@@ -1,0 +1,24 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors / IDE
+.idea/
+.vscode/
+*.swp
+
+# Node (代码启动后适用)
+node_modules/
+dist/
+coverage/
+*.log
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Temp
+*.tmp
+*.bak
