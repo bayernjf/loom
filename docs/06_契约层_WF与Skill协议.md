@@ -27,6 +27,17 @@
 > 段-WF 映射接缝（红旗 B16 → Q72）：以 §A1 CHAIN_13 表为准，**不新增 WF**：段 8→WF-06 覆盖、段 2→WF-01、段 13→WF-11+WF-12。
 > ⚠ 原型未启用的 Skill：PLATFORM-ADAPTER（段7）、KUP-PROPOSE（段13）、PROMPT-EVAL、DRIFT-DETECT（WF-12）——state=pending_review、runs_7d=0，**实现即首次落地**。
 
+### 1.1 WF-04 PWC-SCORING 输出契约（2026-09-13 M0 补，Q22/Q22a/Q22b）
+
+> 段5 的 PWC-SCORING 在原文中仅有 Skill 名（line 918"品类乘数"一句），本契约为 M0 补规格，非原文提取。
+
+- 前置：仅对通过 COMBO-VALIDATE 且未被合规 block 的组合执行；手拼 PWC（Q26）同样执行。
+- 输入：组合的逻辑合理性 AI 分、场景情绪搭配 AI 分（0–1，COMBO-VALIDATE 产出）；待用池中各组合的原子集合（算重合占比）。
+- 输出：写入 `conditionPackages.score`（0–1）及分项留痕 `score_detail{logic, fit, diversity, category_multiplier, w_logic, w_fit}`；品类乘数取 Q7 行业表列，第一期恒 1.0。
+- 计算：`score = (合理性 × 0.6 + 多样性 × 0.4) × 品类乘数`；合理性 = logic×w1 + fit×w2（w1/w2 默认 0.5）；多样性 = 1 − max(原子重合占比)，空池 1.0；重合口径同 Q23。
+- 失败策略：任一 AI 分项缺失/超时 → 该分项记"—"、组合转 `pending_review` 进人工 Gate，禁止默认值凑分。
+- 约束：score 仅排序与 Gate 展示，不做自动通过门槛；权重/开关/小数位配置化（02 §C2）。
+
 ---
 
 ## 2. 已定稿 PT 协议（原文给出完整 constraints/guards，共 7 个）
