@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
 from alembic import context
+from app.core import models as _core_models  # noqa: F401  (register audit_logs)
 from app.core.db import Base
+from app.product.modeling import models as _modeling_models  # noqa: F401
 from app.product.product_intake import models as _models  # noqa: F401  (register tables)
 
 config = context.config
