@@ -1,6 +1,6 @@
 # Handoff — Loom
 
-> **State of Loom as of 2026-09-13**（设计/文档阶段，代码未启动）。
+> **State of Loom as of 2026-09-13**（设计/文档定稿；代码骨架已搭，业务代码自 M1 起）。
 > 续工时**先读本文件**，再读 [docs/README_文档地图与治理.md](docs/README_文档地图与治理.md)（场景导航 + 治理规则）。历史/规格细节一律以 docs 内文档为准，本文件只保留"当前状态 + 活跃任务 + 最近变更"。
 
 ## 项目一句话
@@ -36,7 +36,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 
 ## 当前状态
 
-- **阶段**：设计/文档阶段完成度高，代码未启动；仓库**已 git init**（分支 `dev`，`main` 为主干，最新提交 `6b2ed2c`）。
+- **阶段**：设计/文档阶段完成度高；代码骨架已搭（2026-09-13，按 15/17 定稿：backend FastAPI 13 模块包 + core 横切包 + Alembic + 分层 tests；runtime workflows/skills/agents/protocols 空目录；eval 两件套目录；middleplatform；frontend Next.js TS 最小页；infra docker-compose = PG16-pgvector/Redis7/MinIO），**业务代码尚未开始，自 V1 任务包 M1 起写**。仓库**已 git init**（分支 `dev`，`main` 为主干）。
 - **文档体系**：原唯一事实源 `Loom_核心业务主链梳理_v3.md` 已于 2026-09-13 归档删除，内容 **100% 迁入 docs/**（231 段段落级核验零丢失）；01–09 为 v3 忠实切分（Part A/B/C/D/E 全覆盖），10–17 为同日新增工程骨架文档。
 - **权威口径**：13 段链（CHAIN_13，01 PRD）为唯一权威；03-A~E 展示口径（09）并存不混用，冲突以 01 为准。
 - **已定稿事实基线**：Q1–Q72 均已有决策记录（02，含正式采纳与"临时采纳"两类）；S 级红旗 4 条经 Q34/Q60 等解决（02 收官注、03 已标销账）。**M0 已于 2026-09-13 完成**：Q2/Q22/Q60(a/b/c) 转定稿（02 新增"✅定稿"状态与转正注记）；新裁 Q22a（分项打分口径）/Q22b（多样性函数 + AI 失败兜底），评分细则同步 01 段5、06 §1.1、§C2；业务方 3 份素材采纳经负责人确认（02 C1.16）；段 1-6 缺口实体 ProductSpace / g2FieldCandidates 已补字段（04/10）。挂账 4 子项（不阻塞 M1）：PS.lifecycle 迁移触发、18 通用字段值归属（M1 前定）、候选实体多租户可见性、候选状态枚举。**两套路线图口径冲突已于 2026-09-13 由负责人裁决合并（Q73，08 §1.3）：A7 为骨 + D9 厚度，段 12 后置 V2，V1 驾驶舱只留 Token 成本 + 人工审核 2 个；08 §2 已重排。至此原文挂起的待裁决事项全部清零。** 技术选型 6 项**已拍板定稿**（14，2026-09-13：模块化单体 / 自研注册表编排器 / PG+pgvector+Redis / DB+广播热更新 / 进程内合规模块 / Evaluation+Golden 两件套），技术栈 = FastAPI + Next.js + YAML 编排；下游 15/17/08/10/06 已同步刷新。
@@ -44,6 +44,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 
 ## 最近进度（2026-09-13）
 
+- **代码脚手架落地**：按 15/17 定稿建最小骨架——backend（Python 3.12 + FastAPI 模块化单体，13 模块包映射 product×6/platform×2/decision×2/final/content/feedback，core 9 横切包，Alembic 异步 env，tests 四层目录，.env.example）、runtime/eval/middleplatform 数据驱动目录（.gitkeep 占位）、frontend（Next.js 15 + React 19 + TS 最小页）、infra/docker-compose（pgvector/pg16 + redis:7 + MinIO）；.gitignore 补 Python/.next；MIGRATION_CONVENTION 补 Alembic 现行口径。仅骨架可跑 `/healthz`，无业务逻辑。
 - **路线图合并裁决（Q73）**：负责人逐项拍板——①A7 为骨 + D9 厚度（时间盒/客户目标采用 D9）；②段 12 内容生成移出 V1（V1 到段 11 final_id 闭环，段 12 随段 13 在 V2，原 M9 改为 P4）；③段 7/8 V1 仅静态底表（新增 M11）；④V1 驾驶舱收敛为 Token 成本 + 人工审核 2 个；⑤质量两件套维持 V1 覆盖 D9 V3 口径。08 §1.3 由"待裁决"改为裁决记录 + 合并后权威路线图表，§2 重排（V1=M1–M8+M10/M10-Q+M11/M12，V2=P1–P5，V3 平台化）；02 新增 C1.17/Q73；README 治理规则 4 与待裁决清单、AGENTS、本文件同步；原文挂起待裁决事项清零。
 - **选型下游文档刷新**：技术栈确认（Python 3.12 + FastAPI / React + Next.js + TS / YAML 声明式编排）；按 14 §3 刷新 15（目录/技术栈/eval 落位）、17（PG16+pgvector/Redis7/S3 中间件）、08（新增 M10-Q 质量两件套任务包）、10（§1.3 存储拓扑 + 配置中心版本化热更新 + MVP 辅助系统范围）、06（§4.2 编排器选型）；15/17 升 🟢 已定稿。
 - **技术选型 6 项拍板**：负责人逐项拍板，全部采纳 docs/14 建议——模块化单体 / 自研注册表编排器最小集（协议解耦留 LangGraph 迁移）/ PG+pgvector+Redis（Streams）+对象存储 / DB+变更广播热更新 / 进程内独立合规模块 / MVP 仅 Evaluation Dataset+Golden Cases。14 升 ✅ 定稿；下一步按 §3 同步 15/17/08/10/06。
@@ -69,7 +70,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
    - 12 的 PT 占位候选名单待与基准 HTML 核对（依赖上面的文件找回）；
    - 11/13 的接口与迁移行待 M0 裁决后补齐；
    - 10 的建表要素待 DBA 复核。
-5. **仓库基建**：git init 已完成（`dev` 分支，提交规范见 [git-commit-message.md](git-commit-message.md)）；15 代码结构落地依赖 14 拍板。
+5. **仓库基建 — 部分完成**：git（`dev` 分支，提交规范见 [git-commit-message.md](git-commit-message.md)）；脚手架已按 15 落地（backend/runtime/eval/middleplatform/frontend/infra）。下一步：`backend` 建 venv 装依赖跑通 `/healthz`、`infra` compose up 跑通 PG/Redis、M1 开工前定 18 通用字段值归属挂账子项。
 
 ## 关键约束（接手者不得违反）
 

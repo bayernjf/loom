@@ -4,6 +4,8 @@ Loom 的迁移规范，覆盖两类迁移：**数据库迁移**（代码启动�
 
 ## 1. 数据库迁移
 
+> **Loom 现行口径（2026-09-13 起）**：技术选型已定稿 SQLAlchemy 2.x + Alembic（14/15），后端迁移落 `backend/alembic/versions/`，由 `alembic revision --autogenerate -m "..."` 生成，迁移信息通过 `LOOM_DATABASE_DSN` 环境变量传入（禁止在文件中写凭证）。下述 SQL 文件命名/头注释/幂等规则作为**通用项目模板**保留；Loom 迁移同样遵守其一文件一变更、snake_case 描述、只追加不改写历史的精神（Alembic 用 revision 链 + downgrade 表达）。
+
 ### 1.1 目录
 
 - **Supabase 项目** → `supabase/migrations/`

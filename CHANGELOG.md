@@ -12,6 +12,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 - **仓库基建** — git init（`main` + `dev` 工作分支），推送至 GitHub private 仓库（bayernjf/loom）。
 
+- **代码脚手架落地（2026-09-13）** — 按 15/17 定稿建最小骨架：backend（Python 3.12 + FastAPI 模块化单体，13 模块包 + core 9 横切包 + Alembic + tests 四层 + `.env.example`）、runtime/eval/middleplatform 数据驱动目录、frontend（Next.js + TS 最小页）、infra docker-compose（pgvector/pg16、redis:7、MinIO）；MIGRATION_CONVENTION 补 Alembic 现行口径。仅骨架，业务代码自 V1 M1 起写。
+
 - **路线图口径合并裁决 Q73（2026-09-13）** — A7 三阶段与 D9 V1/V2/V3 两套并存路线图由负责人裁决合并：**A7 为骨 + D9 厚度**；V1（0–3 月/5–10 客户）主链到段 11 `final_id` 发证闭环，**段 12 内容生成后置 V2**，段 7/8 V1 仅交付 FCW 必需的静态底表基础版，驾驶舱收敛为 Token 成本 + 人工审核 2 个，Evaluation/Golden 两件套维持 V1；08 §1.3 改为裁决记录 + 合并后权威路线图表，§2 任务包重排（V1=M1–M8+M10/M10-Q+新增 M11/M12；V2=P1–P5）；02 新增 C1.17/Q73；01/03/06/09/12/16/README/handoff/AGENTS 同步；原文挂起待裁决事项清零。
 
 - **技术选型 6 项定稿（2026-09-13）** — 模块化单体；自研注册表驱动编排器最小集（YAML 声明式，留 LangGraph 逃生口）；PostgreSQL 16 + pgvector + Redis 7（Streams）+ S3 兼容对象存储；DB 配置中心 + 变更广播热更新；进程内独立合规模块；MVP 仅建 Evaluation Dataset + Golden Cases。技术栈 = Python 3.12 + FastAPI / React + Next.js + TS。14 升 ✅ 定稿，15/17/08/10/06 已同步。
