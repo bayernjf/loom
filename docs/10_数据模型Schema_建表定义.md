@@ -139,6 +139,8 @@
 | 索引 | (product_space_id, gate_status, score desc)——消费端按评分取 | Q71 |
 | goals | contentGoals 枚举引用 | Q25 |
 
+> **实现补登（2026-09-14，M5 后端切片）**：段5 随 Alembic 0005 落地（PG16 up/down/up 实测），共 6 表：`content_goals`（Q25，5 码种子）、`pwc_pool_configs`（一品一配置，capacity 可空=无上限）、`condition_packages`（双状态 gate_status/status、score+score_detail/score_incomplete、dup_of 自 FK/is_backup、high_reuse/is_hot）、`pwc_combo_items`（唯一 `(pwc_id, atom_id)`）、`pwc_usage_records`（取用流水，唯一 `(pwc_id, platform, account, slot)`，带 tenant 隔离）、`pwc_platform_states`（每组合每平台 available/cooldown + cooldown_until；"冷却"态落此表而非组合全局状态）。字段类型/索引以迁移脚本为准；"待入库"原文【待补】未实现。
+
 **pws_snapshots（PWS 快照）** — 04 §2.11
 | 要素 | 说明 | 来源 |
 |---|---|---|
@@ -205,7 +207,7 @@
 - 三关卡同源：段 4 定原子风险 / 段 5 相撞合规 / 段 10 清洗——**同一张表**
 - 生效即自动全量扫描（active 快照/draft FCW/未发布成品），联动 Q29/Q30（Q51）
 
-> **实现补登（2026-09-13，M4 后端切片）**：已随 Alembic 0004 落地物理表 `compliance_wordlist`（PG16 up/down/up 实测），active/archived 软删，行业+生效期过滤，段4 已消费（原子风险定级）；段 5/10 消费随 M5/M7，Q51 自动扫描随 M10。
+> **实现补登（2026-09-13，M4 后端切片）**：已随 Alembic 0004 落地物理表 `compliance_wordlist`（PG16 up/down/up 实测），active/archived 软删，行业+生效期过滤，段4 已消费（原子风险定级），段5 已在 M5 消费（漏斗合规检测，ban→blocked）；段10 随 M7，Q51 自动扫描随 M10。
 
 **cp_law_sensitive_domains（CP-LAW 敏感领域清单）** — 04 §2.20
 - 领域：医疗健康/儿童/减肥/美白/医疗器械/金融（领域非词）；触发自动法审（Q49）
