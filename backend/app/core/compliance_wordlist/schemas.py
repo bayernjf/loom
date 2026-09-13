@@ -1,0 +1,21 @@
+"""Q48 合规词库 Pydantic 契约。"""
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from app.core.actor import Actor
+
+
+class WordlistItem(BaseModel):
+    word: str = Field(min_length=1)
+    level: Literal["critical", "high"]
+    action: Literal["ban", "downgrade"]
+    downgrade_target: str | None = None
+    country: str | None = None
+    industry: str | None = None
+
+
+class WordlistUpsert(BaseModel):
+    item: WordlistItem
+    actor: Actor

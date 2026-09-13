@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 
+from app.core.compliance_wordlist.router import router as wordlist_router
+from app.product.atom.router import router as atom_router
 from app.product.fieldpool.router import router as fieldpool_router
 from app.product.modeling.router import router as modeling_router
 from app.product.product_intake.router import router as intake_router
@@ -9,6 +11,8 @@ app = FastAPI(title="Loom", version="0.1.0")
 app.include_router(intake_router)
 app.include_router(modeling_router)
 app.include_router(fieldpool_router)
+app.include_router(wordlist_router)
+app.include_router(atom_router)
 
 
 @app.get("/healthz")

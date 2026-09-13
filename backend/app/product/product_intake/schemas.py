@@ -1,9 +1,8 @@
 from pydantic import BaseModel, Field
 
+from app.core.actor import Actor
 
-class Actor(BaseModel):
-    id: str
-    roles: list[str] = Field(default_factory=list)
+__all__ = ["Actor"]
 
 
 class IntakeCreate(BaseModel):
