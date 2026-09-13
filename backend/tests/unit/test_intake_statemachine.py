@@ -45,6 +45,11 @@ def test_category_creating_only_accepts_b2_results():
         sm.transition(sm.CATEGORY_CREATING, "ops_confirm", ["operations"])
 
 
+def test_high_confidence_auto_confirm_needs_no_role():
+    # Q1 direct_approve / Q3：仅中置信出运营待办，高置信系统自动确认。
+    assert sm.transition(sm.PENDING_CONFIRM, "auto_confirm") == sm.SUBMITTED
+
+
 def test_b2_branches():
     assert (
         sm.transition(sm.CATEGORY_CREATING, "b2_approved", ["operations"])

@@ -1,9 +1,9 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import append_audit
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import (
-    AuditLog,
     G2Field,
     ProductIntakeApplication,
     ProductSpace,
@@ -28,29 +28,6 @@ async def _required_common_fids(session: AsyncSession) -> list[str]:
     return sorted(rows.all())
 
 
-async def _append_audit(
-    session: AsyncSession,
-    *,
-    tenant_id: str,
-    actor_id: str | None,
-    actor_roles: list[str] | None,
-    action: str,
-    entity_id: str,
-    detail: dict | None = None,
-) -> None:
-    session.add(
-        AuditLog(
-            tenant_id=tenant_id,
-            actor_id=actor_id,
-            actor_roles=actor_roles,
-            action=action,
-            entity_type="product_intake_application",
-            entity_id=entity_id,
-            detail=detail,
-        )
-    )
-
-
 async def create_intake(
     session: AsyncSession, *, tenant_id: str, profile: dict, actor_id: str | None = None
 ) -> ProductIntakeApplication:
@@ -62,12 +39,13 @@ async def create_intake(
     )
     session.add(intake)
     await session.flush()
-    await _append_audit(
+    await append_audit(
         session,
         tenant_id=tenant_id,
         actor_id=actor_id,
         actor_roles=None,
         action="intake.create",
+        entity_type="product_intake_application",
         entity_id=intake.intake_id,
     )
     await session.commit()
@@ -100,12 +78,13 @@ async def update_profile(
     if intake.status not in _EDITABLE_STATES:
         raise ProfileNotEditable(f"profile is not editable in state {intake.status}")
     intake.profile = {**intake.profile, **profile_patch}
-    await _append_audit(
+    await append_audit(
         session,
         tenant_id=intake.tenant_id,
         actor_id=actor_id,
         actor_roles=None,
         action="intake.profile_update",
+        entity_type="product_intake_application",
         entity_id=intake.intake_id,
         detail={"fields": sorted(profile_patch.keys())},
     )
@@ -147,12 +126,13 @@ async def apply_event(
         )
         session.add(space)
 
-    await _append_audit(
+    await append_audit(
         session,
         tenant_id=intake.tenant_id,
         actor_id=actor_id,
         actor_roles=actor_roles,
         action=f"intake.{event}",
+        entity_type="product_intake_application",
         entity_id=intake.intake_id,
         detail={"from": old_status, "to": new_status, "space_created": bool(space)},
     )
