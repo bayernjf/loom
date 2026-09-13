@@ -28,6 +28,15 @@
 | 角色 | 普通客户/运营/产品审核员/平台审核员/内容审核员/系统管理员/Skill 管理员/法审 + 权威扩展（BO-07/字典管理员/平台级管理员/internal_compliance/internal_finance） | 09 D8 / 07 §2.3 |
 | 内容目的 | contentGoals 5 类标准枚举（ENGAGEMENT/CONVERSION/EDUCATION/TRUST/RETENTION） | Q25 / line 1090 |
 
+### 1.3 存储拓扑（14 选型定稿 2026-09-13：PG + pgvector + Redis + 对象存储）
+| 存储 | 引擎 | 承载 |
+|---|---|---|
+| 关系库 | PostgreSQL 16 | 本文档全部业务表/共享知识表/配置中心/审计；事务与强一致（PWS 冻结、block_required、final_id 组装） |
+| 向量 | pgvector 扩展（同 PG 实例起步） | 知识检索 embedding（M2-M4、Memory 层）；切换条件：向量规模 > 千万级或需高级混合检索时迁独立向量库（14 §2.3） |
+| 缓存/队列 | Redis 7 | C7 Layer1 模板缓存、结果缓存（D7.2 策略 7）；Redis Streams 承载相撞/生成/批量审核异步任务 |
+| 对象存储 | S3 兼容 | 主图/包装图等素材、内容成品（文章/视频/多语言）、Memory 对象层；跨区冗余 |
+| 不入库 | — | 密钥/连接串只走环境变量；缓存中的派生值（如 fit_score 视图）不写死回业务表 |
+
 ---
 
 ## 2. 逐表 Schema（35 实体）
@@ -258,6 +267,7 @@
 
 **config_center（系统配置中心）** — 02 §C2 全表
 - 40+ 配置项：key/value/类型/校验/出处 Q 编号/审计；禁止硬编码（Q9）
+- 热更新（14 §2.4 定稿）：配置落库 + 变更广播；**发布=新版本 + 原子切换 + writeAudit**，自带版本历史与回滚；建议表结构 key 唯一 + 版本子表（config_center_versions）【建议】
 - 权重和=1（Q2）与 Σ≤1.0（Q40）做成**通用校验器**被多处复用【建议】
 
 **api_keys（API Key）** — 04 §3 待补
@@ -269,10 +279,11 @@
 
 **memory_layers（Memory 6 层 M1–M6）** — 展示口径，09 §3.13
 - 内容：M1 项目规范 / M2 产品知识 / M3 平台知识 / M4 内容策略 / M5 使用表现 / M6 Skill 运行
-- 存储：SQL + 向量库 + 对象存储 + 缓存（存储选型见 14 决策）
+- 存储：PostgreSQL + pgvector + S3 对象存储 + Redis 缓存（14 定稿，见 §1.3）
 
-**auxiliary_systems（10 辅助系统）** — 展示口径，09 §3.12（V2-V3）
+**auxiliary_systems（10 辅助系统）** — 展示口径，09 §3.12
 - Knowledge Graph / Evidence Center / Evaluation Dataset / Golden Cases / Simulation Sandbox / Rollback Center / Drift Detection / Human Feedback Loop / Multi-model Router / Context Pack Builder
+- **MVP 只建 Evaluation Dataset + Golden Cases 两件套**（14 §2.6 定稿，落 eval/ 目录，与 16 测试联动）；Simulation Sandbox 及其余随 V2-V3
 
 ---
 
@@ -299,4 +310,5 @@
 - [x] 字段名与 04 完全一致，未新增/改名（全部引用 04 章节）
 - [x] Q 编号约束已映射（Q2/Q3/Q5/Q7/Q8/Q12/Q13/Q15/Q17/Q18/Q20/Q21/Q24/Q25/Q27/Q28-Q33/Q34-Q38/Q39-Q43/Q44-Q47/Q48-Q51/Q52-Q55/Q56-Q59/Q60-Q65/Q66-Q72）
 - [x] 配置化清单数值不硬编码进表定义（全部指向配置中心）
-- [ ] 字段全定义仍【待补】的实体（content_products / skill_run_logs / audit_logs / api_keys / memory_layers / 动态信号事件 / 爆款判定记录 / 校准报表 / SLA 待办）——属开发第 0 步①，需 M0 裁决后补（见 08 §2.1）
+- [x] 存储引擎已定稿并补入 §1.3（2026-09-13，14 选型）
+- [ ] 字段全定义仍【待补】的实体（content_products / skill_run_logs / audit_logs / api_keys / memory_layers / 动态信号事件 / 爆款判定记录 / 校准报表 / SLA 待办）——属段 7/12/13 与横切，随对应阶段任务包补（段 1-6 的 ProductSpace / g2_field_candidates 已于 M0 补齐）
