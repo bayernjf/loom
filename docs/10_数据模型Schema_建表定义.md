@@ -46,19 +46,21 @@
 | 关联 | → product_spaces（通过后生成 PS）；→ g2_fields（18 通用录入字段引用） | 01 段1 |
 | 关键约束 | 类目确认动作由运营执行（Q3）；72h 未处理升级（Q4） | Q3/Q4 |
 
-**product_spaces（PS，一品一空间）** — 字段见 04 §2.2
+**product_spaces（PS，一品一空间）** — 字段见 04 §2.2（2026-09-13 M0 补齐）
 | 建表要素 | 说明 | 来源 |
 |---|---|---|
 | 主键 | `product_space_id` | A6 |
-| 生命周期 | `lifecycle_priority`：frozen > stale > cold > modeling > active | line 1655 |
-| 租户 | `tenant_id` 必填；跨租户同款产品各开独立空间，互不感知（Q33） | Q33 |
-| 关联 | 私有资产：field_pools / product_atom_instances / condition_packages / pws_snapshots | line 14813 |
-| 业务方 | `business_owner` 字段值（业务方=产品记录字段，非登录角色） | 09 D8 |
+| 外键 | `tenant_id` 必填；`intake_id` → product_intake_applications；`category_node_id` → g1_category_tree；`active_pws_id` → pws_snapshots（同刻仅 1 个 active，Q31） | Q33/Q5/Q31 |
+| 属性 | `industry_tag`（类目路径映射，运营可改 Q7）/ `sensitive_industry` 布尔 / `business_owner`（产品记录字段，非登录角色，09 D8） | Q7/Q11/09 D8 |
+| 生命周期 | `lifecycle_priority`：frozen > stale > cold > modeling > active（迁移触发条件原文未给，待补） | line 1655 |
+| 关联 | 私有资产：field_pools / product_atom_instances / condition_packages / pws_snapshots（禁止跨产品/跨租户复用，Q24） | line 14813/Q24 |
+| 索引 | (tenant_id, lifecycle)；active_pws_id 唯一过滤索引【建议】 | 【建议】 |
+| 待补 | 18 通用字段值挂 intake 引用还是 PS 快照（M1 前定） | line 682-698 |
 
 **c1_records（C1 识别记录）** — 字段见 04 §2.3
 | 建表要素 | 说明 | 来源 |
 |---|---|---|
-| signals | 5 个权重字段：name/brief/卖点/主图/包装图——**配置表驱动，Σ=1 强校验**（保存拒绝不合格） | Q2 |
+| signals | 信号配置表 5 行（name/brief/卖点/主图/包装图），**第一期仅启用文本三行（0.50/0.33/0.17），图像后置**；启用行权重 Σ=1 强校验（不合格拒绝保存，不归一化，Q2 已转正） | Q2 |
 | 判定 | `conf` 单指标（废弃 hit_rate）；三分支 direct_approve/ops_assist/cold_start | Q1/Q3 |
 | 阈值 | 行业阈值表 c1_thresholds 独立 CRUD 表（medical 0.90/electronics 0.80/general 0.85），不可删默认档 + 审计 | Q7 |
 | 矛盾 | Top1-Top2 差 <0.1 → 信号矛盾 → ops_assist | Q3 |
@@ -81,9 +83,10 @@
 
 ### 2.2 字段池与原子域（段 3–4）
 
-**g2_field_candidates（字段候选）** — 04 §2.6
-- 字段：`dup` 同义去重标记（联动 g2_fields.syn）；转正需字典管理员权限（Q13）
-- 约束：候选→转正不直接改 g2_fields，走人工 Gate【建议】
+**g2_field_candidates（字段候选）** — 04 §2.6（2026-09-13 M0 补齐）
+- 主键 `candidate_id`；字段：`field_name`/定义、`source_layer`（C7 Layer4/WF-02 等）、`source_route`（Q8 路由 6 路）、`confidence`、`dup`（联动 g2_fields.syn）、`related_fid`（≥0.9 疑似重复指向，Q10）、`status`（pending_gate/approved/rejected【枚举建议】）
+- 约束：候选→转正不直接写 g2_fields，走人工 Gate + 字典管理员权限（Q13）；<0.85 必审（Q9）；须带来源标注（line 14133/14081）
+- 待补：全局/租户可见性原文未给；完整状态枚举待补
 
 **field_pools（字段池）** — 04 §2.7
 | 要素 | 说明 | 来源 |
