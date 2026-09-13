@@ -1,6 +1,6 @@
 # Migration Convention
 
-Loom 的迁移规范，覆盖两类迁移：**数据库迁移**（代码启动后适用）与**文档迁移**（规格并入 loom-docs 时适用）。
+Loom 的迁移规范，覆盖两类迁移：**数据库迁移**（代码启动后适用）与**文档迁移**（规格并入 docs 时适用）。
 
 ## 1. 数据库迁移
 
@@ -80,7 +80,7 @@ NNN_verb_snake_case.sql
 -- Run: Supabase SQL Editor, execute once
 -- =====================================================
 -- Note: Persists cross-device theme preference, default
---       "glass". Aligns with loom-docs/10 schema.
+--       "glass". Aligns with docs/10 schema.
 -- -----------------------------------------------------
 ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS theme_preference TEXT DEFAULT 'glass';
@@ -98,11 +98,11 @@ COMMENT ON COLUMN profiles.theme_preference
 | 一个文件一个变更 | 把无关变更塞进一个文件 |
 | 就地标记废弃或新建 drop 迁移 | 删除 / 重写历史迁移文件 |
 
-## 2. 文档迁移（规格并入 loom-docs）
+## 2. 文档迁移（规格并入 docs）
 
-> 适用：把新来源（HTML 原型、业务方素材、旧 md）并入 loom-docs 唯一事实源体系时。
+> 适用：把新来源（HTML 原型、业务方素材、旧 md）并入 docs 唯一事实源体系时。
 
-- **切分去向**：按消费场景归入对应文档（01–17），并在 [loom-docs/README 信息保全映射表](loom-docs/README_文档地图与治理.md) 登记 Part → 目标文档的映射。
+- **切分去向**：按消费场景归入对应文档（01–17），并在 [docs/README 信息保全映射表](docs/README_文档地图与治理.md) 登记 Part → 目标文档的映射。
 - **零丢失**：迁移前做段落级核验（逐段检查 line 引用 / Q 编号 / 状态词 / 专名是否落入目标文档），核验记录写入 README §5.3。
 - **不新增事实**：迁移只搬运、不新增业务事实；原文空缺处标【原文未给出，待补】。
 - **行号溯源**：`line NNNN` 引用保留，指向基准文件 `Docs/Loom_后台_V6.0-需求说明（不是原型).html`；基准文件行号变化需同步核对。

@@ -4,11 +4,11 @@ Loom 的性能与容量基准登记表。**当前处于文档阶段，无代码�
 
 ## How to run
 
-> TODO: fill in the concrete commands once a benchmark harness exists（代码启动后补，与 loom-docs/16 测试策略联动）。
+> TODO: fill in the concrete commands once a benchmark harness exists（代码启动后补，与 docs/16 测试策略联动）。
 
 ## Scope
 
-What is measured（按实测逐项启用，来源标注 loom-docs 对应文档）：
+What is measured（按实测逐项启用，来源标注 docs 对应文档）：
 
 - 13 段链端到端吞吐（白名单产线：录入 → PWS 冻结 → final_id，graph/sec）
 - 原子相撞与 PWC 组合吞吐（段 4/5，预筛漏斗 Q21 后的实际量级）
