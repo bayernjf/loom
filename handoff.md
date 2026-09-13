@@ -1,6 +1,6 @@
 # Handoff — Loom
 
-> **State of Loom as of 2026-09-13**（设计/文档定稿；M1+M2+M3 后端切片已落地，下一步 M4）。
+> **State of Loom as of 2026-09-13**（设计/文档定稿；M1+M2+M3+M4 后端切片已落地，下一步 M5）。
 > 续工时**先读本文件**，再读 [docs/README_文档地图与治理.md](docs/README_文档地图与治理.md)（场景导航 + 治理规则）。历史/规格细节一律以 docs 内文档为准，本文件只保留"当前状态 + 活跃任务 + 最近变更"。
 
 ## 项目一句话
@@ -37,7 +37,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 
 ## 当前状态
 
-- **阶段**：设计/文档阶段完成度高；代码骨架已搭（2026-09-13，按 15/17 定稿：backend FastAPI 13 模块包 + core 横切包 + Alembic + 分层 tests；runtime workflows/skills/agents/protocols 空目录；eval 两件套目录；middleplatform；frontend Next.js TS 最小页；infra docker-compose = PG16-pgvector/Redis7/MinIO）。**M1（段1 产品录入）+ M2（段2 C1 识别）+ M3（段3 字段池规划）后端切片已于 2026-09-13 落地**：M1 productIntake15 + 录入 API + 迁移 0001；M2 信号权重/行业阈值配置、conf 三分支、ops 待办 72h、C7 四层兜底 + 迁移 0002；M3 来源路由表、方案提交/越界处置、WF-02 Gate、Q13 候选转正 + 迁移 0003；45 测试全绿（详见 08 §2.2 M1/M2/M3 完成情况）；下一步 M4。仓库**已 git init**（分支 `dev`，`main` 为主干）。
+- **阶段**：设计/文档阶段完成度高；代码骨架已搭（2026-09-13，按 15/17 定稿：backend FastAPI 13 模块包 + core 横切包 + Alembic + 分层 tests；runtime workflows/skills/agents/protocols 空目录；eval 两件套目录；middleplatform；frontend Next.js TS 最小页；infra docker-compose = PG16-pgvector/Redis7/MinIO）。**M1（段1 产品录入）+ M2（段2 C1 识别）+ M3（段3 字段池规划）+ M4（段4 字段下原子）后端切片已于 2026-09-13 落地**：M1 productIntake15 + 录入 API + 迁移 0001；M2 信号权重/行业阈值配置、conf 三分支、ops 待办 72h、C7 四层兜底 + 迁移 0002；M3 来源路由表、方案提交/越界处置、WF-02 Gate、Q13 候选转正 + 迁移 0003；M4 Q48 统一词库、拓展批次/risk 双轨/三类冲突/approveAtomGuard、evidence 超时可复活、同义簇 alias、事实原子引用数=1、atom8 生命周期 + 迁移 0004；74 测试全绿（详见 08 §2.2 M1/M2/M3/M4 完成情况）；下一步 M5（段5 PWC）。仓库**已 git init**（分支 `dev`，`main` 为主干）。
 - **文档体系**：原唯一事实源 `Loom_核心业务主链梳理_v3.md` 已于 2026-09-13 归档删除，内容 **100% 迁入 docs/**（231 段段落级核验零丢失）；01–09 为 v3 忠实切分（Part A/B/C/D/E 全覆盖），10–17 为同日新增工程骨架文档，18 为同日新增前端 i18n/设计 Token 工程建议（🟡 待拍板）。
 - **权威口径**：13 段链（CHAIN_13，01 PRD）为唯一权威；03-A~E 展示口径（09）并存不混用，冲突以 01 为准。
 - **已定稿事实基线**：Q1–Q72 均已有决策记录（02，含正式采纳与"临时采纳"两类）；S 级红旗 4 条经 Q34/Q60 等解决（02 收官注、03 已标销账）。**M0 已于 2026-09-13 完成**：Q2/Q22/Q60(a/b/c) 转定稿（02 新增"✅定稿"状态与转正注记）；新裁 Q22a（分项打分口径）/Q22b（多样性函数 + AI 失败兜底），评分细则同步 01 段5、06 §1.1、§C2；业务方 3 份素材采纳经负责人确认（02 C1.16）；段 1-6 缺口实体 ProductSpace / g2FieldCandidates 已补字段（04/10）。挂账 4 子项（不阻塞 M1）：PS.lifecycle 迁移触发、~~18 通用字段值归属（M1 前定）~~ ✅ Q74 已裁决（两处落库 profile + profile_snapshot）、候选实体多租户可见性、候选状态枚举。**两套路线图口径冲突已于 2026-09-13 由负责人裁决合并（Q73，08 §1.3）：A7 为骨 + D9 厚度，段 12 后置 V2，V1 驾驶舱只留 Token 成本 + 人工审核 2 个；08 §2 已重排。至此原文挂起的待裁决事项全部清零。** 技术选型 6 项**已拍板定稿**（14，2026-09-13：模块化单体 / 自研注册表编排器 / PG+pgvector+Redis / DB+广播热更新 / 进程内合规模块 / Evaluation+Golden 两件套），技术栈 = FastAPI + Next.js + YAML 编排；下游 15/17/08/10/06 已同步刷新。
@@ -45,6 +45,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 
 ## 最近进度（2026-09-13）
 
+- **M4（段4 字段下原子）后端切片落地**：Q48 统一合规词库横切包先行（CRUD + 软归档 + 审计，段4 先消费、段5/10 同表待 M5/M7）；拓展批次仅产候选（PT-ATOM-EXP），Q14 批次 20/50 可覆盖、Q15 AI 达标停拓手动放行、同批去重；Q17 risk 双轨（词表命中强制定级人工不可改，AI 判级可人工复核）；AtomConflict 三类（disabled_expression/high_risk_single_review/evidence_required）；approveAtomGuard 9 项机检 + 审计，Q70 high/critical 单条审、批量整批 409；Q18 无证据 pending_evidence + 7 天 sweep 自动驳回可复活（调度随 M10）；Q19 同义簇 keeper 终裁、merged 词条作 alias 并入正式原子；line 11189 事实原子（容量/成分/浓度/疣类型/品牌）(fact_type,normalized) 全局唯一、跨租户拦截、reference_count=1；Q20 生命周期（operations 冻结/解冻/废弃/归档，解冻不重审；internal_compliance 暂停/恢复；product_reviewer 驳回；废弃恢复=新原子重审）。迁移 0004（5 表，PG16 up/down/up 通过）；74 测试全绿。未含：WF-03 四 Skill AI 通道、sweep 定时调度、Q51 生效即扫联动段 5/10、Q16 相似度本体、拍板值配置化（均 M10）。详见 08 §2.2 M4 完成情况。
 - **M3（段3 字段池规划）后端切片落地**：Q8 来源路由表 CRUD（6 路种子、引用保护+审计）；方案提交一品一池——每维度强制角色/启用路由/依据标注（line 14081 红线）、fid 必须为 active G2（Q68）、新字段进 g2_field_candidates（wf02_dim_source，同名全局复用）；PT-FP-PLAN 校验（product_attribute 恒 ≥1、risk_control 仅敏感行业 Q11、>8 Top8+备选档可捞回 Q12、<3 不达标转人工）；conf<0.85 标需细看（Q9）、相似度≥0.9 仅标疑重人工终裁（Q10）、目标原子数 15-30（Q15）；WF-02 HumanGate（product_reviewer，approved 锁定、rejected 可重提）；Q13 dictionary_admin 候选转正并回填池维度。迁移 0003（PG16 up/down/up 通过）；45 测试全绿。未含：WF-02 三 Skill AI 通道（M10）、灵感库两层实体、转正保护期加权（第二期）、cat=extension 占位待基准 HTML 核对、拍板值配置化（M10）。详见 08 §2.2 M3 完成情况。
 - **M2（段2 C1 识别）后端切片落地**：信号权重配置表（Σ=1 强校验，Q2，文本三信号 0.50/0.33/0.17 种子）、行业阈值 CRUD（general 默认档不可删+审计，Q7）、conf 单指标三分支（Q1：高置信系统 auto_confirm 直送已提交；中置信 ops_assist 运营待办附 AI Top 候选，72h 未处理 sweep 升级，Q3/Q4，选定/全否；低置信带 B2 候选单进类目创建中）、C7 四层兜底（L1 模板缓存→L2 兄弟继承（product_count 最大，Q6）→L3 G2 覆盖率 60% 线→L4 新字段进 g2_field_candidates；Q68 fid:'-' 在模板写入与 L4 提案入口拦截）。迁移 0002（8 表+种子，PG16 up/down/up 通过）；AuditLog 上移 core 横切包；26 测试全绿。未含：WF-01 六 Skill AI 通道与定时调度（M10）、G1 完整类目管理（V3）、拍板值配置化迁移（M10 配置中心）。详见 08 §2.2 M2 完成情况。
 - **M1（段1 产品录入）后端切片落地 + Q74 裁决**：负责人对挂账子项"18 通用字段值归属"拍板（02 C1.18/Q74）——申请单 `profile`（G2 fid 键控，提交后不可变）+ ProductSpace `profile_snapshot`（start_modeling 时整体复制，同 PWS 快照哲学 Q31）；完整度闸门按 g2_fields active 行动态判定不硬编码名单。代码：纯逻辑 productIntake15 状态机（15 态/终态/B2 三分支/operations 角色闸）、service + `/api/intakes` REST（缺字段 422、越权 403、非法迁移 409、审核后资料不可改 409）、Alembic 0001 四表（PG16 实测 up/down/up 通过）、11 条单测/集成测试全绿（SQLite in-memory；venv 经 uv 装 Python 3.12）。未含：WF-01 6 Skill 候选通道（随 M10）、72h SLA（M10）、真实 fid 种子（待基准 HTML 找回）。详见 08 §2.2 M1 完成情况。
@@ -74,7 +75,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
    - 12 的 PT 占位候选名单待与基准 HTML 核对（依赖上面的文件找回）；
    - 11/13 的接口与迁移行待 M0 裁决后补齐；
    - 10 的建表要素待 DBA 复核。
-5. **仓库基建 — 部分完成**：git（`dev` 分支，提交规范见 [git-commit-message.md](git-commit-message.md)）；脚手架已按 15 落地（backend/runtime/eval/middleplatform/frontend/infra）。backend venv 已用 uv + Python 3.12 建好（`uv venv --python 3.12 backend/.venv && uv pip install --python backend/.venv/bin/python -e 'backend[dev]'`），`pytest` 45 绿、ruff 通过、Alembic 0001/0002/0003 对 PG16 验证通过。**下一步：开 M4（段4 字段下原子，08 §2.2 验收行：approveAtomGuard 10 项/AtomConflict/evidence 双轨/事实原子引用数=1）**；18 字段归属挂账已由 Q74 关闭。
+5. **仓库基建 — 部分完成**：git（`dev` 分支，提交规范见 [git-commit-message.md](git-commit-message.md)）；脚手架已按 15 落地（backend/runtime/eval/middleplatform/frontend/infra）。backend venv 已用 uv + Python 3.12 建好（`uv venv --python 3.12 backend/.venv && uv pip install --python backend/.venv/bin/python -e 'backend[dev]'`），`pytest` 74 绿、ruff 通过、Alembic 0001/0002/0003/0004 对 PG16 验证通过。**下一步：开 M5（段5 PWC 条件包，08 §2.2 验收行：漏斗四步/评分公式 Q22/Q23 重标/Q24 状态/库容 100 Q27）**；18 字段归属挂账已由 Q74 关闭。
 
 ## 关键约束（接手者不得违反）
 

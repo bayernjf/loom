@@ -125,6 +125,8 @@
 
 > **实现补登（2026-09-13，M3 后端切片）**：field_pools 域随 Alembic 0003 落地（PG16 up/down/up 实测），共 3 表：`fp_source_routes`（Q8 路由，6 路种子）、`field_pools`（一品一池唯一约束，gate 三态含实现补规格 rejected、compliant/violations、target_atom 15-30）、`fp_dimensions`（selected/backup 两档，source_ref 非空，fid/candidate_id 二选一挂接，needs_detail/dup 标记）。product_atom_instances/atom_conflicts 尚未实现，随 M4。
 
+> **实现补登（2026-09-13，M4 后端切片）**：原子域随 Alembic 0004 落地（PG16 up/down/up 实测），共 5 表：`compliance_wordlist`（Q48，见 §2.5）、`atom_batches`（拓展批次：batch_size/source/sensitive_snapshot）、`atom_candidates`（候选主体，唯一约束 `(batch_id, normalized)` 同批去重，草稿/待审核活在候选侧）、`atom_conflicts`（三类冲突 + resolved_at）、`product_atom_instances`（Gate 后正式实例，唯一约束 `(fact_type, normalized)` 落实 line 11189 事实原子全局唯一；NULL fact_type 不参与唯一性）。字段类型/索引以迁移脚本为准。
+
 ### 2.3 白名单域（段 5–6）
 
 **condition_packages（PWC）** — 04 §2.10（字段完整）
@@ -202,6 +204,8 @@
 - 字段：词/等级(critical|high)/处置(禁用|降级)/降级映射目标/适用国家/适用行业/生效期
 - 三关卡同源：段 4 定原子风险 / 段 5 相撞合规 / 段 10 清洗——**同一张表**
 - 生效即自动全量扫描（active 快照/draft FCW/未发布成品），联动 Q29/Q30（Q51）
+
+> **实现补登（2026-09-13，M4 后端切片）**：已随 Alembic 0004 落地物理表 `compliance_wordlist`（PG16 up/down/up 实测），active/archived 软删，行业+生效期过滤，段4 已消费（原子风险定级）；段 5/10 消费随 M5/M7，Q51 自动扫描随 M10。
 
 **cp_law_sensitive_domains（CP-LAW 敏感领域清单）** — 04 §2.20
 - 领域：医疗健康/儿童/减肥/美白/医疗器械/金融（领域非词）；触发自动法审（Q49）
