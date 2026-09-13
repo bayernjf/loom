@@ -50,6 +50,7 @@
 |---|---|---|
 | 主键 | `intake_id`（业务容器名 intakes） | 04 §2.1 |
 | 状态 | `status`：productIntake15 15 态（见 13 §1.1） | Q5 |
+| 资料 | `profile` JSONB：18 通用字段提交值，按 G2 fid 键控；提交后不可变（Q74）；完整度按 g2_fields active 且 cat='common' 行动态校验（D7.1 闸门1） | Q74 |
 | 租户 | `tenant_id` 必填 | 1.1 |
 | 索引 | (tenant_id, status)；冷启动支线 (tenant_id, category_pending_id) | 【建议】 |
 | 关联 | → product_spaces（通过后生成 PS）；→ g2_fields（18 通用录入字段引用） | 01 段1 |
@@ -64,7 +65,7 @@
 | 生命周期 | `lifecycle_priority`：frozen > stale > cold > modeling > active（迁移触发条件原文未给，待补） | line 1655 |
 | 关联 | 私有资产：field_pools / product_atom_instances / condition_packages / pws_snapshots（禁止跨产品/跨租户复用，Q24） | line 14813/Q24 |
 | 索引 | (tenant_id, lifecycle)；active_pws_id 唯一过滤索引【建议】 | 【建议】 |
-| 待补 | 18 通用字段值挂 intake 引用还是 PS 快照（M1 前定） | line 682-698 |
+| 资料快照 | `profile_snapshot` JSONB：18 通用字段值不可变快照，建模中生成时从 intake.profile 整体复制（Q74） | Q74 |
 
 **c1_records（C1 识别记录）** — 字段见 04 §2.3
 | 建表要素 | 说明 | 来源 |
