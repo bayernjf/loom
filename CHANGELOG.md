@@ -6,6 +6,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ### Added
 
+- **M2（段2 C1 识别）后端切片落地（2026-09-13）** — 信号权重配置表（启用行 Σ 必须精确等于 1 否则拒绝保存，文本三信号 0.50/0.33/0.17 种子，图像后置，Q2）；行业阈值后台 CRUD（general 默认档不可删 + writeAudit，medical 0.90/electronics 0.80/general 0.85 种子，Q7）；conf 单指标三分支（Q1/Q3：高置信 wf01_confirm+系统 auto_confirm 直送已提交；中置信出 ops_assist 运营待办、72h 未处理 sweep 升级、全否转 cold_start；低置信带 B2 候选单进类目创建中；Top1-Top2 差<0.1 矛盾规则）；C7 四层兜底（L1 模板缓存/L2 兄弟 product_count 最大继承/L3 G2 覆盖率 60% 降级线/L4 新字段进 g2_field_candidates，Q6；模板写入与 L4 提案两入口禁止 fid:'-'，Q68）。迁移 0002（8 表 + 权重/阈值种子，PG16 up/down/up 通过）；AuditLog 上移 core 横切包；26 测试全绿。未含：WF-01 六 Skill AI 通道、定时调度（M10）、G1 完整类目管理（V3）、拍板值配置中心迁移（M10）。
+
 - **M1（段1 产品录入）后端切片落地（2026-09-13）** — productIntake15 状态机（15 态全流转；类目创建中态仅受 B2 三结果，Q5；类目确认 operations 角色闸，Q3；三终态拒事件）；录入 REST `/api/intakes`（创建/查询/allowed-events/profile 补资料/事件迁移/ProductSpace 查询），提交时按 `g2_fields` active 的 cat='common' 行动态校验缺字段阻断（D7.1 闸门1，名单不硬编码），非法迁移 409/越权 403/缺字段 422/审核后资料不可改 409；writeAudit append-only 审计；Alembic 0001（g2_fields/product_intake_applications/product_spaces/audit_logs，PostgreSQL 16 实测 up/down/up 通过）；11 条单元 + 集成测试全绿。配套 Q74 双落库裁决（见下）。未含：WF-01 6 Skill 候选通道（随 M10）、72h SLA（M10）、18 字段真实 fid 种子（待基准 HTML 找回）。
 
 - **决策 Q74（2026-09-13）** — 18 个 G2 cat='common' 字段值两处落库、职责不同：申请单 `profile`（fid 键控，提交后不可变）+ ProductSpace `profile_snapshot`（start_modeling 时整体复制的不可变快照，同 PWS 快照哲学 Q31）；02 新增 C1.18/Q74，04 §2.2、10 §2.1 同步；M0 挂账子项"18 通用字段值归属"销账。
