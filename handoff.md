@@ -31,13 +31,14 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 | [docs/15_代码结构与脚手架.md](docs/15_代码结构与脚手架.md) | 目录/模块/可执行物落位 + 技术栈（FastAPI/Next.js/YAML） | 🟢 **已定稿（选型+技术栈已落）** |
 | [docs/16_测试策略.md](docs/16_测试策略.md) | 分层测试 + 规则级测试清单 | 🟡 与 12 联动 |
 | [docs/17_部署与运维.md](docs/17_部署与运维.md) | 环境/CI-CD/多租户/监控说明（含中间件版本） | 🟢 **已定稿（选型已落）** |
+| [docs/18_前端i18n与设计Token方案.md](docs/18_前端i18n与设计Token方案.md) | 界面 i18n（next-intl 建议，V1 zh-CN）+ 设计 Token 三层模型（CSS 变量/CSS Modules 建议）；与 Q58 内容多语言划界 | 🟡 **工程建议，5 项待负责人拍板（拍板后 Q75）** |
 
 > 根目录文档：README.md（项目介绍）/ AGENTS.md（AI 工作规范）/ CLAUDE.md（指向 AGENTS）/ handoff.md（本文件）/ git-commit-message.md（提交规范）/ CHANGELOG.md / CONTRIBUTING.md / MIGRATION_CONVENTION.md / BENCHMARK.md。
 
 ## 当前状态
 
 - **阶段**：设计/文档阶段完成度高；代码骨架已搭（2026-09-13，按 15/17 定稿：backend FastAPI 13 模块包 + core 横切包 + Alembic + 分层 tests；runtime workflows/skills/agents/protocols 空目录；eval 两件套目录；middleplatform；frontend Next.js TS 最小页；infra docker-compose = PG16-pgvector/Redis7/MinIO）。**M1（段1 产品录入）+ M2（段2 C1 识别）+ M3（段3 字段池规划）后端切片已于 2026-09-13 落地**：M1 productIntake15 + 录入 API + 迁移 0001；M2 信号权重/行业阈值配置、conf 三分支、ops 待办 72h、C7 四层兜底 + 迁移 0002；M3 来源路由表、方案提交/越界处置、WF-02 Gate、Q13 候选转正 + 迁移 0003；45 测试全绿（详见 08 §2.2 M1/M2/M3 完成情况）；下一步 M4。仓库**已 git init**（分支 `dev`，`main` 为主干）。
-- **文档体系**：原唯一事实源 `Loom_核心业务主链梳理_v3.md` 已于 2026-09-13 归档删除，内容 **100% 迁入 docs/**（231 段段落级核验零丢失）；01–09 为 v3 忠实切分（Part A/B/C/D/E 全覆盖），10–17 为同日新增工程骨架文档。
+- **文档体系**：原唯一事实源 `Loom_核心业务主链梳理_v3.md` 已于 2026-09-13 归档删除，内容 **100% 迁入 docs/**（231 段段落级核验零丢失）；01–09 为 v3 忠实切分（Part A/B/C/D/E 全覆盖），10–17 为同日新增工程骨架文档，18 为同日新增前端 i18n/设计 Token 工程建议（🟡 待拍板）。
 - **权威口径**：13 段链（CHAIN_13，01 PRD）为唯一权威；03-A~E 展示口径（09）并存不混用，冲突以 01 为准。
 - **已定稿事实基线**：Q1–Q72 均已有决策记录（02，含正式采纳与"临时采纳"两类）；S 级红旗 4 条经 Q34/Q60 等解决（02 收官注、03 已标销账）。**M0 已于 2026-09-13 完成**：Q2/Q22/Q60(a/b/c) 转定稿（02 新增"✅定稿"状态与转正注记）；新裁 Q22a（分项打分口径）/Q22b（多样性函数 + AI 失败兜底），评分细则同步 01 段5、06 §1.1、§C2；业务方 3 份素材采纳经负责人确认（02 C1.16）；段 1-6 缺口实体 ProductSpace / g2FieldCandidates 已补字段（04/10）。挂账 4 子项（不阻塞 M1）：PS.lifecycle 迁移触发、~~18 通用字段值归属（M1 前定）~~ ✅ Q74 已裁决（两处落库 profile + profile_snapshot）、候选实体多租户可见性、候选状态枚举。**两套路线图口径冲突已于 2026-09-13 由负责人裁决合并（Q73，08 §1.3）：A7 为骨 + D9 厚度，段 12 后置 V2，V1 驾驶舱只留 Token 成本 + 人工审核 2 个；08 §2 已重排。至此原文挂起的待裁决事项全部清零。** 技术选型 6 项**已拍板定稿**（14，2026-09-13：模块化单体 / 自研注册表编排器 / PG+pgvector+Redis / DB+广播热更新 / 进程内合规模块 / Evaluation+Golden 两件套），技术栈 = FastAPI + Next.js + YAML 编排；下游 15/17/08/10/06 已同步刷新。
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。

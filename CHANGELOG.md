@@ -6,6 +6,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ### Added
 
+- **新增 docs/18 前端 i18n 与设计 Token 方案（2026-09-13，🟡 工程建议）** — 界面 i18n 与内容多语言划界（Q58 内容侧不重定义；运营数据中文名 V1 canonical、V3 再扩 name_i18n）；建议 next-intl + `[locale]` 路由，V1 仅 zh-CN、文案全量走消息表、后端只返枚举码、UTC 存储/上海展示，V3 随路线图启用外语；设计 Token 建议 primitive→semantic→component 三层 CSS 变量（状态色对齐 docs/13 状态词）、V1 CSS Modules + tokens.css 不引 Tailwind、深色/租户白牌包留 V3；5 项选型列入待拍板（确认后追加 Q75 升 ✅）；已登记文档地图与 handoff。
+
 - **契约层文档同步 M1–M3 实现（2026-09-13）** — 以"实现补登"形式（不改设计原文、不升级文档状态）把后端切片登记回契约层：05 §1.4 新增已落地 REST 端点清单（M1–M3 全量路由 + 404/409/403/422 错误口径）；04 §2.4/2.6/2.7 补物理表名与字段（M2 七表、候选唯一约束与转正回填、M3 三表与 violations 取值）；10 §2.1/2.2 补 Alembic 0001–0003 物理表与设计名映射；13 §1.12 新增字段池 Gate 流转（标注 Gate 非状态机）；15 §1 补实际包结构（product_intake/modeling/fieldpool）与规划名对应。
 
 - **M3（段3 字段池规划）后端切片落地（2026-09-13）** — Q8 维度来源路由表后台 CRUD（6 路种子：用户输入/通用灵感库/产品专属灵感库/类目模板/G2 高频/合规风险面，被引用禁删，改动 writeAudit）；字段池方案提交（一品一池，每维度强制角色+启用路由+依据标注 line 14081 红线，fid 必须为 active G2 否则违规，新字段进 g2_field_candidates 同名全局复用）；PT-FP-PLAN-V2.0 校验（product_attribute 恒 ≥1；risk_control 仅敏感行业强制 Q11；>8 按 conf 留 Top8、余者入备选档可人工捞回 Q12；<3 不达标转人工不自动补）；conf<0.85 标"需细看"不自动通过（Q9，第一期全量过 Gate）、相似度 ≥0.9 仅机器标记人工终裁（Q10）、目标原子数 15-30（Q15）；WF-02 HumanGate（product_reviewer 角色，非合规方案 409 拒批，approved 锁定，rejected 可重提）；Q13 新字段转正端点（dictionary_admin 角色，fid 冲突/重复转正 409，转正后回填池维度，G2 cat 完整取值待基准 HTML，默认 extension 不污染 common）。迁移 0003（fp_source_routes/field_pools/fp_dimensions + 6 路种子，PG16 up/down/up 通过）；45 测试全绿。未含：WF-02 三 Skill AI 通道（M10）、灵感库两层实体、转正保护期加权（第二期）、拍板值配置中心迁移（M10）。
