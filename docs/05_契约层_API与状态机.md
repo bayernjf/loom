@@ -57,6 +57,41 @@
 - **API Key 唯一入口**：真接 LLM 时模型注册页是唯一入口（line 2101）；Q67 合并为一张模型注册表（per-1M）。
 - **单一出口红线（line 11036）**：全系统只有 E1.1 publishFCW 能生成 final_content_whitelist_id；任何其他模块/Skill/Agent 写 final_id = 越权 = 违反协议。
 
+### 1.4 M1–M3 已落地 REST 端点（2026-09-13 后端切片实现登记）
+
+> 以下为已实现端点（FastAPI，前缀见各行）；原文未给契约，属"开发补规格"落地，**不是已定稿契约的替代**——后续契约层定稿以本节实现为对账输入。错误口径统一：不存在 404 / 业务状态不允许 409 / 角色不符 403 / 输入或规则校验失败 422；所有写操作 writeAudit。
+
+**M1 段1 产品录入（前缀 `/api/intakes`）**
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| POST `` | 创建申请单 | 13 §1.1 |
+| GET `/{intake_id}` / `/{intake_id}/allowed-events` / `/{intake_id}/product-space` | 查询/可迁事件/生成的 PS | — |
+| PATCH `/{intake_id}/profile` | 补资料（审核后不可改 409） | Q74 |
+| POST `/{intake_id}/transitions` | 15 态事件迁移（缺字段 422 / 越权 403 / 非法迁移 409） | Q3/Q5 |
+
+**M2 段2 C1 识别（前缀 `/api`）**
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| GET/PUT `/admin/c1/signal-weights` | Q2 权重表（Σ≠1 → 422） | Q2 |
+| GET/POST `/admin/c1/industries`，PATCH/DELETE `/admin/c1/industries/{industry}` | Q7 阈值 CRUD（默认档删 → 409） | Q7 |
+| POST `/intakes/{intake_id}/c1-recognition` | conf 三分支（高置信 auto_confirm；中置信出待办；低置信须带 category_pending_id） | Q1/Q3/Q5 |
+| POST `/intakes/{intake_id}/ops-decision` | 运营选定/全否 | Q3 |
+| POST `/admin/ops-todos/sweep` | 72h 到期升级（手工触发；调度随 M10） | Q4 |
+| POST/GET `/categories`，PUT `/categories/{category_id}/template` | G1 最小切片 + 叶子模板（fid:'-'/未知 fid → 422） | Q68 |
+| POST `/intakes/{intake_id}/c7-runs` | C7 L1–L4 兜底（L4 提案入库候选） | Q6/Q68 |
+
+**M3 段3 字段池规划（前缀 `/api`）**
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| GET `/admin/fp-source-routes`，PUT/DELETE `/admin/fp-source-routes/{route}` | Q8 来源路由 CRUD（被维度引用 → 409） | Q8 |
+| POST/GET `/product-spaces/{product_space_id}/field-pools`（+ `/current`） | 方案提交（一品一池；违规落 violations 仍 pending_gate）/查当前池 | PT-FP-PLAN |
+| POST `/field-pools/{pool_id}/gate` | WF-02 HumanGate（product_reviewer；非合规批 → 409） | Q9/Q11/Q12 |
+| POST `/field-pools/{pool_id}/dimensions/{dimension_id}/restore` | 备选档捞回（满 8 挤回最低置信） | Q12 |
+| GET `/admin/g2-candidates`，POST `/admin/g2-candidates/{candidate_id}/promote` | 候选列表 / Q13 转正（dictionary_admin；fid 冲突/重复转正 → 409，转正回填池维度） | Q13/Q68 |
+
 ---
 
 ## Part 2 · 状态机定义

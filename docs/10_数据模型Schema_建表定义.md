@@ -91,6 +91,8 @@
 | cat | 'common' 18 个通用录入字段（cat:'common'） | line 682-698 |
 | 共享 | 平台级共享表（无 tenant_id） | 1.1 |
 
+> **实现补登（2026-09-13，M1/M2 后端切片）**：本段物理表已随 Alembic 0001/0002 落地并在 PG16 实测 up/down/up——`product_intake_applications`/`product_spaces`/`g2_fields`/`audit_logs`（0001）；`c1_signal_weights`/`c1_industry_thresholds`/`c1_records`/`ops_todos`/`g1_categories`/`g1_category_templates`/`c7_runs`/`g2_field_candidates`（0002，含文本三权重与 medical/electronics/general 三阈值种子）。设计名 g1_category_tree 实现为 g1_categories + g1_category_templates 两表；c1_thresholds 实现为 c1_industry_thresholds；ops_todos 为 M2 临时表，M10 通用 SLA 引擎（Q49）落地后归并。字段类型/索引以迁移脚本为准，本文 DBA 复核结论不因此变更。
+
 ### 2.2 字段池与原子域（段 3–4）
 
 **g2_field_candidates（字段候选）** — 04 §2.6（2026-09-13 M0 补齐）
@@ -120,6 +122,8 @@
 **atom_conflicts（原子冲突）** — 04 §2.9
 - 类型：disabled_expression（critical→驳回+审计）/ high_risk_single_review（high→单条 Gate）/ evidence_required（high→补证据或驳回）
 - 状态：blocked / pending_gate
+
+> **实现补登（2026-09-13，M3 后端切片）**：field_pools 域随 Alembic 0003 落地（PG16 up/down/up 实测），共 3 表：`fp_source_routes`（Q8 路由，6 路种子）、`field_pools`（一品一池唯一约束，gate 三态含实现补规格 rejected、compliant/violations、target_atom 15-30）、`fp_dimensions`（selected/backup 两档，source_ref 非空，fid/candidate_id 二选一挂接，needs_detail/dup 标记）。product_atom_instances/atom_conflicts 尚未实现，随 M4。
 
 ### 2.3 白名单域（段 5–6）
 
