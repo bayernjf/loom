@@ -6,6 +6,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ### Added
 
+- **M1（段1 产品录入）后端切片落地（2026-09-13）** — productIntake15 状态机（15 态全流转；类目创建中态仅受 B2 三结果，Q5；类目确认 operations 角色闸，Q3；三终态拒事件）；录入 REST `/api/intakes`（创建/查询/allowed-events/profile 补资料/事件迁移/ProductSpace 查询），提交时按 `g2_fields` active 的 cat='common' 行动态校验缺字段阻断（D7.1 闸门1，名单不硬编码），非法迁移 409/越权 403/缺字段 422/审核后资料不可改 409；writeAudit append-only 审计；Alembic 0001（g2_fields/product_intake_applications/product_spaces/audit_logs，PostgreSQL 16 实测 up/down/up 通过）；11 条单元 + 集成测试全绿。配套 Q74 双落库裁决（见下）。未含：WF-01 6 Skill 候选通道（随 M10）、72h SLA（M10）、18 字段真实 fid 种子（待基准 HTML 找回）。
+
+- **决策 Q74（2026-09-13）** — 18 个 G2 cat='common' 字段值两处落库、职责不同：申请单 `profile`（fid 键控，提交后不可变）+ ProductSpace `profile_snapshot`（start_modeling 时整体复制的不可变快照，同 PWS 快照哲学 Q31）；02 新增 C1.18/Q74，04 §2.2、10 §2.1 同步；M0 挂账子项"18 通用字段值归属"销账。
+
 - **建立 docs 唯一事实源体系（2026-09-13）** — 原唯一事实源《Loom_核心业务主链梳理_v3.md》经段落级核验（231 段、业务信息零丢失）后归档删除，内容 100% 迁入 `docs/`（01–09 为 v3 忠实切分，10–17 为工程骨架文档）；配套文档地图 README 承载治理规则与信息保全映射表。详见 [docs/README_文档地图与治理.md](docs/README_文档地图与治理.md)。
 
 - **根目录项目文档** — README（项目介绍与 13 段链一图流）/ handoff（当前状态、待办与文档清单单一事实源）/ AGENTS + CLAUDE（AI 工作规范）/ git-commit-message（提交规范）/ CONTRIBUTING（贡献指南）/ MIGRATION_CONVENTION（迁移规范）/ BENCHMARK（基准登记表，代码启动后启用）。
