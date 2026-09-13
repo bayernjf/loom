@@ -2,9 +2,12 @@ import asyncio
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
+
+from alembic import context
+from app.core.db import Base
+from app.product.product_intake import models as _models  # noqa: F401  (register tables)
 
 config = context.config
 
@@ -18,7 +21,7 @@ database_dsn = os.environ.get(
 )
 config.set_main_option("sqlalchemy.url", database_dsn)
 
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
