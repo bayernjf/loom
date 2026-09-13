@@ -64,6 +64,8 @@ TRANSITIONS: dict[str, list[Transition]] = {
     ],
     PENDING_CONFIRM: [
         Transition("ops_confirm", SUBMITTED, requires_role=ROLE_OPERATIONS),
+        # Q1 direct_approve：高置信由系统自动确认过类目，不需运营（Q3 仅中置信出待办）。
+        Transition("auto_confirm", SUBMITTED),
         Transition("to_cold_start", CATEGORY_CREATING, requires_role=ROLE_OPERATIONS),
     ],
     PENDING_PARAMS: [
