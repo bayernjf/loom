@@ -10,6 +10,7 @@ from app.core import models as _core_models  # noqa: F401  (register audit_logs)
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
 from app.core.db import Base
 from app.product.atom import models as _atom_models  # noqa: F401
+from app.product.condition import models as _condition_models  # noqa: F401
 from app.product.fieldpool import models as _fieldpool_models  # noqa: F401
 from app.product.modeling import models as _modeling_models  # noqa: F401
 from app.product.product_intake import models as _models  # noqa: F401  (register tables)
