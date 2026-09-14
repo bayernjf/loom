@@ -248,6 +248,12 @@
 - 状态：ready_for_publish / 客户确认 / 已发布 / 驳回 / 改稿（Q59）
 - 字段全定义【待补：原文未给出——属开发第 0 步①】
 
+> **实现补登（2026-09-14，M8 后端切片，迁移 0009_m8_stage11，PG16 up/downgrade-1/up 实测）**：
+> - `final_content_whitelists`：final_id PK（uuid1，时间有序）/ task_id 可空（关联批量任务）/ tenant_id / product_space_id / pws_id / pwc_id / pcp_id / csp_package_id / cstp_package_id / cep_package_id / ccr_report_id / law_review_id（后两者可空，Guards 实际要求 ccr 存在）/ platform / slot_id / goal（均索引）/ country String(8) 可空索引 / score Float 可空 / score_detail JSONB（公式/权重/原始分/缩放）/ score_incomplete Bool（server_default false）/ guards JSONB（7 项逐项结果）/ guards_passed Bool / publish_status String(16) server_default 'published' / issued_by / published_at / created_at / updated_at；`UNIQUE(pws_id, pwc_id, platform, slot_id)`（含 country 维度的重复判定在服务层补 country 条件，uq 约束按 04 §2.21 实现补登口径）。
+> - `fcw_assembly_tasks`（Q55 任务驱动）：task_id PK / tenant_id / product_space_id / pws_id 索引 / platform / goal / country / requested_count / slot_ids JSONB / status(running|completed) / results JSONB（requested/resolved_slots/issued/failures 逐项原因）/ created_by / created_at / completed_at；V1 为同步执行（建单即跑完），异步 worker 随 M10。
+> - 分数口径（Q54，仅排序）：PWC 骨架分与三包 conf 为 0–1 先 ×100 归一，slot fit 本为 0–100；`pwc×100×0.4 + fit×0.3 + mean(三包 conf)×100×0.3`；任一来源缺失 → score=null + incomplete=true，不凑分、不卡发证。
+> - 挂账：WF-09 AI Skills（V2）、draft 生命周期端点（V1 直接 published，draft 列保留无创建入口）、段12 content_products、消费侧 API（Q71 取用走 M5 PWC 消费，FCW 消费契约【待补】）。
+
 ### 2.7 反馈与知识域（段 13）
 
 **cat_feedback（类目效果回流）** — 04 §2.22（字段完整）

@@ -57,7 +57,7 @@
 - **API Key 唯一入口**：真接 LLM 时模型注册页是唯一入口（line 2101）；Q67 合并为一张模型注册表（per-1M）。
 - **单一出口红线（line 11036）**：全系统只有 E1.1 publishFCW 能生成 final_content_whitelist_id；任何其他模块/Skill/Agent 写 final_id = 越权 = 违反协议。
 
-### 1.4 M1–M11 已落地 REST 端点（2026-09-13 起后端切片实现登记；实现序 M7→M11，M8/段11 待续）
+### 1.4 M1–M11 已落地 REST 端点（2026-09-13 起后端切片实现登记；实现序 M7→M11→M8，段11 已闭合）
 
 > 以下为已实现端点（FastAPI，前缀见各行）；原文未给契约，属"开发补规格"落地，**不是已定稿契约的替代**——后续契约层定稿以本节实现为对账输入。错误口径统一：不存在 404 / 业务状态不允许 409 / 角色不符 403 / 输入或规则校验失败 422；所有写操作 writeAudit。
 
@@ -152,6 +152,17 @@
 | GET `/admin/pcp-templates` | Q39 四模板只读（种子 short_video/community/photo_text/ecommerce，17 键 Σ=1.0；实现期初值草稿） | Q39 |
 | GET/POST `/product-spaces/{id}/pcp`，PUT `/pcp/{pcp_id}` | PCP 实例（operations；PS 不存在 404；模板派生或显式 weights，17 键 Σ≤1.0 统一校验器 422；同 PS×平台 active 唯一 409；PUT 为 Q42 人工直编通道，清空 template_code + before/after 审计） | Q40/Q42/Q52/PT-PCP-V1.5 |
 | GET/POST `/product-spaces/{id}/packages`，PUT/DELETE `/packages/{package_id}` | 段9 CSP/CSTP/CEP 静态实例（operations；payload 键按 04 §2.17 定死，缺/多键 422；产品×平台×目的×包型 active 唯一 409；goal 须活跃；DELETE=软归档；行带 tenant/PS 供段11 Guard④⑤） | Q45/Q52/line 863 |
+
+**M8 段11 FCW 组装（前缀 `/api`，E1.1 publishFCW = final_id 唯一出口，line 11036）**
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| POST `/fcw/assemble` | 手动单条发证（operations；body 指定 PS/pws_id(缺省取 active 版)/platform/slot_id/goal/country）：机械解析六路材料→7 项 Guard，全绿 mint final_id 直接 published；任一 Guard 败 → 409 回带逐项 guards（不生成 final_id，失败尝试仍 writeAudit `fcw.assembly_blocked` 并提交）；材料缺失 409、slot/平台不符 422、goal 未知 404、重复发证 409 | PT-FCW-ASM/Q52/Q53/Q55 |
+| POST `/fcw/assembly-tasks` | Q55 任务驱动批量（operations；product×platform×goal×count，可选 slot_ids 长度须=count 且不重复否则 422）：同步逐条组装，不给 slot_ids 时取该平台 active 发布位前 N；单项失败（Guard/材料/去重）不阻断其余，任务 completed，results 留痕 issued/failures 每条原因；每条发证 writeAudit `fcw.issued`（六路材料+Guard 结果+E1_owner=publishFCW），任务另记 `fcw.assembly_task` | Q55 |
+| GET `/fcw/assembly-tasks/{task_id}` | 任务结果（不存在 404） | Q55 |
+| GET `/product-spaces/{id}/fcw`、GET `/fcw/{final_id}` | 成品列表（新→旧）/单条明细（含 guards 明细、score/score_detail/incomplete） | line 870 |
+
+> Guard 七项 code：`g1_pws_frozen`（PWS status=frozen）/`g2_compliance_clear`（block_required=false **且** cleaning_passed=true，无报告不放行【实现补】）/`g3_packages_active`（PCP active + CSP/CSTP/CEP active 且 gate=approved）/`g4_product_space_consistent`（六路 PS 一致）/`g5_tenant_consistent`（六路 tenant 一致）/`g6_law_review`（仅法审被触发时要求 approved，Q49）/`g7_pws_active_version`（is_active=true）。Q54 score（pwc×100×0.4 + fit×0.3 + 三包 conf 均值×100×0.3）仅排序，缺失即 null/incomplete=true，永不做门槛。draft publish_status V1 无创建入口；WF-09 AI Skill 随 V2。
 
 ---
 
