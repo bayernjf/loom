@@ -9,17 +9,29 @@ Q19（同义簇留高亲和者，余为 alias）/Q20（冻结/合规/废弃权�
 WF-03 四个 Skill（ATOM-EXPAND/CANON/AFFINITY/CONFLICT-PRECHECK）的 AI 产物
 由 M10 skill7 通道接入；M4 只接收结构化候选并做确定性定级、冲突、Guard 与流转。
 
-拍板值暂为常量，M10 迁配置中心（02 §C2 已登记 20/50、0.5、7 天、15-30）。
+拍板值经配置中心热更（02 §C2 已登记 20/50、0.5、7 天、15-30；M10c 接入）。
 """
 
 from dataclasses import dataclass, field
 
-BATCH_SIZE_SENSITIVE = 20  # Q14：敏感行业默认 20
-BATCH_SIZE_DEFAULT = 50  # Q14：非敏感默认 50
+from app.core.config_center.knobs import knob
 
-LOW_AFFINITY_LINE = 0.5  # Q16：仅标"低亲和"，无硬淘汰线
 
-EVIDENCE_TIMEOUT_DAYS = 7  # Q18：用户改自建议的 14 天
+# Q14/Q16/Q18 拍板值经配置中心热更（02 §C2）。
+def batch_size_sensitive() -> int:
+    return knob("atom.batch_size_sensitive")
+
+
+def batch_size_default() -> int:
+    return knob("atom.batch_size_default")
+
+
+def low_affinity_line() -> float:
+    return knob("atom.low_affinity_line")
+
+
+def evidence_timeout_days() -> int:
+    return knob("atom.evidence_timeout_days")
 
 # Q17：原文只给 critical/high；medium/low 为实现补全等级，标【实现补】。
 RISK_CRITICAL = "critical"
@@ -86,7 +98,7 @@ GUARD_BULK_HIGH_CRITICAL = "bulk_high_critical_forbidden"
 
 
 def default_batch_size(*, sensitive: bool) -> int:
-    return BATCH_SIZE_SENSITIVE if sensitive else BATCH_SIZE_DEFAULT
+    return batch_size_sensitive() if sensitive else batch_size_default()
 
 
 def normalize_text(text: str) -> str:
@@ -95,7 +107,7 @@ def normalize_text(text: str) -> str:
 
 
 def is_low_affinity(affinity: float | None) -> bool:
-    return affinity is not None and affinity < LOW_AFFINITY_LINE
+    return affinity is not None and affinity < low_affinity_line()
 
 
 @dataclass

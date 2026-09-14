@@ -177,7 +177,7 @@ async def submit_batch(session, product_space_id: str, body, actor) -> AtomBatch
         due = (
             None
             if has_evidence
-            else _now() + timedelta(days=atom_rules.EVIDENCE_TIMEOUT_DAYS)
+            else _now() + timedelta(days=atom_rules.evidence_timeout_days())
         )
         candidate = AtomCandidate(
             tenant_id=ps.tenant_id,
@@ -519,7 +519,7 @@ async def revive_candidate(session, candidate_id: str, actor) -> AtomCandidate:
     )
     if cand.status == atom_rules.CAND_PENDING_EVIDENCE:
         cand.evidence_due_at = _now() + timedelta(
-            days=atom_rules.EVIDENCE_TIMEOUT_DAYS
+            days=atom_rules.evidence_timeout_days()
         )
     cand.reject_reason = None
     cand.decided_by = None

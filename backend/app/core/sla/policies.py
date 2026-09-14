@@ -7,7 +7,7 @@
 
 from datetime import UTC, timedelta
 
-from app.core.config_center.cache import config_cache
+from app.core.config_center.knobs import knob
 
 
 def _as_utc(dt):
@@ -16,7 +16,7 @@ def _as_utc(dt):
 
 YELLOW_BY_TYPE = {
     # Q49：法审 24h 黄 / 48h 升级。值可经配置中心热更（sla.yellow_hours，种子 24）。
-    "law_review": lambda: timedelta(hours=config_cache.get_int("sla.yellow_hours", 24)),
+    "law_review": lambda: timedelta(hours=knob("sla.yellow_hours")),
 }
 
 

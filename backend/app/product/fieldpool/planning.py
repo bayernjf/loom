@@ -4,17 +4,39 @@
 AI 不在本模块：WF-02（FIELDPOOL-PLAN→DIM-SOURCE→DIM-MERGE）候选由 M10 接入，
 M3 接收结构化维度候选后做确定性的结构校验、越界处置与细看/疑似重复标记。
 
-拍板值暂为常量，M10 迁配置中心（02 §C2 已登记 0.85 细看线/3-8 维度/0.9 重复线）。
+拍板值经配置中心热更（02 §C2 已登记 0.85 细看线/3-8 维度/0.9 重复线；M10c 接入）。
 """
 
 from dataclasses import dataclass, field
 
-DIM_MIN = 3
-DIM_MAX = 8
-DETAIL_CONF_LINE = 0.85  # Q9：第一期全部走 Gate，低于此线仅标"需细看"
-DUP_SIMILARITY_LINE = 0.9  # Q10：AI 标疑似重复，人工 Gate 终裁
-TARGET_ATOM_MIN_DEFAULT = 15  # Q15
-TARGET_ATOM_MAX_DEFAULT = 30
+from app.core.config_center.knobs import knob
+
+
+def dim_min() -> int:
+    return knob("fieldpool.dim_min")
+
+
+def dim_max() -> int:
+    return knob("fieldpool.dim_max")
+
+
+def needs_detail_conf() -> float:
+    # Q9：第一期全部走 Gate，低于此线仅标"需细看"
+    return knob("fieldpool.needs_detail_conf")
+
+
+def dup_similarity_line() -> float:
+    # Q10：AI 标疑似重复，人工 Gate 终裁
+    return knob("fieldpool.dup_similarity_line")
+
+
+def target_atom_min_default() -> int:
+    # Q15
+    return knob("fieldpool.target_atom_min")
+
+
+def target_atom_max_default() -> int:
+    return knob("fieldpool.target_atom_max")
 
 ROLE_PRODUCT_ATTRIBUTE = "product_attribute"
 ROLE_RISK_CONTROL = "risk_control"
@@ -76,8 +98,8 @@ class PlanEvaluation:
 def _mark(dim: DimInput) -> EvaluatedDim:
     return EvaluatedDim(
         dim=dim,
-        needs_detail=dim.confidence < DETAIL_CONF_LINE,
-        dup=dim.similarity is not None and dim.similarity >= DUP_SIMILARITY_LINE,
+        needs_detail=dim.confidence < needs_detail_conf(),
+        dup=dim.similarity is not None and dim.similarity >= dup_similarity_line(),
     )
 
 
@@ -110,15 +132,16 @@ def evaluate_plan(
             result.violations.append(VIOL_ILLEGAL_FID)
 
     ordered = sorted(marked, key=lambda x: x.dim.confidence, reverse=True)
-    result.selected = ordered[:DIM_MAX]
-    result.backup = ordered[DIM_MAX:]
+    max_dims = dim_max()
+    result.selected = ordered[:max_dims]
+    result.backup = ordered[max_dims:]
 
     roles = {x.dim.role for x in result.selected}
     if ROLE_PRODUCT_ATTRIBUTE not in roles:
         result.violations.append(VIOL_MISSING_PRODUCT_ATTRIBUTE)
     if sensitive and ROLE_RISK_CONTROL not in roles:
         result.violations.append(VIOL_MISSING_RISK_CONTROL)
-    if len(result.selected) < DIM_MIN:
+    if len(result.selected) < dim_min():
         result.violations.append(VIOL_BELOW_MIN)
 
     return result

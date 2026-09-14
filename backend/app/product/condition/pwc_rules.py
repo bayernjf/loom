@@ -16,32 +16,56 @@ M5 接收结构化组合与 AI 分项分，做确定性合规检测、评分、�
 
 from dataclasses import dataclass
 
-# Q21：漏斗单次产出上限、待用池目标量（§C2 配置项）。
-SINGLE_RUN_MAX = 50
-POOL_TARGET = 100
+from app.core.config_center.knobs import knob
 
-# Q71：池健康度三档（line 1451）与补货防抖冷却。
-POOL_MIN = 70
-POOL_CRITICAL = 50
-RESTOCK_COOLDOWN_MINUTES = 5
 
-# Q27：待用池默认库容；None 表示运营显式配"无上限"。
-DEFAULT_CAPACITY = 100
+# 拍板值均经配置中心热更（02 §C2；键见 app.core.config_center.seeds）。
+def single_run_max() -> int:
+    return knob("pwc.funnel_batch_limit")
 
-# Q22/Q22a：评分权重。
-REASONABLENESS_WEIGHT = 0.6
-DIVERSITY_WEIGHT = 0.4
-W_LOGIC = 0.5
-W_FIT = 0.5
-CATEGORY_MULTIPLIER_DEFAULT = 1.0  # Q22：第一期各行业恒 1.0
 
-# Q23：疑似重复线（第一期不用语义向量）。
-DUP_OVERLAP_LINE = 0.8
+def pool_target() -> int:
+    return knob("pwc.pool_target")
 
-# Q24：冷却三配置项。
-COOLDOWN_WINDOW_DAYS = 7
-COOLDOWN_HITS = 3
-COOLDOWN_DURATION_DAYS = 14
+
+def pool_min() -> int:
+    return knob("pwc.pool_min")
+
+
+def pool_critical() -> int:
+    return knob("pwc.pool_critical")
+
+
+def restock_cooldown_minutes() -> int:
+    return knob("pwc.restock_cooldown_minutes")
+
+
+def default_capacity() -> int:
+    return knob("pwc.default_capacity")
+
+
+def reasonableness_weight() -> float:
+    return knob("pwc.reasonableness_weight")
+
+
+def diversity_weight() -> float:
+    return knob("pwc.diversity_weight")
+
+
+def dup_overlap_line() -> float:
+    return knob("pwc.dup_overlap_line")
+
+
+def cooldown_window_days() -> int:
+    return knob("pwc.cooldown_window_days")
+
+
+def cooldown_hits() -> int:
+    return knob("pwc.cooldown_hits")
+
+
+def cooldown_duration_days() -> int:
+    return knob("pwc.cooldown_duration_days")
 
 # Q25：contentGoals 五类标准枚举（line 1090）；名称/颜色/配比上下限运营可维护。
 GOAL_ENGAGEMENT = "ENGAGEMENT"
@@ -111,15 +135,20 @@ def score_combo(
     logic: float | None,
     fit: float | None,
     max_pool_overlap: float,
-    w_logic: float = W_LOGIC,
-    w_fit: float = W_FIT,
-    category_multiplier: float = CATEGORY_MULTIPLIER_DEFAULT,
+    w_logic: float | None = None,
+    w_fit: float | None = None,
+    category_multiplier: float | None = None,
 ) -> ScoreOutcome:
     """Q22/Q22a/Q22b：合规前置在调用处处理，本函数只算加权分。
 
     逻辑合理性/场景情绪搭配任一 AI 分缺失 → 分项记 "—"、不出分，
     组合转人工 Gate（score 仅排序辅助，不做自动通过门槛）。
+    权重缺省取配置中心（调用方显式传值时覆盖，便于测试/未来分行业配置）。
     """
+    w_logic = knob("pwc.w_logic") if w_logic is None else w_logic
+    w_fit = knob("pwc.w_fit") if w_fit is None else w_fit
+    if category_multiplier is None:
+        category_multiplier = knob("pwc.category_multiplier")
     if logic is None or fit is None:
         return ScoreOutcome(
             scored=False,
@@ -136,8 +165,8 @@ def score_combo(
     reasonableness = logic * w_logic + fit * w_fit
     diversity = 1 - max_pool_overlap
     score = (
-        reasonableness * REASONABLENESS_WEIGHT
-        + diversity * DIVERSITY_WEIGHT
+        reasonableness * reasonableness_weight()
+        + diversity * diversity_weight()
     ) * category_multiplier
     return ScoreOutcome(
         scored=True,
@@ -156,12 +185,12 @@ def score_combo(
 
 def is_duplicate(max_pool_overlap: float) -> bool:
     """Q23：≥0.8 标疑似重复，保留分高者、低分降权入备选，人工可改判。"""
-    return max_pool_overlap >= DUP_OVERLAP_LINE
+    return max_pool_overlap >= dup_overlap_line()
 
 
 def should_cooldown(recent_hits: int) -> bool:
     """Q24：冷却窗口内同平台消费次数达线即冷却。"""
-    return recent_hits >= COOLDOWN_HITS
+    return recent_hits >= cooldown_hits()
 
 
 def cooldown_over(cooldown_until, now) -> bool:
@@ -188,10 +217,10 @@ def all_platforms_used(used_platforms: set[str], target_platforms: list[str] | N
 
 def pool_health(ready_count: int) -> str:
     """Q71/line 1451 池健康度三档。"""
-    if ready_count < POOL_CRITICAL:
+    if ready_count < pool_critical():
         return "critical"
-    if ready_count < POOL_MIN:
+    if ready_count < pool_min():
         return "low"
-    if ready_count < POOL_TARGET:
+    if ready_count < pool_target():
         return "healthy_below_target"
     return "target"

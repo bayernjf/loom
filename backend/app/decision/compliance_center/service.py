@@ -202,7 +202,7 @@ async def ensure_law_review(session, ps: ProductSpace, snapshot: PwsSnapshot) ->
             entity_id=review.law_review_id,
             assignee_role=ccr_rules.ROLE_INTERNAL_COMPLIANCE,
             detail={"domain": domain, "pws_id": snapshot.pws_id},
-            due_at=_now() + timedelta(hours=ccr_rules.LAW_REVIEW_DUE_HOURS),
+            due_at=_now() + timedelta(hours=ccr_rules.law_review_due_hours()),
         )
     )
     await append_audit(
@@ -462,7 +462,7 @@ async def rescan_for_entry(session, entry: ComplianceWordlistEntry) -> list[dict
                     "word": entry.word,
                     "country": entry.country,
                 },
-                due_at=now + timedelta(days=pws_rules.READY_TODO_DUE_DAYS),
+                due_at=now + timedelta(days=pws_rules.ready_todo_due_days()),
             )
             session.add(todo)
             await session.flush()
@@ -529,7 +529,7 @@ async def rescan_for_entry(session, entry: ComplianceWordlistEntry) -> list[dict
                     "country": entry.country,
                     "pws_id": fcw.pws_id,
                 },
-                due_at=now + timedelta(days=pws_rules.READY_TODO_DUE_DAYS),
+                due_at=now + timedelta(days=pws_rules.ready_todo_due_days()),
             )
             session.add(todo)
             await session.flush()

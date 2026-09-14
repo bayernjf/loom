@@ -5,12 +5,22 @@
 
 import hashlib
 
-# Q28：就绪门全绿出待办，7 天（配置项）未冻结升级提醒；M10 配置中心前为代码常量。
-READY_TODO_DUE_DAYS = 7
-# line 2634：≥3 个已批准原子。
-MIN_APPROVED_ATOMS = 3
-# line 2634：≥1 个 active PWC。
-MIN_ACTIVE_PWCS = 1
+from app.core.config_center.knobs import knob
+
+
+def ready_todo_due_days() -> int:
+    # Q28：就绪门全绿出待办，7 天（配置项）未冻结升级提醒。
+    return knob("pws.ready_todo_due_days")
+
+
+def min_approved_atoms() -> int:
+    # line 2634：≥3 个已批准原子。
+    return knob("pws.min_approved_atoms")
+
+
+def min_active_pwcs() -> int:
+    # line 2634：≥1 个 active PWC。
+    return knob("pws.min_active_pwcs")
 
 # Q31：大版本递增 v1.0→v2.0。
 VERSION_PREFIX = "v"

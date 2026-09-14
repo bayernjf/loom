@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
+from app.core.config_center.knobs import knob
 from app.product.modeling import c1, c7
 from app.product.modeling.models import (
     C1IndustryThreshold,
@@ -29,8 +30,6 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
 )
 from app.product.product_intake.service import IntakeNotFound
-
-OPS_ASSIST_SLA_HOURS = 72  # Q4；M10 通用 SLA 引擎上线后按待办类型配置（02 §C2）
 
 
 class ConfigError(Exception):
@@ -252,7 +251,7 @@ async def submit_recognition(session, intake_id, body) -> tuple[C1Record, OpsTod
                 "top_candidates": record.top_candidates,
                 "reason": "mid_confidence" if conf < industry_row.threshold else "contradiction",
             },
-            due_at=now + timedelta(hours=OPS_ASSIST_SLA_HOURS),
+            due_at=now + timedelta(hours=knob("c1.ops_assist_sla_hours")),
         )
         session.add(todo)
     else:
@@ -471,7 +470,7 @@ async def resolve_c7(session, intake_id, body, actor) -> C7Run:
             c7.validate_fids(body.required_fids)
             ratio = c7.coverage(body.required_fids, active_fids)
             matched = [fid for fid in body.required_fids if fid in set(active_fids)]
-            if ratio >= c7.LAYER3_COVERAGE_FLOOR:
+            if ratio >= c7.layer3_coverage_floor():
                 run.layer, run.field_list, run.detail = (
                     3,
                     matched,

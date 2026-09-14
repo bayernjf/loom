@@ -2,6 +2,8 @@
 同级从严（Q36）、block_required 判定（PT-COMPLIANCE-V2.0）、Q49 敏感领域触发。
 """
 
+from app.core.config_center.knobs import knob
+
 # Q50：国家法规 > 平台规则 > 通用底座默认（固定优先序，不可配置）。
 LAYER_COUNTRY = "country"
 LAYER_PLATFORM = "platform"
@@ -23,7 +25,10 @@ LAW_APPROVED = "approved"
 LAW_REJECTED = "rejected"
 
 # Q49：法审待办 48h（24h 黄/48h 升级上级；黄色为看板态，sweep 升级随 M10 SLA 引擎）。
-LAW_REVIEW_DUE_HOURS = 48
+def law_review_due_hours() -> int:
+    return knob("ccr.law_review_due_hours")
+
+
 ROLE_INTERNAL_COMPLIANCE = "internal_compliance"
 TODO_TYPE_LAW_REVIEW = "law_review"
 # Q51：词表生效即扫命中 active 快照 → 提请 BO-07 强制重冻（wordlist_hit）。

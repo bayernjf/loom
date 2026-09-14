@@ -34,8 +34,8 @@ class DimensionItem(BaseModel):
 
 class PlanSubmitRequest(BaseModel):
     dimensions: list[DimensionItem] = Field(min_length=1)
-    target_atom_min: int = planning.TARGET_ATOM_MIN_DEFAULT
-    target_atom_max: int = planning.TARGET_ATOM_MAX_DEFAULT
+    target_atom_min: int = Field(default_factory=planning.target_atom_min_default)
+    target_atom_max: int = Field(default_factory=planning.target_atom_max_default)
     actor: Actor
 
 

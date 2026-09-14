@@ -320,7 +320,7 @@ async def restore_dimension(session, pool_id: str, dimension_id: str, actor) -> 
     ).all()
 
     bumped = None
-    if len(selected) >= planning.DIM_MAX:
+    if len(selected) >= planning.dim_max():
         bumped = min(selected, key=lambda d: d.confidence)
         bumped.status = planning.DIM_BACKUP
     target.status = planning.DIM_SELECTED
@@ -366,7 +366,7 @@ def _recheck_compliance(
         violations.append(planning.VIOL_MISSING_PRODUCT_ATTRIBUTE)
     if sensitive and planning.ROLE_RISK_CONTROL not in roles:
         violations.append(planning.VIOL_MISSING_RISK_CONTROL)
-    if len(selected) < planning.DIM_MIN:
+    if len(selected) < planning.dim_min():
         violations.append(planning.VIOL_BELOW_MIN)
     return not violations, violations
 

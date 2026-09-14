@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
+from app.core.config_center.knobs import knob
 from app.product.condition import pwc_rules as r
 
 
@@ -87,9 +88,10 @@ def test_pool_health_bands():
 
 
 def test_constants_traceability():
-    assert r.SINGLE_RUN_MAX == 50
-    assert r.DEFAULT_CAPACITY == 100
-    assert (r.REASONABLENESS_WEIGHT, r.DIVERSITY_WEIGHT) == (0.6, 0.4)
-    assert (r.W_LOGIC, r.W_FIT) == (0.5, 0.5)
-    assert (r.COOLDOWN_WINDOW_DAYS, r.COOLDOWN_HITS, r.COOLDOWN_DURATION_DAYS) == (7, 3, 14)
+    # 拍板值单一事实源为配置中心种子（02 §C2）；缓存未引导时 knob() 回落种子默认。
+    assert r.single_run_max() == 50
+    assert r.default_capacity() == 100
+    assert (r.reasonableness_weight(), r.diversity_weight()) == (0.6, 0.4)
+    assert (knob("pwc.w_logic"), knob("pwc.w_fit")) == (0.5, 0.5)
+    assert (r.cooldown_window_days(), r.cooldown_hits(), r.cooldown_duration_days()) == (7, 3, 14)
     assert len(r.CONTENT_GOALS) == 5
