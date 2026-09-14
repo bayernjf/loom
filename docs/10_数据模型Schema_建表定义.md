@@ -280,8 +280,10 @@
 
 ### 2.8 治理与平台域（横切）
 
-**skill_run_logs（Skill 运行日志）** — 04 §3 待补
+**skill_run_logs（Skill 运行日志）** — 04 §3 待补（切片 e 已补字段实现，Q76）
 - 输入/输出/成本/置信度/失败/人工修改记录；**不可 mutate**（append-only）
+- **实现补登（2026-09-14，M10 切片 e，迁移 0012_m10_skill7）**：物理表名 `skill_runs`，落于 `app/core/skill7/models.py`。run_id String36 PK（uuid1 时间有序）/ skill_id String64 索引 / wf_id String16 可空 / tenant_id·product_space_id 可空索引（横切平台级运行留空）/ status String16 索引（`succeeded`=外部投递终结态、`requested`=系统触发尚无产出（Q71 补货，Q76-4）；`failed` 预留）/ source String16（`delivery`=operations 外部投递、`restock_auto`=system 消费触发）/ `input`/`output` JSONB（SQLite 变体 JSON）/ input_tokens·output_tokens Int 可空（成本金额待 Q67 模型注册表，未建列）/ confidence Float 可空 / error Text 可空 / created_by（投递=actor.id，补货=`system`）/ created_at 索引。无任何 update/delete 代码路径。
+- 同迁移建 **`skill_candidates`**（skill7 通用候选，Q76-3；15 §3 通用管道；04 原无此实体，字段为本次实现补）：candidate_id String36 PK（uuid1）/ run_id 索引 + candidate_index Int，uq(run_id,candidate_index) / skill_id 索引 / wf_id / tenant_id 可空索引 / product_space_id 索引 / target_type String32（试点仅 `pwc_combo`）/ payload JSONB（confirmed 原样应用、modified 整体替换并置 human_modified=true）/ state String16 索引（pending_review/applied/archived；投递即 pending_review，ai_suggested 不持久化【实现补】）/ applied_refs JSONB（适配器落库结果 id 列表）/ human_modified Bool server_default false / review_note / reviewed_by / reviewed_at / created_at。每次投递/裁决/补货 writeAudit（skill7.run_delivered / candidate_applied / candidate_rejected / restock_requested）。PG16 up/downgrade-1/up 实测。
 
 **audit_logs（writeAudit）** — 04 §3 待补
 - 所有人工操作 + AI 调用全记录，append-only 不可篡改

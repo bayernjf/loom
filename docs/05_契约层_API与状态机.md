@@ -117,7 +117,7 @@
 | POST `/pwcs/{pwc_id}/gate` | HumanGate（product_reviewer；approve→ready 受库容 409；reject→archived；blocked 不可批 409） | Q21/Q27 |
 | POST `/product-spaces/{id}/pwc/consume` | Q71 消费：score 降序取用，同平台+账号+发布位去重，跨平台可复用，goals 交集过滤；响应带 usage_record/platform_state/pool_ready_count/pool_health/restock_hint；无可取 409 | Q24/Q71 |
 | POST `/pwcs/{pwc_id}/hot` `/archive` | Q61 爆款手工标/取消（operations；V1 无自动检测）；归档（operations） | Q61/Q24 |
-| 冷却 sweep / 自动补货（**未开 HTTP**） | `sweep_cooldowns`（14 天到期回 available）已实现为服务函数；critical→target 自动补货（5 分钟防抖）未实现；定时触发随 M10 | Q24/Q71 |
+| 冷却 sweep / 自动补货（**补货已实现，sweep 未开 HTTP**） | `sweep_cooldowns`（14 天到期回 available）已实现为服务函数；**critical→target 自动补货已于切片 e 接通**（Q76-4：跌破 critical 经 5 分钟防抖落 `skill_runs(status=requested)`，不造候选，consume 响应回带 `restock_run_id`）；冷却 sweep 定时触发随 M10 | Q24/Q71/Q76 |
 
 **M6 段6 PWS 冻结（前缀 `/api`）**
 
@@ -195,6 +195,18 @@
 > **有意开放、不加闸**（Q75 第 4 条，实现补登）：`POST /pws/{id}/pws/evaluate`（Q28"系统提请"——机械求值 + 幂等出单，非人工决策）、`POST /atom-candidates/{id}/revive`（仅 evidence_timeout 驳回可复活，前置状态即闸）。
 > 既有各模块服务内 `RoleNotAllowed`（config_center/whitelist_center/compliance_center 等）保持不动，本次只收口红线，不做全库异常类合并；统一 403 口径不变。
 
+**M10 切片 e · skill7 AI 候选通道（WF-04 试点）**（2026-09-14，迁移 0012，Q76；路由前缀 `/api`）
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| POST `/skill-runs` | AI 产出外部投递（**operations**，越权 403；机器对机器 API Key 通道 05 §1.2【待补】）：body=skill_id/wf_id(可省，按注册表推导)/product_space_id/input/output/candidates[{target_type,payload}]/confidence/tokens/actor；未注册 Skill 或 Skill 不属该 WF → 422，PS 不存在 404，payload 不符适配器契约 422；写不可变 `skill_runs(status=succeeded,source=delivery)` + 每候选 `skill_candidates(pending_review)`，writeAudit `skill7.run_delivered` | Q76-1/2/5，06 §4 |
+| GET `/skill-runs`（`?product_space_id=&status=`）/ GET `/skill-runs/{run_id}` | 运行日志查询（无更新/删除端点；历史不可 mutate，PT-COMPLIANCE）；不存在 404 | 06 §4.3 |
+| GET `/skill-candidates`（`?product_space_id=&state=`） | 候选列表 | 05 §2.3 |
+| POST `/skill-candidates/{id}/decision` | 人工裁决（角色取 WF 定义 skill7 Gate 插槽；WF-04=**product_reviewer**）：confirmed→适配器经既有 `pwc/funnel`(source=ai) 落库（预筛/合规/评分/限量/Gate 全不绕过）置 applied+applied_refs；modified 必带替换 payload（422）、human_modified=true 后同样 apply；rejected→archived；非 pending_review 409；不存在 404；适配器业务错误沿用漏斗口径 404/409/422；writeAudit `skill7.candidate_applied/rejected` | Q76-3，05 §2.3 |
+
+> 补货（Q71/Q76-4）：`POST .../pwc/consume` 致待用数跌破 critical 时，按 `pwc.restock_cooldown_minutes`（5min）防抖创建 `skill_runs(status=requested,source=restock_auto,created_by=system)`，**只记 run 不产候选**；响应新增 `restock_run_id`（防抖期内为 null）。外部投递迟到产出后正常走 pending_review。
+> 注册表：`runtime/workflows/WF-04.yaml`（顺序 Skill + 2 个 Gate 插槽）与 `runtime/skills/{PWC-BUILDER,COMBO-VALIDATE,PWC-SCORING}/skill.yaml`（06 §4.1 字段；原文称 11 字段但逐项列出 10 项，按 10 项实现不擅补）；加载器 `app/core/skill7/registry.py`，`LOOM_RUNTIME_DIR` 可覆盖路径。**仍挂账**：WF-01/02/03（M2 C1/C7、M3 维度、M4 原子批次）占位入参的通道替换按本切片同模式后续切片；Q67 模型注册表/LLM 客户端/API Key 鉴权随真接 LLM 切片；编排器并行/DAG 二期；多副本补货防抖锁随调度锁挂账。
+
 ---
 
 ## Part 2 · 状态机定义
@@ -242,6 +254,8 @@
 | rejected | → archived | 拒绝后归档 |
 | applied | 应用态 | — |
 | archived | 终态 | — |
+
+> **实现补登（2026-09-14，M10 切片 e，Q76）**：通道落 `app/core/skill7/`；`ai_suggested` 为生产者侧态，外部投递落库即 `pending_review`，不持久化 ai_suggested 行【实现补】。confirmed/modified → 适配器应用后置 `applied`（不经过独立 confirmed/modified 持久态，二者体现在 human_modified 与审计动作上）；rejected → `archived`。WF-04 试点适配器复用既有 `pwc/funnel`，故 AI 候选落库后仍走 PWC 自己的待 Gate→待用流程，skill7 不替代任何既有 Gate。
 
 ### 2.4 G1 类目状态机（段2）
 | 状态 | 说明 | Guard/条件 |
