@@ -14,6 +14,7 @@ from app.product.condition import models as _condition_models  # noqa: F401
 from app.product.fieldpool import models as _fieldpool_models  # noqa: F401
 from app.product.modeling import models as _modeling_models  # noqa: F401
 from app.product.product_intake import models as _models  # noqa: F401  (register tables)
+from app.product.whitelist_center import models as _whitelist_models  # noqa: F401
 
 config = context.config
 
