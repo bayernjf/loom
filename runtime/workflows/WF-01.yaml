@@ -1,10 +1,13 @@
 # WF-01 · 段1+段2 冷启动识别（docs/06 §1）
 # 顺序：PARSE → UNDERSTAND → CAT-RECOG → TYPE-MATCH → MISSING-INFO → RISK-TAG；
-# 14 §2.2 自研注册表驱动编排器最小集；M10 WF 替换切片 2/3（Q79）。
-# 仅 CAT-RECOG 向 skill7 通道产出整结果单候选（target=c1_recognition），
-# confirmed/modified 经适配器复用 modeling.submit_recognition：
-# Q1 三分支机械逻辑不变（高置信 auto_confirm / 中置信 ops_assist 待办 /
-# 低置信 cold_start），skill7 Gate 是 AI 产出准入裁决，不替代既有 ops-decision。
+# 14 §2.2 自研注册表驱动编排器最小集；M10 WF 替换切片 2/3（Q79）+ C7 Layer4（Q81）。
+# 两个候选产出者：
+#   CAT-RECOG → target=c1_recognition（识别整结果），confirmed/modified 经适配器
+#     复用 modeling.submit_recognition：Q1 三分支机械逻辑不变，skill7 Gate 是
+#     AI 产出准入裁决，不替代既有 ops-decision。
+#   TYPE-MATCH → target=c7_layer4（整 C7 解析请求，含 l4_proposals），confirmed/
+#     modified 经适配器复用 modeling.resolve_c7：L1→L4 机械判定（Q6/Q68）不变，
+#     落在 L1/2/3 时提案自然不生效；新字段候选后续 Q13 dictionary_admin 转正。
 # 锚点 intake_id（段2 时 ProductSpace 尚未创建，Q79-4）。
 wf_id: WF-01
 stage: 2
@@ -17,6 +20,9 @@ skills:
     candidate_target: c1_recognition
     single_candidate: true
   - skill_id: TYPE-MATCH
+    produces_candidates: true
+    candidate_target: c7_layer4
+    single_candidate: true
   - skill_id: MISSING-INFO
   - skill_id: RISK-TAG
 gates:
@@ -24,6 +30,10 @@ gates:
     channel: skill7
     role: operations
     note: AI 识别结果准入裁决（Q79-2）；中置信后续 ops_assist 待办与 Q3/Q4 流程不变
+  - after: TYPE-MATCH
+    channel: skill7
+    role: operations
+    note: C7 Layer4 新字段提案准入裁决（Q81-3）；深度审核/转正仍走 Q13 dictionary_admin
 failure_policy:
   low_confidence: cold_start        # Q1：<0.6 转 B2 新类目创建中
   mid_confidence: ops_assist        # Q3：出运营待办，72h SLA

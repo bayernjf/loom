@@ -2,7 +2,7 @@
 
 key = candidate.target_type；适配器只调用既有业务服务，不绕过任何
 预筛/合规/评分/限量/Gate。已接入：pwc_combo（WF-04）、field_plan（WF-02，Q78）、
-c1_recognition（WF-01，Q79）、atom_batch（WF-03，Q80）。
+c1_recognition（WF-01，Q79）、atom_batch（WF-03，Q80）、c7_layer4（WF-01，Q81）。
 """
 
 from collections.abc import Awaitable, Callable
@@ -88,9 +88,28 @@ async def apply_atom_batch(
     return [batch.batch_id]
 
 
+async def apply_c7_layer4(
+    session: AsyncSession, candidate: SkillCandidate, actor: Actor
+) -> list[str]:
+    # Q81：TYPE-MATCH 整 C7 解析单候选 → 既有 modeling.resolve_c7，
+    # L1→L4 机械判定（Q6 覆盖率/Q68 fid 拦截/L4 候选落库）一项不绕；
+    # 实际落在 L1/2/3 时 l4_proposals 自然不生效。Q13 转正 Gate 不变。
+    from app.product.modeling import service as modeling_service
+    from app.product.modeling.schemas import C7ResolveRequest
+
+    data = dict(candidate.payload)
+    data.pop("actor", None)
+    body = C7ResolveRequest(**data, actor=actor)
+    run = await modeling_service.resolve_c7(
+        session, candidate.intake_id, body, actor
+    )
+    return [run.run_id]
+
+
 ADAPTERS: dict[str, CandidateAdapter] = {
     "pwc_combo": apply_pwc_combo,
     "field_plan": apply_field_plan,
     "c1_recognition": apply_c1_recognition,
     "atom_batch": apply_atom_batch,
+    "c7_layer4": apply_c7_layer4,
 }
