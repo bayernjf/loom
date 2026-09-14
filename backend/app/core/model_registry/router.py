@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
-from app.core.model_registry import extraction, gateway
+from app.core.model_registry import c7_resolve, extraction, gateway
 from app.core.model_registry.schemas import (
     AIModelCreate,
     AIModelPatch,
     AIModelView,
+    C7ResolveInvokeRequest,
     KeyCreate,
     KeyView,
     PromptPublish,
@@ -25,6 +26,8 @@ from app.core.model_registry.schemas import (
     SceneRouteView,
 )
 from app.core.rbac import PermissionDenied
+from app.product.modeling import c7 as c7_rules
+from app.product.modeling.service import CategoryNotFound
 
 router = APIRouter(tags=["model-registry"])
 
@@ -253,6 +256,50 @@ async def invoke_c1_recognition(
     except gateway.GenerationUpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except extraction.ExtractionOutputInvalid as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await session.commit()
+    return {
+        "run_id": run.run_id,
+        "source": run.source,
+        "model_id": run.model_id,
+        "input_tokens": run.input_tokens,
+        "output_tokens": run.output_tokens,
+        "candidates": [
+            {"candidate_id": c.candidate_id, "state": c.state, "target_type": c.target_type}
+            for c in candidates
+        ],
+    }
+
+
+# ---------- C7 Layer4 TYPE-MATCH（Q84） ------------------------------------------
+
+@router.post("/api/intakes/{intake_id}/c7/llm-resolve", status_code=201)
+async def invoke_c7_resolve(
+    intake_id: str,
+    body: C7ResolveInvokeRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        run, candidates = await c7_resolve.invoke_c7_resolve(
+            session, intake_id, body, body.actor
+        )
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except c7_resolve.C7ResolveInvokeNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CategoryNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"category {exc} not found") from exc
+    except c7_resolve.C7ResolveInvokeState as exc:
+        raise _http409(str(exc))
+    except gateway.ModelUnavailable as exc:
+        raise _http409(str(exc))
+    except gateway.ModelConfigError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except c7_rules.IllegalFid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except gateway.GenerationUpstreamError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except c7_resolve.C7ResolveOutputInvalid as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await session.commit()
     return {

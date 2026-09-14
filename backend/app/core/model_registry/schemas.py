@@ -89,3 +89,10 @@ class PromptVersionDetail(PromptVersionView):
 
 class RecognizeInvokeRequest(BaseModel):
     actor: Actor
+
+
+class C7ResolveInvokeRequest(BaseModel):
+    # Q84：operations 显式触发 TYPE-MATCH，类目与必填位由触发侧给定（有界输入）。
+    category_id: str = Field(min_length=1)
+    required_fids: list[str] = Field(default_factory=list)
+    actor: Actor

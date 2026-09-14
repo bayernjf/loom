@@ -54,7 +54,30 @@ def build_pwc_builder(variables: dict) -> dict:
     return {"combos": combos}
 
 
+def build_type_match(variables: dict) -> dict:
+    """TYPE-MATCH 结构替身（Q84-3）：只按 G2 覆盖率缺口造结构提案，不打任何分。
+
+    原样回传 category_id/required_fids；为每个未被 active G2 fid 覆盖的必填位
+    产一条 field_name 提案（definition 为确定性结构说明）；覆盖已足时给空数组。
+    """
+    required = list(variables.get("_required_fids", []) or [])
+    active = set(variables.get("_active_fids", []) or [])
+    missing = [fid for fid in required if fid not in active]
+    return {
+        "category_id": variables.get("_category_id"),
+        "required_fids": required,
+        "l4_proposals": [
+            {
+                "field_name": f"待补字段·{fid}",
+                "definition": "synthetic TYPE-MATCH 覆盖率缺口结构提案",
+            }
+            for fid in missing
+        ],
+    }
+
+
 BUILDERS: dict[str, Callable[[dict], dict]] = {
     "CAT-RECOG": build_cat_recog,
     "PWC-BUILDER": build_pwc_builder,
+    "TYPE-MATCH": build_type_match,
 }
