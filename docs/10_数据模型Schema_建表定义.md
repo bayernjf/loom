@@ -305,6 +305,8 @@
 - 热更新（14 §2.4 定稿）：配置落库 + 变更广播；**发布=新版本 + 原子切换 + writeAudit**，自带版本历史与回滚；建议表结构 key 唯一 + 版本子表（config_center_versions）【建议】
 - 权重和=1（Q2）与 Σ≤1.0（Q40）做成**通用校验器**被多处复用【建议】
 
+> **实现补登（2026-09-14，M10 切片 a，迁移 0010_m10_config_center，PG16 up/downgrade-1/up 实测）**：物理表 `config_items` + `config_item_versions` 落于 `app/core/config_center/`。**config_items**：key String128 PK / category String64 索引 / value JSONB（SQLite 变体 JSON）/ value_type String16（int/float/bool/string/json）/ validation JSONB 可空（`{min,max,choices}` 通用边界/枚举校验；bool 不触发数值边界）/ source_ref String64（Q 编号或 line 出处）/ version Int（server_default 1）/ updated_by / created_at / updated_at（Python 端 default+onupdate 落值，避免提交后过期属性惰性 IO）。**config_item_versions**：version_id String36 PK（uuid1；种子行用 uuid5(`loom-config-seed:{key}`) 确定性值）/ key 索引 / version / value JSONB / change_note / changed_by / created_at；唯一约束 `uq_config_version_key_version(key,version)`；回滚=以**新** version 重发历史值（append-only，历史行永不改写）。迁移种子 **54 项**覆盖 C2 全部纯标量旋钮（c1/fieldpool/atom/pwc/pws/sla/fcw/content/feedback/platform/agent 各类，含后置阶段的 Q56/Q57/Q61/Q63/Q65 与 line2119 agent 限额——"配置页面先行"）；**已有专用 CRUD 表的 C2 项不入种子**（行业阈值、信号权重、词库、CP-LAW、contentGoals、发布位、PCP 模板、模型注册表等），避免双事实源。类型规则（`config_rules.coerce`）：bool 必须是 JSON 真布尔（拒 1/"true"）、int 拒浮点与字符串、float 接受 int、string 非空。每次发布/回滚 append_audit（entity_type=`config_item`，action=`config.update`/`config.rollback`，detail 带 version/value/note）。热更新：进程内单例快照 `config_cache`，仅在会话 `after_commit` 后原子 apply，失败发布不动缓存；多副本 Redis 广播【挂账】。**未含**：应用启动时缓存引导加载、业务模块从常量改读缓存（M10 后续切片）、权重和=1/Σ≤1.0 复用校验器（权重仍在各自 CRUD 表内校验）、配置页前端。
+
 **api_keys（API Key）** — 04 §3 待补
 - 一 Agent 一 Key，可吊销；唯一入口（真接 LLM 时模型注册页是唯一入口，line 2101）；effect-callback 鉴权
 

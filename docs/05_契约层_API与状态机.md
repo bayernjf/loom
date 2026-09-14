@@ -164,6 +164,17 @@
 
 > Guard 七项 code：`g1_pws_frozen`（PWS status=frozen）/`g2_compliance_clear`（block_required=false **且** cleaning_passed=true，无报告不放行【实现补】）/`g3_packages_active`（PCP active + CSP/CSTP/CEP active 且 gate=approved）/`g4_product_space_consistent`（六路 PS 一致）/`g5_tenant_consistent`（六路 tenant 一致）/`g6_law_review`（仅法审被触发时要求 approved，Q49）/`g7_pws_active_version`（is_active=true）。Q54 score（pwc×100×0.4 + fit×0.3 + 三包 conf 均值×100×0.3）仅排序，缺失即 null/incomplete=true，永不做门槛。draft publish_status V1 无创建入口；WF-09 AI Skill 随 V2。
 
+**M10 切片 a · 配置中心**（2026-09-14，迁移 0010，路由前缀 `/api/admin/config`）
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| GET `` （`?category=` 可过滤） | 配置项列表（key/category/value/value_type/validation/source_ref/version/时间）；只读 | 02 §C2 / 07 §2.4 |
+| GET `/{key}` / GET `/{key}/history` | 单项（未知键 404）/版本历史（新→旧，种子为 v1） | 14 §2.4 |
+| PUT `/{key}` | 改值发布（仅 `platform_admin`【实现补：07 §2.3 平台级管理员 Q46/Q64 的英文角色码】；body=value/change_note/actor）：类型+min/max/choices 校验失败 422、未知键 404、越权 403；发布=coerce→value/version+1→写版本行→writeAudit(`config.update`)→事务提交后进程内快照原子切换 | 14 §2.4 |
+| POST `/{key}/rollback` | 回滚到历史版本（platform_admin；target_version 不存在 404）：以新版本号重发该值（非覆盖历史），默认 change_note `rollback to vN`，writeAudit(`config.rollback`) | 14 §2.4 |
+
+> 发布语义严格按 14 §2.4：新版本 + 原子切换 + writeAudit；快照切换挂在 SQLAlchemy `after_commit`，事务回滚/校验失败不触缓存（已测试）。V1 单进程模块化单体，仅做进程内热更新；多副本变更广播（Redis pub/sub）【挂账，多副本部署前补】。配置缓存的进程启动加载与各业务模块常量消费迁移在后续切片，当前 M1–M8 拍板值仍读代码常量。
+
 ---
 
 ## Part 2 · 状态机定义
