@@ -28,6 +28,10 @@ class ComplianceWordlistEntry(Base):
     # None = 适用于全部国家/行业（Q48：适用国家/适用行业）。
     country: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     industry: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Q50 规则层级：country 国家法规 > platform 平台规则 > base 底座默认（不可配置）。
+    layer: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="base", server_default="base"
+    )
     effective_from: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

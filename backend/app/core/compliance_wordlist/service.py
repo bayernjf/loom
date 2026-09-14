@@ -15,6 +15,16 @@ from app.product.atom.atom_rules import WordlistHit
 
 PLATFORM_TENANT = "_platform"
 
+_LAYERS = {"country", "platform", "base"}
+
+
+def _normalize_layer(layer: str | None, country: str | None) -> str:
+    if layer is not None:
+        if layer not in _LAYERS:
+            raise ValueError(f"unknown compliance layer: {layer}")
+        return layer
+    return "country" if country else "base"
+
 
 class EntryNotFound(Exception):
     pass
@@ -43,6 +53,7 @@ async def create_entry(session, body, actor) -> ComplianceWordlistEntry:
         raise WordlistForbidden("wordlist edit requires operations/internal_compliance")
     if body.item.action == "downgrade" and not (body.item.downgrade_target or "").strip():
         raise ValueError("downgrade_target is required when action=downgrade")
+    layer = _normalize_layer(body.item.layer, body.item.country)
     entry = ComplianceWordlistEntry(
         word=body.item.word,
         level=body.item.level,
@@ -50,6 +61,7 @@ async def create_entry(session, body, actor) -> ComplianceWordlistEntry:
         downgrade_target=body.item.downgrade_target,
         country=body.item.country,
         industry=body.item.industry,
+        layer=layer,
         created_by=actor.id,
     )
     session.add(entry)
@@ -81,6 +93,7 @@ async def update_entry(session, entry_id: str, body, actor) -> ComplianceWordlis
     entry.downgrade_target = body.item.downgrade_target
     entry.country = body.item.country
     entry.industry = body.item.industry
+    entry.layer = _normalize_layer(body.item.layer, body.item.country)
     entry.status = "active"
     await append_audit(
         session,
