@@ -50,9 +50,46 @@ def test_registry_loads_wf02_and_skills():
     assert registry.candidate_target_for("WF-04", "PWC-BUILDER") == "pwc_combo"
 
 
+def test_registry_loads_wf01_and_skills():
+    # M10 WF 替换切片 2/3（Q79）：WF-01 + 段2 六 Skill 登记。
+    skills = registry.all_skills()
+    assert {
+        "PARSE",
+        "UNDERSTAND",
+        "CAT-RECOG",
+        "TYPE-MATCH",
+        "MISSING-INFO",
+        "RISK-TAG",
+    } <= set(skills)
+    assert "WF-01" in registry.all_workflows()
+    for skill_id in ("PARSE", "UNDERSTAND", "CAT-RECOG", "TYPE-MATCH", "MISSING-INFO", "RISK-TAG"):
+        for key in (
+            "skill_id",
+            "layer",
+            "version",
+            "input_output_schema",
+            "knowledge_deps",
+            "model_tier",
+            "thresholds",
+            "failure_policy",
+            "review_rule",
+            "cost_limit",
+        ):
+            assert key in skills[skill_id], (skill_id, key)
+    # CAT-RECOG 是 WF-01 唯一候选产出步骤，整结果单候选，target=c1_recognition。
+    step = registry.producer_step_for("WF-01", "CAT-RECOG")
+    assert step["candidate_target"] == "c1_recognition"
+    assert step["single_candidate"] is True
+    assert registry.producer_step_for("WF-01", "PARSE") is None
+    assert registry.candidate_target_for("WF-01", "CAT-RECOG") == "c1_recognition"
+    # Q79：field_plan 单候选约束同样由声明驱动。
+    assert registry.producer_step_for("WF-02", "DIM-MERGE")["single_candidate"] is True
+
+
 def test_workflow_gate_slot_role():
     assert registry.review_role("WF-04") == "product_reviewer"
     assert registry.review_role("WF-02") == "product_reviewer"
+    assert registry.review_role("WF-01") == "operations"  # Q79-3
 
 
 def test_unknown_skill_and_workflow():

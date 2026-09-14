@@ -1,0 +1,34 @@
+# Golden Cases — CAT-RECOG（WF-01 段2，Q79 切片，Q77 模式人工精选）
+# 从回归矩阵精选防 Q1 三分支机械口径被静默改动的关键裁决，
+# 案例与 datasets 同 schema、同源 refs，数据为合成数据。
+skill_id: CAT-RECOG
+wf_id: WF-01
+cases:
+  - id: golden-cr-001
+    title: 高置信无矛盾 direct_approve（auto_confirm 语义不改三分支，Q79-2）
+    target: decide_branch
+    input:
+      conf: 0.9
+      threshold: 0.85
+      candidates: [{category_id: syn-a, conf: 0.9}, {category_id: syn-b, conf: 0.5}]
+    expected: {branch: direct_approve, conf: 0.9, top_gap: 0.4}
+    source: {refs: [Q1, Q7, Q79-2, "general 默认档 0.85"]}
+
+  - id: golden-cr-002
+    title: 高置信但 Top1-Top2<0.1 矛盾必须转 ops_assist（Q3 红线）
+    target: decide_branch
+    input:
+      conf: 0.92
+      threshold: 0.85
+      candidates: [{category_id: syn-a, conf: 0.92}, {category_id: syn-b, conf: 0.88}]
+    expected: {branch: ops_assist, conf: 0.92, top_gap: 0.04}
+    source: {refs: [Q3, "c1.mid_confidence_top_gap=0.1", "矛盾优先于高置信"]}
+
+  - id: golden-cr-003
+    title: conf<0.6 冷启动地板必转 cold_start（需 B2 候选单，Q5）
+    target: decide_branch
+    input:
+      conf: 0.4
+      threshold: 0.85
+    expected: {branch: cold_start, conf: 0.4, top_gap: null}
+    source: {refs: [Q1, Q5, "c1.cold_start_floor=0.6"]}

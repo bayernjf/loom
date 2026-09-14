@@ -2,7 +2,8 @@
 
 V1 没有进程内 LLM Skill 执行体；Golden Cases 打在具有确定性替身的 Skill 上：
 PWC-SCORING（Q22/Q22a/Q22b 评分）、COMBO-VALIDATE（Q48 词表匹配）、
-DIM-MERGE（PT-FP-PLAN-V2.0 结构校验，Q78 WF-02 切片）。真 LLM 切片后同一批
+DIM-MERGE（PT-FP-PLAN-V2.0 结构校验，Q78 WF-02 切片）、
+CAT-RECOG（c1 加权 conf/三分支判定，Q79 WF-01 切片）。真 LLM 切片后同一批
 YAML 案例改打 Skill 输出，只需在此注册表增改适配器，案例数据不动。
 """
 
@@ -77,6 +78,29 @@ def _evaluate_plan(raw: dict) -> dict:
     }
 
 
+def _weighted_conf(raw: dict) -> float:
+    from app.product.modeling.c1 import weighted_conf
+
+    return weighted_conf(raw["scores"], raw["weights"])
+
+
+def _decide_branch(raw: dict) -> dict:
+    from app.product.modeling.c1 import decide_branch
+
+    decision = decide_branch(
+        conf=raw["conf"],
+        threshold=raw["threshold"],
+        top_candidates=raw.get("candidates"),
+        cold_floor=raw.get("cold_floor", 0.6),
+        top_gap_line=raw.get("top_gap_line", 0.1),
+    )
+    return {
+        "branch": decision.branch,
+        "conf": decision.conf,
+        "top_gap": decision.top_gap,
+    }
+
+
 TARGETS: dict[str, Callable[[dict], object]] = {
     "score_combo": _score_combo,
     "is_duplicate": _is_duplicate,
@@ -84,4 +108,6 @@ TARGETS: dict[str, Callable[[dict], object]] = {
     "max_overlap": _max_overlap,
     "match_words": _match_words,
     "evaluate_plan": _evaluate_plan,
+    "weighted_conf": _weighted_conf,
+    "decide_branch": _decide_branch,
 }

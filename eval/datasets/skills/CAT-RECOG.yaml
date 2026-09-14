@@ -1,0 +1,112 @@
+# Evaluation Dataset — CAT-RECOG（WF-01 段2，回归矩阵，Q79 切片自带）
+# target=c1 纯函数：weighted_conf（Q2 权重加权、Σ=1 不归一化）、
+# decide_branch（Q1 三分支 / Q3 Top1-Top2<0.1 矛盾线 / 0.6 冷启动地板）。
+# 不打错误分支（WeightSumError/MissingSignalScore）：runner 只比对正常返回。
+# 数据均为人工编写合成数据（16 §4，禁用生产数据）。
+skill_id: CAT-RECOG
+wf_id: WF-01
+cases:
+  # ---------- weighted_conf（Q2） ----------
+  - id: cr-wc-001
+    title: Q2 三信号权重 0.50/0.33/0.17 全同分 → 加权等于该分
+    target: weighted_conf
+    input:
+      weights: {name: 0.50, brief: 0.33, sellpoint: 0.17}
+      scores: {name: 0.9, brief: 0.9, sellpoint: 0.9}
+    expected: 0.9
+    source: {refs: [Q2, "migration 0002 seeds", "04 §段2 信号权重"]}
+
+  - id: cr-wc-002
+    title: Q2 异分加权：0.95/0.8/0.6 → 0.475+0.264+0.102=0.841
+    target: weighted_conf
+    input:
+      weights: {name: 0.50, brief: 0.33, sellpoint: 0.17}
+      scores: {name: 0.95, brief: 0.8, sellpoint: 0.6}
+    expected: 0.841
+    source: {refs: [Q2, "round(...,4)"]}
+
+  - id: cr-wc-003
+    title: Q2 两信号权重 0.6/0.4 线性组合
+    target: weighted_conf
+    input:
+      weights: {name: 0.6, brief: 0.4}
+      scores: {name: 0.5, brief: 1.0}
+    expected: 0.7
+    source: {refs: [Q2, "Σ=1 精确，不做归一化"]}
+
+  - id: cr-wc-004
+    title: Q2 零分信号不改变其他信号加权（仅简介命中）
+    target: weighted_conf
+    input:
+      weights: {name: 0.50, brief: 0.33, sellpoint: 0.17}
+      scores: {name: 0.0, brief: 1.0, sellpoint: 0.0}
+    expected: 0.33
+    source: {refs: [Q2]}
+
+  # ---------- decide_branch（Q1/Q3） ----------
+  - id: cr-db-001
+    title: Q1 conf≥行业阈值（general 0.85）且无矛盾 → direct_approve
+    target: decide_branch
+    input:
+      conf: 0.9
+      threshold: 0.85
+      candidates: [{category_id: syn-a, conf: 0.9}, {category_id: syn-b, conf: 0.5}]
+    expected: {branch: direct_approve, conf: 0.9, top_gap: 0.4}
+    source: {refs: [Q1, Q7, "general 默认档 0.85"]}
+
+  - id: cr-db-002
+    title: Q1 conf∈[0.6,0.85) → ops_assist，gap 仍回写
+    target: decide_branch
+    input:
+      conf: 0.72
+      threshold: 0.85
+      candidates: [{category_id: syn-a, conf: 0.72}, {category_id: syn-b, conf: 0.5}]
+    expected: {branch: ops_assist, conf: 0.72, top_gap: 0.22}
+    source: {refs: [Q1, Q4, "72h OpsTodo"]}
+
+  - id: cr-db-003
+    title: Q3 高置信但 Top1-Top2 差<0.1 → 矛盾转 ops_assist
+    target: decide_branch
+    input:
+      conf: 0.92
+      threshold: 0.85
+      candidates: [{category_id: syn-a, conf: 0.92}, {category_id: syn-b, conf: 0.88}]
+    expected: {branch: ops_assist, conf: 0.92, top_gap: 0.04}
+    source: {refs: [Q3, "c1.mid_confidence_top_gap=0.1"]}
+
+  - id: cr-db-004
+    title: Q3 gap=0.22≥0.1 不构成矛盾，高置信 → direct_approve
+    target: decide_branch
+    input:
+      conf: 0.92
+      threshold: 0.85
+      candidates: [{category_id: syn-a, conf: 0.92}, {category_id: syn-b, conf: 0.7}]
+    expected: {branch: direct_approve, conf: 0.92, top_gap: 0.22}
+    source: {refs: [Q1, Q3]}
+
+  - id: cr-db-005
+    title: Q1 conf<0.6 冷启动地板 → cold_start，无候选则 top_gap=null
+    target: decide_branch
+    input:
+      conf: 0.4
+      threshold: 0.85
+    expected: {branch: cold_start, conf: 0.4, top_gap: null}
+    source: {refs: [Q1, Q5, "c1.cold_start_floor=0.6"]}
+
+  - id: cr-db-006
+    title: Q1 边界 conf=0.6 不进冷启动 → ops_assist（[0.6,threshold)）
+    target: decide_branch
+    input:
+      conf: 0.6
+      threshold: 0.85
+    expected: {branch: ops_assist, conf: 0.6, top_gap: null}
+    source: {refs: [Q1, "下界包含"]}
+
+  - id: cr-db-007
+    title: Q1 边界 conf=阈值 0.85 → direct_approve（≥）
+    target: decide_branch
+    input:
+      conf: 0.85
+      threshold: 0.85
+    expected: {branch: direct_approve, conf: 0.85, top_gap: null}
+    source: {refs: [Q1, "上界包含"]}
