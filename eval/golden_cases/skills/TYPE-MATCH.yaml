@@ -1,0 +1,32 @@
+# Golden Cases — TYPE-MATCH（WF-01 C7 兜底，Q81 切片，Q77 模式人工精选）
+# 从回归矩阵精选防 C7 机械口径被静默改动的关键裁决：
+# 0.6 地板拍板值、地板下方必降 Layer4、兄弟继承只认 approved。
+# 案例与 datasets 同 schema、同源 refs，数据为合成数据。
+skill_id: TYPE-MATCH
+wf_id: WF-01
+cases:
+  - id: golden-tm-001
+    title: Layer3 覆盖率地板必须是 Q6 拍板 0.6（配置种子，热更不改默认）
+    target: c7_layer3_floor
+    input: {}
+    expected: 0.6
+    source: {refs: [Q6, "c1.layer3_coverage_floor", Q81]}
+
+  - id: golden-tm-002
+    title: 覆盖率 1/6=0.1667 低于 0.6 必须降 Layer4（新字段提案唯一触发线，Q6 红线）
+    target: c7_coverage
+    input:
+      required_fids: [syn_a, syn_m1, syn_m2, syn_m3, syn_m4, syn_m5]
+      available_fids: [syn_a]
+    expected: 0.1667
+    source: {refs: [Q6, line708, Q81, "<floor → Layer4 g2_field_candidates"]}
+
+  - id: golden-tm-003
+    title: Layer2 兄弟继承只认 approved 模板，draft 计数再高也不可继承（Q6）
+    target: c7_pick_sibling
+    input:
+      siblings:
+        - {category_id: syn_cat_draft, product_count: 99, template_status: draft}
+        - {category_id: syn_cat_ok, product_count: 3, template_status: approved}
+    expected: {category_id: syn_cat_ok, product_count: 3, template_status: approved}
+    source: {refs: [Q6, line708, Q81]}

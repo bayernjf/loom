@@ -193,4 +193,11 @@ async def decide_candidate(
     except atom_service.InvalidBatch as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # c7_layer4 适配器（Q81）：口径与 POST /api/intakes/{id}/c7-runs 一致。
+    except modeling_service.CategoryNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="category not found") from exc
+    except modeling_service.c7.IllegalFid as exc:  # Q68
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _candidate_view(cand)

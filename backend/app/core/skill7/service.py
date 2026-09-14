@@ -94,6 +94,20 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
         return
+    if target_type == "c7_layer4":
+        # Q81：payload 是去 actor 的 C7ResolveRequest 形态
+        # （category_id + required_fids + l4_proposals，TYPE-MATCH 整 C7 解析单候选）。
+        from app.product.modeling.schemas import C7ResolveRequest
+
+        data = dict(payload)
+        data.pop("actor", None)
+        try:
+            C7ResolveRequest(
+                **data, actor={"id": "_delivery_validation", "roles": []}
+            )
+        except ValidationError as exc:
+            raise InvalidCandidatePayload(str(exc)) from exc
+        return
     raise InvalidCandidatePayload(f"unsupported target_type: {target_type}")
 
 
@@ -141,9 +155,9 @@ async def deliver_run(
 
     expected_target = _validate_delivery(wf_id, body.skill_id, body.candidates)
 
-    # Q79-4：锚点按 WF 归属二选一——c1_recognition（段2）挂 intake，
-    # 其余（WF-02/WF-04）挂 ProductSpace。
-    intake_anchor = expected_target == "c1_recognition"
+    # Q79-4/Q81：锚点按 WF 归属二选一——c1_recognition/c7_layer4（段2）挂 intake，
+    # 其余（WF-02/WF-03/WF-04）挂 ProductSpace。
+    intake_anchor = expected_target in {"c1_recognition", "c7_layer4"}
     if intake_anchor:
         if body.intake_id is None or body.product_space_id is not None:
             raise InvalidCandidatePayload(

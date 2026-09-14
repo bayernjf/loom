@@ -18,7 +18,8 @@ eval/
 │   ├── ATOM-EXPAND.yaml      # ┐
 │   ├── ATOM-CANON.yaml       # ├ WF-03 字段下原子（Q80 切片自带，四 Skill）
 │   ├── ATOM-AFFINITY.yaml    # │
-│   └── CONFLICT-PRECHECK.yaml# ┘
+│   ├── CONFLICT-PRECHECK.yaml# ┘
+│   └── TYPE-MATCH.yaml       # WF-01 C7 兜底（Q81 切片自带，WF-01 第二个 Skill）
 └── golden_cases/skills/      # Golden Cases：人工策展标杆（同 schema，范围小）
     ├── PWC-SCORING.yaml
     ├── COMBO-VALIDATE.yaml
@@ -27,7 +28,8 @@ eval/
     ├── ATOM-EXPAND.yaml      # ┐
     ├── ATOM-CANON.yaml       # ├ WF-03（Q80）
     ├── ATOM-AFFINITY.yaml    # │
-    └── CONFLICT-PRECHECK.yaml# ┘
+    ├── CONFLICT-PRECHECK.yaml# ┘
+    └── TYPE-MATCH.yaml       # WF-01 C7 兜底（Q81）
 ```
 
 ## 运行（staging 回归闸门，docs/17 CI/CD）
@@ -83,13 +85,20 @@ cases:
     blocked、high 无证据双冲突、high 有证据单审、medium 无冲突），共 8+3 例。
   - 错误分支（InvalidBatch/冲突 blocked 审批）runner 无错误案例 schema，由
     backend 集成测试覆盖。
+- **WF-01 C7 切片补 `TYPE-MATCH`（Q81，每 WF 替换切片自带 eval 回归；同一 WF
+  的第二个 Skill）**：→ c7 确定性纯函数（`modeling.c7.coverage` /
+  `pick_sibling` / `layer3_coverage_floor`），覆盖 Q6 Layer3 覆盖率（空必填→
+  1.0 / 0.6 地板边界包含 / round 4）、L2 兄弟继承（仅 approved、最大
+  product_count、平局保序、无 approved→None）与 0.6 拍板地板，共 14+3 例。
+  Q68 fid:'-' 拒绝与各错误分支 runner 无错误案例 schema，由 backend 集成
+  测试覆盖；L4 真 LLM 新字段生成本体挂 Q67。
 - **PWC-BUILDER 无案例（挂账）**：该 Skill V1 为外部投递，仓库内无确定性
   生成实现，不构造虚拟案例；真 LLM 切片落地后补。
 - COMBO-VALIDATE 的结构预筛（≥2 维度/同批去重/跨租户拦截等）目前内联在
   `pwc/funnel` 服务内且耦合 DB，未作为纯 target 暴露；其行为由 backend
   集成测试覆盖，后续若抽纯函数再接入本 runner（挂账）。
-- 当前合计 84 例（Evaluation Dataset 66 + Golden Cases 18）；C7 Layer4
-  提案通道随 Q79-1 后续切片。
+- 当前合计 101 例（Evaluation Dataset 80 + Golden Cases 21）；C7 Layer4
+  确定性侧已随 Q81 接入，真 LLM 新字段生成挂 Q67。
 - 案例一律人工依据 docs 原文/Q 规则编写，**禁止生产数据**（16 §4）；
   词例均为合成词。
 - 真 LLM 落地后：同一批 YAML 案例改打 Skill 输出，只改 `targets.py`

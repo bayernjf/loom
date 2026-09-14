@@ -1,0 +1,141 @@
+# Evaluation Dataset — TYPE-MATCH（WF-01 段2 C7 兜底，回归矩阵，Q81 切片自带）
+# target=c7 确定性纯函数：coverage（Q6 Layer3 必填覆盖率，空必填→1.0、round 4）、
+# pick_sibling（Q6 Layer2 同父兄弟：approved 且 product_count 最大）、
+# layer3_coverage_floor（Q6 拍板 0.6 配置热更地板）。
+# 不打错误分支（IllegalFid/Q68 fid:'-'）：runner 无错误用例 schema，留在后端集成测试。
+# 数据均为人工编写合成数据（16 §4，禁用生产数据）。
+skill_id: TYPE-MATCH
+wf_id: WF-01
+cases:
+  # ---------- layer3_coverage_floor（Q6） ----------
+  - id: tm-fl-001
+    title: Q6 Layer3 覆盖率地板拍板值 0.6（配置中心种子默认）
+    target: c7_layer3_floor
+    input: {}
+    expected: 0.6
+    source: {refs: [Q6, "c1.layer3_coverage_floor", "seeds.CONFIG_SEEDS"]}
+
+  # ---------- coverage（Q6） ----------
+  - id: tm-cv-001
+    title: Q6 空必填字段 → 覆盖率 1.0（无必填位不降级 Layer4）
+    target: c7_coverage
+    input:
+      required_fids: []
+      available_fids: [syn_f_name]
+    expected: 1.0
+    source: {refs: [Q6, line708, "空 required_fids → 1.0"]}
+
+  - id: tm-cv-002
+    title: Q6 6/6 必填位全在 G2 active → 1.0（Layer3 达标）
+    target: c7_coverage
+    input:
+      required_fids: [syn_a, syn_b, syn_c, syn_d, syn_e, syn_f]
+      available_fids: [syn_a, syn_b, syn_c, syn_d, syn_e, syn_f, syn_extra]
+    expected: 1.0
+    source: {refs: [Q6, "G2 active 多余字段不影响"]}
+
+  - id: tm-cv-003
+    title: Q6 1/6 覆盖 0.1667 < 0.6 → 降级 Layer4（新字段提案触发线）
+    target: c7_coverage
+    input:
+      required_fids: [syn_a, syn_m1, syn_m2, syn_m3, syn_m4, syn_m5]
+      available_fids: [syn_a]
+    expected: 0.1667
+    source: {refs: [Q6, line708, "round 4"]}
+
+  - id: tm-cv-004
+    title: Q6 边界 3/5=0.6 等于地板 → 留 Layer3（>= 包含）
+    target: c7_coverage
+    input:
+      required_fids: [syn_a, syn_b, syn_c, syn_d, syn_e]
+      available_fids: [syn_a, syn_b, syn_c]
+    expected: 0.6
+    source: {refs: [Q6, "ratio >= floor 边界包含"]}
+
+  - id: tm-cv-005
+    title: Q6 2/3=0.6667 ≥0.6 → Layer3（round 4 后比较）
+    target: c7_coverage
+    input:
+      required_fids: [syn_a, syn_b, syn_c]
+      available_fids: [syn_a, syn_b, syn_g2_x]
+    expected: 0.6667
+    source: {refs: [Q6, "round(...,4)"]}
+
+  - id: tm-cv-006
+    title: Q6 2/6=0.3333 <0.6 → Layer4
+    target: c7_coverage
+    input:
+      required_fids: [syn_a, syn_b, syn_m1, syn_m2, syn_m3, syn_m4]
+      available_fids: [syn_a, syn_b]
+    expected: 0.3333
+    source: {refs: [Q6]}
+
+  - id: tm-cv-007
+    title: Q6 0/4=0.0 全缺 → 必降 Layer4
+    target: c7_coverage
+    input:
+      required_fids: [syn_m1, syn_m2, syn_m3, syn_m4]
+      available_fids: [syn_g2_x, syn_g2_y]
+    expected: 0.0
+    source: {refs: [Q6]}
+
+  - id: tm-cv-008
+    title: Q6 4/6=0.6667 ≥0.6 → Layer3
+    target: c7_coverage
+    input:
+      required_fids: [syn_a, syn_b, syn_c, syn_d, syn_m1, syn_m2]
+      available_fids: [syn_a, syn_b, syn_c, syn_d]
+    expected: 0.6667
+    source: {refs: [Q6]}
+
+  # ---------- pick_sibling（Q6 Layer2） ----------
+  - id: tm-ps-001
+    title: Q6 三个 approved 兄弟 → product_count 最大者继承
+    target: c7_pick_sibling
+    input:
+      siblings:
+        - {category_id: syn_cat_a, product_count: 12, template_status: approved}
+        - {category_id: syn_cat_b, product_count: 30, template_status: approved}
+        - {category_id: syn_cat_c, product_count: 5, template_status: approved}
+    expected: {category_id: syn_cat_b, product_count: 30, template_status: approved}
+    source: {refs: [Q6, line708, "Layer2 兄弟继承"]}
+
+  - id: tm-ps-002
+    title: Q6 draft 兄弟 product_count 再高也不可继承；approved 者胜出
+    target: c7_pick_sibling
+    input:
+      siblings:
+        - {category_id: syn_cat_draft, product_count: 99, template_status: draft}
+        - {category_id: syn_cat_ok, product_count: 3, template_status: approved}
+    expected: {category_id: syn_cat_ok, product_count: 3, template_status: approved}
+    source: {refs: [Q6, "仅 approved 模板可继承"]}
+
+  - id: tm-ps-003
+    title: Q6 无 approved 兄弟 → None（继续降 Layer3，不继承草稿）
+    target: c7_pick_sibling
+    input:
+      siblings:
+        - {category_id: syn_cat_d1, product_count: 9, template_status: draft}
+        - {category_id: syn_cat_d2, product_count: 1, template_status: rejected}
+    expected: null
+    source: {refs: [Q6, line708]}
+
+  - id: tm-ps-004
+    title: Q6 approved 并列最大 → 取列表首个（max 确定性平局口径）
+    target: c7_pick_sibling
+    input:
+      siblings:
+        - {category_id: syn_cat_tie1, product_count: 8, template_status: approved}
+        - {category_id: syn_cat_tie2, product_count: 8, template_status: approved}
+    expected: {category_id: syn_cat_tie1, product_count: 8, template_status: approved}
+    source: {refs: [Q6, "平局取首个，确定性"]}
+
+  - id: tm-ps-005
+    title: Q6 approved 兄弟缺 product_count 按 0 计，显式计数者胜出
+    target: c7_pick_sibling
+    input:
+      siblings:
+        - {category_id: syn_cat_zero, template_status: approved}
+        - {category_id: syn_cat_n, product_count: 2, template_status: approved}
+    expected: {category_id: syn_cat_n, product_count: 2, template_status: approved}
+    source: {refs: [Q6, "product_count 缺省 0"]}

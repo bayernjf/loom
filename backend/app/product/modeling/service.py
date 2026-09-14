@@ -491,8 +491,21 @@ async def resolve_c7(session, intake_id, body, actor) -> C7Run:
                 )
             else:
                 # Layer4：Skill 新字段进候选，深度审核 Gate 在段3（Q13）。
+                # G2 候选是全局字典资产：同名 c7_layer4 候选（含他单/历史提交）
+                # 复用不重复建（与 wf02_dim_source 同一口径，避免 uq(source_layer,field_name) 冲突）。
                 candidate_ids: list[str] = []
                 for proposal in body.l4_proposals:
+                    existing = (
+                        await session.scalars(
+                            select(G2FieldCandidate).where(
+                                G2FieldCandidate.source_layer == "c7_layer4",
+                                G2FieldCandidate.field_name == proposal["field_name"],
+                            )
+                        )
+                    ).first()
+                    if existing is not None:
+                        candidate_ids.append(existing.candidate_id)
+                        continue
                     candidate = G2FieldCandidate(
                         tenant_id=intake.tenant_id,
                         field_name=proposal["field_name"],

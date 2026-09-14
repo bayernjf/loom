@@ -76,12 +76,18 @@ def test_registry_loads_wf01_and_skills():
             "cost_limit",
         ):
             assert key in skills[skill_id], (skill_id, key)
-    # CAT-RECOG 是 WF-01 唯一候选产出步骤，整结果单候选，target=c1_recognition。
+    # CAT-RECOG（c1_recognition，Q79）与 TYPE-MATCH（c7_layer4，Q81）两个产出步骤，
+    # 均为整结果单候选。
     step = registry.producer_step_for("WF-01", "CAT-RECOG")
     assert step["candidate_target"] == "c1_recognition"
     assert step["single_candidate"] is True
+    l4_step = registry.producer_step_for("WF-01", "TYPE-MATCH")
+    assert l4_step["candidate_target"] == "c7_layer4"
+    assert l4_step["single_candidate"] is True
     assert registry.producer_step_for("WF-01", "PARSE") is None
+    assert registry.producer_step_for("WF-01", "MISSING-INFO") is None
     assert registry.candidate_target_for("WF-01", "CAT-RECOG") == "c1_recognition"
+    assert registry.candidate_target_for("WF-01", "TYPE-MATCH") == "c7_layer4"
     # Q79：field_plan 单候选约束同样由声明驱动。
     assert registry.producer_step_for("WF-02", "DIM-MERGE")["single_candidate"] is True
 
