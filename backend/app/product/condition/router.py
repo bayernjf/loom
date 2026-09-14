@@ -249,4 +249,5 @@ async def consume(
         "pool_ready_count": result["pool_ready_count"],
         "pool_health": result["pool_health"],
         "restock_hint": result["restock_hint"],
+        "restock_run_id": result["restock_run_id"],
     }

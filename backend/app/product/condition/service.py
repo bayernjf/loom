@@ -582,14 +582,27 @@ async def consume(session, product_space_id: str, body, actor, *, now: datetime 
     )
 
     ready_count = await _ready_count(session, product_space_id)
+    # Q71/Q76-4：跌破 critical 按防抖落 requested SkillRun，不构造虚拟候选。
+    from app.core.skill7 import service as skill7_service
+
+    restock_run = await skill7_service.maybe_request_restock(
+        session,
+        tenant_id=ps.tenant_id,
+        product_space_id=product_space_id,
+        ready_count=ready_count,
+        critical=pwc_rules.pool_critical(),
+        cooldown_minutes=pwc_rules.restock_cooldown_minutes(),
+        now=now,
+    )
     return {
         "pwc": picked,
         "record": record,
         "platform_state": state,
         "pool_ready_count": ready_count,
         "pool_health": pwc_rules.pool_health(ready_count),
-        # Q71：跌破 critical 自动补货；WF-04 补货通道随 M10，此处只出信号。
+        # Q71：跌破 critical 自动补货；Q76-4 起 requested run 在此回带。
         "restock_hint": ready_count < pwc_rules.pool_critical(),
+        "restock_run_id": restock_run.run_id if restock_run else None,
     }
 
 

@@ -1,0 +1,15 @@
+skill_id: PWC-SCORING
+layer: condition
+version: 1.0.0
+input_output_schema:
+  input: COMBO-VALIDATE 子分 + 待用池原子集合
+  output: "score(0–1) 与 score_detail{logic,fit,diversity,category_multiplier,w_logic,w_fit}"
+knowledge_deps:
+  - Q7 行业表品类乘数（V1 恒 1.0）
+model_tier: ""
+thresholds:
+  formula: "(合理性×0.6 + 多样性×0.4) × 品类乘数"   # Q22/Q22a/Q22b
+  reasonableness: "logic×0.5 + fit×0.5"
+failure_policy: score_for_ranking_only          # 仅排序/Gate 展示，不做自动通过门槛
+review_rule: 机械计算（M5 已实现）；结果随 PWC Gate 人工裁决
+cost_limit: null

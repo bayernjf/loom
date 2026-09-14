@@ -1,0 +1,24 @@
+# WF-04 · 段5 PWC 条件包（docs/06 §1）
+# 14 §2.2：自研注册表驱动编排器最小集——顺序执行 + 人工 Gate 插槽。
+# V1（M10 切片 e，Q76）：仅 WF-04 接通 skill7 候选通道试点；
+# COMBO-VALIDATE/PWC-SCORING 的机械判定已在 M5 pwc/funnel 内实现，
+# AI 分项（logic/fit）经投递 API 进入候选通道，confirmed/modified 后复用漏斗落库。
+wf_id: WF-04
+stage: 5
+name: PWC 条件包
+skills:
+  - skill_id: PWC-BUILDER
+    produces_candidates: true
+    candidate_target: pwc_combo
+  - skill_id: COMBO-VALIDATE
+  - skill_id: PWC-SCORING
+gates:
+  - after: PWC-BUILDER
+    channel: skill7
+    role: product_reviewer
+    note: Critical Skill 输出必走候选通道（line 11314）；AI 子分缺失不凑分（Q22b）
+  - after: PWC-SCORING
+    endpoint: POST /api/pwcs/{pwc_id}/gate
+    role: product_reviewer
+failure_policy:
+  ai_score_missing: pending_review   # Q22b：分项缺失转人工，禁止默认值凑分
