@@ -224,7 +224,7 @@ async def test_assemble_green_path_mints_final_id_with_audit(client, session_fac
     failed_guards = {g["code"]: g["passed"] for g in blocked.json()["detail"]["guards"]}
     assert failed_guards["g2_compliance_clear"] is False
 
-    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     assert run.json()["report"]["status"] == "clean"
 
     resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
@@ -271,7 +271,7 @@ async def test_role_and_input_errors(client, session_factory):
     ps_id = await _make_ps(session_factory)
     pws = await _freeze(client, ps_id)
     slot_id = await _seed_static_inputs(client, ps_id)
-    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
 
     body = _assemble_body(ps_id, slot_id)
     denied = await client.post(
@@ -309,7 +309,7 @@ async def test_missing_packages_blocks_without_final_id(client, session_factory)
         }, "actor": OPS},
     )
     slot_id = slot.json()["slot_id"]
-    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
 
     resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
     assert resp.status_code == 409
@@ -322,7 +322,7 @@ async def test_duplicate_and_superseded_pws_guards(client, session_factory):
     ps_id = await _make_ps(session_factory)
     pws = await _freeze(client, ps_id)
     slot_id = await _seed_static_inputs(client, ps_id)
-    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
 
     first = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
     assert first.status_code == 200
@@ -357,7 +357,7 @@ async def test_q55_task_driven_batch_with_per_item_failures(client, session_fact
         }, "actor": OPS},
     )
     slot2 = slot2_resp.json()["slot_id"]
-    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
 
     # 未给 slot_ids：系统从平台 active 发布位自动配料
     task = await client.post(
@@ -460,7 +460,7 @@ async def test_law_review_blocks_g6_until_approved(client, session_factory):
     )
     pws = freeze.json()["pws"]
     slot_id = await _seed_static_inputs(client, ps_id)
-    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     law_id = run.json()["law_review"]["law_review_id"]
 
     blocked = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))

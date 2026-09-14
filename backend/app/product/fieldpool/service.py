@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
+from app.core.rbac import OPERATIONS, require_any_role
 from app.product.fieldpool import planning
 from app.product.fieldpool.models import FieldPool, FPDimension, FPSourceRoute
 from app.product.fieldpool.planning import DimInput
@@ -63,6 +64,7 @@ async def list_routes(session: AsyncSession) -> Sequence[FPSourceRoute]:
 
 
 async def upsert_route(session, item, actor) -> FPSourceRoute:
+    require_any_role(actor, OPERATIONS)  # Q8 来源路由表运营可配置
     row = await session.get(FPSourceRoute, item.route)
     if row is None:
         row = FPSourceRoute(route=item.route)
@@ -84,6 +86,7 @@ async def upsert_route(session, item, actor) -> FPSourceRoute:
 
 
 async def delete_route(session, route: str, actor) -> None:
+    require_any_role(actor, OPERATIONS)  # Q8
     row = await session.get(FPSourceRoute, route)
     if row is None:
         return

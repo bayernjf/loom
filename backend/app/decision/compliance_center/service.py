@@ -277,6 +277,7 @@ def _snapshot_text(snapshot: PwsSnapshot) -> str:
 
 
 async def run_ccr(session, pws_id: str, body) -> dict:
+    _require_compliance(body.actor)  # Q75：机械清洗触发归 internal_compliance
     snapshot = await session.get(PwsSnapshot, pws_id)
     if snapshot is None:
         raise PwsNotFound(pws_id)

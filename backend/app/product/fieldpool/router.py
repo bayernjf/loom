@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
+from app.core.rbac import PermissionDenied
 from app.product.fieldpool import service
 from app.product.fieldpool.models import FPDimension
 from app.product.fieldpool.schemas import (
@@ -75,6 +76,9 @@ async def put_route(
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(status_code=409, detail="route already exists") from exc
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"route": row.route}
 
 
@@ -92,6 +96,9 @@ async def delete_route(
     except service.RouteInUse as exc:
         await session.rollback()
         raise HTTPException(status_code=409, detail="route is referenced by dimensions") from exc
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"deleted": route}
 
 

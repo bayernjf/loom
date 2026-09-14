@@ -86,6 +86,7 @@ class TodoView(BaseModel):
 class CategoryCreate(BaseModel):
     name: str
     parent_id: str | None = None
+    actor: Actor
 
 
 class TemplateUpsert(BaseModel):

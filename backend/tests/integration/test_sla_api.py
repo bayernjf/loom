@@ -17,6 +17,8 @@ from app.product.modeling.models import OpsTodo
 
 NOW = datetime.now(UTC)
 
+PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
+
 
 @pytest_asyncio.fixture
 async def session_factory():
@@ -56,7 +58,7 @@ async def test_run_escalates_due_todos_and_reports_per_job(client, session_facto
         ))
         await session.commit()
 
-    resp = await client.post("/api/admin/sla/run")
+    resp = await client.post("/api/admin/sla/run", json={"actor": PLATFORM_ADMIN})
     assert resp.status_code == 200, resp.text
     report = resp.json()
     assert report["todo_escalation"]["changed"] == 1
@@ -85,9 +87,9 @@ async def test_future_effective_word_activates_and_rescans(client, session_facto
         ))
         await session.commit()
 
-    resp = await client.post("/api/admin/sla/run")
+    resp = await client.post("/api/admin/sla/run", json={"actor": PLATFORM_ADMIN})
     assert resp.json()["wordlist_activation"]["changed"] == 1
-    resp2 = await client.post("/api/admin/sla/run")
+    resp2 = await client.post("/api/admin/sla/run", json={"actor": PLATFORM_ADMIN})
     assert resp2.json()["wordlist_activation"]["changed"] == 0
 
     async with session_factory() as session:

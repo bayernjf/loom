@@ -123,6 +123,9 @@ async def run_ccr(
     except service.WrongPwsState as exc:
         await session.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except service.RoleNotAllowed as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {
         "report": _report_view(result["report"]),
         "law_review": _law_view(result["law_review"]) if result["law_review"] else None,

@@ -26,6 +26,7 @@ from app.product.product_intake.models import (
 OWNER = {"id": "owner-1", "roles": ["whitelist_owner"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
 OPS = {"id": "ops-1", "roles": ["operations"]}
+PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
 NOBODY = {"id": "nobody-1", "roles": []}
 
 
@@ -205,7 +206,9 @@ async def test_ready_todo_escalates_after_7_days(client, session_factory):
         todo = await session.get(OpsTodo, todo_id)
         todo.due_at = datetime.now(UTC) - timedelta(minutes=1)
         await session.commit()
-    sweep = await client.post("/api/admin/ops-todos/sweep")
+    sweep = await client.post(
+        "/api/admin/ops-todos/sweep", json={"actor": PLATFORM_ADMIN}
+    )
     assert sweep.status_code == 200
     async with session_factory() as session:
         todo = await session.get(OpsTodo, todo_id)
