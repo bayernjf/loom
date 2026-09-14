@@ -1,0 +1,76 @@
+# Evaluation Dataset — COMBO-VALIDATE（WF-04 段5，回归矩阵）
+# V1 target=Q48 统一词库确定性子串匹配（Q77-1）；ban/downgrade 分类与
+# 一票否决在 pwc/funnel 侧（Q22a），本 Skill 替身只负责命中检测。
+# 词例为人工编写的合成词，非生产数据（16 §4）。
+skill_id: COMBO-VALIDATE
+wf_id: WF-04
+cases:
+  - id: cv-wl-001
+    title: ban 词命中返回该词条（critical）
+    target: match_words
+    input:
+      content: "本品最安全，适合日常使用"
+      entries:
+        - {word: "最安全", level: critical, action: ban}
+        - {word: "效果可能因人而异", level: low, action: downgrade}
+    expected:
+      - {word: "最安全", level: critical, action: ban}
+    source: {refs: [Q48, Q22a, "PT-COMPLIANCE-V2.0 绝不放过医疗绝对化"]}
+
+  - id: cv-wl-002
+    title: 无命中返回空列表（可进入评分）
+    target: match_words
+    input:
+      content: "普通产品描述文本"
+      entries:
+        - {word: "最安全", level: critical, action: ban}
+        - {word: "包治百病", level: high, action: ban}
+    expected: []
+    source: {refs: [Q48]}
+
+  - id: cv-wl-003
+    title: 大小写不敏感命中（casefold）
+    target: match_words
+    input:
+      content: "an instant CURE for everything"
+      entries:
+        - {word: "cure", level: high, action: ban}
+    expected:
+      - {word: "cure", level: high, action: ban}
+    source: {refs: [Q48, "match_words 大小写不敏感（实现补）"]}
+
+  - id: cv-wl-004
+    title: 同文本命中多条按词条顺序全部返回，ban 与 downgrade 并存
+    target: match_words
+    input:
+      content: "本品最安全；效果可能因人而异"
+      entries:
+        - {word: "最安全", level: critical, action: ban}
+        - {word: "效果可能因人而异", level: low, action: downgrade}
+    expected:
+      - {word: "最安全", level: critical, action: ban}
+      - {word: "效果可能因人而异", level: low, action: downgrade}
+    source: {refs: [Q48, "同词多规则全部返回，定级从严在漏斗/Q17 侧"]}
+
+  - id: cv-wl-005
+    title: 子串包含即命中（最安全 命中 最安全性价比）
+    target: match_words
+    input:
+      content: "主打一个最安全性价比"
+      entries:
+        - {word: "最安全", level: critical, action: ban}
+    expected:
+      - {word: "最安全", level: critical, action: ban}
+    source: {refs: [Q48, "确定性子串匹配（实现补）"]}
+
+  - id: cv-wl-006
+    title: downgrade 词单独命中不报 ban
+    target: match_words
+    input:
+      content: "效果可能因人而异，请理性选购"
+      entries:
+        - {word: "最安全", level: critical, action: ban}
+        - {word: "效果可能因人而异", level: low, action: downgrade}
+    expected:
+      - {word: "效果可能因人而异", level: low, action: downgrade}
+    source: {refs: [Q48, "降级只出建议（PT-COMPLIANCE-V2.0）"]}
