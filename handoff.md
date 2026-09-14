@@ -77,7 +77,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
    - 12 的 PT 占位候选名单待与基准 HTML 核对（依赖上面的文件找回）；
    - 11/13 的接口与迁移行待 M0 裁决后补齐；
    - 10 的建表要素待 DBA 复核。
-5. **仓库基建 — 部分完成**：git（`dev` 分支，提交规范见 [git-commit-message.md](git-commit-message.md)）；脚手架已按 15 落地（backend/runtime/eval/middleplatform/frontend/infra）。backend venv 已用 uv + Python 3.12 建好（`uv venv --python 3.12 backend/.venv && uv pip install --python backend/.venv/bin/python -e 'backend[dev]'`），`pytest` 118 绿、ruff 通过、Alembic 0001/0002/0003/0004/0005/0006 对 PG16 验证通过。**下一步：开 M7（段10 合规清洗，08 §2.2 验收行：三关卡同源 Q48 词库 / block_required 一票否决阻断段11 / 法审待办卡 Guard⑥ Q49 / 国家>平台>底座优先序 Q50 / 词表生效即扫 Q51）**；18 字段归属挂账已由 Q74 关闭。
+5. **仓库基建 — 部分完成**：git（`dev` 分支，提交规范见 [git-commit-message.md](git-commit-message.md)）；脚手架已按 15 落地（backend/runtime/eval/middleplatform/frontend/infra）。backend venv 已用 uv + Python 3.12 建好（`uv venv --python 3.12 backend/.venv && uv pip install --python backend/.venv/bin/python -e 'backend[dev]'`），`pytest` 118 绿、ruff 通过、Alembic 0001/0002/0003/0004/0005/0006 对 PG16 验证通过。浏览器人工验收通道已就绪：chrome-devtools MCP 以 local scope 注册到本项目（`~/.claude.json`，挂载本机 9222 Chrome + 独立 profile `~/.chrome-claude`，约定见 15 §4；新会话生效，不进仓库）。**下一步：开 M7（段10 合规清洗，08 §2.2 验收行：三关卡同源 Q48 词库 / block_required 一票否决阻断段11 / 法审待办卡 Guard⑥ Q49 / 国家>平台>底座优先序 Q50 / 词表生效即扫 Q51）**；18 字段归属挂账已由 Q74 关闭。
 
 ## 关键约束（接手者不得违反）
 
