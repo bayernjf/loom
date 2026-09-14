@@ -1,7 +1,7 @@
 """候选 confirmed/modified 后的落库适配器（Q76-3）。
 
 key = candidate.target_type；适配器只调用既有业务服务，不绕过任何
-预筛/合规/评分/限量/Gate。试点仅 pwc_combo（WF-04）。
+预筛/合规/评分/限量/Gate。已接入：pwc_combo（WF-04）、field_plan（WF-02，Q78）。
 """
 
 from collections.abc import Awaitable, Callable
@@ -32,8 +32,26 @@ async def apply_pwc_combo(
     return [p.pwc_id for p in created]
 
 
+async def apply_field_plan(
+    session: AsyncSession, candidate: SkillCandidate, actor: Actor
+) -> list[str]:
+    # Q78：DIM-MERGE 整方案候选 → 既有 fieldpool.submit_plan，
+    # PT-FP-PLAN/Q8/Q9/Q10/Q12 全部在既有服务内执行，落 pending_gate 走 WF-02 Gate。
+    from app.product.fieldpool import service as fp_service
+    from app.product.fieldpool.schemas import PlanSubmitRequest
+
+    data = dict(candidate.payload)
+    data.pop("actor", None)
+    body = PlanSubmitRequest(**data, actor=actor)
+    pool = await fp_service.submit_plan(
+        session, candidate.product_space_id, body, actor
+    )
+    return [pool.pool_id]
+
+
 CandidateAdapter = Callable[[AsyncSession, SkillCandidate, Actor], Awaitable[list[str]]]
 
 ADAPTERS: dict[str, CandidateAdapter] = {
     "pwc_combo": apply_pwc_combo,
+    "field_plan": apply_field_plan,
 }

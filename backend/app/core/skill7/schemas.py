@@ -12,8 +12,9 @@ CandidateState = Literal[
 
 
 class CandidateInput(BaseModel):
-    # 试点（WF-04）：target_type 仅 pwc_combo；payload 适配 FunnelRequest 子集。
-    target_type: Literal["pwc_combo"]
+    # target_type 与 WF 步骤声明的 candidate_target 对齐（Q78 起按 WF 泛化）：
+    # pwc_combo（WF-04）/ field_plan（WF-02）。
+    target_type: Literal["pwc_combo", "field_plan"]
     payload: dict
 
 

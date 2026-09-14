@@ -1,0 +1,26 @@
+# WF-02 · 段3 字段池规划（docs/06 §1）
+# 顺序：FIELDPOOL-PLAN → DIM-SOURCE（7 路）→ DIM-MERGE；
+# 14 §2.2 自研注册表驱动编排器最小集；M10 WF 替换切片 1/3（Q78）。
+# DIM-MERGE 为候选产出者：外部完成 7 路采集/合并后投递整方案，
+# confirmed/modified 经 field_plan 适配器复用 fieldpool.submit_plan，
+# 落 pending_gate 后再过既有 WF-02 HumanGate（Q76-3，不绕任何既有校验）。
+wf_id: WF-02
+stage: 3
+name: 字段池规划
+skills:
+  - skill_id: FIELDPOOL-PLAN
+  - skill_id: DIM-SOURCE
+  - skill_id: DIM-MERGE
+    produces_candidates: true
+    candidate_target: field_plan
+gates:
+  - after: DIM-MERGE
+    channel: skill7
+    role: product_reviewer
+    note: PT-FP-PLAN 输出必经 WF-02 HumanGate；conf<0.85 标细看（Q9）
+  - after: DIM-MERGE
+    endpoint: POST /api/field-pools/{pool_id}/gate
+    role: product_reviewer
+failure_policy:
+  low_confidence: mark_needs_detail     # Q9：第一期全部走 Gate，低置信仅标记
+  dup_similarity: flag_only             # Q10：≥0.9 仅标疑重，人工终裁

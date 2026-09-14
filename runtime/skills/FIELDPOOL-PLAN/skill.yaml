@@ -1,0 +1,16 @@
+skill_id: FIELDPOOL-PLAN
+layer: fieldpool
+version: 1.0.0
+input_output_schema:
+  input: 产品录入资料（ProductSpace profile）+ G1 类目模板 + 信号置信
+  output: "字段池规划框架：维度数 3-8、必含 ≥1 product_attribute、敏感行业必含 risk_control"
+knowledge_deps:
+  - G1 类目模板
+  - Q7 行业阈值（敏感行业）
+model_tier: ""
+thresholds:
+  dim_range: [3, 8]                    # PT-FP-PLAN / Q12
+  needs_detail_conf: 0.85             # Q9 细看线
+failure_policy: below_min_to_human     # PT-FP-PLAN：<3 不自动补，转人工
+review_rule: 不直接产候选；方案经 DIM-SOURCE/DIM-MERGE 后过 WF-02 Gate
+cost_limit: null
