@@ -1,0 +1,12 @@
+# Golden Cases — ATOM-EXPAND（WF-03 段4，人工标杆，Q80 切片自带）
+# Q15 达标即停拓的标杆：已通过正式原子数达 target_atom_max（含等于）。
+# 合成数据（16 §4，禁用生产数据）。
+skill_id: ATOM-EXPAND
+wf_id: WF-03
+cases:
+  - id: golden-ae-001
+    title: 标杆：目标 30 已通过 30 → AI 拓展必须停（manual 批次不受限）
+    target: atom_target_reached
+    input: {approved_count: 30, target_atom_max: 30}
+    expected: {reached: true}
+    source: {refs: [Q15, "docs/08 M4 blockquote", "line 2013 PT-ATOM-EXP"]}

@@ -1,0 +1,12 @@
+# Golden Cases — ATOM-CANON（WF-03 段4，人工标杆，Q80 切片自带）
+# 同批去重规范化标杆：大小写与首尾/多余空白差异归一为同一 normalized 值。
+# 合成词例（16 §4，禁用生产数据）。
+skill_id: ATOM-CANON
+wf_id: WF-03
+cases:
+  - id: golden-ac-001
+    title: 标杆："  Gentle   Formula " 与 "gentle formula" 规范化结果一致
+    target: atom_normalize
+    input: {content: "  Gentle   Formula "}
+    expected: "gentle formula"
+    source: {refs: [PT-ATOM-EXP-V1.3, "06 §2.2 同批次去重"]}

@@ -1,0 +1,35 @@
+# Golden Cases — CONFLICT-PRECHECK（WF-03 段4，人工标杆，Q80 切片自带）
+# Q17 词表强制双轨 + line 840 三类冲突标杆。合成词例（16 §4，禁用生产数据）。
+skill_id: CONFLICT-PRECHECK
+wf_id: WF-03
+cases:
+  - id: golden-cp-001
+    title: 标杆：AI 判 low 但命中 critical+ban 词表 → 强制定级 banned（双轨铁律）
+    target: atom_grade_risk
+    input:
+      content: "synthetic banned phrase gamma"
+      ai_level: "low"
+      hits: [{word: "gamma", level: "critical", action: "ban"}]
+    expected: {level: "critical", source: "wordlist", banned: true}
+    source: {refs: [Q17, "line 840", "docs/08 M4 blockquote"]}
+
+  - id: golden-cp-002
+    title: 标杆：critical+ban 且有证据仍 blocked（证据不解禁用表达冲突）
+    target: atom_conflicts_for
+    input:
+      level: critical
+      source: wordlist
+      has_evidence: true
+      hits: [{word: "gamma", level: "critical", action: "ban"}]
+    expected:
+      - {type: "disabled_expression", status: "blocked"}
+    source: {refs: ["line 840", "atom.reject_disabled_expression"]}
+
+  - id: golden-cp-003
+    title: 标杆：high 无证据双冲突（单审 + 证据缺失阻断），补证据后仅留单审
+    target: atom_conflicts_for
+    input: {level: high, source: ai, has_evidence: false, hits: []}
+    expected:
+      - {type: "high_risk_single_review", status: "pending_gate"}
+      - {type: "evidence_required", status: "blocked"}
+    source: {refs: ["line 840", "PT-ATOM-EXP-V1.3", Q70]}

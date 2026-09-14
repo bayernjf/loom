@@ -1,0 +1,17 @@
+skill_id: CONFLICT-PRECHECK
+layer: atom
+version: 1.0.0
+input_output_schema:
+  input: 经 CANON/AFFINITY 处理的整批原子条目（含 AI 初判 risk、证据、词表命中）
+  output: "整批单候选（target_type=atom_batch）：{items[{content,dimension_id,ai_risk,affinity?,evidence?,fact_type?,cluster_id?}], batch_size?}"
+knowledge_deps:
+  - Q17 risk 双轨：词表强制定级（人工无权改），未命中走 AI 判级
+  - line 840 AtomConflict 三类（disabled_expression/high_risk_single_review/evidence_required）
+  - Q70 high/critical 禁批量审；PT-ATOM-EXP 空证据降级 pending_evidence
+model_tier: ""
+thresholds:
+  risk_levels: [critical, high, medium, low]   # medium/low 为【实现补】等级
+  evidence_required: high_without_evidence
+failure_policy: produce_candidates_only        # Q80：仅产候选，不直接写 ProductAtomInstance
+review_rule: skill7 candidate gate → product_reviewer（Q80-2）；准入后逐条 approveAtomGuard/Q70 不变
+cost_limit: null

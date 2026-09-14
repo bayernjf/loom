@@ -8,6 +8,7 @@ from app.core.rbac import PermissionDenied
 from app.core.skill7 import registry, service
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.core.skill7.schemas import CandidateDecisionRequest, DeliverRunRequest
+from app.product.product_intake.service import IntakeNotFound
 
 router = APIRouter(prefix="/api", tags=["skill7"])
 
@@ -19,6 +20,7 @@ def _run_view(run: SkillRun) -> dict:
         "wf_id": run.wf_id,
         "tenant_id": run.tenant_id,
         "product_space_id": run.product_space_id,
+        "intake_id": run.intake_id,
         "status": run.status,
         "source": run.source,
         "input": run.input_payload,
@@ -41,6 +43,7 @@ def _candidate_view(cand: SkillCandidate) -> dict:
         "wf_id": cand.wf_id,
         "tenant_id": cand.tenant_id,
         "product_space_id": cand.product_space_id,
+        "intake_id": cand.intake_id,
         "target_type": cand.target_type,
         "payload": cand.payload,
         "state": cand.state,
@@ -66,6 +69,9 @@ async def deliver_run(
     except service.ProductSpaceMissing as exc:
         await session.rollback()
         raise HTTPException(status_code=404, detail="product space not found") from exc
+    except IntakeNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="intake not found") from exc
     except registry.RegistryError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=f"unregistered skill/workflow: {exc}") from exc
@@ -78,11 +84,15 @@ async def deliver_run(
 @router.get("/skill-runs")
 async def list_runs(
     product_space_id: str | None = None,
+    intake_id: str | None = None,
     status: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     rows = await service.list_runs(
-        session, product_space_id=product_space_id, status=status
+        session,
+        product_space_id=product_space_id,
+        intake_id=intake_id,
+        status=status,
     )
     return {"runs": [_run_view(r) for r in rows]}
 
@@ -98,11 +108,15 @@ async def get_run(run_id: str, session: AsyncSession = Depends(get_session)) -> 
 @router.get("/skill-candidates")
 async def list_candidates(
     product_space_id: str | None = None,
+    intake_id: str | None = None,
     state: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     rows = await service.list_candidates(
-        session, product_space_id=product_space_id, state=state
+        session,
+        product_space_id=product_space_id,
+        intake_id=intake_id,
+        state=state,
     )
     return {"candidates": [_candidate_view(c) for c in rows]}
 
@@ -113,8 +127,10 @@ async def decide_candidate(
     body: CandidateDecisionRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    from app.product.atom import service as atom_service
     from app.product.condition import service as pwc_service
     from app.product.fieldpool import service as fp_service
+    from app.product.modeling import service as modeling_service
 
     try:
         cand = await service.decide_candidate(session, candidate_id, body)
@@ -151,6 +167,30 @@ async def decide_candidate(
         await session.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except fp_service.InvalidPlan as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # c1_recognition 适配器（Q79）：口径与 /api/intakes/{id}/c1-recognition 一致。
+    except IntakeNotFound:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="intake not found")
+    except modeling_service.RecognitionNotAllowed as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (modeling_service.ConfigError, modeling_service.InvalidDecision) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # atom_batch 适配器（Q80）：口径与 POST /api/product-spaces/{id}/atom-batches 一致。
+    except (atom_service.ProductSpaceNotFound, atom_service.PoolNotFound) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (
+        atom_service.PoolNotApproved,
+        atom_service.TargetReached,
+        atom_service.FactAtomConflict,
+    ) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except atom_service.InvalidBatch as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _candidate_view(cand)

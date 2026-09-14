@@ -66,22 +66,51 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
         return
+    if target_type == "c1_recognition":
+        # Q79：payload 是去 actor 的 C1RecognitionRequest 形态（CAT-RECOG 整结果）。
+        from app.product.modeling.schemas import C1RecognitionRequest
+
+        data = dict(payload)
+        data.pop("actor", None)
+        try:
+            C1RecognitionRequest(
+                **data, actor={"id": "_delivery_validation", "roles": []}
+            )
+        except ValidationError as exc:
+            raise InvalidCandidatePayload(str(exc)) from exc
+        return
+    if target_type == "atom_batch":
+        # Q80：payload 是去 actor 的 BatchSubmitRequest 形态（items + 可选 batch_size）；
+        # 通道只接 AI 拓展批次，source 由适配器强制 "ai"（Q15 停拓仅对 AI 批次生效）。
+        from app.product.atom.schemas import BatchSubmitRequest
+
+        data = dict(payload)
+        data.pop("actor", None)
+        data.pop("source", None)
+        try:
+            BatchSubmitRequest(
+                **data, source="ai", actor={"id": "_delivery_validation", "roles": []}
+            )
+        except ValidationError as exc:
+            raise InvalidCandidatePayload(str(exc)) from exc
+        return
     raise InvalidCandidatePayload(f"unsupported target_type: {target_type}")
 
 
-def _validate_delivery(wf_id: str, skill_id: str, candidates) -> None:
+def _validate_delivery(wf_id: str, skill_id: str, candidates) -> str:
     # Q78：投递校验以 WF 步骤声明的 candidate_target 为准（不再硬编码 pwc_combo）。
-    expected_target = registry.candidate_target_for(wf_id, skill_id)
-    if expected_target is None:
+    step = registry.producer_step_for(wf_id, skill_id)
+    if step is None:
         raise InvalidCandidatePayload(
             f"skill {skill_id} is not declared as a candidate producer in {wf_id}"
         )
+    expected_target = step["candidate_target"]
     if not candidates:
         raise InvalidCandidatePayload("candidates must be a non-empty list")
-    # Q78：field_plan 为整方案单候选。
-    if expected_target == "field_plan" and len(candidates) != 1:
+    # Q79：单候选约束由步骤声明 single_candidate 驱动（field_plan/c1_recognition）。
+    if step.get("single_candidate") and len(candidates) != 1:
         raise InvalidCandidatePayload(
-            "field_plan delivery must contain exactly one whole-plan candidate"
+            f"{expected_target} delivery must contain exactly one whole-result candidate"
         )
     for cand in candidates:
         if cand.target_type != expected_target:
@@ -90,6 +119,7 @@ def _validate_delivery(wf_id: str, skill_id: str, candidates) -> None:
                 f"candidate_target {expected_target!r} of {wf_id}/{skill_id}"
             )
         _validate_payload(cand.target_type, cand.payload)
+    return expected_target
 
 
 async def deliver_run(
@@ -97,12 +127,6 @@ async def deliver_run(
 ) -> tuple[SkillRun, list[SkillCandidate]]:
     # Q76-5：投递归 operations；机器对机器 API Key 通道契约【待补】。
     require_any_role(body.actor, OPERATIONS)
-
-    from app.product.product_intake.models import ProductSpace
-
-    ps = await session.get(ProductSpace, body.product_space_id)
-    if ps is None:
-        raise ProductSpaceMissing(body.product_space_id)
 
     # 未注册 Skill 拒绝（注册表为唯一事实源，14 §2.2）。
     skill = registry.get_skill(body.skill_id)
@@ -115,13 +139,45 @@ async def deliver_run(
             f"skill {body.skill_id} is not bound to workflow {wf_id!r}"
         )
 
-    _validate_delivery(wf_id, body.skill_id, body.candidates)
+    expected_target = _validate_delivery(wf_id, body.skill_id, body.candidates)
+
+    # Q79-4：锚点按 WF 归属二选一——c1_recognition（段2）挂 intake，
+    # 其余（WF-02/WF-04）挂 ProductSpace。
+    intake_anchor = expected_target == "c1_recognition"
+    if intake_anchor:
+        if body.intake_id is None or body.product_space_id is not None:
+            raise InvalidCandidatePayload(
+                f"{expected_target} delivery must use intake_id anchor"
+            )
+        from app.product.product_intake.models import ProductIntakeApplication
+        from app.product.product_intake.service import IntakeNotFound
+
+        intake = await session.get(ProductIntakeApplication, body.intake_id)
+        if intake is None:
+            raise IntakeNotFound(body.intake_id)
+        tenant_id = intake.tenant_id
+        product_space_id = None
+        intake_id = intake.intake_id
+    else:
+        if body.product_space_id is None or body.intake_id is not None:
+            raise InvalidCandidatePayload(
+                f"{expected_target} delivery must use product_space_id anchor"
+            )
+        from app.product.product_intake.models import ProductSpace
+
+        ps = await session.get(ProductSpace, body.product_space_id)
+        if ps is None:
+            raise ProductSpaceMissing(body.product_space_id)
+        tenant_id = ps.tenant_id
+        product_space_id = ps.product_space_id
+        intake_id = None
 
     run = SkillRun(
         skill_id=body.skill_id,
         wf_id=wf_id,
-        tenant_id=ps.tenant_id,
-        product_space_id=ps.product_space_id,
+        tenant_id=tenant_id,
+        product_space_id=product_space_id,
+        intake_id=intake_id,
         status="succeeded",
         source="delivery",
         input_payload=body.input,
@@ -141,8 +197,9 @@ async def deliver_run(
             candidate_index=index,
             skill_id=body.skill_id,
             wf_id=wf_id,
-            tenant_id=ps.tenant_id,
-            product_space_id=ps.product_space_id,
+            tenant_id=tenant_id,
+            product_space_id=product_space_id,
+            intake_id=intake_id,
             target_type=cand.target_type,
             payload=cand.payload,
             state="pending_review",
@@ -152,7 +209,7 @@ async def deliver_run(
 
     await append_audit(
         session,
-        tenant_id=ps.tenant_id,
+        tenant_id=tenant_id,
         actor_id=body.actor.id,
         actor_roles=body.actor.roles,
         action="skill7.run_delivered",
@@ -163,6 +220,7 @@ async def deliver_run(
             "wf_id": wf_id,
             "candidates": len(body.candidates),
             "model_tier": skill.get("model_tier") or None,
+            "anchor": "intake" if intake_anchor else "product_space",
         },
     )
     return run, created
@@ -172,12 +230,15 @@ async def list_runs(
     session: AsyncSession,
     *,
     product_space_id: str | None = None,
+    intake_id: str | None = None,
     status: str | None = None,
     limit: int = 100,
 ) -> list[SkillRun]:
     stmt = select(SkillRun).order_by(desc(SkillRun.created_at), desc(SkillRun.run_id))
     if product_space_id:
         stmt = stmt.where(SkillRun.product_space_id == product_space_id)
+    if intake_id:
+        stmt = stmt.where(SkillRun.intake_id == intake_id)
     if status:
         stmt = stmt.where(SkillRun.status == status)
     return list((await session.scalars(stmt.limit(limit))).all())
@@ -187,6 +248,7 @@ async def list_candidates(
     session: AsyncSession,
     *,
     product_space_id: str | None = None,
+    intake_id: str | None = None,
     state: str | None = None,
     limit: int = 100,
 ) -> list[SkillCandidate]:
@@ -195,6 +257,8 @@ async def list_candidates(
     )
     if product_space_id:
         stmt = stmt.where(SkillCandidate.product_space_id == product_space_id)
+    if intake_id:
+        stmt = stmt.where(SkillCandidate.intake_id == intake_id)
     if state:
         stmt = stmt.where(SkillCandidate.state == state)
     return list((await session.scalars(stmt.limit(limit))).all())

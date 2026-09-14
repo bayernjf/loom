@@ -1,0 +1,61 @@
+# Evaluation Dataset — ATOM-AFFINITY（WF-03 段4，回归矩阵，Q80 切片自带）
+# target=atom_rules 纯函数：is_low_affinity（Q16 <0.5 标记、None 不标、0.5 边界不标，
+# 无硬淘汰）、pick_cluster_keeper（Q19 同义簇推荐亲和度最高者，None 排最后，
+# 并列保持原序；终裁仍归人工 product_reviewer）。
+# 数据均为人工编写合成数据（16 §4，禁用生产数据）。
+skill_id: ATOM-AFFINITY
+wf_id: WF-03
+cases:
+  # ---------- Q16 低亲和 ----------
+  - id: af-la-001
+    title: Q16 affinity=None（未计算）→ 不标低亲和
+    target: atom_is_low_affinity
+    input: {affinity: null}
+    expected: {low_affinity: false}
+    source: {refs: [Q16, "atom_rules.is_low_affinity"]}
+
+  - id: af-la-002
+    title: Q16 affinity=0.49 < 0.5 → 标低亲和
+    target: atom_is_low_affinity
+    input: {affinity: 0.49}
+    expected: {low_affinity: true}
+    source: {refs: [Q16, "02 §C2 atom.low_affinity_line=0.5"]}
+
+  - id: af-la-003
+    title: Q16 affinity=0.5 边界（不含）→ 不标低亲和
+    target: atom_is_low_affinity
+    input: {affinity: 0.5}
+    expected: {low_affinity: false}
+    source: {refs: [Q16, "atom_rules.is_low_affinity"]}
+
+  - id: af-la-004
+    title: Q16 affinity=0.9 → 不标；低亲和仅标记无硬淘汰
+    target: atom_is_low_affinity
+    input: {affinity: 0.9}
+    expected: {low_affinity: false}
+    source: {refs: [Q16, "docs/08 M4 blockquote"]}
+
+  # ---------- Q19 keeper 推荐 ----------
+  - id: af-kp-001
+    title: Q19 亲和度最高者推荐为 keeper（index=2）
+    target: atom_pick_keeper
+    input:
+      items: [{affinity: 0.6}, {affinity: 0.71}, {affinity: 0.9}]
+    expected: {keeper_index: 2}
+    source: {refs: [Q19, "atom_rules.pick_cluster_keeper"]}
+
+  - id: af-kp-002
+    title: Q19 None 亲和度排最后：有分值项优先（index=0）
+    target: atom_pick_keeper
+    input:
+      items: [{affinity: 0.55}, {affinity: null}, {affinity: 0.3}]
+    expected: {keeper_index: 0}
+    source: {refs: [Q19, "atom_rules.pick_cluster_keeper"]}
+
+  - id: af-kp-003
+    title: Q19 并列保持原序：全 0.8 取第一项（index=0）
+    target: atom_pick_keeper
+    input:
+      items: [{affinity: 0.8}, {affinity: 0.8}, {affinity: 0.8}]
+    expected: {keeper_index: 0}
+    source: {refs: [Q19, "atom_rules.pick_cluster_keeper"]}

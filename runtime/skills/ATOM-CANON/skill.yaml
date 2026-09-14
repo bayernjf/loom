@@ -1,0 +1,15 @@
+skill_id: ATOM-CANON
+layer: atom
+version: 1.0.0
+input_output_schema:
+  input: ATOM-EXPAND 原子条目批次原文
+  output: 规范化文本（去空白、casefold）+ 同批次 normalized 去重结论
+knowledge_deps:
+  - PT-ATOM-EXP-V1.3 同批次去重（06 §2.2）
+  - line 11189 事实原子 (fact_type, normalized) 全局唯一
+model_tier: ""
+thresholds:
+  normalize: strip_whitespace_and_casefold   # atom_rules.normalize_text 确定性替身
+failure_policy: duplicate_reject_batch       # 同批 normalized 重复 → InvalidBatch 422
+review_rule: 不单独设 Gate；结论随整批由 CONFLICT-PRECHECK 末步走 skill7 gate
+cost_limit: null

@@ -1,0 +1,18 @@
+skill_id: ATOM-EXPAND
+layer: atom
+version: 1.0.0
+input_output_schema:
+  input: 已批准 FieldPool 的 selected 维度 + 现有已通过原子数 + 产品素材
+  output: 结构化原子条目批次（content/dimension_id/ai_risk/affinity/evidence/fact_type/cluster_id）
+knowledge_deps:
+  - PT-ATOM-EXP-V1.3（06 §2.2，仅产 candidate）
+  - Q14 批次上限 20/50（敏感/非敏感，可显式覆盖）
+  - Q15 target_atom_max 达标 AI 停拓
+  - line 11189 产品事实原子跨产品全局唯一
+model_tier: ""
+thresholds:
+  batch_size_sensitive_config: atom.batch_size_sensitive   # Q14 拍板 20
+  batch_size_default_config: atom.batch_size_default       # Q14 拍板 50
+failure_policy: stop_at_target                            # Q15：409 停拓，候选留 pending 可改后重裁
+review_rule: 本步不直接投递；整批经 CANON/AFFINITY/PRECHECK 后由末步统一走 skill7 gate（Q80-3）
+cost_limit: null

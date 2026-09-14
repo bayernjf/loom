@@ -1,0 +1,20 @@
+# Golden Cases — ATOM-AFFINITY（WF-03 段4，人工标杆，Q80 切片自带）
+# Q16 低亲和仅标记不淘汰、Q19 keeper 推荐最高亲和（终裁归人工）。
+# 合成数据（16 §4，禁用生产数据）。
+skill_id: ATOM-AFFINITY
+wf_id: WF-03
+cases:
+  - id: golden-af-001
+    title: 标杆：0.5 边界不标低亲和（严格小于 0.5 才标），无硬淘汰
+    target: atom_is_low_affinity
+    input: {affinity: 0.5}
+    expected: {low_affinity: false}
+    source: {refs: [Q16, "02 §C2 atom.low_affinity_line=0.5"]}
+
+  - id: golden-af-002
+    title: 标杆：同义簇推荐亲和度最高者为 keeper，None 排最后
+    target: atom_pick_keeper
+    input:
+      items: [{affinity: null}, {affinity: 0.62}, {affinity: 0.88}, {affinity: 0.7}]
+    expected: {keeper_index: 2}
+    source: {refs: [Q19, "atom_rules.pick_cluster_keeper"]}

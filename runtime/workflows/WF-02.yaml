@@ -13,6 +13,7 @@ skills:
   - skill_id: DIM-MERGE
     produces_candidates: true
     candidate_target: field_plan
+    single_candidate: true        # Q79：单候选约束改由步骤声明驱动
 gates:
   - after: DIM-MERGE
     channel: skill7

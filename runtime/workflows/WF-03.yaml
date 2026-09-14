@@ -1,0 +1,29 @@
+# WF-03 · 段4 字段下原子（docs/06 §1）
+# 顺序：ATOM-EXPAND → ATOM-CANON → ATOM-AFFINITY → CONFLICT-PRECHECK；
+# 14 §2.2 自研注册表驱动编排器最小集；M10 WF 替换切片 3/3（Q80）。
+# CONFLICT-PRECHECK 为候选产出者：四步 AI 处理全部完成后投递整批单候选
+# （target=atom_batch）；confirmed/modified 经适配器复用 atom.submit_batch
+# （通道侧强制 source=ai），Q14 批次上限/Q15 达标停拓/同批 normalized 去重/
+# 维度属本池 selected/line 11189 事实原子全局唯一/Q17 双轨定级/line 840
+# 三类冲突/PT-ATOM-EXP 空证据降级全部在既有服务内执行。skill7 Gate 仅 AI
+# 产出准入；入库后每条 AtomCandidate 的 approveAtomGuard/Q70/Q18/Q19 不变。
+# 锚点 product_space_id（段4 时 ProductSpace 与已批准 FieldPool 均已存在）。
+wf_id: WF-03
+stage: 4
+name: 字段下原子
+skills:
+  - skill_id: ATOM-EXPAND
+  - skill_id: ATOM-CANON
+  - skill_id: ATOM-AFFINITY
+  - skill_id: CONFLICT-PRECHECK
+    produces_candidates: true
+    candidate_target: atom_batch
+    single_candidate: true
+gates:
+  - after: CONFLICT-PRECHECK
+    channel: skill7
+    role: product_reviewer
+    note: AI 原子拓展整批准入裁决（Q80-2/3，docs/06 line 172 原子审核=产品审核员）；准入后逐条 approveAtomGuard 不变
+failure_policy:
+  target_reached: stop_expand          # Q15：达 target_atom_max AI 批次 409 停拓（manual 不受限）
+  evidence_missing: pending_evidence   # PT-ATOM-EXP-V1.3：空证据降级，Q18 7 天超时自动驳回复可复活

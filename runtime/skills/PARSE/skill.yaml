@@ -1,0 +1,13 @@
+skill_id: PARSE
+layer: modeling
+version: 1.0.0
+input_output_schema:
+  input: 产品录入原始资料（文本/表单/附件转写）
+  output: 结构化字段草稿（键值对，供后续识别步骤消费）
+knowledge_deps:
+  - productIntake15 字段表
+model_tier: ""
+thresholds: {}
+failure_policy: human_takeover             # 原文未给失败细则【待补】
+review_rule: 不直接产候选；随 CAT-RECOG 整结果过 WF-01 Gate
+cost_limit: null

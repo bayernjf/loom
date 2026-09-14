@@ -1,0 +1,15 @@
+skill_id: ATOM-AFFINITY
+layer: atom
+version: 1.0.0
+input_output_schema:
+  input: 规范化原子条目 + 同簇候选亲和度
+  output: 每条目 affinity（0–1）/low_affinity 标记 + 同义簇 keeper 推荐
+knowledge_deps:
+  - Q16 亲和度 <0.5 标低亲和、无硬淘汰
+  - Q19 同义簇人工终裁 keeper，非 keeper 合并为 alias（不删）
+model_tier: ""
+thresholds:
+  low_affinity_line_config: atom.low_affinity_line   # Q16 拍板 0.5
+failure_policy: low_affinity_flag_only               # Q16：仅标记不淘汰
+review_rule: keeper 终裁在候选侧 product_reviewer（resolve-cluster 端点）；skill7 只管整批准入
+cost_limit: null

@@ -1,0 +1,44 @@
+# Evaluation Dataset — ATOM-EXPAND（WF-03 段4，回归矩阵，Q80 切片自带）
+# target=atom_rules 纯函数：default_batch_size（Q14 敏感 20/非敏感 50）、
+# target_reached（Q15 已通过+冻结正式原子达 target_atom_max 即停拓，含等于边界）。
+# 真 LLM 拓展生成本体仓内无实现，同 PWC-BUILDER 挂账（Q77）。
+# 数据均为人工编写合成数据（16 §4，禁用生产数据）。
+skill_id: ATOM-EXPAND
+wf_id: WF-03
+cases:
+  # ---------- Q14 批次上限 ----------
+  - id: ae-bs-001
+    title: Q14 敏感行业默认批次上限 20
+    target: atom_default_batch_size
+    input: {sensitive: true}
+    expected: {batch_size: 20}
+    source: {refs: [Q14, "02 §C2 atom.batch_size_sensitive"]}
+
+  - id: ae-bs-002
+    title: Q14 非敏感行业默认批次上限 50
+    target: atom_default_batch_size
+    input: {sensitive: false}
+    expected: {batch_size: 50}
+    source: {refs: [Q14, "02 §C2 atom.batch_size_default"]}
+
+  # ---------- Q15 达标停拓 ----------
+  - id: ae-tr-001
+    title: Q15 已通过 0 / 目标 30 → 未达标，继续拓展
+    target: atom_target_reached
+    input: {approved_count: 0, target_atom_max: 30}
+    expected: {reached: false}
+    source: {refs: [Q15, "docs/08 M4 blockquote"]}
+
+  - id: ae-tr-002
+    title: Q15 已通过等于目标（30/30）→ 达标停拓（边界含等于）
+    target: atom_target_reached
+    input: {approved_count: 30, target_atom_max: 30}
+    expected: {reached: true}
+    source: {refs: [Q15, "atom_rules.target_reached"]}
+
+  - id: ae-tr-003
+    title: Q15 已通过超过目标（31/30）→ 达标停拓
+    target: atom_target_reached
+    input: {approved_count: 31, target_atom_max: 30}
+    expected: {reached: true}
+    source: {refs: [Q15, "atom_rules.target_reached"]}

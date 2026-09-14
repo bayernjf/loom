@@ -1,0 +1,85 @@
+# Evaluation Dataset — CONFLICT-PRECHECK（WF-03 段4，回归矩阵，Q80 切片自带）
+# target=atom_rules 纯函数：grade_risk（Q17 双轨：命中词表按词表最高等级强制定级
+# source=wordlist，未命中用 AI 判级 source=ai）、conflicts_for（line 840 三类：
+# critical+ban → disabled_expression/blocked；high → high_risk_single_review/
+# pending_gate，且无证据追加 evidence_required/blocked；medium/low 无冲突）。
+# 数据均为人工编写合成词例（16 §4，禁用生产数据）。
+skill_id: CONFLICT-PRECHECK
+wf_id: WF-03
+cases:
+  # ---------- Q17 双轨定级 ----------
+  - id: cp-gr-001
+    title: Q17 未命中词表 → 用 AI 判级（low / source=ai，不 banned）
+    target: atom_grade_risk
+    input: {content: "synthetic gentle phrase", ai_level: "low", hits: []}
+    expected: {level: "low", source: "ai", banned: false}
+    source: {refs: [Q17, "atom_rules.grade_risk"]}
+
+  - id: cp-gr-002
+    title: Q17 命中 high 词表 → 词表强制定级，覆盖 AI 的 low
+    target: atom_grade_risk
+    input:
+      content: "synthetic phrase alpha"
+      ai_level: "low"
+      hits: [{word: "alpha", level: "high", action: "downgrade"}]
+    expected: {level: "high", source: "wordlist", banned: false}
+    source: {refs: [Q17, "docs/08 M4 blockquote"]}
+
+  - id: cp-gr-003
+    title: Q17 多条命中取词表最高等级（high + critical → critical）
+    target: atom_grade_risk
+    input:
+      content: "synthetic phrase beta gamma"
+      ai_level: "low"
+      hits:
+        - {word: "beta", level: "high", action: "downgrade"}
+        - {word: "gamma", level: "critical", action: "ban"}
+    expected: {level: "critical", source: "wordlist", banned: true}
+    source: {refs: [Q17, "atom_rules.grade_risk"]}
+
+  - id: cp-gr-004
+    title: Q17 critical 命中但处置为 downgrade（非 ban）→ 非 banned
+    target: atom_grade_risk
+    input:
+      content: "synthetic phrase delta"
+      ai_level: "medium"
+      hits: [{word: "delta", level: "critical", action: "downgrade"}]
+    expected: {level: "critical", source: "wordlist", banned: false}
+    source: {refs: [Q17, "line 840 disabled_expression 需 critical+ban"]}
+
+  # ---------- line 840 冲突三类 ----------
+  - id: cp-cf-001
+    title: line840 critical+ban → disabled_expression/blocked
+    target: atom_conflicts_for
+    input:
+      level: critical
+      source: wordlist
+      has_evidence: true
+      hits: [{word: "gamma", level: "critical", action: "ban"}]
+    expected:
+      - {type: "disabled_expression", status: "blocked"}
+    source: {refs: ["line 840", "docs/08 M4 blockquote"]}
+
+  - id: cp-cf-002
+    title: line840 high 无证据 → 单审 pending_gate + 证据缺失 blocked 两条
+    target: atom_conflicts_for
+    input: {level: high, source: ai, has_evidence: false, hits: []}
+    expected:
+      - {type: "high_risk_single_review", status: "pending_gate"}
+      - {type: "evidence_required", status: "blocked"}
+    source: {refs: ["line 840", "PT-ATOM-EXP-V1.3"]}
+
+  - id: cp-cf-003
+    title: line840 high 有证据 → 仅单审 pending_gate
+    target: atom_conflicts_for
+    input: {level: high, source: ai, has_evidence: true, hits: []}
+    expected:
+      - {type: "high_risk_single_review", status: "pending_gate"}
+    source: {refs: ["line 840", "Q70 high/critical 单条审"]}
+
+  - id: cp-cf-004
+    title: medium/low【实现补】等级无冲突产出（空列表）
+    target: atom_conflicts_for
+    input: {level: medium, source: ai, has_evidence: false, hits: []}
+    expected: []
+    source: {refs: ["docs/08 M4 blockquote", "atom_rules.conflicts_for"]}

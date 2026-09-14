@@ -1,0 +1,13 @@
+skill_id: UNDERSTAND
+layer: modeling
+version: 1.0.0
+input_output_schema:
+  input: PARSE 结构化字段草稿
+  output: 语义归一化字段与三信号原始打分素材（文本/图片/第三方）
+knowledge_deps:
+  - Q2 三信号（文本/图片/第三方）
+model_tier: ""
+thresholds: {}
+failure_policy: human_takeover             # 原文未给失败细则【待补】
+review_rule: 不直接产候选；随 CAT-RECOG 整结果过 WF-01 Gate
+cost_limit: null
