@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     sweep_interval_seconds: float = 300.0
 
+    # Q82：outbound 供应商 API Key 落库密文的主密钥（只从环境变量注入，不入库不入仓）。
+    # 未设置时测试/本地用进程内临时密钥（重启后旧密文不可解，仅限开发态）。
+    master_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

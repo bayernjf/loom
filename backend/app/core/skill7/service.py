@@ -141,7 +141,44 @@ async def deliver_run(
 ) -> tuple[SkillRun, list[SkillCandidate]]:
     # Q76-5：投递归 operations；机器对机器 API Key 通道契约【待补】。
     require_any_role(body.actor, OPERATIONS)
+    return await _persist_delivery(session, body, source="delivery")
 
+
+async def deliver_generated_run(
+    session: AsyncSession,
+    body: DeliverRunRequest,
+    *,
+    model_id: str,
+    input_cost,
+    output_cost,
+    currency_code: str | None,
+) -> tuple[SkillRun, list[SkillCandidate]]:
+    """Q82-2：进程内真 LLM 调用后的机器投递。
+
+    与人工外部投递共用同一条通道与全部校验，但 system actor 不持任何角色
+    （Q66），source=llm_auto 以区别外部投递；候选同样落 pending_review 过人工 Gate。
+    """
+    return await _persist_delivery(
+        session,
+        body,
+        source="llm_auto",
+        model_id=model_id,
+        input_cost=input_cost,
+        output_cost=output_cost,
+        currency_code=currency_code,
+    )
+
+
+async def _persist_delivery(
+    session: AsyncSession,
+    body: DeliverRunRequest,
+    *,
+    source: str,
+    model_id: str | None = None,
+    input_cost=None,
+    output_cost=None,
+    currency_code: str | None = None,
+) -> tuple[SkillRun, list[SkillCandidate]]:
     # 未注册 Skill 拒绝（注册表为唯一事实源，14 §2.2）。
     skill = registry.get_skill(body.skill_id)
     wf_id = body.wf_id or _workflow_of_skill(body.skill_id)
@@ -193,11 +230,15 @@ async def deliver_run(
         product_space_id=product_space_id,
         intake_id=intake_id,
         status="succeeded",
-        source="delivery",
+        source=source,
         input_payload=body.input,
         output_payload=body.output,
         input_tokens=body.input_tokens,
         output_tokens=body.output_tokens,
+        model_id=model_id,
+        input_cost=input_cost,
+        output_cost=output_cost,
+        currency_code=currency_code,
         confidence=body.confidence,
         created_by=body.actor.id,
     )
@@ -234,6 +275,8 @@ async def deliver_run(
             "wf_id": wf_id,
             "candidates": len(body.candidates),
             "model_tier": skill.get("model_tier") or None,
+            "model_id": model_id,
+            "source": source,
             "anchor": "intake" if intake_anchor else "product_space",
         },
     )
