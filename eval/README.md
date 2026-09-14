@@ -14,12 +14,20 @@ eval/
 │   ├── PWC-SCORING.yaml
 │   ├── COMBO-VALIDATE.yaml
 │   ├── DIM-MERGE.yaml        # WF-02 字段池（Q78 切片自带）
-│   └── CAT-RECOG.yaml        # WF-01 C1 识别（Q79 切片自带）
+│   ├── CAT-RECOG.yaml        # WF-01 C1 识别（Q79 切片自带）
+│   ├── ATOM-EXPAND.yaml      # ┐
+│   ├── ATOM-CANON.yaml       # ├ WF-03 字段下原子（Q80 切片自带，四 Skill）
+│   ├── ATOM-AFFINITY.yaml    # │
+│   └── CONFLICT-PRECHECK.yaml# ┘
 └── golden_cases/skills/      # Golden Cases：人工策展标杆（同 schema，范围小）
     ├── PWC-SCORING.yaml
     ├── COMBO-VALIDATE.yaml
     ├── DIM-MERGE.yaml
-    └── CAT-RECOG.yaml
+    ├── CAT-RECOG.yaml
+    ├── ATOM-EXPAND.yaml      # ┐
+    ├── ATOM-CANON.yaml       # ├ WF-03（Q80）
+    ├── ATOM-AFFINITY.yaml    # │
+    └── CONFLICT-PRECHECK.yaml# ┘
 ```
 
 ## 运行（staging 回归闸门，docs/17 CI/CD）
@@ -63,12 +71,25 @@ cases:
   加权（Σ=1 不归一化）/ Q1 三分支边界（0.6 地板包含、阈值≥）/ Q3 Top1-Top2
   <0.1 矛盾线优先转 ops_assist，共 11+3 例。错误分支（WeightSumError/
   MissingSignalScore）runner 无错误案例 schema，由 backend 集成测试覆盖。
+- **WF-03 替换切片补四 Skill（Q80，每 WF 替换切片自带 eval 回归）**：
+  - `ATOM-EXPAND` → Q14 批次上限（敏感 20/默认 50，显式覆盖）与 Q15 AI 达标
+    停拓（`default_batch_size` / `target_reached`，>= 边界），共 5+1 例；
+  - `ATOM-CANON` → 同批去重规范化（`normalize_text`：trim/casefold/空白折叠/
+    幂等/非 ASCII），共 4+1 例；
+  - `ATOM-AFFINITY` → Q16 低亲和线严格 <0.5（`is_low_affinity`）与 Q19 簇
+    keeper 选择（`pick_cluster_keeper`：最高亲和、None 殿后、平局保序），共 7+2 例；
+  - `CONFLICT-PRECHECK` → Q17 词表强制双轨（`grade_risk`：AI/词表/从严/
+    critical+ban）与 line 840 三类冲突（`conflicts_for`：critical+ban→
+    blocked、high 无证据双冲突、high 有证据单审、medium 无冲突），共 8+3 例。
+  - 错误分支（InvalidBatch/冲突 blocked 审批）runner 无错误案例 schema，由
+    backend 集成测试覆盖。
 - **PWC-BUILDER 无案例（挂账）**：该 Skill V1 为外部投递，仓库内无确定性
   生成实现，不构造虚拟案例；真 LLM 切片落地后补。
 - COMBO-VALIDATE 的结构预筛（≥2 维度/同批去重/跨租户拦截等）目前内联在
   `pwc/funnel` 服务内且耦合 DB，未作为纯 target 暴露；其行为由 backend
   集成测试覆盖，后续若抽纯函数再接入本 runner（挂账）。
-- WF-03 等其余 Skill 随各自占位替换切片补数据集；C7 Layer4 提案通道随 Q79-1 后续切片。
+- 当前合计 84 例（Evaluation Dataset 66 + Golden Cases 18）；C7 Layer4
+  提案通道随 Q79-1 后续切片。
 - 案例一律人工依据 docs 原文/Q 规则编写，**禁止生产数据**（16 §4）；
   词例均为合成词。
 - 真 LLM 落地后：同一批 YAML 案例改打 Skill 输出，只改 `targets.py`
