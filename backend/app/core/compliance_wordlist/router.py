@@ -10,6 +10,13 @@ from app.core.db import get_session
 router = APIRouter(prefix="/api/admin/compliance-wordlist", tags=["compliance-wordlist"])
 
 
+async def _q51_rescan(session, entry) -> list[dict]:
+    # Q51：词表保存生效即扫 active 快照（边沿接线，避免 core 反向依赖 decision 包）。
+    from app.decision.compliance_center.service import rescan_for_entry
+
+    return await rescan_for_entry(session, entry)
+
+
 class _ArchiveBody(BaseModel):
     actor: Actor
 
@@ -23,6 +30,7 @@ def _view(e) -> dict:
         "downgrade_target": e.downgrade_target,
         "country": e.country,
         "industry": e.industry,
+        "layer": e.layer,
         "status": e.status,
     }
 
@@ -43,6 +51,7 @@ async def create_entry(
 ) -> dict:
     try:
         entry = await service.create_entry(session, body, body.actor)
+        impacted = await _q51_rescan(session, entry)
         await session.commit()
     except service.WordlistForbidden as exc:
         await session.rollback()
@@ -50,7 +59,7 @@ async def create_entry(
     except ValueError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _view(entry)
+    return {**_view(entry), "q51_impacted": impacted}
 
 
 @router.put("/{entry_id}")
@@ -59,6 +68,7 @@ async def update_entry(
 ) -> dict:
     try:
         entry = await service.update_entry(session, entry_id, body, body.actor)
+        impacted = await _q51_rescan(session, entry)
         await session.commit()
     except service.EntryNotFound as exc:
         await session.rollback()
@@ -69,7 +79,7 @@ async def update_entry(
     except ValueError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _view(entry)
+    return {**_view(entry), "q51_impacted": impacted}
 
 
 @router.delete("/{entry_id}")

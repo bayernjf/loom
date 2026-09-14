@@ -14,6 +14,8 @@ class WordlistItem(BaseModel):
     downgrade_target: str | None = None
     country: str | None = None
     industry: str | None = None
+    # Q50 层级；缺省由服务归一化（带国家→country，其余→base）。
+    layer: Literal["country", "platform", "base"] | None = None
 
 
 class WordlistUpsert(BaseModel):
