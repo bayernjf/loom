@@ -287,6 +287,7 @@
 - **实现补登（2026-09-14，WF-01 切片 Q79-4，迁移 0013_skill7_intake_anchor）**：段2 先于 ProductSpace，两表各加 `intake_id` String36 可空索引，`skill_candidates.product_space_id` 改可空；投递锚点按 WF 归属二选一（c1_recognition=intake；pwc_combo/field_plan=PS），同一行只回填其一。target_type 扩为 `pwc_combo`/`field_plan`/`c1_recognition`。PG16 up/downgrade-1/up 实测（0013 downgrade 将 product_space_id 复原 NOT NULL）。
 - **实现补登（2026-09-14，Q82 模型网关试点，迁移 0014_model_gateway）**：source 枚举增 `llm_auto`（进程内真 LLM 系统 Actor 投递）；`skill_runs` 加 `model_id` String36 可空索引 / `input_cost`·`output_cost` Numeric(12,6) 可空 / `currency_code` String3 可空（per-1M 价 × tokens/1e6，ROUND_HALF_UP 6 位；币种【原文未给出，待补】）。PG16 up/downgrade-1/up 实测。
 - **实现补登（2026-09-14，Q83 PWC-BUILDER 第二站，迁移 0015_pwc_builder_seed，纯数据无 schema 变更）**：仅 3 行种子——`ai_scene_routes` PWC-BUILDER→synthetic、`skill_prompts` PWC-BUILDER v0.1 指针、`skill_prompt_versions` v0.1 模板（变量 approved_atoms/active_goals/capacity/ready_count/target_platforms/batch_limit）。downgrade 按三表 DELETE。PG16 up/downgrade-1/up 实测。
+- **实现补登（2026-09-15，Q84 C7 Layer4 TYPE-MATCH 第三站，迁移 0016_type_match_seed，纯数据无 schema 变更）**：仅 3 行种子——`ai_scene_routes` TYPE-MATCH→synthetic、`skill_prompts` TYPE-MATCH v0.1 指针、`skill_prompt_versions` v0.1 模板（变量 category/required_fids/own_template/sibling_summary/coverage_floor/g2_coverage）。downgrade 按三表 DELETE。PG16 up/downgrade-1/up 实测。
 
 **audit_logs（writeAudit）** — 04 §3 待补
 - 所有人工操作 + AI 调用全记录，append-only 不可篡改
@@ -308,7 +309,7 @@
   - `ai_scene_routes`：scene String64 PK（= skill_id）/ model_id FK / updated_by·updated_at。
   - `skill_prompts`：skill_id PK / current_version String16 / updated_by·updated_at（当前版本指针）。
   - `skill_prompt_versions`：version_id PK / skill_id 索引 / version String16 / template Text / change_note Text 可空 / variables JSONB / created_by·created_at；uq(skill_id,version)；append-only，首版 v0.1。
-  - 迁移种子（固定 uuid5）：`synthetic-deterministic`（provider=synthetic，价 0/无预算/active）+ CAT-RECOG→synthetic 路由 + CAT-RECOG Prompt v0.1（变量 product_profile/signal_keys/category_options）。Q83 起（迁移 0015 纯种子，无 schema 变更）再加 PWC-BUILDER→synthetic 路由与 PWC-BUILDER Prompt v0.1（变量 approved_atoms/active_goals/capacity/ready_count/target_platforms/batch_limit）。
+  - 迁移种子（固定 uuid5）：`synthetic-deterministic`（provider=synthetic，价 0/无预算/active）+ CAT-RECOG→synthetic 路由 + CAT-RECOG Prompt v0.1（变量 product_profile/signal_keys/category_options）。Q83 起（迁移 0015 纯种子，无 schema 变更）再加 PWC-BUILDER→synthetic 路由与 PWC-BUILDER Prompt v0.1（变量 approved_atoms/active_goals/capacity/ready_count/target_platforms/batch_limit）。Q84 起（迁移 0016 纯种子，无 schema 变更）再加 TYPE-MATCH→synthetic 路由与 TYPE-MATCH Prompt v0.1（变量 category/required_fids/own_template/sibling_summary/coverage_floor/g2_coverage）。
 
 **agent_registry（Agent 注册表）** — 04 表 #30
 - 3 个 Agent：AG-REVIEW-COPILOT（10 轮/8000 token）、AG-PM-AUDIT（6/6000）、AG-SUPPORT（20/4000，上线前脱敏审核）
