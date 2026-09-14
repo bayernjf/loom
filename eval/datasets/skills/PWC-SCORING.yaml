@@ -1,0 +1,129 @@
+# Evaluation Dataset — PWC-SCORING（WF-04 段5，回归矩阵）
+# V1 target=确定性规则替身（Q77-1）；真 LLM Skill 落地后同案改打 Skill 输出。
+# 公式（Q22/Q22a/Q22b，docs/06 §1.1）：
+#   score = ((logic*w_logic + fit*w_fit)*0.6 + (1-max_pool_overlap)*0.4) * 品类乘数
+#   缺任一 AI 分项 → 不出分、转人工 Gate，不用默认值凑分。
+#   默认 w_logic=w_fit=0.5，一期品类乘数=1.0（配置中心 pwc.* 键）。
+skill_id: PWC-SCORING
+wf_id: WF-04
+cases:
+  - id: ps-score-001
+    title: 常规组合：合理性 0.7、多样性 0.75 → 0.72
+    target: score_combo
+    input: {logic: 0.8, fit: 0.6, max_pool_overlap: 0.25}
+    expected:
+      scored: true
+      score: 0.72
+      detail: {logic: 0.8, fit: 0.6, reasonableness: 0.7, diversity: 0.75, category_multiplier: 1.0, w_logic: 0.5, w_fit: 0.5}
+    source: {refs: [Q22, Q22a, Q22b, "docs/06 §1.1"]}
+
+  - id: ps-score-002
+    title: 空待用池多样性取 1.0，双 0.9 → 0.94
+    target: score_combo
+    input: {logic: 0.9, fit: 0.9, max_pool_overlap: 0.0}
+    expected:
+      scored: true
+      score: 0.94
+      detail: {reasonableness: 0.9, diversity: 1.0}
+    source: {refs: [Q22b, "docs/06 §1.1（空池 max=0）"]}
+
+  - id: ps-score-003
+    title: 与待用池完全重合多样性为 0，仅合理性贡献 0.42
+    target: score_combo
+    input: {logic: 0.8, fit: 0.6, max_pool_overlap: 1.0}
+    expected:
+      scored: true
+      score: 0.42
+      detail: {diversity: 0.0}
+    source: {refs: [Q22b]}
+
+  - id: ps-score-004
+    title: logic 缺失分项记"—"、不出分（Q22b 人工 Gate，不凑分）
+    target: score_combo
+    input: {logic: null, fit: 0.6, max_pool_overlap: 0.25}
+    expected:
+      scored: false
+      score: null
+      detail: {logic: "—", fit: 0.6, diversity: 0.75, category_multiplier: 1.0, w_logic: 0.5, w_fit: 0.5}
+    source: {refs: [Q22b, "PT 失败策略：AI 分项缺失转 pending_review"]}
+
+  - id: ps-score-005
+    title: fit 缺失同样不出分
+    target: score_combo
+    input: {logic: 0.8, fit: null, max_pool_overlap: 0.0}
+    expected:
+      scored: false
+      score: null
+      detail: {logic: 0.8, fit: "—", diversity: 1.0}
+    source: {refs: [Q22b]}
+
+  - id: ps-score-006
+    title: 两项 AI 分均缺失，不出分
+    target: score_combo
+    input: {logic: null, fit: null, max_pool_overlap: 0.4}
+    expected:
+      scored: false
+      score: null
+      detail: {logic: "—", fit: "—", diversity: 0.6}
+    source: {refs: [Q22b]}
+
+  - id: ps-score-007
+    title: 品类乘数显式给 1.2 时线性放大（一期默认恒 1.0，回流后校准）
+    target: score_combo
+    input: {logic: 0.8, fit: 0.6, max_pool_overlap: 0.25, category_multiplier: 1.2}
+    expected:
+      scored: true
+      score: 0.864
+      detail: {category_multiplier: 1.2}
+    tolerance: 0.000000001
+    source: {refs: [Q22, "docs/06 §1.1 品类乘数"]}
+
+  - id: ps-score-008
+    title: 显式权重 0.7/0.3 覆盖默认 0.5/0.5
+    target: score_combo
+    input: {logic: 0.8, fit: 0.6, max_pool_overlap: 0.25, w_logic: 0.7, w_fit: 0.3}
+    expected:
+      scored: true
+      score: 0.744
+      detail: {reasonableness: 0.74, w_logic: 0.7, w_fit: 0.3}
+    tolerance: 0.000000001
+    source: {refs: [Q22a, "docs/06 §1.1（w1/w2 默认 0.5，可配）"]}
+
+  - id: ps-dup-001
+    title: Q23 疑重线边界：max_overlap=0.8 即标疑重
+    target: is_duplicate
+    input: {max_pool_overlap: 0.8}
+    expected: true
+    source: {refs: [Q23, "pwc.dup_overlap_line=0.8"]}
+
+  - id: ps-dup-002
+    title: 0.8 以下不标疑重
+    target: is_duplicate
+    input: {max_pool_overlap: 0.79}
+    expected: false
+    source: {refs: [Q23]}
+
+  - id: ps-overlap-001
+    title: 重合占比 Jaccard：{a1,a2} vs {a2,a3} = 1/3
+    target: overlap_ratio
+    input: {a: [a1, a2], b: [a2, a3]}
+    expected: 0.3333333333333333
+    tolerance: 0.000000001
+    source: {refs: [Q23, "docs/06 §1.1（Jaccard 为实现补口径）"]}
+
+  - id: ps-overlap-002
+    title: 空池 max_overlap 取 0
+    target: max_overlap
+    input: {combo: [a1, a2], pool_combos: []}
+    expected: 0.0
+    source: {refs: [Q22b]}
+
+  - id: ps-overlap-003
+    title: 取与池中各组合重合的最大值
+    target: max_overlap
+    input:
+      combo: [a1, a2, a3]
+      pool_combos: [[a1, a4], [a1, a2, a3, a4]]
+    expected: 0.75
+    tolerance: 0.000000001
+    source: {refs: [Q22b, Q23]}

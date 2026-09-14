@@ -1,0 +1,32 @@
+# Golden Cases — PWC-SCORING（WF-04 段5，人工精选标杆案例）
+# 与 datasets/ 同 schema（Q77 实现形态）：datasets 为全量回归矩阵，
+# golden_cases 为每条业务裁决的标杆示范，策展范围小、必须逐案人工复核。
+skill_id: PWC-SCORING
+wf_id: WF-04
+cases:
+  - id: golden-ps-001
+    title: 标杆｜完整 Q22 公式：合理性 0.7 与多样性 0.75 加权 0.6/0.4，一期乘数 1.0
+    target: score_combo
+    input: {logic: 0.8, fit: 0.6, max_pool_overlap: 0.25}
+    expected:
+      scored: true
+      score: 0.72
+      detail: {reasonableness: 0.7, diversity: 0.75, category_multiplier: 1.0, w_logic: 0.5, w_fit: 0.5}
+    source: {refs: [Q22, Q22a, Q22b, "docs/06 §1.1", "line 918 品类乘数一期恒 1.0"]}
+
+  - id: golden-ps-002
+    title: 标杆｜AI 分项缺失不凑分——score=null 且转人工 Gate（Q22b 失败策略）
+    target: score_combo
+    input: {logic: null, fit: 0.9, max_pool_overlap: 0.1}
+    expected:
+      scored: false
+      score: null
+      detail: {logic: "—", fit: 0.9, diversity: 0.9}
+    source: {refs: [Q22b, "PT 失败策略：缺分项转 pending_review，禁止默认值凑分"]}
+
+  - id: golden-ps-003
+    title: 标杆｜与待用池高度重合（0.9）→ Q23 疑重标，保留分高者人工可改判
+    target: is_duplicate
+    input: {max_pool_overlap: 0.9}
+    expected: true
+    source: {refs: [Q23, "重合 ≥0.8 标疑重，低分降权入备选，人工可改判"]}

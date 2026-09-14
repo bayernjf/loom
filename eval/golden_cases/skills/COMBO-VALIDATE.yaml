@@ -1,0 +1,29 @@
+# Golden Cases — COMBO-VALIDATE（WF-04 段5，人工精选标杆案例）
+skill_id: COMBO-VALIDATE
+wf_id: WF-04
+cases:
+  - id: golden-cv-001
+    title: 标杆｜医疗绝对化 ban 命中——一票否决、不进评分（PT-COMPLIANCE-V2.0）
+    target: match_words
+    input:
+      content: "本品最安全，包治百病"
+      entries:
+        - {word: "最安全", level: critical, action: ban}
+        - {word: "包治百病", level: high, action: ban}
+        - {word: "效果可能因人而异", level: low, action: downgrade}
+    expected:
+      - {word: "最安全", level: critical, action: ban}
+      - {word: "包治百病", level: high, action: ban}
+    source: {refs: [Q48, Q22a, "PT-COMPLIANCE-V2.0：绝不放过医疗绝对化"]}
+
+  - id: golden-cv-002
+    title: 标杆｜仅降级词命中——只出建议、最终人工 approval，不阻断评分出池
+    target: match_words
+    input:
+      content: "效果可能因人而异，请遵医嘱选用"
+      entries:
+        - {word: "最安全", level: critical, action: ban}
+        - {word: "效果可能因人而异", level: low, action: downgrade}
+    expected:
+      - {word: "效果可能因人而异", level: low, action: downgrade}
+    source: {refs: [Q48, "PT-COMPLIANCE-V2.0：降级只出建议、最终人工 approval"]}
