@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, JSONType
@@ -37,6 +37,11 @@ class SkillRun(Base):
     output_payload: Mapped[dict | None] = mapped_column("output", JSONType, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Q82：真 LLM 调用的模型归属与 per-1M 折算成本（币种原文未给【待补】）。
+    model_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    input_cost: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    output_cost: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)

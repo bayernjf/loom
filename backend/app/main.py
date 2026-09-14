@@ -7,6 +7,7 @@ from app.core.compliance_wordlist.router import router as wordlist_router
 from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
 from app.core.db import SessionLocal, settings
+from app.core.model_registry.router import router as model_registry_router
 from app.core.skill7.router import router as skill7_router
 from app.core.sla.router import router as sla_router
 from app.core.sla.runner import run_jobs
@@ -55,6 +56,7 @@ app.include_router(modeling_router)
 app.include_router(fieldpool_router)
 app.include_router(wordlist_router)
 app.include_router(config_router)
+app.include_router(model_registry_router)
 app.include_router(skill7_router)
 app.include_router(sla_router)
 app.include_router(atom_router)

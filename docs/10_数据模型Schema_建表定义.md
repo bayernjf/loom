@@ -285,6 +285,7 @@
 - **实现补登（2026-09-14，M10 切片 e，迁移 0012_m10_skill7）**：物理表名 `skill_runs`，落于 `app/core/skill7/models.py`。run_id String36 PK（uuid1 时间有序）/ skill_id String64 索引 / wf_id String16 可空 / tenant_id·product_space_id 可空索引（横切平台级运行留空）/ status String16 索引（`succeeded`=外部投递终结态、`requested`=系统触发尚无产出（Q71 补货，Q76-4）；`failed` 预留）/ source String16（`delivery`=operations 外部投递、`restock_auto`=system 消费触发）/ `input`/`output` JSONB（SQLite 变体 JSON）/ input_tokens·output_tokens Int 可空（成本金额待 Q67 模型注册表，未建列）/ confidence Float 可空 / error Text 可空 / created_by（投递=actor.id，补货=`system`）/ created_at 索引。无任何 update/delete 代码路径。
 - 同迁移建 **`skill_candidates`**（skill7 通用候选，Q76-3；15 §3 通用管道；04 原无此实体，字段为本次实现补）：candidate_id String36 PK（uuid1）/ run_id 索引 + candidate_index Int，uq(run_id,candidate_index) / skill_id 索引 / wf_id / tenant_id 可空索引 / product_space_id 索引 / target_type String32（试点仅 `pwc_combo`）/ payload JSONB（confirmed 原样应用、modified 整体替换并置 human_modified=true）/ state String16 索引（pending_review/applied/archived；投递即 pending_review，ai_suggested 不持久化【实现补】）/ applied_refs JSONB（适配器落库结果 id 列表）/ human_modified Bool server_default false / review_note / reviewed_by / reviewed_at / created_at。每次投递/裁决/补货 writeAudit（skill7.run_delivered / candidate_applied / candidate_rejected / restock_requested）。PG16 up/downgrade-1/up 实测。
 - **实现补登（2026-09-14，WF-01 切片 Q79-4，迁移 0013_skill7_intake_anchor）**：段2 先于 ProductSpace，两表各加 `intake_id` String36 可空索引，`skill_candidates.product_space_id` 改可空；投递锚点按 WF 归属二选一（c1_recognition=intake；pwc_combo/field_plan=PS），同一行只回填其一。target_type 扩为 `pwc_combo`/`field_plan`/`c1_recognition`。PG16 up/downgrade-1/up 实测（0013 downgrade 将 product_space_id 复原 NOT NULL）。
+- **实现补登（2026-09-14，Q82 模型网关试点，迁移 0014_model_gateway）**：source 枚举增 `llm_auto`（进程内真 LLM 系统 Actor 投递）；`skill_runs` 加 `model_id` String36 可空索引 / `input_cost`·`output_cost` Numeric(12,6) 可空 / `currency_code` String3 可空（per-1M 价 × tokens/1e6，ROUND_HALF_UP 6 位；币种【原文未给出，待补】）。PG16 up/downgrade-1/up 实测。
 
 **audit_logs（writeAudit）** — 04 §3 待补
 - 所有人工操作 + AI 调用全记录，append-only 不可篡改
@@ -300,6 +301,13 @@
 **model_registry（统一模型注册表）** — 04 §2.24（字段完整）
 - 字段：模型/供应商/输入价/输出价/日预算/状态/fallback；**统一 per-1M 口径**（Q67 消除千倍差）
 - 场景路由表：场景→默认模型（类目识别/原子拓展/内容生成/合规复检等），运营可改不动代码
+- **实现补登（2026-09-14，Q67/Q82，迁移 0014_model_gateway，物理表落 `app/core/model_registry/models.py`，PG16 up/downgrade-1/up 实测）**：拆五表——
+  - `ai_models`：model_id String36 PK（uuid1；种子行用 uuid5 固定值）/ model_code String64 unique / provider String32 / input·output_price_per_1m Numeric(12,4) server_default 0 / currency_code String3 可空【原文未给出，待补】/ daily_budget Numeric(12,4) 可空（NULL=不限）/ status String16 server_default active / fallback_model_id 自引用 FK 可空 / created_by·updated_by / created_at·updated_at(onupdate)。
+  - `ai_model_keys`（outbound）：key_id PK / model_id FK 索引 / ciphertext LargeBinary（Fernet，env 主密钥派生）/ fingerprint String8（明文末 4 位）/ status active·revoked / created_by·created_at / revoked_by·revoked_at；一模型至多一 active 行，轮换事务内旧行置 revoked + 插新行，历史保留；任何读路径不回显明文/密文。
+  - `ai_scene_routes`：scene String64 PK（= skill_id）/ model_id FK / updated_by·updated_at。
+  - `skill_prompts`：skill_id PK / current_version String16 / updated_by·updated_at（当前版本指针）。
+  - `skill_prompt_versions`：version_id PK / skill_id 索引 / version String16 / template Text / change_note Text 可空 / variables JSONB / created_by·created_at；uq(skill_id,version)；append-only，首版 v0.1。
+  - 迁移种子（固定 uuid5）：`synthetic-deterministic`（provider=synthetic，价 0/无预算/active）+ CAT-RECOG→synthetic 路由 + CAT-RECOG Prompt v0.1（变量 product_profile/signal_keys/category_options）。
 
 **agent_registry（Agent 注册表）** — 04 表 #30
 - 3 个 Agent：AG-REVIEW-COPILOT（10 轮/8000 token）、AG-PM-AUDIT（6/6000）、AG-SUPPORT（20/4000，上线前脱敏审核）
@@ -314,6 +322,7 @@
 
 **api_keys（API Key）** — 04 §3 待补
 - 一 Agent 一 Key，可吊销；唯一入口（真接 LLM 时模型注册页是唯一入口，line 2101）；effect-callback 鉴权
+- **outbound 供应商密钥半套已实现（Q82，物理表 ai_model_keys 见上 model_registry；入站一 Agent 一 Key 全字段仍待 Q60 效果回调切片）**
 
 **dict_management（字典管理）** — Q25/Q38/Q43/Q46
 - 内容目的字典（contentGoals）/ 降级动作字典（REMOVE_BRAND/REMOVE_CLAIM/REMOVE_HOOK/REWRITE/…，Q38）/ 17 池选项字典 / 通用底座（Q46 权限单列）
