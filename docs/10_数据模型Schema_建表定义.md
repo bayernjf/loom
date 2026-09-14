@@ -188,6 +188,15 @@
 | 隔离 | 平台间不共享权重池（platform_id 归属） | PT-PCP-V1.5 |
 | 重算 | 动态信号每周触发；AI 候选+对照单进 HumanGate；单项 ±0.05 | Q41/Q42 |
 
+> **实现补登（2026-09-14，M11 后端切片，迁移 0008，PG16 up/down/up 实测，共 6 表）**：
+> - `publish_slots`：slot_id(String36) PK / platform / code UNIQUE / name / slot_type / chars_max / dur_min/max / traffic/safe/conv/load Float server_default 0 / score_source(16) server_default manual_eval / risk(16) 可空 / gate(16) server_default approved / source_url(512) / status(16) active|archived / 审计列；**无种子**（14 平台目录原文 line 1098-1221 基准 HTML 不在仓库，【原文未给出，待补】，不虚构）。
+> - `goal_fit_weights`：goal String32 PK（逻辑引用 content_goals.code，无 DB FK）/ weights JSONB / updated_by/at；种子 2 行 ENGAGEMENT、CONVERSION（04 §2.15 实现补登，其余 3 目的【待补】）。
+> - `platform_rules`：rule_id PK / selector_level(24) / platform/slot_type/slot_id/country 均可空（空=通配）/ effect(16)=blocked|partial / note / status(16) / 审计列；同层级同条件不同结论的查重由服务层保存时执行（409 + overwrite 归档旧行），非 DB 约束；跨层 R-X01~X05 未建表【后续任务包】。
+> - `slot_type_defaults`：slot_type PK / daily_limit_min/max / defaults JSONB / 审计列；约 40 列明细【原文未给出，待补】，无种子。
+> - `pcp_templates`：template_id PK / code UNIQUE / name / weights JSONB / status；种子 4 行（pcpt-short_video/community/photo_text/ecommerce，17 键 Σ=1.0，Q39 实现期初值草稿）。
+> - `pcp_weight_tables`：pcp_id PK / tenant_id/product_space_id/platform 索引 / template_code(32) 可空（人工直编后清空）/ weights JSONB / status / 审计列；UNIQUE(product_space_id, platform) 名为 uq_pcp_ps_platform，落实 PT-PCP-V1.5 平台不共享（M11 仅提供 create/update，无归档端点，一对 PS×平台生命周期内仅一行）。
+> - 种子单一事实源在 `app/platform/platform_adaptation/seeds.py`，迁移与测试共用。字段类型/索引以迁移脚本为准。
+
 ### 2.5 策略与合规域（段 9–10）
 
 **layer_spaces（通用底座 4 层）** — 04 §2.16
@@ -199,6 +208,8 @@
 - 字段：CSP(goal/stage/angle/intensity/cta/emotion)、CSTP(struct 段式)、CEP(tone/perspective/explicit/soften)；各带 conf 与 gate
 - 复用：按（产品×平台×目的）三元组配一份；满 20 次或 PCP 更新触发重配（Q45）
 - 索引：(product_id, platform_id, goal) 唯一【建议】
+
+> **实现补登（2026-09-14，M11 后端切片，迁移 0008，PG16 up/down/up 实测）**：物理表 `packages` 落于段9 包 `app/decision/layer_strategy/`：package_id String36 PK / kind(8)=csp|cstp|cep 索引 / tenant_id/product_space_id/platform/goal 索引 / payload JSONB（键按 04 §2.17 定死，服务层校验缺/多键 422）/ conf Float 可空 / gate(16) server_default approved / status(16) active|archived / usage_count Int server_default 0 / 审计列。三元组+包型的"仅一条 active"由服务层保证（非 DB 唯一约束，软归档后可重建）。WF-07 AI 选包、20 次重配、usage_count 递增均 V2（列先行不计数）。
 
 **countries（国家事实库）** — 04 §2.18
 - 承载 R-030（EU/GDPR 禁留邮箱手机）/ R-031（CN/NMPA）/ R-032（US/FDA OTC 禁 cure/treat）

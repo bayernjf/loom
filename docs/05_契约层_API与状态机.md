@@ -57,7 +57,7 @@
 - **API Key 唯一入口**：真接 LLM 时模型注册页是唯一入口（line 2101）；Q67 合并为一张模型注册表（per-1M）。
 - **单一出口红线（line 11036）**：全系统只有 E1.1 publishFCW 能生成 final_content_whitelist_id；任何其他模块/Skill/Agent 写 final_id = 越权 = 违反协议。
 
-### 1.4 M1–M7 已落地 REST 端点（2026-09-13 起后端切片实现登记）
+### 1.4 M1–M11 已落地 REST 端点（2026-09-13 起后端切片实现登记；实现序 M7→M11，M8/段11 待续）
 
 > 以下为已实现端点（FastAPI，前缀见各行）；原文未给契约，属"开发补规格"落地，**不是已定稿契约的替代**——后续契约层定稿以本节实现为对账输入。错误口径统一：不存在 404 / 业务状态不允许 409 / 角色不符 403 / 输入或规则校验失败 422；所有写操作 writeAudit。
 
@@ -139,6 +139,19 @@
 | POST `/ccr/{ccr_id}/approve-downgrades` | 降级建议人工 approval（internal_compliance；仅 downgrade_pending 可批，否则 409）；批后 cleaning_passed | PT-COMPLIANCE |
 | GET `/pws/{pws_id}/law-reviews`、POST `/law-reviews/{id}/decision` | 法审记录查询/线下律师结论录入（internal_compliance；approved/rejected，已决再判 409；通过放行 Guard⑥、不通过维持否决；同步开关法审待办） | Q49 |
 | Q51 生效即扫（**无独立端点**） | 词表 POST/PUT 保存生效即在同事务扫描全部 active frozen 快照（按行业过滤），命中产出 `wordlist_rescan` 待办（whitelist_owner，detail.reason_code=wordlist_hit，开放待办幂等），响应附 `q51_impacted`；重冻新版本仍须 BO-07 人工执行；定时扫未来生效词条随 M10 | Q51/Q29 |
+
+**M11 段7/8 静态底表 + 段9 三包（前缀 `/api`，实现序先于 M8：段11 七 Guard 需要静态 PCP/三包实例）**
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| GET/POST `/admin/publish-slots`，PUT/DELETE `/admin/publish-slots/{slot_id}` | 发布位档案 CRUD（operations；code 唯一 409；四维分 score_source=manual_eval + source_url；DELETE=软归档）；**无平台目录种子（line 1098-1221 原文【待补】）** | Q35/line 1098 |
+| GET `/admin/publish-slots/{slot_id}/fit-score?goal=` | Q34 派生值（不落库）：Σ 四维分×目的权重；目的未配权重 → fit_score=null/incomplete=true，不凑分 | Q34 |
+| GET/PUT `/admin/fit-weights` | 目的权重矩阵（operations；4 维齐 + Σ=1 硬校验 422，不归一化；goal 须活跃 content_goals 否则 404；种子 ENGAGEMENT/CONVERSION） | Q34 |
+| GET/POST `/admin/platform-rules`，DELETE `/admin/platform-rules/{rule_id}`，GET `/admin/platform-rules/match` | 4 层 selector + country 横切；层级必填字段 422、effect 仅 blocked/partial；同级同条件异结论保存 → 409 回冲突行，`overwrite=true` 重发归档旧行；match=高优先级层级覆盖、同级从严；native 默认不存 | Q36/line 1383 |
+| GET/PUT `/admin/slot-type-defaults` | slotType 默认值（operations；min>max 422；约 40 列走 defaults JSON，明细【待补】） | line 1428 |
+| GET `/admin/pcp-templates` | Q39 四模板只读（种子 short_video/community/photo_text/ecommerce，17 键 Σ=1.0；实现期初值草稿） | Q39 |
+| GET/POST `/product-spaces/{id}/pcp`，PUT `/pcp/{pcp_id}` | PCP 实例（operations；PS 不存在 404；模板派生或显式 weights，17 键 Σ≤1.0 统一校验器 422；同 PS×平台 active 唯一 409；PUT 为 Q42 人工直编通道，清空 template_code + before/after 审计） | Q40/Q42/Q52/PT-PCP-V1.5 |
+| GET/POST `/product-spaces/{id}/packages`，PUT/DELETE `/packages/{package_id}` | 段9 CSP/CSTP/CEP 静态实例（operations；payload 键按 04 §2.17 定死，缺/多键 422；产品×平台×目的×包型 active 唯一 409；goal 须活跃；DELETE=软归档；行带 tenant/PS 供段11 Guard④⑤） | Q45/Q52/line 863 |
 
 ---
 
