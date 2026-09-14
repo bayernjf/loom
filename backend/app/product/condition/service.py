@@ -142,7 +142,7 @@ async def archive_goal(session, code: str, actor) -> None:
 async def get_pool_config(session, product_space_id: str) -> dict:
     row = await session.get(PwcPoolConfig, product_space_id)
     return {
-        "capacity": pwc_rules.DEFAULT_CAPACITY if row is None else row.capacity,
+        "capacity": pwc_rules.default_capacity() if row is None else row.capacity,
         "target_platforms": [] if row is None else list(row.target_platforms or []),
         "high_reuse_n": None if row is None else row.high_reuse_n,
         "configured": row is not None,
@@ -195,7 +195,7 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
     if pool is None or pool.gate != "approved":
         raise PoolNotApproved("PWC funnel requires an approved FieldPool")
 
-    batch_size = body.batch_size or pwc_rules.SINGLE_RUN_MAX
+    batch_size = body.batch_size or pwc_rules.single_run_max()
     if len(body.combos) > batch_size:
         raise InvalidFunnel(
             f"funnel run has {len(body.combos)} combos, exceeding single-run cap {batch_size} (Q21)"
@@ -526,7 +526,7 @@ async def consume(session, product_space_id: str, body, actor, *, now: datetime 
     if state is None:
         state = PwcPlatformState(pwc_id=picked.pwc_id, platform=body.platform)
         session.add(state)
-    window_start = now - timedelta(days=pwc_rules.COOLDOWN_WINDOW_DAYS)
+    window_start = now - timedelta(days=pwc_rules.cooldown_window_days())
     recent = (
         await session.scalars(
             select(PwcUsageRecord).where(
@@ -540,7 +540,7 @@ async def consume(session, product_space_id: str, body, actor, *, now: datetime 
     state.last_used_at = now
     if pwc_rules.should_cooldown(len(recent)):
         state.state = "cooldown"
-        state.cooldown_until = now + timedelta(days=pwc_rules.COOLDOWN_DURATION_DAYS)
+        state.cooldown_until = now + timedelta(days=pwc_rules.cooldown_duration_days())
 
     total_usage = (
         await session.scalars(
@@ -589,7 +589,7 @@ async def consume(session, product_space_id: str, body, actor, *, now: datetime 
         "pool_ready_count": ready_count,
         "pool_health": pwc_rules.pool_health(ready_count),
         # Q71：跌破 critical 自动补货；WF-04 补货通道随 M10，此处只出信号。
-        "restock_hint": ready_count < pwc_rules.POOL_CRITICAL,
+        "restock_hint": ready_count < pwc_rules.pool_critical(),
     }
 
 

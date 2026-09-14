@@ -132,8 +132,8 @@ async def evaluate_readiness(session, product_space_id: str) -> dict:
 
     checks = {
         "approved_field_pool": pool is not None and pool.gate == "approved",
-        "enough_approved_atoms": approved_atom_count >= pws_rules.MIN_APPROVED_ATOMS,
-        "active_pwc": active_pwc_count >= pws_rules.MIN_ACTIVE_PWCS,
+        "enough_approved_atoms": approved_atom_count >= pws_rules.min_approved_atoms(),
+        "active_pwc": active_pwc_count >= pws_rules.min_active_pwcs(),
         "no_unresolved_blocked_conflict": blocked_conflict_count == 0,
         "no_pending_gate_fields": pending_pool_count == 0,
     }
@@ -175,7 +175,7 @@ async def evaluate(session, product_space_id: str, actor) -> dict:
                 entity_id=product_space_id,
                 assignee_role=pws_rules.ROLE_PWS_OWNER,
                 detail={"summary": readiness["counts"], "proposed_by": actor.id},
-                due_at=_now() + timedelta(days=pws_rules.READY_TODO_DUE_DAYS),
+                due_at=_now() + timedelta(days=pws_rules.ready_todo_due_days()),
             )
             session.add(todo)
             await session.flush()

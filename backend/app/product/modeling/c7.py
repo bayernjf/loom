@@ -6,7 +6,13 @@ Layer3 从 G2 挑选（必填字段覆盖率 <60% 降级 Layer4，Q6；禁止发
 Layer4 大模型新生成 → g2_field_candidates（深度审核 Gate，段3 落）
 """
 
-LAYER3_COVERAGE_FLOOR = 0.6  # Q6 临时拍板，M10 配置中心迁移（02 §C2）
+from app.core.config_center.knobs import knob
+
+
+def layer3_coverage_floor() -> float:
+    # Q6 拍板值经配置中心热更（02 §C2；M10c 接入）。
+    return knob("c1.layer3_coverage_floor")
+
 
 FORBIDDEN_FID = "-"  # Q68：fid:'-' 黑户字段禁止落库
 

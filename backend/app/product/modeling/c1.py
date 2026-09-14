@@ -7,9 +7,16 @@ AI Skill（WF-01 六步）的信号提取在 M10 skill 通道接入，
 
 from dataclasses import dataclass
 
-# Q9 全局配置化要求的临时落点；M10 配置中心上线后迁移为后台配置（02 §C2）。
-COLD_START_FLOOR = 0.6
-TOP_GAP_CONTRADICTION = 0.1
+from app.core.config_center.knobs import knob
+
+
+# Q1/Q3 拍板值经配置中心热更（02 §C2；M10c 接入）。
+def cold_start_floor() -> float:
+    return knob("c1.cold_start_floor")
+
+
+def top_gap_contradiction() -> float:
+    return knob("c1.mid_confidence_top_gap")
 
 BRANCH_DIRECT_APPROVE = "direct_approve"
 BRANCH_OPS_ASSIST = "ops_assist"
@@ -49,9 +56,15 @@ def decide_branch(
     conf: float,
     threshold: float,
     top_candidates: list[dict] | None = None,
+    cold_floor: float | None = None,
+    top_gap_line: float | None = None,
 ) -> BranchDecision:
     """Q1/Q3 三分支：conf≥阈值 → direct_approve；[0.6,阈值) 或 Top1-Top2 差<0.1
-    → ops_assist；conf<0.6 → cold_start。"""
+    → ops_assist；conf<0.6 → cold_start。阈值缺省取配置中心（显式传值覆盖）。"""
+    if cold_floor is None:
+        cold_floor = cold_start_floor()
+    if top_gap_line is None:
+        top_gap_line = top_gap_contradiction()
     top_gap: float | None = None
     contradiction = False
     if top_candidates:
@@ -60,9 +73,9 @@ def decide_branch(
         )
         if len(ranked) >= 2:
             top_gap = round(ranked[0] - ranked[1], 4)
-            contradiction = top_gap < TOP_GAP_CONTRADICTION
+            contradiction = top_gap < top_gap_line
 
-    if conf < COLD_START_FLOOR:
+    if conf < cold_floor:
         branch = BRANCH_COLD_START
     elif conf < threshold or contradiction:
         branch = BRANCH_OPS_ASSIST

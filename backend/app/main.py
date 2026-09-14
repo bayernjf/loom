@@ -1,8 +1,10 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from app.core.compliance_wordlist.router import router as wordlist_router
+from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
 from app.core.db import SessionLocal, settings
 from app.core.sla.router import router as sla_router
@@ -19,12 +21,21 @@ from app.product.modeling.router import router as modeling_router
 from app.product.product_intake.router import router as intake_router
 from app.product.whitelist_center.router import router as pws_router
 
+logger = logging.getLogger("loom.startup")
+
 _scheduler: SweepScheduler | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _scheduler
+    # M10c：启动引导配置缓存。失败不阻断启动——knob() 回落种子默认值，
+    # 进程仍可健康启动，配置中心在下次发布或重启后恢复（单进程 V1）。
+    try:
+        async with SessionLocal() as session:
+            await config_cache.reload(session)
+    except Exception:
+        logger.warning("config cache bootstrap failed; falling back to seed defaults", exc_info=True)
     if settings.scheduler_enabled:
         _scheduler = SweepScheduler(SessionLocal, run_jobs, settings.sweep_interval_seconds)
         await _scheduler.start()

@@ -6,10 +6,20 @@
 
 from dataclasses import dataclass, field
 
-# Q54 一期临时权重（line 135；待段13 回流校准），配置化随 M10 配置中心。
-W_PWC_SKELETON = 0.4
-W_SLOT_FIT = 0.3
-W_PACKAGE_CONF = 0.3
+from app.core.config_center.knobs import knob
+
+
+# Q54 一期临时权重（line 135；待段13 回流校准），经配置中心热更（M10c 接入）。
+def w_pwc_skeleton() -> float:
+    return knob("fcw.w_pwc_skeleton")
+
+
+def w_slot_fit() -> float:
+    return knob("fcw.w_slot_fit")
+
+
+def w_package_conf() -> float:
+    return knob("fcw.w_package_conf")
 
 PWS_FROZEN = "frozen"
 PCP_ACTIVE = "active"
@@ -200,16 +210,22 @@ def score_fcw(
     pwc_score: float | None,
     slot_fit_score: float | None,
     package_confs: list[float | None],
-    w_pwc: float = W_PWC_SKELETON,
-    w_fit: float = W_SLOT_FIT,
-    w_conf: float = W_PACKAGE_CONF,
+    w_pwc: float | None = None,
+    w_fit: float | None = None,
+    w_conf: float | None = None,
 ) -> ScoreOutcome:
     """Q54：骨架分×0.4 + 发布位 fit×0.3 + 三包 conf 均值×0.3。
 
     尺度统一到 0-100：PWC 分与 conf 为 0-1（M5/Q47），fit_score 为 0-100（Q34）。
     任一来源缺失 → 不出分、incomplete=true（不凑分，对齐 Q22b；
-    分仅排序，缺失不影响发证）。
+    分仅排序，缺失不影响发证）。权重缺省取配置中心（显式传值覆盖，便于测试）。
     """
+    if w_pwc is None:
+        w_pwc = w_pwc_skeleton()
+    if w_fit is None:
+        w_fit = w_slot_fit()
+    if w_conf is None:
+        w_conf = w_package_conf()
     confs = [c for c in package_confs if c is not None]
     missing: list[str] = []
     if pwc_score is None:
