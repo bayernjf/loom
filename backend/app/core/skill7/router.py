@@ -127,6 +127,7 @@ async def decide_candidate(
     body: CandidateDecisionRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    from app.product.atom import service as atom_service
     from app.product.condition import service as pwc_service
     from app.product.fieldpool import service as fp_service
     from app.product.modeling import service as modeling_service
@@ -176,6 +177,20 @@ async def decide_candidate(
         await session.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (modeling_service.ConfigError, modeling_service.InvalidDecision) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # atom_batch 适配器（Q80）：口径与 POST /api/product-spaces/{id}/atom-batches 一致。
+    except (atom_service.ProductSpaceNotFound, atom_service.PoolNotFound) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (
+        atom_service.PoolNotApproved,
+        atom_service.TargetReached,
+        atom_service.FactAtomConflict,
+    ) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except atom_service.InvalidBatch as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _candidate_view(cand)

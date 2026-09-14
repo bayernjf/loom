@@ -13,8 +13,9 @@ CandidateState = Literal[
 
 class CandidateInput(BaseModel):
     # target_type 与 WF 步骤声明的 candidate_target 对齐（按 WF 泛化）：
-    # pwc_combo（WF-04）/ field_plan（WF-02，Q78）/ c1_recognition（WF-01，Q79）。
-    target_type: Literal["pwc_combo", "field_plan", "c1_recognition"]
+    # pwc_combo（WF-04）/ field_plan（WF-02，Q78）/ c1_recognition（WF-01，Q79）
+    # / atom_batch（WF-03，Q80）。
+    target_type: Literal["pwc_combo", "field_plan", "c1_recognition", "atom_batch"]
     payload: dict
 
 

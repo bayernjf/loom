@@ -79,6 +79,21 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
         return
+    if target_type == "atom_batch":
+        # Q80：payload 是去 actor 的 BatchSubmitRequest 形态（items + 可选 batch_size）；
+        # 通道只接 AI 拓展批次，source 由适配器强制 "ai"（Q15 停拓仅对 AI 批次生效）。
+        from app.product.atom.schemas import BatchSubmitRequest
+
+        data = dict(payload)
+        data.pop("actor", None)
+        data.pop("source", None)
+        try:
+            BatchSubmitRequest(
+                **data, source="ai", actor={"id": "_delivery_validation", "roles": []}
+            )
+        except ValidationError as exc:
+            raise InvalidCandidatePayload(str(exc)) from exc
+        return
     raise InvalidCandidatePayload(f"unsupported target_type: {target_type}")
 
 
