@@ -4,6 +4,7 @@ V1 没有进程内 LLM Skill 执行体；Golden Cases 打在具有确定性替�
 PWC-SCORING（Q22/Q22a/Q22b 评分）、COMBO-VALIDATE（Q48 词表匹配）、
 DIM-MERGE（PT-FP-PLAN-V2.0 结构校验，Q78 WF-02 切片）、
 CAT-RECOG（c1 加权 conf/三分支判定，Q79 WF-01 切片）、
+TYPE-MATCH（c7 确定性纯函数：Layer3 覆盖率/兄弟继承/0.6 地板，Q81 WF-01 C7 切片）、
 WF-03 段4 四 Skill（Q80）：ATOM-EXPAND（Q14 批次上限/Q15 达标停拓）、
 ATOM-CANON（normalize_text 规范化）、ATOM-AFFINITY（Q16 低亲和/Q19 keeper）、
 CONFLICT-PRECHECK（Q17 双轨定级/line 840 冲突三类）。真 LLM 切片后同一批
@@ -104,6 +105,24 @@ def _decide_branch(raw: dict) -> dict:
     }
 
 
+def _c7_coverage(raw: dict) -> float:
+    from app.product.modeling.c7 import coverage
+
+    return coverage(raw["required_fids"], raw.get("available_fids", []))
+
+
+def _c7_pick_sibling(raw: dict) -> dict | None:
+    from app.product.modeling.c7 import pick_sibling
+
+    return pick_sibling(raw["siblings"])
+
+
+def _c7_layer3_floor(raw: dict) -> float:
+    from app.product.modeling.c7 import layer3_coverage_floor
+
+    return layer3_coverage_floor()
+
+
 def _atom_default_batch_size(raw: dict) -> dict:
     from app.product.atom.atom_rules import default_batch_size
 
@@ -172,6 +191,10 @@ TARGETS: dict[str, Callable[[dict], object]] = {
     "evaluate_plan": _evaluate_plan,
     "weighted_conf": _weighted_conf,
     "decide_branch": _decide_branch,
+    # WF-01 TYPE-MATCH / C7（Q81）
+    "c7_coverage": _c7_coverage,
+    "c7_pick_sibling": _c7_pick_sibling,
+    "c7_layer3_floor": _c7_layer3_floor,
     # WF-03 段4（Q80）
     "atom_default_batch_size": _atom_default_batch_size,
     "atom_target_reached": _atom_target_reached,
