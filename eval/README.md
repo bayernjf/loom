@@ -12,10 +12,12 @@ eval/
 ├── targets.py                # target 名 → 确定性 Skill 替身函数适配器
 ├── datasets/skills/          # Evaluation Dataset：每 Skill 一份回归矩阵
 │   ├── PWC-SCORING.yaml
-│   └── COMBO-VALIDATE.yaml
+│   ├── COMBO-VALIDATE.yaml
+│   └── DIM-MERGE.yaml        # WF-02 字段池（Q78 切片自带）
 └── golden_cases/skills/      # Golden Cases：人工策展标杆（同 schema，范围小）
     ├── PWC-SCORING.yaml
-    └── COMBO-VALIDATE.yaml
+    ├── COMBO-VALIDATE.yaml
+    └── DIM-MERGE.yaml
 ```
 
 ## 运行（staging 回归闸门，docs/17 CI/CD）
@@ -50,12 +52,16 @@ cases:
   - `PWC-SCORING` → Q22/Q22a/Q22b 评分（`pwc_rules.score_combo` /
     `overlap_ratio` / `max_overlap` / `is_duplicate`）；
   - `COMBO-VALIDATE` → Q48 词表确定性子串匹配（`match_words`）。
+- **WF-02 替换切片补 `DIM-MERGE`（Q78，每 WF 替换切片自带 eval 回归）**：
+  → PT-FP-PLAN-V2.0 结构校验（`fieldpool.planning.evaluate_plan`），
+  覆盖 Q8 启用路由 / Q9 细看线 / Q10 疑重仅标记 / Q11 敏感行业 risk_control /
+  Q12 Top8+备选与 below_min / line 14081 依据必填 / fid 活跃校验，共 12+3 例。
 - **PWC-BUILDER 无案例（挂账）**：该 Skill V1 为外部投递，仓库内无确定性
   生成实现，不构造虚拟案例；真 LLM 切片落地后补。
 - COMBO-VALIDATE 的结构预筛（≥2 维度/同批去重/跨租户拦截等）目前内联在
   `pwc/funnel` 服务内且耦合 DB，未作为纯 target 暴露；其行为由 backend
   集成测试覆盖，后续若抽纯函数再接入本 runner（挂账）。
-- WF-01/02/03 等其余 Skill 随各自占位替换切片补数据集。
+- WF-01/03 等其余 Skill 随各自占位替换切片补数据集。
 - 案例一律人工依据 docs 原文/Q 规则编写，**禁止生产数据**（16 §4）；
   词例均为合成词。
 - 真 LLM 落地后：同一批 YAML 案例改打 Skill 输出，只改 `targets.py`

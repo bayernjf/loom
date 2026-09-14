@@ -1,9 +1,9 @@
 """Evaluation regression target adapters (M10-Q, Q77).
 
-V1 没有进程内 LLM Skill 执行体；Golden Cases 打在 WF-04 中具有确定性
-替身的两个 Skill 上：PWC-SCORING（Q22/Q22a/Q22b 评分）与
-COMBO-VALIDATE（Q48 词表匹配）。真 LLM 切片后同一批 YAML 案例改打
-Skill 输出，只需在此注册表增改适配器，案例数据不动。
+V1 没有进程内 LLM Skill 执行体；Golden Cases 打在具有确定性替身的 Skill 上：
+PWC-SCORING（Q22/Q22a/Q22b 评分）、COMBO-VALIDATE（Q48 词表匹配）、
+DIM-MERGE（PT-FP-PLAN-V2.0 结构校验，Q78 WF-02 切片）。真 LLM 切片后同一批
+YAML 案例改打 Skill 输出，只需在此注册表增改适配器，案例数据不动。
 """
 
 from collections.abc import Callable
@@ -55,10 +55,33 @@ def _match_words(raw: dict) -> list[dict]:
     return [{"word": h.word, "level": h.level, "action": h.action} for h in hits]
 
 
+def _evaluate_plan(raw: dict) -> dict:
+    from app.product.fieldpool.planning import DimInput, evaluate_plan
+
+    result = evaluate_plan(
+        [DimInput(**d) for d in raw["dimensions"]],
+        sensitive=raw.get("sensitive", False),
+        enabled_routes=frozenset(raw["enabled_routes"]),
+        active_fids=frozenset(raw.get("active_fids", [])),
+    )
+    return {
+        "compliant": result.compliant,
+        "violations": result.violations,
+        "selected_count": len(result.selected),
+        "backup_count": len(result.backup),
+        "backup_fields": [e.dim.field_name for e in result.backup],
+        "needs_detail_fields": [
+            e.dim.field_name for e in result.selected if e.needs_detail
+        ],
+        "dup_fields": [e.dim.field_name for e in result.selected if e.dup],
+    }
+
+
 TARGETS: dict[str, Callable[[dict], object]] = {
     "score_combo": _score_combo,
     "is_duplicate": _is_duplicate,
     "overlap_ratio": _overlap_ratio,
     "max_overlap": _max_overlap,
     "match_words": _match_words,
+    "evaluate_plan": _evaluate_plan,
 }
