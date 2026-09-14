@@ -1,0 +1,29 @@
+# WF-01 · 段1+段2 冷启动识别（docs/06 §1）
+# 顺序：PARSE → UNDERSTAND → CAT-RECOG → TYPE-MATCH → MISSING-INFO → RISK-TAG；
+# 14 §2.2 自研注册表驱动编排器最小集；M10 WF 替换切片 2/3（Q79）。
+# 仅 CAT-RECOG 向 skill7 通道产出整结果单候选（target=c1_recognition），
+# confirmed/modified 经适配器复用 modeling.submit_recognition：
+# Q1 三分支机械逻辑不变（高置信 auto_confirm / 中置信 ops_assist 待办 /
+# 低置信 cold_start），skill7 Gate 是 AI 产出准入裁决，不替代既有 ops-decision。
+# 锚点 intake_id（段2 时 ProductSpace 尚未创建，Q79-4）。
+wf_id: WF-01
+stage: 2
+name: 冷启动建模
+skills:
+  - skill_id: PARSE
+  - skill_id: UNDERSTAND
+  - skill_id: CAT-RECOG
+    produces_candidates: true
+    candidate_target: c1_recognition
+    single_candidate: true
+  - skill_id: TYPE-MATCH
+  - skill_id: MISSING-INFO
+  - skill_id: RISK-TAG
+gates:
+  - after: CAT-RECOG
+    channel: skill7
+    role: operations
+    note: AI 识别结果准入裁决（Q79-2）；中置信后续 ops_assist 待办与 Q3/Q4 流程不变
+failure_policy:
+  low_confidence: cold_start        # Q1：<0.6 转 B2 新类目创建中
+  mid_confidence: ops_assist        # Q3：出运营待办，72h SLA

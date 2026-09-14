@@ -1,4 +1,4 @@
-"""skill7 横切表（M10 切片 e，迁移 0012；字段级补登见 docs/10 §2.8）。"""
+"""skill7 横切表（M10 切片 e，迁移 0012；Q79-4 intake 锚点见迁移 0013；字段级补登见 docs/10 §2.8）。"""
 
 import uuid
 from datetime import datetime
@@ -29,6 +29,8 @@ class SkillRun(Base):
     product_space_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, index=True
     )
+    # Q79-4：段2（WF-01）先于 ProductSpace，intake 锚点与 PS 锚点二选一。
+    intake_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     source: Mapped[str] = mapped_column(String(16), nullable=False)
     input_payload: Mapped[dict | None] = mapped_column("input", JSONType, nullable=True)
@@ -63,7 +65,10 @@ class SkillCandidate(Base):
     skill_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     wf_id: Mapped[str] = mapped_column(String(16), nullable=False)
     tenant_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    product_space_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    product_space_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )  # Q79-4：c1_recognition 走 intake 锚点，故改 nullable
+    intake_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     target_type: Mapped[str] = mapped_column(String(32), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONType, nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False, index=True)

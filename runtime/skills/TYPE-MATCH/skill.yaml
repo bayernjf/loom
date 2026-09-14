@@ -1,0 +1,15 @@
+skill_id: TYPE-MATCH
+layer: modeling
+version: 1.0.0
+input_output_schema:
+  input: 已识别类目 + G1 类目模板
+  output: 该类目必填字段 fid 集（required_fids，供 C7 四层兜底消费）
+knowledge_deps:
+  - G1CategoryTemplate
+  - C7 四层兜底（Q6/Q68）
+model_tier: ""
+thresholds:
+  l3_coverage_floor_config: c7.layer3_coverage_floor   # Q6 拍板 0.6
+failure_policy: fallback_to_c7                         # 无匹配走 C7 Layer2/3/4
+review_rule: 不直接产候选；C7 Layer4 新字段通道留挂账（Q79-1）
+cost_limit: null

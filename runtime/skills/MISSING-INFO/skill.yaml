@@ -1,0 +1,13 @@
+skill_id: MISSING-INFO
+layer: modeling
+version: 1.0.0
+input_output_schema:
+  input: PARSE/UNDERSTAND 结果与 productIntake15 必填项比对
+  output: 缺失/待补字段清单（驱动 pending_params 待补充参数态）
+knowledge_deps:
+  - productIntake15
+model_tier: ""
+thresholds: {}
+failure_policy: pending_params                 # 缺参转待补充参数态（13 §1.1）
+review_rule: 不直接产候选
+cost_limit: null

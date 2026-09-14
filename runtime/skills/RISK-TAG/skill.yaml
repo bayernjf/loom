@@ -1,0 +1,13 @@
+skill_id: RISK-TAG
+layer: modeling
+version: 1.0.0
+input_output_schema:
+  input: 录入资料 + 行业关键词
+  output: 行业/敏感标记候选（sensitive 行业阈值在既有 _resolve_industry 内机械判定）
+knowledge_deps:
+  - Q7 行业阈值（keywords/sensitive）
+model_tier: ""
+thresholds: {}
+failure_policy: default_to_general             # 未命中走 general 默认档
+review_rule: 不直接产候选；随 CAT-RECOG 整结果过 WF-01 Gate
+cost_limit: null

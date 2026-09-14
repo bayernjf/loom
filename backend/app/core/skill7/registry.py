@@ -75,12 +75,16 @@ def review_role(wf_id: str) -> str:
     raise RegistryError(f"workflow {wf_id} has no skill7 gate slot")
 
 
-def candidate_target_for(wf_id: str, skill_id: str) -> str | None:
-    """WF 中该 Skill 步骤声明的 candidate_target（Q78：投递校验按 WF 泛化）。"""
+def producer_step_for(wf_id: str, skill_id: str) -> dict | None:
+    """WF 中该 Skill 步骤的完整声明（非候选产出者返回 None，Q79）。"""
     wf = get_workflow(wf_id)
     for step in wf.get("skills", []):
         if step.get("skill_id") == skill_id:
-            if step.get("produces_candidates"):
-                return step.get("candidate_target")
-            return None
+            return step if step.get("produces_candidates") else None
     return None
+
+
+def candidate_target_for(wf_id: str, skill_id: str) -> str | None:
+    """WF 中该 Skill 步骤声明的 candidate_target（Q78：投递校验按 WF 泛化）。"""
+    step = producer_step_for(wf_id, skill_id)
+    return step.get("candidate_target") if step else None

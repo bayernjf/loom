@@ -1,0 +1,17 @@
+skill_id: CAT-RECOG
+layer: modeling
+version: 1.0.0
+input_output_schema:
+  input: 三信号 0..1 打分 + G1 类目候选集
+  output: "识别整结果（target_type=c1_recognition）：{signals{}, candidates[{category_id,conf}], industry?, category_pending_id?}"
+knowledge_deps:
+  - Q2 信号权重（Σ=1）
+  - Q7 行业阈值表
+  - G1 类目树
+model_tier: ""
+thresholds:
+  cold_start_floor_config: c1.cold_start_floor     # Q1 拍板 0.6
+  contradiction_gap_config: c1.mid_confidence_top_gap  # Q3 Top1-Top2<0.1
+failure_policy: produce_candidates_only            # Q79：仅产候选，不直接写 C1Record
+review_rule: skill7 candidate gate → operations（Q79-3）；准入后三分支机械裁决
+cost_limit: null
