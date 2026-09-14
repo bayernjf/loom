@@ -209,10 +209,15 @@
 - 三关卡同源：段 4 定原子风险 / 段 5 相撞合规 / 段 10 清洗——**同一张表**
 - 生效即自动全量扫描（active 快照/draft FCW/未发布成品），联动 Q29/Q30（Q51）
 
-> **实现补登（2026-09-13，M4 后端切片）**：已随 Alembic 0004 落地物理表 `compliance_wordlist`（PG16 up/down/up 实测），active/archived 软删，行业+生效期过滤，段4 已消费（原子风险定级），段5 已在 M5 消费（漏斗合规检测，ban→blocked）；段10 随 M7，Q51 自动扫描随 M10。
+> **实现补登（2026-09-13，M4 后端切片；2026-09-14 M7 补齐段10 消费）**：已随 Alembic 0004 落地物理表 `compliance_wordlist`（PG16 up/down/up 实测），active/archived 软删，行业+生效期过滤，段4 已消费（原子风险定级），段5 已在 M5 消费（漏斗合规检测，ban→blocked）；M7 迁移 0007 增 `layer`（country/platform/base，server_default=base）承载 Q50 三层优先序，段10 按行业+市场取词裁决（同级 Q36 从严）；Q51 生效即扫已随 M7 落（保存生效事务内扫 active frozen 快照→`wordlist_rescan` 待办；draft FCW/未发布成品扫描随 M8/段12；未来生效词条定时扫描随 M10）。
 
 **cp_law_sensitive_domains（CP-LAW 敏感领域清单）** — 04 §2.20
 - 领域：医疗健康/儿童/减肥/美白/医疗器械/金融（领域非词）；触发自动法审（Q49）
+
+> **实现补登（2026-09-14，M7 后端切片，迁移 0007，PG16 up/down/up 实测）**：
+> - `cp_law_sensitive_domains`：domain_id PK / code 唯一 / name / status(active|archived) / 审计列；迁移种子 6 码（medical/children/weight_loss/whitening/medical_device/finance）；internal_compliance CRUD + writeAudit。
+> - `law_reviews`：law_review_id PK / tenant_id / product_space_id / pws_id（UNIQUE，一冻结版一条）/ domain / status(pending|approved|rejected) / conclusion Text / decided_by/at / created_at；法审待办复用横切 `ops_todos`（todo_type=law_review，assignee_role=internal_compliance，48h due）。
+> - `ccr_reports`：ccr_id PK（uuid1，时间有序便于同秒取最新）/ tenant_id / product_space_id / pws_id（索引）/ country（可空，索引）/ status(clean|downgrade_pending|approved|blocked) / block_required Bool / hits JSONB / wordlist_context JSONB / run_by / decided_by/at / created_at；append-only，段11 按 (pws_id, country) 最新行消费 Guard②⑥。
 
 ### 2.6 组装与成品域（段 11–12）
 
