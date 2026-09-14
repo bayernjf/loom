@@ -75,3 +75,30 @@ def test_synthetic_cat_recog_single_option():
             {"category_id": "only", "name": "唯一"}]}
     )
     assert len(out["candidates"]) == 1 and out["candidates"][0]["category_id"] == "only"
+
+
+def test_synthetic_pwc_builder_is_structural_only():
+    # Q83-3：只按维度确定性配对，不造分/不造目的；首维锚点 × 其余各维首原子。
+    variables = {"_approved_atoms": [
+        {"atom_id": "a1", "dimension_id": "d1"},
+        {"atom_id": "a2", "dimension_id": "d2"},
+        {"atom_id": "a3", "dimension_id": "d3"},
+    ]}
+    out = synthetic.build_pwc_builder(variables)
+    assert out == {"combos": [
+        {"atom_ids": ["a1", "a2"], "goals": []},
+        {"atom_ids": ["a1", "a3"], "goals": []},
+    ]}
+    assert all("logic_score" not in c and "fit_score" not in c for c in out["combos"])
+    assert synthetic.build_pwc_builder(variables) == out  # 确定性
+
+
+def test_synthetic_pwc_builder_caps_at_five_and_requires_two_dimensions():
+    variables = {"_approved_atoms": [
+        {"atom_id": f"a{i}", "dimension_id": f"d{i}"} for i in range(7)
+    ]}
+    assert len(synthetic.build_pwc_builder(variables)["combos"]) == 5
+    assert synthetic.build_pwc_builder(
+        {"_approved_atoms": [{"atom_id": "a1", "dimension_id": "d1"}]}
+    ) == {"combos": []}
+    assert synthetic.build_pwc_builder({"_approved_atoms": []}) == {"combos": []}
