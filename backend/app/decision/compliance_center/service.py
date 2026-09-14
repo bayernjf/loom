@@ -70,6 +70,11 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _as_utc(dt: datetime) -> datetime:
+    # SQLite 读回的时间戳不带 tz，统一按 UTC 解释。
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
 def _require_compliance(actor) -> None:
     if ccr_rules.ROLE_INTERNAL_COMPLIANCE not in actor.roles:
         raise RoleNotAllowed("requires internal_compliance role")
@@ -410,9 +415,9 @@ async def rescan_for_entry(session, entry: ComplianceWordlistEntry) -> list[dict
     now = _now()
     if entry.status != "active":
         return []
-    if entry.effective_from is not None and entry.effective_from > now:
+    if entry.effective_from is not None and _as_utc(entry.effective_from) > now:
         return []
-    if entry.effective_until is not None and entry.effective_until < now:
+    if entry.effective_until is not None and _as_utc(entry.effective_until) < now:
         return []
 
     snapshots = (

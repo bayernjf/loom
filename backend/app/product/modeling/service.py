@@ -344,26 +344,14 @@ async def ops_decide(session, intake_id, body) -> OpsTodo:
 
 
 async def escalate_due_todos(session, now: datetime | None = None) -> int:
-    """Q4：开放待办超过 72h 未处理 → escalated（主管/看板高亮）。
+    """Q4：开放待办超过 due_at 未处理 → escalated（主管/看板高亮）。
 
-    M10 的通用 SLA 引擎将统一所有待办类型（Q49/Q70）。
+    薄包装：升级逻辑在 M10 通用 SLA 引擎（core.sla.engine，Q49/Q70），本函数
+    保留模块入口与提交边界（既有端点/测试契约）。
     """
-    now = now or datetime.now(UTC)
-    due = (await session.scalars(
-        select(OpsTodo).where(OpsTodo.status == "open", OpsTodo.due_at <= now)
-    )).all()
-    for todo in due:
-        todo.status = "escalated"
-        todo.escalated_at = now
-        await append_audit(
-            session,
-            tenant_id=todo.tenant_id,
-            actor_id=None,
-            actor_roles=None,
-            action="c1.todo_escalated",
-            entity_type="ops_todo",
-            entity_id=todo.todo_id,
-        )
+    from app.core.sla.engine import escalate_due_todos as _engine_sweep
+
+    due = await _engine_sweep(session, now)
     await session.commit()
     return len(due)
 

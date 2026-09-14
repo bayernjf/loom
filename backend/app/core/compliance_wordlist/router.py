@@ -32,6 +32,9 @@ def _view(e) -> dict:
         "industry": e.industry,
         "layer": e.layer,
         "status": e.status,
+        "effective_from": e.effective_from.isoformat() if e.effective_from else None,
+        "effective_until": e.effective_until.isoformat() if e.effective_until else None,
+        "activated_at": e.activated_at.isoformat() if e.activated_at else None,
     }
 
 
