@@ -74,19 +74,19 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET/PUT `/admin/c1/signal-weights` | Q2 权重表（Σ≠1 → 422） | Q2 |
-| GET/POST `/admin/c1/industries`，PATCH/DELETE `/admin/c1/industries/{industry}` | Q7 阈值 CRUD（默认档删 → 409） | Q7 |
+| GET/PUT `/admin/c1/signal-weights` | Q2 权重表（Σ≠1 → 422；operations；越权 403，Q75 补闸） | Q2 |
+| GET/POST `/admin/c1/industries`，PATCH/DELETE `/admin/c1/industries/{industry}` | Q7 阈值 CRUD（operations；越权 403，Q75 补闸；默认档删 → 409） | Q7/Q75 |
 | POST `/intakes/{intake_id}/c1-recognition` | conf 三分支（高置信 auto_confirm；中置信出待办；低置信须带 category_pending_id） | Q1/Q3/Q5 |
 | POST `/intakes/{intake_id}/ops-decision` | 运营选定/全否 | Q3 |
-| POST `/admin/ops-todos/sweep` | 72h 到期升级（手工触发；调度随 M10） | Q4 |
-| POST/GET `/categories`，PUT `/categories/{category_id}/template` | G1 最小切片 + 叶子模板（fid:'-'/未知 fid → 422） | Q68 |
+| POST `/admin/ops-todos/sweep` | 72h 到期升级（手工触发，**platform_admin**，越权 403；Q75；调度随 M10） | Q4/Q75 |
+| POST/GET `/categories`，PUT `/categories/{category_id}/template` | G1 最小切片 + 叶子模板（**dictionary_admin**，越权 403；fid:'-'/未知 fid → 422；Q75） | Q68/Q75 |
 | POST `/intakes/{intake_id}/c7-runs` | C7 L1–L4 兜底（L4 提案入库候选） | Q6/Q68 |
 
 **M3 段3 字段池规划（前缀 `/api`）**
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET `/admin/fp-source-routes`，PUT/DELETE `/admin/fp-source-routes/{route}` | Q8 来源路由 CRUD（被维度引用 → 409） | Q8 |
+| GET `/admin/fp-source-routes`，PUT/DELETE `/admin/fp-source-routes/{route}` | Q8 来源路由 CRUD（operations；越权 403，Q75 补闸；被维度引用 → 409） | Q8/Q75 |
 | POST/GET `/product-spaces/{product_space_id}/field-pools`（+ `/current`） | 方案提交（一品一池；违规落 violations 仍 pending_gate）/查当前池 | PT-FP-PLAN |
 | POST `/field-pools/{pool_id}/gate` | WF-02 HumanGate（product_reviewer；非合规批 → 409） | Q9/Q11/Q12 |
 | POST `/field-pools/{pool_id}/dimensions/{dimension_id}/restore` | 备选档捞回（满 8 挤回最低置信） | Q12 |
@@ -100,7 +100,7 @@
 | POST `/product-spaces/{product_space_id}/atom-batches` | WF-03 候选批次（仅产 candidate；池非 approved → 409；Q14 超限 422 可覆盖；Q15 AI 达标 409、manual 放行；同批去重/维度归属 422；事实原子跨产品撞值 409）；响应内嵌 AtomConflict | Q14/Q15/PT-ATOM-EXP/line 11189 |
 | GET `/product-spaces/{product_space_id}/atom-candidates`、`/atoms` | 候选列表（可按 status）/正式原子列表 | — |
 | POST `/atom-candidates/{id}/approve`、POST `/atom-candidates/batch-approve` | approveAtomGuard（product_reviewer；违规码数组 409；high/critical 批量 409，Q70） | line 2633/Q70 |
-| POST `/atom-candidates/{id}/reject` `/evidence` `/revive` | 驳回（critical 禁用表达记合规审计动作）/ 补证据（解 evidence_required）/ 仅 evidence_timeout 驳回复活 | Q18/line 840 |
+| POST `/atom-candidates/{id}/reject` `/evidence` `/revive` | 驳回（critical 禁用表达记合规审计动作）/ 补证据（解 evidence_required）/ 仅 evidence_timeout 驳回复活（**revive 有意不设角色闸**，前置状态即闸，Q75） | Q18/Q75/line 840 |
 | POST `/atom-clusters/{cluster_id}/resolve` | Q19 同义簇人工终裁 keeper，非 keeper 置 merged 为 alias | Q19 |
 | POST `/atom-candidates/{id}/risk-override` | 人工复核改判（词表强制定级 409 不可改；AI 判级可改并重建冲突集） | Q17 |
 | POST `/atoms/{id}/freeze` `/unfreeze` `/compliance-suspend` `/compliance-resume` `/deprecate` `/archive` `/reject` | atom8 生命周期：freeze/unfreeze/deprecate/archive=operations（解冻不重审、废弃不原地复活）；suspend/resume=internal_compliance；reject=product_reviewer | Q20 |
@@ -124,7 +124,7 @@
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
 | GET `/product-spaces/{id}/pws/readiness` | pwsReadiness 5 项机械求值 + 计数明细（PS 不存在 404） | line 2634 |
-| POST `/product-spaces/{id}/pws/evaluate` | 全绿时系统出 pws_ready 待办（whitelist_owner，7 天 due，幂等）；不全绿只回状态不出单 | Q28 |
+| POST `/product-spaces/{id}/pws/evaluate` | 全绿时系统出 pws_ready 待办（whitelist_owner，7 天 due，幂等）；不全绿只回状态不出单（**有意不设角色闸**：系统提请的机械求值，Q75） | Q28/Q75 |
 | POST `/product-spaces/{id}/pws/freeze` | BO-07 冻结/重冻（whitelist_owner；非属主 403；不全绿 409 回带 5 项）；首冻 v1.0 免原因，重冻须 reason_code（缺失/未知 422，none 档 409）；返回快照+items、dup_hints、Q30 dispositions | Q29/Q30/Q31/Q33/line 7674 |
 | POST `/pws/{pws_id}/revoke` | Q32 急停（whitelist_owner；仅 active frozen 可作废，否则 409）；作废后可重冻新版 | Q32 |
 | GET `/product-spaces/{id}/pws`、GET `/pws/{pws_id}` | 版本列表（主版本号倒序，同刻仅 1 active）/ 版本明细含物化 items；superseded/revoked 只读 | Q31 |
@@ -134,7 +134,7 @@
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
 | GET/POST `/admin/cp-law-domains`，PUT/DELETE `/admin/cp-law-domains/{id}` | CP-LAW 敏感领域小表 CRUD（internal_compliance；code 唯一 409；DELETE=软归档；迁移种子 medical/children/weight_loss/whitening/medical_device/finance） | Q48/Q49 |
-| POST `/pws/{pws_id}/ccr/run` | WF-08 机械清洗：仅 active frozen 可跑（否则 409）；同源自 M4 词库按行业+市场取词，Q50 国家>平台>底座裁决（同级 Q36 从严）；ban→`blocked/block_required=true`、downgrade→`downgrade_pending` 只出建议、无命中→`clean`；敏感领域同事务幂等触发法审；报告 append-only | PT-COMPLIANCE/Q48-Q50 |
+| POST `/pws/{pws_id}/ccr/run` | WF-08 机械清洗（**internal_compliance 触发**，越权 403，Q75）：仅 active frozen 可跑（否则 409）；同源自 M4 词库按行业+市场取词，Q50 国家>平台>底座裁决（同级 Q36 从严）；ban→`blocked/block_required=true`、downgrade→`downgrade_pending` 只出建议、无命中→`clean`；敏感领域同事务幂等触发法审；报告 append-only | PT-COMPLIANCE/Q48-Q50/Q75 |
 | GET `/pws/{pws_id}/ccr`、GET `/pws/{pws_id}/ccr/gate?country=` | 报告历史（新→旧，同秒按 id 兜底）/ 供段11 Guard②⑥ 消费的机械视图（block_required/cleaning_passed/law_review_passed） | Q53 |
 | POST `/ccr/{ccr_id}/approve-downgrades` | 降级建议人工 approval（internal_compliance；仅 downgrade_pending 可批，否则 409）；批后 cleaning_passed | PT-COMPLIANCE |
 | GET `/pws/{pws_id}/law-reviews`、POST `/law-reviews/{id}/decision` | 法审记录查询/线下律师结论录入（internal_compliance；approved/rejected，已决再判 409；通过放行 Guard⑥、不通过维持否决；同步开关法审待办） | Q49 |
@@ -183,10 +183,17 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| POST `/sla/run` | 手工触发全部 sweep 作业（与定时调度同一 runner）：①待办到期升级（所有 open ops_todo 过 due_at→escalated，按类型写审计）②Q18 证据超时自动驳回 ③Q24 冷却到期回 available ④Q51 未来生效词条到点激活并补扫；每作业独立会话/提交，单作业失败回滚不阻断其余，响应回带每作业 `{changed}` 或 `{error}` | Q49/Q18/Q24/Q51 |
+| POST `/sla/run` | 手工触发全部 sweep 作业（**platform_admin**，body 带 actor，越权 403；Q75）：①待办到期升级（所有 open ops_todo 过 due_at→escalated，按类型写审计）②Q18 证据超时自动驳回 ③Q24 冷却到期回 available ④Q51 未来生效词条到点激活并补扫；每作业独立会话/提交，单作业失败回滚不阻断其余，响应回带每作业 `{changed}` 或 `{error}` | Q49/Q18/Q24/Q51/Q75 |
 | GET `/sla/todos?status=open\|all` | 待办 SLA 看板（due_at 升序），派生 `sla_state`：green/yellow/red/resolved（黄色仅法审 created_at+24h，其余类型黄色口径【原文未给出，待补】） | Q49/Q70 |
 
-> 定时调度：FastAPI lifespan 内 asyncio 循环，默认 300s 一轮（`LOOM_SWEEP_INTERVAL_SECONDS`、`LOOM_SCHEDULER_ENABLED=false` 可关）；V1 单进程，多副本单实例触发（分布式锁）【挂账】。法审黄色小时数读配置中心 `sla.yellow_hours`（种子 24，缓存未引导时回退默认）——首个配置中心消费方。Q71 critical→target 自动补货（5 分钟防抖）仍未实现：V1 无 skill7 AI 漏斗可调用，挂 skill7 切片，不构造虚拟候选。`/sla/run` 暂与既有 `/admin/ops-todos/sweep` 一样无角色闸，RBAC 收口在 M10 后续切片。
+> 定时调度：FastAPI lifespan 内 asyncio 循环，默认 300s 一轮（`LOOM_SWEEP_INTERVAL_SECONDS`、`LOOM_SCHEDULER_ENABLED=false` 可关）；V1 单进程，多副本单实例触发（分布式锁）【挂账】。法审黄色小时数读配置中心 `sla.yellow_hours`（种子 24，缓存未引导时回退默认）——首个配置中心消费方。Q71 critical→target 自动补货（5 分钟防抖）仍未实现：V1 无 skill7 AI 漏斗可调用，挂 skill7 切片，不构造虚拟候选。**RBAC 收口已于切片 d 完成（Q75）**：`/sla/run` 与 `/admin/ops-todos/sweep` 手工触发归 platform_admin；其余端点级角色映射见切片 d 小节。
+
+**M10 切片 d · RBAC 红线收口**（2026-09-14，无新表/无新端点；Q75 销账）
+
+> 统一入口 `app/core/rbac`：角色常量（operations/product_reviewer/dictionary_admin/internal_compliance/whitelist_owner/platform_admin）+ `require_any_role(actor, *roles)` + 单一 `PermissionDenied`（路由统一映射 403）。闸放服务层；定时调度等系统内部调用不经 HTTP、不经角色闸。
+> 新增/补闸矩阵：①`POST /api/admin/sla/run`、`POST /api/admin/ops-todos/sweep` → **platform_admin**（Q75 新裁决；sla/run 请求体新增 `actor`）；②`POST /categories`、`PUT /categories/{id}/template` → **dictionary_admin**（Q75；CategoryCreate 请求体新增 `actor`）；③`POST /pws/{id}/ccr/run` → **internal_compliance**（Q75）；④补闸既有裁决：信号权重 PUT、行业阈值 CRUD = operations（Q2/Q7），来源路由 PUT/DELETE = operations（Q8）。
+> **有意开放、不加闸**（Q75 第 4 条，实现补登）：`POST /pws/{id}/pws/evaluate`（Q28"系统提请"——机械求值 + 幂等出单，非人工决策）、`POST /atom-candidates/{id}/revive`（仅 evidence_timeout 驳回可复活，前置状态即闸）。
+> 既有各模块服务内 `RoleNotAllowed`（config_center/whitelist_center/compliance_center 等）保持不动，本次只收口红线，不做全库异常类合并；统一 403 口径不变。
 
 ---
 
