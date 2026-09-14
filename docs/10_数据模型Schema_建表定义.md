@@ -221,6 +221,8 @@
 - 生效即自动全量扫描（active 快照/draft FCW/未发布成品），联动 Q29/Q30（Q51）
 
 > **实现补登（2026-09-13，M4 后端切片；2026-09-14 M7 补齐段10 消费）**：已随 Alembic 0004 落地物理表 `compliance_wordlist`（PG16 up/down/up 实测），active/archived 软删，行业+生效期过滤，段4 已消费（原子风险定级），段5 已在 M5 消费（漏斗合规检测，ban→blocked）；M7 迁移 0007 增 `layer`（country/platform/base，server_default=base）承载 Q50 三层优先序，段10 按行业+市场取词裁决（同级 Q36 从严）；Q51 生效即扫已随 M7 落（保存生效事务内扫 active frozen 快照→`wordlist_rescan` 待办；draft FCW/未发布成品扫描随 M8/段12；未来生效词条定时扫描随 M10）。
+>
+> **实现补登（2026-09-14，M10 切片 b，迁移 0011_m10_sla_engine，PG16 up/downgrade-1/up 实测）**：`compliance_wordlist` 增 `activated_at`（timestamptz 可空）承载 Q51 未来生效词条到点补扫——创建/编辑时已在生效窗口内立即置位（且 Q48 `effective_from`/`effective_until` 经 API 契约开放录入，窗口倒置 422），未来生效为 NULL；升级 SQL 将存量 active 行回填 now()。SLA 调度作业到点选取 `status=active AND activated_at IS NULL AND effective_from<=now`，置位并复用 `rescan_for_entry` 补扫。**SLA 引擎无新表**：通用升级直接作用于 `ops_todos`（open 且 due_at 到期→escalated，审计动作按类型：ops_assist=`c1.todo_escalated`、pws_ready=`pws.ready_todo_escalated`、law_review=`law_review.escalated`、wordlist_rescan=`wordlist.rescan_todo_escalated`、余者 `sla.todo_escalated`）；看板态 green/yellow/red/resolved 为派生值（yellow 仅法审：created_at+sla.yellow_hours，配置中心种子 24h；其余类型黄色口径原文未给，到期前恒 green），不落库。
 
 **cp_law_sensitive_domains（CP-LAW 敏感领域清单）** — 04 §2.20
 - 领域：医疗健康/儿童/减肥/美白/医疗器械/金融（领域非词）；触发自动法审（Q49）

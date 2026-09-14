@@ -175,6 +175,15 @@
 
 > 发布语义严格按 14 §2.4：新版本 + 原子切换 + writeAudit；快照切换挂在 SQLAlchemy `after_commit`，事务回滚/校验失败不触缓存（已测试）。V1 单进程模块化单体，仅做进程内热更新；多副本变更广播（Redis pub/sub）【挂账，多副本部署前补】。配置缓存的进程启动加载与各业务模块常量消费迁移在后续切片，当前 M1–M8 拍板值仍读代码常量。
 
+**M10 切片 b · 通用 SLA 引擎 + 定时调度**（2026-09-14，无新表/迁移 0011 仅加列）
+
+| 方法/路径 | 说明 | 依据 |
+|---|---|---|
+| POST `/sla/run` | 手工触发全部 sweep 作业（与定时调度同一 runner）：①待办到期升级（所有 open ops_todo 过 due_at→escalated，按类型写审计）②Q18 证据超时自动驳回 ③Q24 冷却到期回 available ④Q51 未来生效词条到点激活并补扫；每作业独立会话/提交，单作业失败回滚不阻断其余，响应回带每作业 `{changed}` 或 `{error}` | Q49/Q18/Q24/Q51 |
+| GET `/sla/todos?status=open\|all` | 待办 SLA 看板（due_at 升序），派生 `sla_state`：green/yellow/red/resolved（黄色仅法审 created_at+24h，其余类型黄色口径【原文未给出，待补】） | Q49/Q70 |
+
+> 定时调度：FastAPI lifespan 内 asyncio 循环，默认 300s 一轮（`LOOM_SWEEP_INTERVAL_SECONDS`、`LOOM_SCHEDULER_ENABLED=false` 可关）；V1 单进程，多副本单实例触发（分布式锁）【挂账】。法审黄色小时数读配置中心 `sla.yellow_hours`（种子 24，缓存未引导时回退默认）——首个配置中心消费方。Q71 critical→target 自动补货（5 分钟防抖）仍未实现：V1 无 skill7 AI 漏斗可调用，挂 skill7 切片，不构造虚拟候选。`/sla/run` 暂与既有 `/admin/ops-todos/sweep` 一样无角色闸，RBAC 收口在 M10 后续切片。
+
 ---
 
 ## Part 2 · 状态机定义
