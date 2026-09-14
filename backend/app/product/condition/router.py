@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
+from app.core.model_registry import gateway, pwc_build
+from app.core.rbac import PermissionDenied
 from app.product.condition import service
 from app.product.condition.models import (
     ConditionPackage,
@@ -125,6 +127,55 @@ async def set_pool_config(
 
 
 # ---- Q21 漏斗 ----
+
+@router.post("/product-spaces/{product_space_id}/pwc/llm-build", status_code=201)
+async def llm_build(
+    product_space_id: str,
+    body: ActorRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Q83：operations 显式触发 PWC-BUILDER 真 LLM 组合生成（restock_auto 不自动消费）。"""
+    try:
+        run, candidates = await pwc_build.invoke_pwc_build(
+            session, product_space_id, body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ProductSpaceNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="product space not found") from exc
+    except (service.PoolNotApproved, pwc_build.PwcBuildNotReady) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.ModelNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=f"model {exc} not found") from exc
+    except gateway.ModelUnavailable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.ModelConfigError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except gateway.GenerationUpstreamError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except pwc_build.PwcBuildOutputInvalid as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await session.commit()
+    return {
+        "run_id": run.run_id,
+        "source": run.source,
+        "model_id": run.model_id,
+        "input_tokens": run.input_tokens,
+        "output_tokens": run.output_tokens,
+        "candidates": [
+            {"candidate_id": c.candidate_id, "state": c.state, "target_type": c.target_type}
+            for c in candidates
+        ],
+    }
+
 
 @router.post("/product-spaces/{product_space_id}/pwc/funnel")
 async def run_funnel(
