@@ -188,6 +188,15 @@
 | 隔离 | 平台间不共享权重池（platform_id 归属） | PT-PCP-V1.5 |
 | 重算 | 动态信号每周触发；AI 候选+对照单进 HumanGate；单项 ±0.05 | Q41/Q42 |
 
+> **实现补登（2026-09-14，M11 后端切片，迁移 0008，PG16 up/down/up 实测，共 6 表）**：
+> - `publish_slots`：slot_id(String36) PK / platform / code UNIQUE / name / slot_type / chars_max / dur_min/max / traffic/safe/conv/load Float server_default 0 / score_source(16) server_default manual_eval / risk(16) 可空 / gate(16) server_default approved / source_url(512) / status(16) active|archived / 审计列；**无种子**（14 平台目录原文 line 1098-1221 基准 HTML 不在仓库，【原文未给出，待补】，不虚构）。
+> - `goal_fit_weights`：goal String32 PK（逻辑引用 content_goals.code，无 DB FK）/ weights JSONB / updated_by/at；种子 2 行 ENGAGEMENT、CONVERSION（04 §2.15 实现补登，其余 3 目的【待补】）。
+> - `platform_rules`：rule_id PK / selector_level(24) / platform/slot_type/slot_id/country 均可空（空=通配）/ effect(16)=blocked|partial / note / status(16) / 审计列；同层级同条件不同结论的查重由服务层保存时执行（409 + overwrite 归档旧行），非 DB 约束；跨层 R-X01~X05 未建表【后续任务包】。
+> - `slot_type_defaults`：slot_type PK / daily_limit_min/max / defaults JSONB / 审计列；约 40 列明细【原文未给出，待补】，无种子。
+> - `pcp_templates`：template_id PK / code UNIQUE / name / weights JSONB / status；种子 4 行（pcpt-short_video/community/photo_text/ecommerce，17 键 Σ=1.0，Q39 实现期初值草稿）。
+> - `pcp_weight_tables`：pcp_id PK / tenant_id/product_space_id/platform 索引 / template_code(32) 可空（人工直编后清空）/ weights JSONB / status / 审计列；UNIQUE(product_space_id, platform) 名为 uq_pcp_ps_platform，落实 PT-PCP-V1.5 平台不共享（M11 仅提供 create/update，无归档端点，一对 PS×平台生命周期内仅一行）。
+> - 种子单一事实源在 `app/platform/platform_adaptation/seeds.py`，迁移与测试共用。字段类型/索引以迁移脚本为准。
+
 ### 2.5 策略与合规域（段 9–10）
 
 **layer_spaces（通用底座 4 层）** — 04 §2.16
@@ -200,6 +209,8 @@
 - 复用：按（产品×平台×目的）三元组配一份；满 20 次或 PCP 更新触发重配（Q45）
 - 索引：(product_id, platform_id, goal) 唯一【建议】
 
+> **实现补登（2026-09-14，M11 后端切片，迁移 0008，PG16 up/down/up 实测）**：物理表 `packages` 落于段9 包 `app/decision/layer_strategy/`：package_id String36 PK / kind(8)=csp|cstp|cep 索引 / tenant_id/product_space_id/platform/goal 索引 / payload JSONB（键按 04 §2.17 定死，服务层校验缺/多键 422）/ conf Float 可空 / gate(16) server_default approved / status(16) active|archived / usage_count Int server_default 0 / 审计列。三元组+包型的"仅一条 active"由服务层保证（非 DB 唯一约束，软归档后可重建）。WF-07 AI 选包、20 次重配、usage_count 递增均 V2（列先行不计数）。
+
 **countries（国家事实库）** — 04 §2.18
 - 承载 R-030（EU/GDPR 禁留邮箱手机）/ R-031（CN/NMPA）/ R-032（US/FDA OTC 禁 cure/treat）
 - 优先序：国家 > 平台 > 底座默认（**不可配置**，Q50）
@@ -210,6 +221,8 @@
 - 生效即自动全量扫描（active 快照/draft FCW/未发布成品），联动 Q29/Q30（Q51）
 
 > **实现补登（2026-09-13，M4 后端切片；2026-09-14 M7 补齐段10 消费）**：已随 Alembic 0004 落地物理表 `compliance_wordlist`（PG16 up/down/up 实测），active/archived 软删，行业+生效期过滤，段4 已消费（原子风险定级），段5 已在 M5 消费（漏斗合规检测，ban→blocked）；M7 迁移 0007 增 `layer`（country/platform/base，server_default=base）承载 Q50 三层优先序，段10 按行业+市场取词裁决（同级 Q36 从严）；Q51 生效即扫已随 M7 落（保存生效事务内扫 active frozen 快照→`wordlist_rescan` 待办；draft FCW/未发布成品扫描随 M8/段12；未来生效词条定时扫描随 M10）。
+>
+> **实现补登（2026-09-14，M10 切片 b，迁移 0011_m10_sla_engine，PG16 up/downgrade-1/up 实测）**：`compliance_wordlist` 增 `activated_at`（timestamptz 可空）承载 Q51 未来生效词条到点补扫——创建/编辑时已在生效窗口内立即置位（且 Q48 `effective_from`/`effective_until` 经 API 契约开放录入，窗口倒置 422），未来生效为 NULL；升级 SQL 将存量 active 行回填 now()。SLA 调度作业到点选取 `status=active AND activated_at IS NULL AND effective_from<=now`，置位并复用 `rescan_for_entry` 补扫。**SLA 引擎无新表**：通用升级直接作用于 `ops_todos`（open 且 due_at 到期→escalated，审计动作按类型：ops_assist=`c1.todo_escalated`、pws_ready=`pws.ready_todo_escalated`、law_review=`law_review.escalated`、wordlist_rescan=`wordlist.rescan_todo_escalated`、余者 `sla.todo_escalated`）；看板态 green/yellow/red/resolved 为派生值（yellow 仅法审：created_at+sla.yellow_hours，配置中心种子 24h；其余类型黄色口径原文未给，到期前恒 green），不落库。
 
 **cp_law_sensitive_domains（CP-LAW 敏感领域清单）** — 04 §2.20
 - 领域：医疗健康/儿童/减肥/美白/医疗器械/金融（领域非词）；触发自动法审（Q49）
@@ -236,6 +249,12 @@
 - 载体：文章/视频（video-studio 四模块）/多语言版本；各语言版独立成品（Q58）
 - 状态：ready_for_publish / 客户确认 / 已发布 / 驳回 / 改稿（Q59）
 - 字段全定义【待补：原文未给出——属开发第 0 步①】
+
+> **实现补登（2026-09-14，M8 后端切片，迁移 0009_m8_stage11，PG16 up/downgrade-1/up 实测）**：
+> - `final_content_whitelists`：final_id PK（uuid1，时间有序）/ task_id 可空（关联批量任务）/ tenant_id / product_space_id / pws_id / pwc_id / pcp_id / csp_package_id / cstp_package_id / cep_package_id / ccr_report_id / law_review_id（后两者可空，Guards 实际要求 ccr 存在）/ platform / slot_id / goal（均索引）/ country String(8) 可空索引 / score Float 可空 / score_detail JSONB（公式/权重/原始分/缩放）/ score_incomplete Bool（server_default false）/ guards JSONB（7 项逐项结果）/ guards_passed Bool / publish_status String(16) server_default 'published' / issued_by / published_at / created_at / updated_at；`UNIQUE(pws_id, pwc_id, platform, slot_id)`（含 country 维度的重复判定在服务层补 country 条件，uq 约束按 04 §2.21 实现补登口径）。
+> - `fcw_assembly_tasks`（Q55 任务驱动）：task_id PK / tenant_id / product_space_id / pws_id 索引 / platform / goal / country / requested_count / slot_ids JSONB / status(running|completed) / results JSONB（requested/resolved_slots/issued/failures 逐项原因）/ created_by / created_at / completed_at；V1 为同步执行（建单即跑完），异步 worker 随 M10。
+> - 分数口径（Q54，仅排序）：PWC 骨架分与三包 conf 为 0–1 先 ×100 归一，slot fit 本为 0–100；`pwc×100×0.4 + fit×0.3 + mean(三包 conf)×100×0.3`；任一来源缺失 → score=null + incomplete=true，不凑分、不卡发证。
+> - 挂账：WF-09 AI Skills（V2）、draft 生命周期端点（V1 直接 published，draft 列保留无创建入口）、段12 content_products、消费侧 API（Q71 取用走 M5 PWC 消费，FCW 消费契约【待补】）。
 
 ### 2.7 反馈与知识域（段 13）
 
@@ -287,6 +306,8 @@
 - 40+ 配置项：key/value/类型/校验/出处 Q 编号/审计；禁止硬编码（Q9）
 - 热更新（14 §2.4 定稿）：配置落库 + 变更广播；**发布=新版本 + 原子切换 + writeAudit**，自带版本历史与回滚；建议表结构 key 唯一 + 版本子表（config_center_versions）【建议】
 - 权重和=1（Q2）与 Σ≤1.0（Q40）做成**通用校验器**被多处复用【建议】
+
+> **实现补登（2026-09-14，M10 切片 a，迁移 0010_m10_config_center，PG16 up/downgrade-1/up 实测）**：物理表 `config_items` + `config_item_versions` 落于 `app/core/config_center/`。**config_items**：key String128 PK / category String64 索引 / value JSONB（SQLite 变体 JSON）/ value_type String16（int/float/bool/string/json）/ validation JSONB 可空（`{min,max,choices}` 通用边界/枚举校验；bool 不触发数值边界）/ source_ref String64（Q 编号或 line 出处）/ version Int（server_default 1）/ updated_by / created_at / updated_at（Python 端 default+onupdate 落值，避免提交后过期属性惰性 IO）。**config_item_versions**：version_id String36 PK（uuid1；种子行用 uuid5(`loom-config-seed:{key}`) 确定性值）/ key 索引 / version / value JSONB / change_note / changed_by / created_at；唯一约束 `uq_config_version_key_version(key,version)`；回滚=以**新** version 重发历史值（append-only，历史行永不改写）。迁移种子 **54 项**覆盖 C2 全部纯标量旋钮（c1/fieldpool/atom/pwc/pws/sla/fcw/content/feedback/platform/agent 各类，含后置阶段的 Q56/Q57/Q61/Q63/Q65 与 line2119 agent 限额——"配置页面先行"）；**已有专用 CRUD 表的 C2 项不入种子**（行业阈值、信号权重、词库、CP-LAW、contentGoals、发布位、PCP 模板、模型注册表等），避免双事实源。类型规则（`config_rules.coerce`）：bool 必须是 JSON 真布尔（拒 1/"true"）、int 拒浮点与字符串、float 接受 int、string 非空。每次发布/回滚 append_audit（entity_type=`config_item`，action=`config.update`/`config.rollback`，detail 带 version/value/note）。热更新：进程内单例快照 `config_cache`，仅在会话 `after_commit` 后原子 apply，失败发布不动缓存；多副本 Redis 广播【挂账】。**未含**：应用启动时缓存引导加载、业务模块从常量改读缓存（M10 后续切片）、权重和=1/Σ≤1.0 复用校验器（权重仍在各自 CRUD 表内校验）、配置页前端。
 
 **api_keys（API Key）** — 04 §3 待补
 - 一 Agent 一 Key，可吊销；唯一入口（真接 LLM 时模型注册页是唯一入口，line 2101）；effect-callback 鉴权

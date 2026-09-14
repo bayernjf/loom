@@ -21,6 +21,7 @@ from app.decision.compliance_center.models import (
     CpLawSensitiveDomain,
     LawReview,
 )
+from app.final.final_whitelist.models import FinalContentWhitelist
 from app.product.modeling.models import OpsTodo
 from app.product.product_intake.models import ProductSpace
 from app.product.whitelist_center import pws_rules
@@ -67,6 +68,11 @@ class LawReviewAlreadyDecided(Exception):
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _as_utc(dt: datetime) -> datetime:
+    # SQLite 读回的时间戳不带 tz，统一按 UTC 解释。
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 def _require_compliance(actor) -> None:
@@ -404,14 +410,14 @@ async def rescan_for_entry(session, entry: ComplianceWordlistEntry) -> list[dict
     """词条保存生效即扫 active 冻结快照；命中产出 wordlist_hit 强制重冻待办。
 
     自动只"触发"Q29 强制档——重冻新版本仍须 BO-07 人工执行（红线 line 7674，
-    与 M6 无全自动冻结一致）。draft FCW/未发布成品实体随 M8/段12 接入（占位）。
+    与 M6 无全自动冻结一致）。draft FCW 随 M8 接入；段12 未发布成品随段12。
     """
     now = _now()
     if entry.status != "active":
         return []
-    if entry.effective_from is not None and entry.effective_from > now:
+    if entry.effective_from is not None and _as_utc(entry.effective_from) > now:
         return []
-    if entry.effective_until is not None and entry.effective_until < now:
+    if entry.effective_until is not None and _as_utc(entry.effective_until) < now:
         return []
 
     snapshots = (
@@ -481,4 +487,60 @@ async def rescan_for_entry(session, entry: ComplianceWordlistEntry) -> list[dict
                 "todo_id": todo_id,
             }
         )
+
+    # Q51：同事务扫命中快照关联的 draft FCW/未发布成品（M8 实体接入）。
+    # FCW 本身无文本，骨架文本随冻结 PWS，故只看上面命中的 pws_id。
+    # 【实现补】V1 全自动发证直接 published，draft 通道未开，此处置通常为空集，
+    # 但实体与扫描随 M8 落地，draft 通道开启即生效。
+    hit_pws_ids = [row["pws_id"] for row in impacted]
+    if hit_pws_ids:
+        draft_fcws = (
+            await session.scalars(
+                select(FinalContentWhitelist).where(
+                    FinalContentWhitelist.pws_id.in_(hit_pws_ids),
+                    FinalContentWhitelist.publish_status == "draft",
+                )
+            )
+        ).all()
+        for fcw in draft_fcws:
+            open_fcw_todo = (
+                await session.scalars(
+                    select(OpsTodo).where(
+                        OpsTodo.tenant_id == fcw.tenant_id,
+                        OpsTodo.todo_type == ccr_rules.TODO_TYPE_WORDLIST_RESCAN,
+                        OpsTodo.entity_type == "final_content_whitelist",
+                        OpsTodo.entity_id == fcw.final_id,
+                        OpsTodo.status.in_(["open", "escalated"]),
+                    )
+                )
+            ).first()
+            if open_fcw_todo is not None:
+                continue
+            todo = OpsTodo(
+                tenant_id=fcw.tenant_id,
+                todo_type=ccr_rules.TODO_TYPE_WORDLIST_RESCAN,
+                entity_type="final_content_whitelist",
+                entity_id=fcw.final_id,
+                assignee_role="operations",
+                detail={
+                    "reason_code": ccr_rules.REASON_WORDLIST_HIT,
+                    "entry_id": entry.entry_id,
+                    "word": entry.word,
+                    "country": entry.country,
+                    "pws_id": fcw.pws_id,
+                },
+                due_at=now + timedelta(days=pws_rules.READY_TODO_DUE_DAYS),
+            )
+            session.add(todo)
+            await session.flush()
+            await append_audit(
+                session,
+                tenant_id=fcw.tenant_id,
+                actor_id=None,
+                actor_roles=None,
+                action="ccr.wordlist_rescan",
+                entity_type="final_content_whitelist",
+                entity_id=fcw.final_id,
+                detail={"entry_id": entry.entry_id, "word": entry.word},
+            )
     return impacted

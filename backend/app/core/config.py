@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
 
+    # M10b SLA sweep 调度（进程内 asyncio loop；LOOM_SCHEDULER_ENABLED=false 可关）。
+    scheduler_enabled: bool = True
+    sweep_interval_seconds: float = 300.0
+
 
 @lru_cache
 def get_settings() -> Settings:

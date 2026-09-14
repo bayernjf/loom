@@ -4,7 +4,7 @@
 """
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,12 +48,20 @@ async def list_entries(
     return (await session.scalars(stmt.order_by(ComplianceWordlistEntry.created_at))).all()
 
 
+def _in_effective_window(item, now: datetime) -> bool:
+    return not (
+        (item.effective_from is not None and item.effective_from > now)
+        or (item.effective_until is not None and item.effective_until < now)
+    )
+
+
 async def create_entry(session, body, actor) -> ComplianceWordlistEntry:
     if not (set(actor.roles) & {"operations", "internal_compliance"}):
         raise WordlistForbidden("wordlist edit requires operations/internal_compliance")
     if body.item.action == "downgrade" and not (body.item.downgrade_target or "").strip():
         raise ValueError("downgrade_target is required when action=downgrade")
     layer = _normalize_layer(body.item.layer, body.item.country)
+    now = datetime.now(UTC)
     entry = ComplianceWordlistEntry(
         word=body.item.word,
         level=body.item.level,
@@ -62,6 +70,9 @@ async def create_entry(session, body, actor) -> ComplianceWordlistEntry:
         country=body.item.country,
         industry=body.item.industry,
         layer=layer,
+        effective_from=body.item.effective_from,
+        effective_until=body.item.effective_until,
+        activated_at=now if _in_effective_window(body.item, now) else None,
         created_by=actor.id,
     )
     session.add(entry)
@@ -94,6 +105,10 @@ async def update_entry(session, entry_id: str, body, actor) -> ComplianceWordlis
     entry.country = body.item.country
     entry.industry = body.item.industry
     entry.layer = _normalize_layer(body.item.layer, body.item.country)
+    entry.effective_from = body.item.effective_from
+    entry.effective_until = body.item.effective_until
+    now = datetime.now(UTC)
+    entry.activated_at = now if _in_effective_window(body.item, now) else None
     entry.status = "active"
     await append_audit(
         session,

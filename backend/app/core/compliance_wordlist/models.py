@@ -38,6 +38,11 @@ class ComplianceWordlistEntry(Base):
     effective_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Q51：未来生效词条到达生效时点的补扫标记（M10 SLA 调度置位）；
+    # 创建/编辑时已在生效窗口内则立即置位。None+effective_from 未来 = 待补扫。
+    activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="active", index=True
     )  # active/archived
