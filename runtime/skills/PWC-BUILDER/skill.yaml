@@ -1,0 +1,18 @@
+# 注册表 11 字段表述（docs/06 §4.1）原文逐字段列出 10 项键名，
+# 计数"11"与所列项不符——按原文所列 10 项实现，差异不擅自补字段（Q76 备注）。
+skill_id: PWC-BUILDER
+layer: condition
+version: 1.0.0
+input_output_schema:
+  input: product_space_id + approved field pool + approved atoms
+  output: "combo 候选批次：[{atom_ids(≥2,跨≥2 维度), goals, logic_score, fit_score}]"
+knowledge_deps:
+  - G2 字段池
+  - 已 Gate 原子
+model_tier: ""        # Q67 模型注册表未建（V1 外部投递，Q76-2），档位留空
+thresholds:
+  combo_min_dimensions: 2
+  batch_limit_config: pwc.funnel_batch_limit   # 拍板值 50，配置中心
+failure_policy: produce_candidates_only        # 仅产候选，不直接写正式对象
+review_rule: skill7 candidate gate → product_reviewer
+cost_limit: null

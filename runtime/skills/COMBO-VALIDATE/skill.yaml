@@ -1,0 +1,14 @@
+skill_id: COMBO-VALIDATE
+layer: condition
+version: 1.0.0
+input_output_schema:
+  input: PWC-BUILDER 组合候选 + 待用池已有组合
+  output: "每组合 logic_score/fit_score（0–1）+ 结构/跨租户校验结论"
+knowledge_deps:
+  - 待用池组合（重合口径 Q23）
+model_tier: ""
+thresholds:
+  score_range: [0, 1]
+failure_policy: missing_score_pending_review   # Q22b：缺失记"—"、转人工，不凑分
+review_rule: 随 PWC-BUILDER 候选同批走 skill7 gate
+cost_limit: null
