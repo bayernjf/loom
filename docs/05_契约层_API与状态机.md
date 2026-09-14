@@ -173,7 +173,11 @@
 | PUT `/{key}` | 改值发布（仅 `platform_admin`【实现补：07 §2.3 平台级管理员 Q46/Q64 的英文角色码】；body=value/change_note/actor）：类型+min/max/choices 校验失败 422、未知键 404、越权 403；发布=coerce→value/version+1→写版本行→writeAudit(`config.update`)→事务提交后进程内快照原子切换 | 14 §2.4 |
 | POST `/{key}/rollback` | 回滚到历史版本（platform_admin；target_version 不存在 404）：以新版本号重发该值（非覆盖历史），默认 change_note `rollback to vN`，writeAudit(`config.rollback`) | 14 §2.4 |
 
-> 发布语义严格按 14 §2.4：新版本 + 原子切换 + writeAudit；快照切换挂在 SQLAlchemy `after_commit`，事务回滚/校验失败不触缓存（已测试）。V1 单进程模块化单体，仅做进程内热更新；多副本变更广播（Redis pub/sub）【挂账，多副本部署前补】。配置缓存的进程启动加载与各业务模块常量消费迁移在后续切片，当前 M1–M8 拍板值仍读代码常量。
+> 发布语义严格按 14 §2.4：新版本 + 原子切换 + writeAudit；快照切换挂在 SQLAlchemy `after_commit`，事务回滚/校验失败不触缓存（已测试）。V1 单进程模块化单体，仅做进程内热更新；多副本变更广播（Redis pub/sub）【挂账，多副本部署前补】。进程启动加载与业务常量消费已在切片 c 接通（见下）。
+
+**M10 切片 c · 缓存引导 + 常量迁移**（2026-09-14，无新表/无新端点/无迁移）
+
+> 消费侧统一入口 `knob(key)`（`app/core/config_center/knobs.py`）：读进程内 `config_cache`，缓存未引导或键缺失时回落种子表拍板值（`SEED_BY_KEY` 为默认值唯一事实源）。M1–M8 拍板值全部由代码常量迁为零参访问器函数：c1 冷启动 0.6/TopGap 0.1/ops 72h、c7 L3 覆盖 0.6、fieldpool 0.85/0.9/3–8/15–30（请求契约默认值走 `Field(default_factory=...)` 按请求取值）、atom 20·50/0.5/7 天、pwc 50/100·70·50/5min/100/0.6·0.4/0.5·0.5/1.0/0.8/7·3·14、pws 3·1/7 天、ccr 48h、sla 黄 24h、fcw 0.4·0.3·0.3；状态字符串/原因码映射等非标量规则不动。纯函数权重入参缺省为 `None` 并在函数内解析，显式传值仍覆盖（测试/未来分行业配置）。启动引导：lifespan 在调度器启动前以独立会话全量 reload；失败仅告警不阻断启动（knob 回落种子值）。发布后的热更路径不变（切片 a after_commit apply），故运营改值对所有规则访问器即时生效、无需重启。
 
 **M10 切片 b · 通用 SLA 引擎 + 定时调度**（2026-09-14，无新表/迁移 0011 仅加列）
 
