@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.compliance_wordlist.router import router as wordlist_router
+from app.core.config_center.router import router as config_router
 from app.decision.compliance_center.router import router as ccr_router
 from app.decision.layer_strategy.router import router as package_router
 from app.final.final_whitelist.router import router as fcw_router
@@ -18,6 +19,7 @@ app.include_router(intake_router)
 app.include_router(modeling_router)
 app.include_router(fieldpool_router)
 app.include_router(wordlist_router)
+app.include_router(config_router)
 app.include_router(atom_router)
 app.include_router(pwc_router)
 app.include_router(pws_router)

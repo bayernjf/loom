@@ -8,7 +8,12 @@ from sqlalchemy.pool import NullPool
 from alembic import context
 from app.core import models as _core_models  # noqa: F401  (register audit_logs)
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
+from app.core.config_center import models as _config_models  # noqa: F401
 from app.core.db import Base
+from app.decision.compliance_center import models as _ccr_models  # noqa: F401
+from app.decision.layer_strategy import models as _package_models  # noqa: F401
+from app.final.final_whitelist import models as _fcw_models  # noqa: F401
+from app.platform.platform_adaptation import models as _platform_models  # noqa: F401
 from app.product.atom import models as _atom_models  # noqa: F401
 from app.product.condition import models as _condition_models  # noqa: F401
 from app.product.fieldpool import models as _fieldpool_models  # noqa: F401
