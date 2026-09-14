@@ -3,7 +3,10 @@
 V1 没有进程内 LLM Skill 执行体；Golden Cases 打在具有确定性替身的 Skill 上：
 PWC-SCORING（Q22/Q22a/Q22b 评分）、COMBO-VALIDATE（Q48 词表匹配）、
 DIM-MERGE（PT-FP-PLAN-V2.0 结构校验，Q78 WF-02 切片）、
-CAT-RECOG（c1 加权 conf/三分支判定，Q79 WF-01 切片）。真 LLM 切片后同一批
+CAT-RECOG（c1 加权 conf/三分支判定，Q79 WF-01 切片）、
+WF-03 段4 四 Skill（Q80）：ATOM-EXPAND（Q14 批次上限/Q15 达标停拓）、
+ATOM-CANON（normalize_text 规范化）、ATOM-AFFINITY（Q16 低亲和/Q19 keeper）、
+CONFLICT-PRECHECK（Q17 双轨定级/line 840 冲突三类）。真 LLM 切片后同一批
 YAML 案例改打 Skill 输出，只需在此注册表增改适配器，案例数据不动。
 """
 
@@ -101,6 +104,65 @@ def _decide_branch(raw: dict) -> dict:
     }
 
 
+def _atom_default_batch_size(raw: dict) -> dict:
+    from app.product.atom.atom_rules import default_batch_size
+
+    return {"batch_size": default_batch_size(sensitive=raw["sensitive"])}
+
+
+def _atom_target_reached(raw: dict) -> dict:
+    from app.product.atom.atom_rules import target_reached
+
+    return {
+        "reached": target_reached(raw["approved_count"], raw["target_atom_max"])
+    }
+
+
+def _atom_normalize(raw: dict) -> str:
+    from app.product.atom.atom_rules import normalize_text
+
+    return normalize_text(raw["content"])
+
+
+def _atom_is_low_affinity(raw: dict) -> dict:
+    from app.product.atom.atom_rules import is_low_affinity
+
+    return {"low_affinity": is_low_affinity(raw.get("affinity"))}
+
+
+def _atom_pick_keeper(raw: dict) -> dict:
+    from types import SimpleNamespace
+
+    from app.product.atom.atom_rules import pick_cluster_keeper
+
+    items = [SimpleNamespace(affinity=item.get("affinity")) for item in raw["items"]]
+    keeper = pick_cluster_keeper(items)
+    return {"keeper_index": items.index(keeper)}
+
+
+def _atom_grade_risk(raw: dict) -> dict:
+    from app.product.atom.atom_rules import WordlistHit, grade_risk
+
+    hits = [WordlistHit(**h) for h in raw.get("hits", [])]
+    grade = grade_risk(raw["content"], raw["ai_level"], hits)
+    return {
+        "level": grade.level,
+        "source": grade.source,
+        "banned": grade.banned,
+    }
+
+
+def _atom_conflicts_for(raw: dict) -> list:
+    from app.product.atom.atom_rules import RiskGrade, WordlistHit, conflicts_for
+
+    hits = [WordlistHit(**h) for h in raw.get("hits", [])]
+    grade = RiskGrade(level=raw["level"], source=raw["source"], hits=hits)
+    return [
+        {"type": ctype, "status": cstatus}
+        for ctype, cstatus in conflicts_for(grade, has_evidence=raw["has_evidence"])
+    ]
+
+
 TARGETS: dict[str, Callable[[dict], object]] = {
     "score_combo": _score_combo,
     "is_duplicate": _is_duplicate,
@@ -110,4 +172,12 @@ TARGETS: dict[str, Callable[[dict], object]] = {
     "evaluate_plan": _evaluate_plan,
     "weighted_conf": _weighted_conf,
     "decide_branch": _decide_branch,
+    # WF-03 段4（Q80）
+    "atom_default_batch_size": _atom_default_batch_size,
+    "atom_target_reached": _atom_target_reached,
+    "atom_normalize": _atom_normalize,
+    "atom_is_low_affinity": _atom_is_low_affinity,
+    "atom_pick_keeper": _atom_pick_keeper,
+    "atom_grade_risk": _atom_grade_risk,
+    "atom_conflicts_for": _atom_conflicts_for,
 }

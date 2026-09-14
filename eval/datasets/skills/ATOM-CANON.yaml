@@ -1,0 +1,34 @@
+# Evaluation Dataset — ATOM-CANON（WF-03 段4，回归矩阵，Q80 切片自带）
+# target=atom_rules.normalize_text：去首尾空白、casefold、内部连续空白压一空格，
+# 同批次 normalized 去重与 line 11189 事实原子全局唯一均以此规范化为基准。
+# 数据均为人工编写合成词例（16 §4，禁用生产数据）。
+skill_id: ATOM-CANON
+wf_id: WF-03
+cases:
+  - id: ac-norm-001
+    title: 首尾空白剥离 + 英文小写归一
+    target: atom_normalize
+    input: {content: "  Gentle Formula  "}
+    expected: "gentle formula"
+    source: {refs: [PT-ATOM-EXP-V1.3, "06 §2.2 同批次去重", "atom_rules.normalize_text"]}
+
+  - id: ac-norm-002
+    title: 内部连续空白（含制表/换行）压成单空格
+    target: atom_normalize
+    input: {content: "twice\tdaily\n  use"}
+    expected: "twice daily use"
+    source: {refs: [PT-ATOM-EXP-V1.3, "atom_rules.normalize_text"]}
+
+  - id: ac-norm-003
+    title: 已规范化文本幂等不变
+    target: atom_normalize
+    input: {content: "synthetic phrase"}
+    expected: "synthetic phrase"
+    source: {refs: ["atom_rules.normalize_text"]}
+
+  - id: ac-norm-004
+    title: casefold 非 ASCII 大小写归一（合成词）
+    target: atom_normalize
+    input: {content: "STRAFFE CREME"}
+    expected: "straffe creme"
+    source: {refs: [PT-ATOM-EXP-V1.3, "atom_rules.normalize_text"]}
