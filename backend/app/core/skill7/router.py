@@ -114,6 +114,7 @@ async def decide_candidate(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     from app.product.condition import service as pwc_service
+    from app.product.fieldpool import service as fp_service
 
     try:
         cand = await service.decide_candidate(session, candidate_id, body)
@@ -133,7 +134,7 @@ async def decide_candidate(
     except registry.RegistryError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=f"workflow gate misconfigured: {exc}") from exc
-    # 适配器复用既有漏斗，业务错误口径与 pwc/funnel 端点一致。
+    # 适配器复用既有业务服务，错误口径与各业务端点一致。
     except pwc_service.ProductSpaceNotFound:
         await session.rollback()
         raise HTTPException(status_code=404, detail="product space not found")
@@ -141,6 +142,15 @@ async def decide_candidate(
         await session.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except pwc_service.InvalidFunnel as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except fp_service.ProductSpaceNotFound:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="product space not found")
+    except fp_service.GateNotAllowed as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except fp_service.InvalidPlan as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _candidate_view(cand)

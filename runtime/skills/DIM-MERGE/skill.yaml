@@ -1,0 +1,17 @@
+skill_id: DIM-MERGE
+layer: fieldpool
+version: 1.0.0
+input_output_schema:
+  input: 7 路维度候选 + 已批准 G2 fid 集合
+  output: "完整字段方案（target_type=field_plan）：{dimensions[], target_atom_min, target_atom_max}"
+knowledge_deps:
+  - PT-FP-PLAN-V2.0（06 §2.1）
+  - Q12 Top8+备选档 / Q15 目标原子 15-30
+model_tier: ""
+thresholds:
+  dim_max: 8                          # >8 按置信 Top8，余入备选可捞回
+  needs_detail_conf: 0.85
+  dup_similarity_line: 0.9
+failure_policy: produce_candidates_only  # Q78：仅产候选，不直接写 FieldPool
+review_rule: skill7 candidate gate → product_reviewer；适配落库后再过 WF-02 端点 Gate
+cost_limit: null

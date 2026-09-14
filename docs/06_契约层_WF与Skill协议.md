@@ -117,7 +117,8 @@
 ### 4.2 Skill Orchestrator（编排器，D3.10）
 - 触发判断 / 串并行编排 / 人工闸门 / 失败处理 / 成本控制 / 结果路由
 - **选型定稿（14 §2.2，2026-09-13）**：一期**自研注册表驱动编排器最小集**——只做注册表驱动 + 顺序/并行 + 人工 Gate 插槽；WF/Skill/PT 均为 YAML 数据驱动（落位 15 `runtime/`），编排协议与框架解耦；复杂 DAG 能力二期评估，失控时可迁 LangGraph。
-- **实现状态（2026-09-14，M10 切片 e，Q76）**：注册表加载器 + WF-04 YAML（顺序 Skill + skill7/PWC 双 Gate 插槽）+ 三个 WF-04 Skill 定义已落；SkillRunLog（`skill_runs`，append-only）与通用候选（`skill_candidates`）通道可用，投递/裁决 API 见 05 §1.4 切片 e。顺序演绎经"投递→候选→适配器"接通；并行执行与复杂串排二期。
+- **实现状态（2026-09-14，M10 切片 e，Q76；WF-02 替换切片 Q78）**：注册表加载器 + WF-04 YAML（顺序 Skill + skill7/PWC 双 Gate 插槽）+ 三个 WF-04 Skill 定义已落；SkillRunLog（`skill_runs`，append-only）与通用候选（`skill_candidates`）通道可用，投递/裁决 API 见 05 §1.4 切片 e。顺序演绎经"投递→候选→适配器"接通；并行执行与复杂串排二期。
+- **实现状态（2026-09-14，WF-02 字段池占位替换切片 1/3，Q78）**：`runtime/workflows/WF-02.yaml`（FIELDPOOL-PLAN→DIM-SOURCE→DIM-MERGE 顺序 Skill + skill7/fieldpool 双 Gate 插槽，failure_policy 记 Q9 mark_needs_detail / Q10 flag_only）与 `runtime/skills/{FIELDPOOL-PLAN,DIM-SOURCE,DIM-MERGE}/skill.yaml` 已登记；接缝经负责人拍板记 Q78——DIM-MERGE 为候选产出者，**整方案单候选** `target_type=field_plan`（payload 为去 actor 的 PlanSubmitRequest 形态），投递校验按 WF 步骤 `candidate_target` 泛化（非产出步骤拒收、target 不符拒收、field_plan 限 1 条），confirmed/modified 经适配器复用 `fieldpool.submit_plan` 落 pending_gate 再过既有 WF-02 HumanGate（Q8 启用路由/PT-FP-PLAN/Q9/Q10/Q12/G2 候选一项不绕）；rejected→archived 不落池；适配器 GateNotAllowed 等失败回滚候选留 pending_review。FIELDPOOL-PLAN、DIM-SOURCE 不带 candidate_target。配套 eval 回归见 15 §2.5 `eval/`（DIM-MERGE 12+3 案）。
 
 ### 4.3 Skill 调用日志（M6，D3.10 + 段10）
 - 每次输入/输出/成本/置信度/失败/人工修改记录

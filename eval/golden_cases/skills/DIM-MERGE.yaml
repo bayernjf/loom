@@ -1,0 +1,52 @@
+# Golden Cases — DIM-MERGE（WF-02 段3，Q78 切片，Q77 模式人工精选）
+# 从回归矩阵精选防 S2（静默放宽/收紧 PT-FP-PLAN）的关键裁决口径，
+# 案例与 datasets 同 schema、同源 refs，数据为合成数据。
+skill_id: DIM-MERGE
+wf_id: WF-02
+cases:
+  - id: golden-dm-001
+    title: 敏感行业缺 risk_control 必拦（Q11 红线）
+    target: evaluate_plan
+    input:
+      sensitive: true
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-2}
+        - {field_name: 规格, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: false
+      violations: [missing_risk_control]
+    source: {refs: [Q11, Q7, "敏感行业 risk_control 强制；Gate 不允许批准违规方案"]}
+
+  - id: golden-dm-002
+    title: 不足 3 维度转人工不自动补（Q12 below_min）
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-2}
+    expected:
+      compliant: false
+      violations: [below_min]
+      selected_count: 2
+    source: {refs: [Q12, PT-FP-PLAN-V2.0, "<3 不自动补，转人工"]}
+
+  - id: golden-dm-003
+    title: Q10 疑重只标记不拦截（防 S2：人工终裁权不被静默收回）
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input, g2_frequent]
+      active_fids: [f_a]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.95, source_ref: syn-ref-1}
+        - {field_name: 色彩, role: product_attribute, source_route: g2_frequent, confidence: 0.92, source_ref: syn-ref-2, fid: f_a, similarity: 0.93, related_fid: f_a}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: true
+      violations: []
+      dup_fields: [色彩]
+    source: {refs: [Q10, "≥0.9 仅 flag_only，合并由人工 Gate 终裁"]}

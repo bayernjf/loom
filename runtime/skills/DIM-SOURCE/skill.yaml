@@ -1,0 +1,16 @@
+skill_id: DIM-SOURCE
+layer: fieldpool
+version: 1.0.0
+input_output_schema:
+  input: FIELDPOOL-PLAN 规划框架
+  output: "7 路来源维度候选：route + field_name + confidence + source_ref（+fid/similarity/definition）"
+knowledge_deps:
+  - Q8 来源路由表（6 路种子；第 7 路随基准 HTML 核对，原文 7 路未列全【待补】）
+  - G2 高频字段 / 通用·产品灵感库
+model_tier: ""
+thresholds:
+  evidence_required: true             # line 14081 红线：依据必须标明
+  dup_similarity_line: 0.9            # Q10
+failure_policy: unknown_route_reject   # 停用/未知来源逐条记违规
+review_rule: 逐路候选不直接落库；合并后随整方案走 WF-02 Gate
+cost_limit: null

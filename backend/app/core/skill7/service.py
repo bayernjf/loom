@@ -40,15 +40,12 @@ def _workflow_of_skill(skill_id: str) -> str | None:
     return None
 
 
-def _validate_candidates(candidates) -> None:
-    # 试点唯一适配器；其 payload 在投递时即用既有契约预校验，
-    # 不把坏 payload 拖到人工裁决时才暴露。
-    from app.product.condition.schemas import ComboItem
+def _validate_payload(target_type: str, payload: dict) -> None:
+    """投递/改单时按 target_type 做结构预校验（业务规则仍在适配器内跑）。"""
+    if target_type == "pwc_combo":
+        from app.product.condition.schemas import ComboItem
 
-    for cand in candidates:
-        if cand.target_type != "pwc_combo":
-            raise InvalidCandidatePayload(f"unsupported target_type: {cand.target_type}")
-        combos = cand.payload.get("combos")
+        combos = payload.get("combos")
         if not isinstance(combos, list) or not combos:
             raise InvalidCandidatePayload("payload.combos must be a non-empty list")
         try:
@@ -56,6 +53,43 @@ def _validate_candidates(candidates) -> None:
                 ComboItem(**combo)
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
+        return
+    if target_type == "field_plan":
+        from app.product.fieldpool.schemas import PlanSubmitRequest
+
+        data = dict(payload)
+        data.pop("actor", None)  # payload 是去 actor 的 PlanSubmitRequest 形态
+        try:
+            PlanSubmitRequest(
+                **data, actor={"id": "_delivery_validation", "roles": []}
+            )
+        except ValidationError as exc:
+            raise InvalidCandidatePayload(str(exc)) from exc
+        return
+    raise InvalidCandidatePayload(f"unsupported target_type: {target_type}")
+
+
+def _validate_delivery(wf_id: str, skill_id: str, candidates) -> None:
+    # Q78：投递校验以 WF 步骤声明的 candidate_target 为准（不再硬编码 pwc_combo）。
+    expected_target = registry.candidate_target_for(wf_id, skill_id)
+    if expected_target is None:
+        raise InvalidCandidatePayload(
+            f"skill {skill_id} is not declared as a candidate producer in {wf_id}"
+        )
+    if not candidates:
+        raise InvalidCandidatePayload("candidates must be a non-empty list")
+    # Q78：field_plan 为整方案单候选。
+    if expected_target == "field_plan" and len(candidates) != 1:
+        raise InvalidCandidatePayload(
+            "field_plan delivery must contain exactly one whole-plan candidate"
+        )
+    for cand in candidates:
+        if cand.target_type != expected_target:
+            raise InvalidCandidatePayload(
+                f"candidate target_type {cand.target_type!r} does not match declared "
+                f"candidate_target {expected_target!r} of {wf_id}/{skill_id}"
+            )
+        _validate_payload(cand.target_type, cand.payload)
 
 
 async def deliver_run(
@@ -81,7 +115,7 @@ async def deliver_run(
             f"skill {body.skill_id} is not bound to workflow {wf_id!r}"
         )
 
-    _validate_candidates(body.candidates)
+    _validate_delivery(wf_id, body.skill_id, body.candidates)
 
     run = SkillRun(
         skill_id=body.skill_id,
@@ -200,18 +234,9 @@ async def decide_candidate(
         return cand
 
     if body.decision == "modified":
-        from app.product.condition.schemas import ComboItem
-
         if body.payload is None:
             raise InvalidCandidatePayload("decision=modified requires a replacement payload")
-        try:
-            combos = body.payload.get("combos")
-            if not isinstance(combos, list) or not combos:
-                raise InvalidCandidatePayload("payload.combos must be a non-empty list")
-            for combo in combos:
-                ComboItem(**combo)
-        except (TypeError, ValidationError) as exc:
-            raise InvalidCandidatePayload(str(exc)) from exc
+        _validate_payload(cand.target_type, body.payload)
         cand.payload = body.payload
         cand.human_modified = True
 

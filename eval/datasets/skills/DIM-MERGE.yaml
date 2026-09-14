@@ -1,0 +1,205 @@
+# Evaluation Dataset — DIM-MERGE（WF-02 段3，回归矩阵，Q78 切片自带）
+# target=PT-FP-PLAN-V2.0 确定性结构校验（docs/06 §2.1）：Q8 启用路由、
+# Q9 细看线 0.85、Q10 疑重线 0.9（仅标记）、Q11 敏感行业 risk_control、
+# Q12 Top8+备选/不足 3、line 14081 依据必填。数据均为人工编写合成数据（16 §4）。
+skill_id: DIM-MERGE
+wf_id: WF-02
+cases:
+  - id: dm-fp-001
+    title: 合规三维度全过（≥1 product_attribute，置信全在线上）
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input, g2_frequent, compliance_risk]
+      active_fids: [f_a]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.95, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: g2_frequent, confidence: 0.9, source_ref: syn-ref-2, fid: f_a}
+        - {field_name: 卖点, role: product_attribute, source_route: user_input, confidence: 0.86, source_ref: syn-ref-3}
+    expected:
+      compliant: true
+      violations: []
+      selected_count: 3
+      backup_count: 0
+      needs_detail_fields: []
+      dup_fields: []
+    source: {refs: [PT-FP-PLAN-V2.0, Q8, Q12, "06 §2.1"]}
+
+  - id: dm-fp-002
+    title: Q9 置信低于 0.85 仅标需细看，不记违规
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.8, source_ref: syn-ref-2}
+        - {field_name: 尺寸, role: product_attribute, source_route: user_input, confidence: 0.6, source_ref: syn-ref-3}
+    expected:
+      compliant: true
+      violations: []
+      needs_detail_fields: [材质, 尺寸]
+    source: {refs: [Q9, "02 C2 0.85 细看线", "第一期全部走 Gate，低置信仅标记"]}
+
+  - id: dm-fp-003
+    title: Q10 相似度 ≥0.9 标疑重但不违规（人工终裁）
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input, g2_frequent]
+      active_fids: [f_a]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.95, source_ref: syn-ref-1}
+        - {field_name: 色彩, role: product_attribute, source_route: g2_frequent, confidence: 0.92, source_ref: syn-ref-2, fid: f_a, similarity: 0.93, related_fid: f_a}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: true
+      violations: []
+      dup_fields: [色彩]
+    source: {refs: [Q10, "02 C2 0.9 疑重线", "flag_only 不合并"]}
+
+  - id: dm-fp-004
+    title: 仅两维度记 below_min（<3 不自动补，转人工）
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-2}
+    expected:
+      compliant: false
+      violations: [below_min]
+      selected_count: 2
+    source: {refs: [Q12, PT-FP-PLAN-V2.0, "不足 3 转人工不自动补"]}
+
+  - id: dm-fp-005
+    title: 无 product_attribute 记 missing_product_attribute
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [compliance_risk, user_input]
+      dimensions:
+        - {field_name: 禁忌人群, role: risk_control, source_route: compliance_risk, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 警示语, role: risk_control, source_route: compliance_risk, confidence: 0.9, source_ref: syn-ref-2}
+        - {field_name: 适用法规, role: risk_control, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: false
+      violations: [missing_product_attribute]
+    source: {refs: [PT-FP-PLAN-V2.0, "product_attribute 恒 ≥1"]}
+
+  - id: dm-fp-006
+    title: Q11 敏感行业缺 risk_control 记 missing_risk_control
+    target: evaluate_plan
+    input:
+      sensitive: true
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-2}
+        - {field_name: 规格, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: false
+      violations: [missing_risk_control]
+    source: {refs: [Q11, Q7, "敏感行业 risk_control 强制"]}
+
+  - id: dm-fp-007
+    title: 非敏感行业无 risk_control 合规（仅敏感行业强制）
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-2}
+        - {field_name: 规格, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: true
+      violations: []
+    source: {refs: [Q11, "risk_control 仅敏感行业强制"]}
+
+  - id: dm-fp-008
+    title: 停用/未知来源逐维度记 unknown_route
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: disabled_route, confidence: 0.9, source_ref: syn-ref-2}
+        - {field_name: 规格, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: false
+      violations: [unknown_route]
+    source: {refs: [Q8, "来源路由可启停，停用路由不进方案"]}
+
+  - id: dm-fp-009
+    title: 未知角色记 unknown_role
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: selling_point, source_route: user_input, confidence: 0.9, source_ref: syn-ref-2}
+        - {field_name: 规格, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: false
+      violations: [unknown_role]
+    source: {refs: [PT-FP-PLAN-V2.0, "DIMENSION_ROLES=product_attribute/risk_control"]}
+
+  - id: dm-fp-010
+    title: line 14081 依据缺失记 missing_evidence
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: null}
+        - {field_name: 规格, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3}
+    expected:
+      compliant: false
+      violations: [missing_evidence]
+    source: {refs: ["line 14081", "依据来源必须标明"]}
+
+  - id: dm-fp-011
+    title: 非活跃 fid 记 illegal_fid（fid 必须指向活跃 G2）
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input, g2_frequent]
+      active_fids: [f_a]
+      dimensions:
+        - {field_name: 颜色, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-1}
+        - {field_name: 材质, role: product_attribute, source_route: g2_frequent, confidence: 0.9, source_ref: syn-ref-2, fid: f_retired}
+        - {field_name: 规格, role: product_attribute, source_route: user_input, confidence: 0.9, source_ref: syn-ref-3, fid: f_a}
+    expected:
+      compliant: false
+      violations: [illegal_fid]
+    source: {refs: [Q68, "fid 必须为活跃 G2，否则走 G2FieldCandidate"]}
+
+  - id: dm-fp-012
+    title: Q12 超 8 维度按置信 Top8 入选，余入备选档可捞回
+    target: evaluate_plan
+    input:
+      sensitive: false
+      enabled_routes: [user_input]
+      dimensions:
+        - {field_name: d01, role: product_attribute, source_route: user_input, confidence: 0.95, source_ref: s1}
+        - {field_name: d02, role: product_attribute, source_route: user_input, confidence: 0.94, source_ref: s2}
+        - {field_name: d03, role: product_attribute, source_route: user_input, confidence: 0.93, source_ref: s3}
+        - {field_name: d04, role: product_attribute, source_route: user_input, confidence: 0.92, source_ref: s4}
+        - {field_name: d05, role: product_attribute, source_route: user_input, confidence: 0.91, source_ref: s5}
+        - {field_name: d06, role: product_attribute, source_route: user_input, confidence: 0.90, source_ref: s6}
+        - {field_name: d07, role: product_attribute, source_route: user_input, confidence: 0.89, source_ref: s7}
+        - {field_name: d08, role: product_attribute, source_route: user_input, confidence: 0.88, source_ref: s8}
+        - {field_name: d09, role: product_attribute, source_route: user_input, confidence: 0.87, source_ref: s9}
+        - {field_name: d10, role: product_attribute, source_route: user_input, confidence: 0.86, source_ref: s10}
+    expected:
+      compliant: true
+      violations: []
+      selected_count: 8
+      backup_count: 2
+      backup_fields: [d09, d10]
+    source: {refs: [Q12, "Top8+备选档，备选不删可捞回"]}
