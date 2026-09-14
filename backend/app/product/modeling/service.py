@@ -13,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
 from app.core.config_center.knobs import knob
+from app.core.rbac import (
+    DICTIONARY_ADMIN,
+    OPERATIONS,
+    PLATFORM_ADMIN,
+    require_any_role,
+)
 from app.product.modeling import c1, c7
 from app.product.modeling.models import (
     C1IndustryThreshold,
@@ -64,6 +70,7 @@ async def list_signal_weights(session: AsyncSession) -> Sequence[C1SignalWeight]
 
 
 async def replace_signal_weights(session, rows, actor) -> list[C1SignalWeight]:
+    require_any_role(actor, OPERATIONS)  # Q2 运营保存信号权重
     enabled = {r.signal: float(r.weight) for r in rows if r.enabled}
     try:
         c1.validate_enabled_weights(enabled)
@@ -106,6 +113,7 @@ async def list_industries(session: AsyncSession) -> Sequence[C1IndustryThreshold
 
 
 async def create_industry(session, item, actor) -> C1IndustryThreshold:
+    require_any_role(actor, OPERATIONS)  # Q7 行业阈值后台 CRUD 归运营
     row = C1IndustryThreshold(
         industry=item.industry,
         keywords=list(item.keywords),
@@ -130,6 +138,7 @@ async def create_industry(session, item, actor) -> C1IndustryThreshold:
 
 
 async def patch_industry(session, industry, patch, actor) -> C1IndustryThreshold:
+    require_any_role(actor, OPERATIONS)  # Q7
     row = await session.get(C1IndustryThreshold, industry)
     if row is None:
         raise CategoryNotFound(industry)
@@ -156,6 +165,7 @@ async def patch_industry(session, industry, patch, actor) -> C1IndustryThreshold
 
 
 async def delete_industry(session, industry, actor) -> None:
+    require_any_role(actor, OPERATIONS)  # Q7
     row = await session.get(C1IndustryThreshold, industry)
     if row is None:
         raise CategoryNotFound(industry)
@@ -342,12 +352,13 @@ async def ops_decide(session, intake_id, body) -> OpsTodo:
     return todo
 
 
-async def escalate_due_todos(session, now: datetime | None = None) -> int:
+async def escalate_due_todos(session, actor, now: datetime | None = None) -> int:
     """Q4：开放待办超过 due_at 未处理 → escalated（主管/看板高亮）。
 
     薄包装：升级逻辑在 M10 通用 SLA 引擎（core.sla.engine，Q49/Q70），本函数
-    保留模块入口与提交边界（既有端点/测试契约）。
+    保留模块入口与提交边界（既有端点/测试契约）。手工触发归 platform_admin（Q75）。
     """
+    require_any_role(actor, PLATFORM_ADMIN)
     from app.core.sla.engine import escalate_due_todos as _engine_sweep
 
     due = await _engine_sweep(session, now)
@@ -358,6 +369,7 @@ async def escalate_due_todos(session, now: datetime | None = None) -> int:
 # ---------- G1 类目树（最小切片；完整类目管理在 V3） ----------
 
 async def create_category(session, body) -> G1Category:
+    require_any_role(body.actor, DICTIONARY_ADMIN)  # Q75：G1 全局字典归字典管理员
     if body.parent_id and await session.get(G1Category, body.parent_id) is None:
         raise CategoryNotFound(body.parent_id)
     row = G1Category(name=body.name, parent_id=body.parent_id)
@@ -371,6 +383,7 @@ async def list_categories(session) -> Sequence[G1Category]:
 
 
 async def upsert_template(session, category_id, body, actor) -> G1CategoryTemplate:
+    require_any_role(actor, DICTIONARY_ADMIN)  # Q75：模板影响该类目未来全部新产品（Q69）
     category = await session.get(G1Category, category_id)
     if category is None:
         raise CategoryNotFound(category_id)

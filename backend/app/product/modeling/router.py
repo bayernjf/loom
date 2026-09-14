@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
+from app.core.rbac import PermissionDenied
 from app.product.modeling import c7, service
 from app.product.modeling.c1 import WeightSumError
 from app.product.modeling.schemas import (
@@ -55,6 +56,8 @@ async def put_signal_weights(
         rows = await service.replace_signal_weights(session, body.rows, body.actor)
     except (service.ConfigError, WeightSumError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"updated": [w.signal for w in rows]}
 
 
@@ -84,6 +87,8 @@ async def post_industry(
         row = await service.create_industry(session, body.item, body.actor)
     except IntegrityError as exc:
         raise HTTPException(status_code=409, detail="industry already exists") from exc
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"industry": row.industry}
 
 
@@ -95,16 +100,18 @@ async def patch_industry(
         row = await service.patch_industry(session, industry, body, body.actor)
     except service.CategoryNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"industry": row.industry, "threshold": row.threshold}
 
 
-class _DeleteBody(BaseModel):
+class _ActorBody(BaseModel):
     actor: Actor
 
 
 @router.delete("/admin/c1/industries/{industry}", status_code=204)
 async def delete_industry(
-    industry: str, body: _DeleteBody, session: AsyncSession = Depends(get_session)
+    industry: str, body: _ActorBody, session: AsyncSession = Depends(get_session)
 ):
     try:
         await service.delete_industry(session, industry, body.actor)
@@ -112,6 +119,8 @@ async def delete_industry(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except service.DefaultIndustryProtected as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 # ---- C1 识别三分支（Q1/Q3/Q4/Q5） ----
@@ -174,8 +183,13 @@ async def post_ops_decision(
 
 
 @router.post("/admin/ops-todos/sweep")
-async def post_sweep(session: AsyncSession = Depends(get_session)) -> dict:
-    count = await service.escalate_due_todos(session)
+async def post_sweep(
+    body: _ActorBody, session: AsyncSession = Depends(get_session)
+) -> dict:
+    try:
+        count = await service.escalate_due_todos(session, body.actor)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"escalated": count}
 
 
@@ -189,6 +203,8 @@ async def post_category(
         row = await service.create_category(session, body)
     except service.CategoryNotFound as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"category_id": row.category_id}
 
 
@@ -222,6 +238,8 @@ async def put_template(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except c7.IllegalFid as exc:  # Q68
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"category_id": tpl.category_id, "status": tpl.status, "fields": len(tpl.field_list)}
 
 

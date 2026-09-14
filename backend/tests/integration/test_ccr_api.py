@@ -28,6 +28,7 @@ REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
 OPS = {"id": "ops-1", "roles": ["operations"]}
 COMPLIANCE = {"id": "ic-1", "roles": ["internal_compliance"]}
 NOBODY = {"id": "nobody-1", "roles": []}
+PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
 
 
 @pytest_asyncio.fixture
@@ -187,10 +188,10 @@ async def test_ccr_clean_blocked_and_append_only(client, session_factory):
     # 冻结时词库无此词（Q51 典型场景：词条后加，旧快照仍含该词）
     pws = await _freeze(client, ps_id, contents=("温和根治护理", "水润肤感", "清爽质地"))
 
-    missing = await client.post("/api/pws/nope/ccr/run", json={"actor": OPS})
+    missing = await client.post("/api/pws/nope/ccr/run", json={"actor": COMPLIANCE})
     assert missing.status_code == 404
 
-    run1 = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run1 = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     assert run1.status_code == 200, run1.text
     assert run1.json()["report"]["status"] == "clean"
     assert run1.json()["report"]["block_required"] is False
@@ -202,7 +203,7 @@ async def test_ccr_clean_blocked_and_append_only(client, session_factory):
         json={"item": {"word": "根治", "level": "critical", "action": "ban"}, "actor": OPS},
     )
     assert wl.status_code == 200
-    run2 = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run2 = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     blocked = run2.json()["report"]
     assert blocked["status"] == "blocked" and blocked["block_required"] is True
     assert blocked["hits"]["bans"][0]["word"] == "根治"
@@ -225,7 +226,7 @@ async def test_superseded_snapshot_not_cleanable(client, session_factory):
         f"/api/product-spaces/{ps_id}/pws/freeze",
         json={"actor": OWNER, "reason_code": "asset_increment"},
     )
-    resp = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    resp = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     assert resp.status_code == 409
 
 
@@ -243,7 +244,7 @@ async def test_downgrade_suggestion_requires_approval(client, session_factory):
     )
     assert wl.json()["layer"] == "base"
 
-    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     report = run.json()["report"]
     assert report["status"] == "downgrade_pending"
     assert report["hits"]["downgrades"][0]["downgrade_target"] == "感受改善"
@@ -292,13 +293,13 @@ async def test_q50_layer_precedence_per_market(client, session_factory):
     )
 
     us = await client.post(
-        f"/api/pws/{pws['pws_id']}/ccr/run", json={"country": "US", "actor": OPS}
+        f"/api/pws/{pws['pws_id']}/ccr/run", json={"country": "US", "actor": COMPLIANCE}
     )
     assert us.json()["report"]["status"] == "blocked"
     assert us.json()["report"]["hits"]["bans"][0]["layer"] == "country"
 
     cn = await client.post(
-        f"/api/pws/{pws['pws_id']}/ccr/run", json={"country": "CN", "actor": OPS}
+        f"/api/pws/{pws['pws_id']}/ccr/run", json={"country": "CN", "actor": COMPLIANCE}
     )
     assert cn.json()["report"]["status"] == "downgrade_pending"
 
@@ -314,13 +315,13 @@ async def test_law_review_trigger_decision_and_sla(client, session_factory):
     ps_id = await _make_ps(session_factory, industry="medical")
     pws = await _freeze(client, ps_id, contents=("温和护理", "水润肤感", "清爽质地"), risk_control=True)
 
-    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     law = run.json()["law_review"]
     assert law is not None and law["status"] == "pending" and law["domain"] == "medical"
     law_id = law["law_review_id"]
 
     # 幂等：再跑不重开
-    run2 = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run2 = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     assert run2.json()["law_review"]["law_review_id"] == law_id
 
     gate = (await client.get(f"/api/pws/{pws['pws_id']}/ccr/gate")).json()
@@ -346,7 +347,7 @@ async def test_law_review_trigger_decision_and_sla(client, session_factory):
         assert (due - datetime.now(UTC).replace(tzinfo=None)) > timedelta(hours=47)
         todo.due_at = datetime.now(UTC) - timedelta(minutes=1)
         await session.commit()
-    swept = await client.post("/api/admin/ops-todos/sweep")
+    swept = await client.post("/api/admin/ops-todos/sweep", json={"actor": PLATFORM_ADMIN})
     assert swept.status_code == 200
 
     # 非合规角色不能录结论；驳回 → Guard⑥ 继续否决
@@ -376,7 +377,7 @@ async def test_law_review_trigger_decision_and_sla(client, session_factory):
         json={"actor": OWNER, "reason_code": "asset_increment"},
     )
     new_pws = v2.json()["pws"]
-    run3 = await client.post(f"/api/pws/{new_pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run3 = await client.post(f"/api/pws/{new_pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     new_law = run3.json()["law_review"]
     approve = await client.post(
         f"/api/law-reviews/{new_law['law_review_id']}/decision",
@@ -390,7 +391,7 @@ async def test_law_review_trigger_decision_and_sla(client, session_factory):
 async def test_sensitive_flag_triggers_without_domain_match(client, session_factory):
     ps_id = await _make_ps(session_factory, industry="wart_pen", sensitive=True)
     pws = await _freeze(client, ps_id, risk_control=True)
-    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": OPS})
+    run = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     law = run.json()["law_review"]
     assert law is not None and law["domain"] == "wart_pen"
 
