@@ -449,7 +449,7 @@ async def test_cooldown_after_three_uses_and_recovery(client, session_factory):
     # 14 天后 sweep 回待用，同平台可再取
     async with session_factory() as session:
         released = await pwc_service.sweep_cooldowns(
-            session, datetime(2026, 9, 14, tzinfo=UTC) + timedelta(days=15)
+            session, datetime.now(UTC) + timedelta(days=15)
         )
         await session.commit()
         assert released == 1
