@@ -31,6 +31,7 @@ from app.core.model_registry.seeds import (
     TYPE_MATCH_PROMPT_VERSION,
 )
 from app.core.skill7.models import SkillCandidate, SkillRun
+from app.core.tenants.models import Tenant
 from app.main import app
 from app.product.modeling.models import C7Run, G1Category, G2FieldCandidate
 from app.product.product_intake.models import G2Field
@@ -62,6 +63,7 @@ async def session_factory():
 async def client(session_factory):
     async with session_factory() as session:
         session.add_all([
+            Tenant(tenant_id="t1", name="试点客户", plan="basic", status="active"),
             AIModel(
                 model_id=SYNTHETIC_MODEL_ID, model_code="synthetic-deterministic",
                 provider="synthetic", status="active",

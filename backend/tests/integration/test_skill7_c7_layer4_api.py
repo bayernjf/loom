@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
+from app.core.tenants.models import Tenant
 from app.main import app
 from app.product.modeling.models import C7Run, G2FieldCandidate
 from app.product.product_intake import statemachine as sm
@@ -48,6 +49,7 @@ async def client(session_factory):
     async with session_factory() as session:
         session.add_all(
             [
+                Tenant(tenant_id="t1", name="试点客户", plan="basic", status="active"),
                 G2Field(fid="f_name", cat="common", field_name="产品名"),
                 G2Field(fid="f_brief", cat="common", field_name="简介"),
                 G2Field(fid="g2_extra", cat="selling", field_name="扩展字段"),

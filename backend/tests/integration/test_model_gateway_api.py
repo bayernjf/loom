@@ -32,6 +32,7 @@ from app.core.model_registry.seeds import (
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillCandidate, SkillRun
+from app.core.tenants.models import Tenant
 from app.main import app
 from app.product.modeling.models import (
     C1IndustryThreshold,
@@ -86,6 +87,7 @@ async def client(session_factory):
     async with session_factory() as session:
         await _seed_platform(session)
         session.add_all([
+            Tenant(tenant_id="t1", name="试点客户", plan="basic", status="active"),
             G2Field(fid="f_name", cat="common", field_name="产品名"),
             G2Field(fid="f_brief", cat="common", field_name="简介"),
             C1SignalWeight(signal="name", signal_name="产品名", enabled=True, weight=0.50),

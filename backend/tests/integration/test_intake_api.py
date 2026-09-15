@@ -5,6 +5,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
+from app.core.tenants.models import Tenant
 from app.main import app
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import G2Field
@@ -29,6 +30,10 @@ async def session_factory():
 
 @pytest_asyncio.fixture
 async def client(session_factory):
+    # Q95：段1 准入闸要求租户已注册且未暂停。
+    async with session_factory() as session:
+        session.add(Tenant(tenant_id="t1", name="试点客户", plan="basic", status="active"))
+        await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
