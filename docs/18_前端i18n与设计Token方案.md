@@ -67,7 +67,7 @@ frontend/
 落码步骤（顺序即依赖序）：
 1. `npm i next-intl`；建 i18n/routing.ts、i18n/request.ts、middleware.ts（next-intl App Router 官方三件套结构，不自造变体）；
 2. `app/*` 迁入 `app/[locale]/*`，layout 注入 NextIntlClientProvider 并 import tokens.css；
-3. 建 messages/zh-CN.json，现有页面文案全部改 `useTranslations`/`getTranslations`；命名空间按后端域：`common.*`、`intake.*`（含 `intake.status.*`，与 docs/13 状态词一一对应）、`fieldpool.*`、`pwc.*`、`pws.*`、`skill7.*`（候选/裁决/工作台）、`dashboard.*`、`tenant.*`（Q95 租户管理/引导）、`error.*`（错误码映射）；
+3. 建 messages/zh-CN.json，现有页面文案全部改 `useTranslations`/`getTranslations`；命名空间按后端域：`common.*`、`nav.*`（Q97 八菜单）、`shell.*`（Q97 外壳/占位）、`intake.*`（含 `intake.status.*`，与 docs/13 状态词一一对应）、`fieldpool.*`、`pwc.*`、`pws.*`、`skill7.*`（候选/裁决/工作台）、`dashboard.*`、`tenant.*`（Q95 租户管理/引导）、`error.*`（错误码映射）；
 4. 后端错误体只消费 `code`+参数，前端按 `error.<code>` 拼文案（HTTP 403/404/409/422 各有通用兜底 key）；枚举码、fid、审计 action 码不进消息表；
 5. 时间展示统一 `Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", … })`，时区作为配置常量不散落组件；
 6. M12 页面验收口径（评审项，V1 不上 lint 插件）：页面无硬编码中文业务文案、无前端自创状态词。
@@ -233,3 +233,28 @@ z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-
 - **Token 落地偏差一处**：Semantic 层在 §3.6 清单外新增 `--color-brand-bg: var(--color-brand-1)`（浅蓝品牌浅底，badge 示范消费）；理由同 §3.1 三层纪律——组件不得直引 Primitive，brand-1 需要一个语义出口。tokens.css 与 tokens.ts 两侧同步，共 85 个变量。
 - **验收记录**：`npm run typecheck` 通过；`npm run build` 通过（`/zh-CN` SSG 预渲染）；生产服务器实测 `GET /` → **307** Location `/zh-CN`、`GET /zh-CN` → 200（本文 §2.1/§2.3 原写 308 已更正）；chrome-devtools MCP 挂载本机 9222 Chrome 可视验收：文案全部来自消息表、`<html lang="zh-CN">`、badge 计算背景 rgb(230,244,255)=#e6f4ff（经 `--color-brand-bg` 解析）；控制台仅 favicon.ico 404（裸脚手架无图标，matcher 对带点文件放行，非本切片缺陷）。
 - **校验脚本**：`scripts/check-tokens.mjs` 零依赖解析两侧（多行值做空白归一化），键集合与值任一不一致即 exit 1；开发期曾以缺 4 个多行元组验证过失败路径。
+
+---
+
+## 6. 应用外壳与导航（Q97 定稿，2026-09-16）
+
+客户前端第一个页面切片（M12）边界由 Q97 四接缝拍板（02 C1.41）：
+
+- **结构**：路由组 `app/[locale]/(shell)/`（layout + `sidebar.tsx` client 组件 + `menu-placeholder` 共享占位 + 8 个菜单目录）；导航注册表 `app/[locale]/nav.ts` 为唯一菜单事实源（`{href,labelKey,phase}` ×8），`i18n/navigation.ts` 由 createNavigation 产出 Link/usePathname。
+- **布局**：左侧固定 240px（`--sidebar-width`）+ 顶栏 64px（`--space-8`）+ 内容区 max-width 1280（`--layout-content-max`）；当前项 `aria-current="page"`；样式全部 Semantic/刻度变量（Q97 新增语义别名 `--color-bg-hover: var(--color-surface-2)`，tokens 总数 85→86）。
+- **八菜单路由与阶段标**（slug 为 URL 事实，label 走 `nav.*` 消息）：
+
+| 菜单（D5） | slug | phase |
+|---|---|---|
+| 工作台 | `/workbench` | v1（默认落地页，`/[locale]` 307 至此） |
+| 产品中心 | `/products` | v1 |
+| 内容生产与发布 | `/content` | **v2**（段12，Q73） |
+| 模板管理 | `/templates` | v1（段7 静态底表侧） |
+| 数据分析 | `/analytics` | **v2**（段13） |
+| 社媒账号 | `/social-accounts` | **v2**（段8/发布账号完整版） |
+| 合规风控 | `/compliance` | v1（段10 侧） |
+| 系统设置 | `/settings` | v1（账号子项随 V2 真实认证） |
+
+- **占位口径**：v1 页文案 `shell.placeholderV1`（随 M12 后续切片落地），v2 页标题旁与导航项均挂"V2"徽标 + `shell.placeholderV2`；菜单全显不隐藏。
+- **管理端分治**：Q92/Q93/Q95 等管理页面未来落 `/[locale]/admin/*` 独立布局，不与客户外壳共用导航（真实认证 V2 前不做角色显隐）。
+- **漂移防护**：`scripts/check-nav.mjs`（npm run check-nav）校验 nav.ts↔messages↔页面文件三方一致，随 Q96 的 check-tokens 同为零依赖脚本测试。

@@ -4,6 +4,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ## [Unreleased]
 
+- **Q97 应用外壳+D5 八菜单导航骨架落地（2026-09-16，feat 345e15e/test 09deafd）** — `(shell)` 路由组：240px 侧栏+顶栏+1280 内容列，nav.ts 注册表驱动 8 菜单（next-intl Link/usePathname active）；段8/12/13 三项（content/analytics/social-accounts）V2 徽标占位，余五项 V1 占位；`/[locale]` 307 到 workbench，欢迎页删除；新增 `--color-bg-hover`（86 token）、`scripts/check-nav.mjs` 三方漂移校验、`i18n/navigation.ts`；管理端 `/[locale]/admin` 独立布局不预埋。typecheck/build、两级 307/8×200、9222 Chrome 验收通过；无后端/迁移变化（头仍 0023，401 测试、101 eval 不变）。
 - **Q96 前端 i18n+tokens.css 脚手架落地（2026-09-16，feat 946a774/test 8b614b6）** — next-intl v4（routing/request/middleware，仅 zh-CN，无前缀 307 实测→/zh-CN）+ `app/[locale]` 段（旧根页面删除）+ messages/zh-CN.json（common/home/error）+ tokens.css 三层 85 变量唯一事实源与 tokens.ts 镜像，`scripts/check-tokens.mjs` 零依赖逐值校验（npm run check-tokens）；Semantic 补 `--color-brand-bg` 并补登 docs/18 §5。typecheck/build 通过，curl 307/200 与 9222 Chrome 可视验收通过；无后端/迁移变化（头仍 0023，401 测试、101 eval 不变）。M12 菜单页面逐片点工。
 
 ### Added
