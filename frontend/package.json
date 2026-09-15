@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "check-tokens": "node scripts/check-tokens.mjs",
     "check-nav": "node scripts/check-nav.mjs",
+    "check-products": "node scripts/check-products.mjs",
     "lint": "next lint"
   },
   "dependencies": {
