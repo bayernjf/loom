@@ -137,3 +137,50 @@ def test_synthetic_type_match_full_coverage_gives_empty_proposals():
     assert synthetic.build_type_match({"_category_id": "c"}) == {
         "category_id": "c", "required_fids": [], "l4_proposals": [],
     }
+
+
+def test_synthetic_dim_merge_builds_compliant_plan_and_echoes_targets():
+    # Q85：active G2 复用 + 资料键补维度到 3 维；confidence 固定 0.9 结构占位。
+    variables = {
+        "_routes": [
+            {"route": "user_input", "name": "用户输入"},
+            {"route": "compliance_risk", "name": "合规风险面"},
+        ],
+        "_active_fields": [{"fid": "f_a", "field_name": "字段A"}],
+        "_profile": {"f_b": "x"},
+        "_sensitive": True,
+        "_industry_tag": "medical",
+        "_dim_min": 3,
+        "_dim_max": 8,
+        "_target_atom_min": 15,
+        "_target_atom_max": 30,
+    }
+    out = synthetic.build_dim_merge(variables)
+    assert out["target_atom_min"] == 15 and out["target_atom_max"] == 30
+    dims = out["dimensions"]
+    assert 3 <= len(dims) <= 8
+    assert {d["role"] for d in dims} == {"product_attribute", "risk_control"}
+    risk = [d for d in dims if d["role"] == "risk_control"]
+    assert risk[0]["source_route"] == "compliance_risk"
+    assert risk[0]["source_ref"] == "industry_tag:medical"
+    assert dims[0]["fid"] == "f_a" and dims[0]["source_ref"] == "g2:f_a"
+    assert all(d["confidence"] == 0.9 for d in dims)
+    assert all(d["source_ref"].strip() for d in dims)  # line 14081 依据红线
+    assert synthetic.build_dim_merge(variables) == out  # 确定性
+
+
+def test_synthetic_dim_merge_non_sensitive_has_no_risk_dimension():
+    out = synthetic.build_dim_merge({
+        "_routes": [{"route": "user_input", "name": "用户输入"}],
+        "_active_fields": [
+            {"fid": f"f{i}", "field_name": f"字段{i}"} for i in range(10)
+        ],
+        "_profile": {},
+        "_sensitive": False,
+        "_dim_min": 3,
+        "_dim_max": 8,
+        "_target_atom_min": 15,
+        "_target_atom_max": 30,
+    })
+    assert len(out["dimensions"]) == 8  # 受 dim_max 截断
+    assert all(d["role"] == "product_attribute" for d in out["dimensions"])

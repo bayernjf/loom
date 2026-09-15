@@ -96,3 +96,11 @@ class C7ResolveInvokeRequest(BaseModel):
     category_id: str = Field(min_length=1)
     required_fids: list[str] = Field(default_factory=list)
     actor: Actor
+
+
+class FieldPlanInvokeRequest(BaseModel):
+    # Q85：operations 显式触发 DIM-MERGE 字段池方案生成；目标原子数区间由触发
+    # 侧给定（缺省走 Q15 旋钮），模型必须原样回传。
+    target_atom_min: int | None = Field(default=None, ge=1)
+    target_atom_max: int | None = Field(default=None, ge=1)
+    actor: Actor

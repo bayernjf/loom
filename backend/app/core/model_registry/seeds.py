@@ -1,5 +1,5 @@
-"""Q82/Q83/Q84 底座种子：合成确定性模型 + CAT-RECOG/PWC-BUILDER/TYPE-MATCH
-场景路由与 Prompt v0.1。
+"""Q82/Q83/Q84/Q85 底座种子：合成确定性模型 + CAT-RECOG/PWC-BUILDER/
+TYPE-MATCH/DIM-MERGE 场景路由与 Prompt v0.1。
 
 供 Alembic 迁移与测试共用（同 0008 平台种子模式）。仓库不持任何真实供应商
 凭证：synthetic 驱动仅用于本地/测试的确定性替身，真模型由部署环境经注册页登记。
@@ -12,6 +12,7 @@ SYNTHETIC_PROVIDER = "synthetic"
 SCENE_CAT_RECOG = "CAT-RECOG"
 SCENE_PWC_BUILDER = "PWC-BUILDER"
 SCENE_TYPE_MATCH = "TYPE-MATCH"
+SCENE_DIM_MERGE = "DIM-MERGE"
 
 # 固定主键，便于迁移/测试/路由解析引用同一行。
 SYNTHETIC_MODEL_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:ai-model:synthetic-deterministic"))
@@ -21,6 +22,8 @@ PWC_BUILDER_PROMPT_VERSION = "v0.1"
 PWC_BUILDER_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:PWC-BUILDER:v0.1"))
 TYPE_MATCH_PROMPT_VERSION = "v0.1"
 TYPE_MATCH_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:TYPE-MATCH:v0.1"))
+DIM_MERGE_PROMPT_VERSION = "v0.1"
+DIM_MERGE_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:DIM-MERGE:v0.1"))
 
 CAT_RECOG_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台的类目识别 Skill（CAT-RECOG）。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
 
@@ -99,4 +102,35 @@ TYPE_MATCH_PROMPT_VARIABLES = [
     "sibling_summary",
     "coverage_floor",
     "g2_coverage",
+]
+
+DIM_MERGE_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段3 的 DIM-MERGE Skill：综合 FIELDPOOL-PLAN 规划框架与 DIM-SOURCE 来源结果，为一个产品空间产出合并后的完整字段池方案。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【产品资料（profile_snapshot 唯一资料副本，Q74）】
+$product_profile
+
+【敏感行业】$sensitive_industry（敏感行业方案必含 risk_control 维度，Q11；行业标签：$industry_tag）
+
+【启用中的来源路由】（source_route 只能取自下表，未知/停用路由一律拒绝，DIM-SOURCE failure_policy）
+$enabled_routes
+
+【G2 active 字段】（fid 只能复用下表内字段；提新字段时不要给 fid，改给 definition）
+$active_g2_fields
+
+【硬性边界】维度数 $dim_range（PT-FP-PLAN/Q12）；目标原子数 $target_atom_range（Q15），target_atom_min/target_atom_max 必须原样回传。
+每条维度必须含非空 field_name、role（product_attribute 或 risk_control，且 ≥1 条 product_attribute）、source_route、confidence（0..1 置信度，<0.85 仅转人工细看 Q9）、source_ref（依据红线 line 14081：只许引用上表资料中的真实来源，如 g2:<fid>、product_profile:<资料键>、industry_tag:<标签>；禁止编造）。
+similarity/related_fid 可省略（疑似重复 ≥0.9 仅标记，Q10，人工终裁）。
+
+只输出：
+{"target_atom_min": 0, "target_atom_max": 0, "dimensions": [{"field_name": "...", "role": "product_attribute", "source_route": "...", "confidence": 0.0, "source_ref": "...", "fid": "...", "similarity": 0.0, "related_fid": "...", "definition": "..."}]}
+"""
+
+DIM_MERGE_PROMPT_VARIABLES = [
+    "product_profile",
+    "sensitive_industry",
+    "industry_tag",
+    "enabled_routes",
+    "active_g2_fields",
+    "dim_range",
+    "target_atom_range",
 ]
