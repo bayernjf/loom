@@ -4,6 +4,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
+from app.core.model_registry import field_plan, gateway
+from app.core.model_registry.schemas import FieldPlanInvokeRequest
 from app.core.rbac import PermissionDenied
 from app.product.fieldpool import service
 from app.product.fieldpool.models import FPDimension
@@ -121,6 +123,57 @@ async def submit_plan(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.refresh(pool)
     return await _pool_payload(session, pool)
+
+
+@router.post(
+    "/product-spaces/{product_space_id}/field-pools/llm-plan", status_code=201
+)
+async def llm_plan(
+    product_space_id: str,
+    body: FieldPlanInvokeRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Q85：operations 显式触发 DIM-MERGE 真 LLM 字段池方案生成（不自动串链）。"""
+    try:
+        run, candidates = await field_plan.invoke_field_plan(
+            session, product_space_id, body, body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ProductSpaceNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="product space not found") from exc
+    except service.GateNotAllowed as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.ModelNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=f"model {exc} not found") from exc
+    except gateway.ModelUnavailable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.ModelConfigError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except gateway.GenerationUpstreamError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except field_plan.FieldPlanOutputInvalid as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await session.commit()
+    return {
+        "run_id": run.run_id,
+        "source": run.source,
+        "model_id": run.model_id,
+        "input_tokens": run.input_tokens,
+        "output_tokens": run.output_tokens,
+        "candidates": [
+            {"candidate_id": c.candidate_id, "state": c.state, "target_type": c.target_type}
+            for c in candidates
+        ],
+    }
 
 
 @router.get("/product-spaces/{product_space_id}/field-pools/current")

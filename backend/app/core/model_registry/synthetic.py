@@ -76,8 +76,87 @@ def build_type_match(variables: dict) -> dict:
     }
 
 
+def build_dim_merge(variables: dict) -> dict:
+    """DIM-MERGE 结构替身（Q85）：从有界输入确定性拼合规整方案。
+
+    active G2 字段逐条复用为 product_attribute 维度（source_ref=g2:<fid>），
+    不足 dim_min 时按 profile_snapshot 键/占位名补新字段维度（无 fid）；
+    敏感行业补一条 risk_control（source_ref=industry_tag:<标签>）。
+    confidence 固定 0.9（结构占位，不模拟真实置信分布，Q85-3）。
+    """
+    routes = list(variables.get("_routes", []) or [])
+    first_route = routes[0]["route"] if routes else "user_input"
+    risk_route = next(
+        (r["route"] for r in routes if "risk" in r["route"]), first_route
+    )
+    dim_min = int(variables.get("_dim_min", 3))
+    dim_max = int(variables.get("_dim_max", 8))
+    sensitive = bool(variables.get("_sensitive"))
+
+    capacity = dim_max - (1 if sensitive else 0)
+    dimensions = [
+        {
+            "field_name": f["field_name"],
+            "role": "product_attribute",
+            "source_route": first_route,
+            "confidence": 0.9,
+            "source_ref": f"g2:{f['fid']}",
+            "fid": f["fid"],
+        }
+        for f in (variables.get("_active_fields", []) or [])[:capacity]
+    ]
+
+    profile = dict(variables.get("_profile", {}) or {})
+    for key in list(profile.keys()):
+        if len(dimensions) >= min(dim_min, capacity):
+            break
+        dimensions.append({
+            "field_name": str(key),
+            "role": "product_attribute",
+            "source_route": first_route,
+            "confidence": 0.9,
+            "source_ref": f"product_profile:{key}",
+            "definition": "synthetic DIM-MERGE 资料键结构提案",
+        })
+    n = 1
+    active_fids = [f["fid"] for f in (variables.get("_active_fields", []) or [])]
+    fallback_ref = (
+        f"product_profile:{next(iter(profile))}"
+        if profile
+        else (f"g2:{active_fids[0]}" if active_fids else None)
+    )
+    while len(dimensions) < min(dim_min, capacity) and capacity >= 1 and fallback_ref:
+        dimensions.append({
+            "field_name": f"待补维度·{n}",
+            "role": "product_attribute",
+            "source_route": first_route,
+            "confidence": 0.9,
+            "source_ref": fallback_ref,
+            "definition": "synthetic DIM-MERGE 占位结构提案",
+        })
+        n += 1
+
+    if sensitive and len(dimensions) < dim_max:
+        tag = variables.get("_industry_tag") or "sensitive"
+        dimensions.append({
+            "field_name": "合规风险控制",
+            "role": "risk_control",
+            "source_route": risk_route,
+            "confidence": 0.9,
+            "source_ref": f"industry_tag:{tag}",
+            "definition": "synthetic DIM-MERGE 敏感行业风控结构提案",
+        })
+
+    return {
+        "target_atom_min": variables.get("_target_atom_min"),
+        "target_atom_max": variables.get("_target_atom_max"),
+        "dimensions": dimensions,
+    }
+
+
 BUILDERS: dict[str, Callable[[dict], dict]] = {
     "CAT-RECOG": build_cat_recog,
     "PWC-BUILDER": build_pwc_builder,
     "TYPE-MATCH": build_type_match,
+    "DIM-MERGE": build_dim_merge,
 }
