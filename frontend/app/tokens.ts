@@ -104,6 +104,7 @@ export const tokenValues: readonly TokenEntry[] = [
   // Semantic
   ["--color-bg-page", "var(--color-surface-3)"],
   ["--color-bg-card", "var(--color-surface-1)"],
+  ["--color-bg-hover", "var(--color-surface-2)"],
   ["--color-border", "var(--color-border-strong)"],
   ["--color-brand", "var(--color-brand-6)"],
   ["--color-brand-hover", "var(--color-brand-5)"],
