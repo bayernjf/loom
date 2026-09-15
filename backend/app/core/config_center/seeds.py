@@ -24,6 +24,7 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("atom.batch_size_sensitive", "atom", "int", 20, "Q14", {"min": 1}),
     ("atom.batch_size_default", "atom", "int", 50, "Q14", {"min": 1}),
     ("atom.low_affinity_line", "atom", "float", 0.5, "Q16", {"min": 0.0, "max": 1.0}),
+    ("atom.cluster_line", "atom", "float", 0.9, "Q86（借 Q10 0.9 同义线，原文未给）", {"min": 0.0, "max": 1.0}),
     ("atom.evidence_timeout_days", "atom", "int", 7, "Q18", {"min": 1}),
     # ---- 段5 PWC（Q21/Q22/Q22a/Q23/Q24/Q27/Q71，line 1451）----
     ("pwc.funnel_batch_limit", "pwc", "int", 50, "Q21", {"min": 1}),

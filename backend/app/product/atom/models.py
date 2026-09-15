@@ -4,23 +4,60 @@
 AtomConflict（line 840）、Q14-Q20、line 11189（产品事实原子引用数=1）。
 """
 
+import struct
 import uuid
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
 
 from app.core.db import Base, JSONType
+
+# Q86：embedding 维度与合成替身一致；真实模型维度变更需随迁移一起调。
+EMBEDDING_DIM = 1536
+
+
+class EmbeddingVector(TypeDecorator):
+    """PG 上落 pgvector Vector，SQLite（测试 create_all）落 float32 字节。
+
+    V1 相似度走进程内余弦（14 §2.3 千万级切换条件前不引 KNN 索引），
+    pgvector 列负责持久化与未来检索。
+    """
+
+    impl = LargeBinary
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(Vector(EMBEDDING_DIM))
+        return dialect.type_descriptor(LargeBinary())
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return list(value)
+        return struct.pack(f"{len(value)}f", *value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return list(value)
+        return list(struct.unpack(f"{len(value) // 4}f", value))
 
 
 def _uuid_pk() -> Mapped[str]:
@@ -99,6 +136,9 @@ class AtomCandidate(Base):
     aliases: Mapped[list] = mapped_column(JSONType, nullable=False, default=list)
     alias_of: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
+    # Q86：本候选 content 的 embedding（affinity/cluster 的向量留痕，approve 时复制）。
+    embedding: Mapped[list | None] = mapped_column(EmbeddingVector, nullable=True)
+
     status: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     submitted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -164,6 +204,9 @@ class ProductAtomInstance(Base):
     risk_source: Mapped[str] = mapped_column(String(16), nullable=False)
     affinity: Mapped[float | None] = mapped_column(Float, nullable=True)
     evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Q86：approve 时从候选复制，供后续批次同维度语义比对。
+    embedding: Mapped[list | None] = mapped_column(EmbeddingVector, nullable=True)
 
     # approved/frozen/deprecated/rejected/compliance_suspended/archived
     status: Mapped[str] = mapped_column(String(24), nullable=False, index=True)

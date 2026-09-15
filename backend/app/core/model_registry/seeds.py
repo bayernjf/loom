@@ -1,5 +1,6 @@
-"""Q82/Q83/Q84/Q85 底座种子：合成确定性模型 + CAT-RECOG/PWC-BUILDER/
-TYPE-MATCH/DIM-MERGE 场景路由与 Prompt v0.1。
+"""Q82/Q83/Q84/Q85/Q86 底座种子：合成确定性模型 + CAT-RECOG/PWC-BUILDER/
+TYPE-MATCH/DIM-MERGE/CONFLICT-PRECHECK 场景路由与 Prompt v0.1，以及 Q86
+ATOM-AFFINITY embedding 场景（无 Prompt）与合成 embedding 模型。
 
 供 Alembic 迁移与测试共用（同 0008 平台种子模式）。仓库不持任何真实供应商
 凭证：synthetic 驱动仅用于本地/测试的确定性替身，真模型由部署环境经注册页登记。
@@ -8,14 +9,18 @@ TYPE-MATCH/DIM-MERGE 场景路由与 Prompt v0.1。
 import uuid
 
 SYNTHETIC_MODEL_CODE = "synthetic-deterministic"
+SYNTHETIC_EMBEDDING_MODEL_CODE = "synthetic-embedding"
 SYNTHETIC_PROVIDER = "synthetic"
 SCENE_CAT_RECOG = "CAT-RECOG"
 SCENE_PWC_BUILDER = "PWC-BUILDER"
 SCENE_TYPE_MATCH = "TYPE-MATCH"
 SCENE_DIM_MERGE = "DIM-MERGE"
+SCENE_CONFLICT_PRECHECK = "CONFLICT-PRECHECK"
+SCENE_ATOM_AFFINITY = "ATOM-AFFINITY"
 
 # 固定主键，便于迁移/测试/路由解析引用同一行。
 SYNTHETIC_MODEL_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:ai-model:synthetic-deterministic"))
+SYNTHETIC_EMBEDDING_MODEL_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:ai-model:synthetic-embedding"))
 CAT_RECOG_PROMPT_VERSION = "v0.1"
 CAT_RECOG_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:CAT-RECOG:v0.1"))
 PWC_BUILDER_PROMPT_VERSION = "v0.1"
@@ -24,6 +29,8 @@ TYPE_MATCH_PROMPT_VERSION = "v0.1"
 TYPE_MATCH_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:TYPE-MATCH:v0.1"))
 DIM_MERGE_PROMPT_VERSION = "v0.1"
 DIM_MERGE_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:DIM-MERGE:v0.1"))
+CONFLICT_PRECHECK_PROMPT_VERSION = "v0.1"
+CONFLICT_PRECHECK_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:CONFLICT-PRECHECK:v0.1"))
 
 CAT_RECOG_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台的类目识别 Skill（CAT-RECOG）。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
 
@@ -133,4 +140,39 @@ DIM_MERGE_PROMPT_VARIABLES = [
     "active_g2_fields",
     "dim_range",
     "target_atom_range",
+]
+
+CONFLICT_PRECHECK_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段4 WF-03 的 CONFLICT-PRECHECK Skill：为一个产品空间的字段池原子批量补池（ATOM-EXPAND 生产契约）。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【产品资料（唯一资料副本，Q74）】
+$product_profile
+
+【敏感行业】$sensitive_industry（当批目标条数 $batch_size：敏感行业默认 20，否则默认 50，Q14）
+
+【本空间已选中的维度】（dimension_id 必须取自下表；不得向未选中维度投原子）
+$selected_dimensions
+
+【各维度已 Gate 通过/冻结的原子】（禁止与其规范文本重复；事实类原子遵守全局唯一，line 11189）
+$approved_atoms
+
+【目标原子数区间】$target_range（已达 target_atom_max 时本次补池不应被触发，Q15）
+
+硬性规则：
+1. 整批不超过 $batch_size 条；batch_size 必须原样回传；每条必须含非空 content、dimension_id（必须在上表内）、ai_risk（low|medium|high 三档之一，Q17 双轨：词表命中由平台强制覆核，只升不降）。
+2. 证据纪律：claim 类原子若资料中没有可引用证据，不要编造 evidence；缺证据的原子平台会转 pending_evidence（Q18，7 日补证窗口）。
+3. fact 类原子（fact_type 仅可取 capacity|ingredient|concentration|wart_type|brand，line 11189）全局单一使用，拿不准就不要输出 fact_type。
+4. 禁止输出 affinity、cluster_id、score、status 等字段；亲和度与成簇由平台依据向量本地计算（Q16/Q19），模型输出的任何此类字段都会被剥离。
+5. 批内规范文本不得重复；没有可信原子时 items 给空数组。
+
+只输出：
+{"batch_size": 0, "items": [{"content": "...", "dimension_id": "...", "ai_risk": "low", "evidence": "...", "fact_type": "capacity"}]}
+"""
+
+CONFLICT_PRECHECK_PROMPT_VARIABLES = [
+    "product_profile",
+    "sensitive_industry",
+    "batch_size",
+    "selected_dimensions",
+    "approved_atoms",
+    "target_range",
 ]

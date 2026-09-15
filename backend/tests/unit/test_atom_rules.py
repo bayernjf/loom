@@ -1,5 +1,8 @@
 """段4 纯逻辑单测：批次/亲和度/risk 双轨/冲突三类/Guard 10 项/同义簇/停拓。"""
 
+import math
+
+import pytest
 
 from app.product.atom import atom_rules as r
 from app.product.atom.atom_rules import WordlistHit
@@ -154,3 +157,43 @@ def test_target_reached():
 def test_normalize_dedup():
     assert r.normalize_text("  Hello   World ") == "hello world"
     assert r.normalize_text("hello  world") == "hello world"
+
+
+# ---------- Q86：embedding 相似度 / 同维成簇 ----------
+
+def test_cosine_basic_and_clamped():
+    assert r.cosine_similarity([1.0, 0.0], [1.0, 0.0]) == 1.0
+    assert r.cosine_similarity([1.0, 0.0], [0.0, 1.0]) == 0.0
+    with pytest.raises(ValueError):
+        r.cosine_similarity([1.0], [1.0, 0.0])
+
+
+def test_cosine_zero_vector_is_zero_not_nan():
+    assert r.cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
+
+
+def test_max_affinity_none_basis_is_none_and_rounds_6dp():
+    assert r.max_affinity([1.0, 0.0], []) is None
+    val = r.max_affinity([1.0, 0.0], [[0.5, 0.5], [1.0, 0.0]])
+    assert val == 1.0
+
+
+def test_assign_clusters_only_groups_pairs_above_line_and_respects_labels():
+    line = r.cluster_line()
+    assert line == 0.9
+
+    def _vec_at(cos: float) -> list[float]:
+        # 与 [1,0] 夹角余弦 cos 的二维单位向量。
+        return [cos, math.sqrt(max(0.0, 1 - cos * cos))]
+
+    base = [1.0, 0.0]
+    near = _vec_at(0.95)
+    far = _vec_at(0.2)
+    ids = r.assign_clusters([base, near, far], line=line)
+    assert ids[0] is not None and ids[0] == ids[1]
+    assert ids[2] is None
+
+    # labels 不同：即使余弦过线也不跨维成簇。
+    other_near = _vec_at(0.99)
+    ids = r.assign_clusters([base, other_near], line=line, labels=["d1", "d2"])
+    assert ids == [None, None]

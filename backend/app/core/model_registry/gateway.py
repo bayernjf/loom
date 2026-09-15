@@ -65,6 +65,7 @@ async def create_model(session: AsyncSession, body: AIModelCreate) -> AIModel:
     model = AIModel(
         model_code=body.model_code,
         provider=body.provider,
+        capability=body.capability,
         input_price_per_1m=body.input_price_per_1m,
         output_price_per_1m=body.output_price_per_1m,
         currency_code=body.currency_code,
@@ -288,6 +289,17 @@ class Invocation:
     currency_code: str | None
 
 
+@dataclass(frozen=True)
+class EmbeddingInvocation:
+    model_id: str
+    model_code: str
+    provider: str
+    vectors: list[list[float]]
+    input_tokens: int
+    input_cost: Decimal
+    currency_code: str | None
+
+
 def _cost(price_per_1m: Decimal, tokens: int) -> Decimal:
     return (Decimal(price_per_1m) * Decimal(tokens) / Decimal(1_000_000)).quantize(
         Decimal("0.000001"), rounding=ROUND_HALF_UP
@@ -305,7 +317,7 @@ async def spend_today(session: AsyncSession, model_id: str) -> Decimal:
     return Decimal(total or 0)
 
 
-async def _resolve_model(session: AsyncSession, scene: str) -> AIModel:
+async def _resolve_model(session: AsyncSession, scene: str, *, capability: str = "chat") -> AIModel:
     route = await session.get(AISceneRoute, scene)
     if route is None:
         raise ModelConfigError(f"no model route for scene {scene!r}")
@@ -313,12 +325,22 @@ async def _resolve_model(session: AsyncSession, scene: str) -> AIModel:
     if model is None:  # pragma: no cover - FK 存在性兜底
         raise ModelConfigError(f"routed model {route.model_id} missing")
     if model.status == "active":
-        return model
-    if model.fallback_model_id:
+        resolved = model
+    elif model.fallback_model_id:
         fallback = await session.get(AIModel, model.fallback_model_id)
         if fallback is not None and fallback.status == "active":
-            return fallback
-    raise ModelUnavailable(f"model for scene {scene!r} disabled without active fallback")
+            resolved = fallback
+        else:
+            raise ModelUnavailable(f"model for scene {scene!r} disabled without active fallback")
+    else:
+        raise ModelUnavailable(f"model for scene {scene!r} disabled without active fallback")
+    if resolved.capability != capability:
+        # 防止 embedding 场景错挂 chat 模型（或反之）。
+        raise ModelConfigError(
+            f"model routed to scene {scene!r} has capability {resolved.capability!r}, "
+            f"expected {capability!r}"
+        )
+    return resolved
 
 
 async def invoke(session: AsyncSession, scene: str, variables: dict) -> Invocation:
@@ -347,5 +369,35 @@ async def invoke(session: AsyncSession, scene: str, variables: dict) -> Invocati
         output_tokens=result.output_tokens,
         input_cost=_cost(Decimal(model.input_price_per_1m), result.input_tokens),
         output_cost=_cost(Decimal(model.output_price_per_1m), result.output_tokens),
+        currency_code=model.currency_code,
+    )
+
+
+async def embed(session: AsyncSession, scene: str, texts: list[str]) -> EmbeddingInvocation:
+    """embedding 场景调用（Q86 ATOM-AFFINITY）：无 Prompt 渲染，仅按输入计费。"""
+    if not texts or any(not isinstance(t, str) or not t.strip() for t in texts):
+        raise ModelConfigError("embed requires a non-empty list of non-empty texts")
+    model = await _resolve_model(session, scene, capability="embedding")
+    budget = model.daily_budget
+    if budget is not None and await spend_today(session, model.model_id) >= Decimal(str(budget)):
+        raise ModelUnavailable(f"daily budget exhausted for model {model.model_code!r}")
+
+    kwargs: dict = {"model_code": model.model_code, "provider": model.provider}
+    if model.provider != "synthetic":
+        kwargs["api_key"] = await _active_key_secret(session, model.model_id)
+    try:
+        result = await drivers.driver_for(model.provider).embed(
+            scene=scene, texts=texts, **kwargs
+        )
+    except drivers.DriverError as exc:
+        raise GenerationUpstreamError(str(exc)) from exc
+
+    return EmbeddingInvocation(
+        model_id=model.model_id,
+        model_code=model.model_code,
+        provider=model.provider,
+        vectors=result.vectors,
+        input_tokens=result.input_tokens,
+        input_cost=_cost(Decimal(model.input_price_per_1m), result.input_tokens),
         currency_code=model.currency_code,
     )

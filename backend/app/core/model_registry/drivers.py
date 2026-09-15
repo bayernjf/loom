@@ -21,6 +21,12 @@ class GenerationResult:
     output_tokens: int
 
 
+@dataclass(frozen=True)
+class EmbeddingResult:
+    vectors: list[list[float]]
+    input_tokens: int
+
+
 def _token_count(text: str) -> int:
     # 确定性近似计数（替身与预算估算用；真实计费以供应商 usage 为准）。
     return max(1, len(text) // 4)
@@ -35,7 +41,7 @@ class ModelEndpointNotConfigured(DriverError):
 
 
 class SyntheticDriver:
-    """无凭证环境的确定性替身：按 scene 注册的构造器产出结构化 JSON。"""
+    """无凭证环境的确定性替身：按 scene 注册的构造器产出结构化 JSON/向量。"""
 
     async def generate(self, *, scene: str, user_message: str, variables: dict, **_) -> GenerationResult:
         builder = synthetic.BUILDERS.get(scene)
@@ -46,6 +52,16 @@ class SyntheticDriver:
             text=text,
             input_tokens=_token_count(user_message),
             output_tokens=_token_count(text),
+        )
+
+    async def embed(self, *, scene: str, texts: list[str], **_) -> EmbeddingResult:
+        builder = synthetic.EMBED_BUILDERS.get(scene)
+        if builder is None:
+            raise DriverError(f"synthetic driver has no embed builder for scene {scene!r}")
+        vectors = builder(texts)
+        return EmbeddingResult(
+            vectors=vectors,
+            input_tokens=sum(_token_count(t) for t in texts),
         )
 
 
@@ -87,6 +103,39 @@ class OpenAICompatibleDriver:
             text=text,
             input_tokens=int(usage.get("prompt_tokens", _token_count(user_message))),
             output_tokens=int(usage.get("completion_tokens", _token_count(text))),
+        )
+
+    async def embed(
+        self,
+        *,
+        scene: str,
+        model_code: str,
+        texts: list[str],
+        api_key: str,
+        provider: str,
+        **_,
+    ) -> EmbeddingResult:
+        base_url = os.environ.get(f"LOOM_LLM_BASE_URL_{provider.upper()}")
+        if not base_url:
+            raise ModelEndpointNotConfigured(
+                f"remote LLM base_url missing: set LOOM_LLM_BASE_URL_{provider.upper()}"
+            )
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{base_url.rstrip('/')}/embeddings",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model_code, "input": texts},
+            )
+        if resp.status_code // 100 != 2:
+            raise DriverError(f"LLM provider returned {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()
+        rows = sorted(data["data"], key=lambda row: row["index"])
+        if len(rows) != len(texts):
+            raise DriverError("embedding response row count does not match input count")
+        usage = data.get("usage", {})
+        return EmbeddingResult(
+            vectors=[list(map(float, row["embedding"])) for row in rows],
+            input_tokens=int(usage.get("prompt_tokens", sum(_token_count(t) for t in texts))),
         )
 
 

@@ -81,9 +81,11 @@ async def apply_atom_batch(
     data = dict(candidate.payload)
     data.pop("actor", None)
     data.pop("source", None)
+    # Q86：_embeddings 为编排层机读键（normalized→向量），不属 BatchSubmitRequest。
+    embeddings = data.pop("_embeddings", None)
     body = BatchSubmitRequest(**data, source="ai", actor=actor)
     batch = await atom_service.submit_batch(
-        session, candidate.product_space_id, body, actor
+        session, candidate.product_space_id, body, actor, embeddings=embeddings
     )
     return [batch.batch_id]
 

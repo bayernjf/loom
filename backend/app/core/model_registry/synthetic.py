@@ -4,7 +4,14 @@
 产出同样必须经 skill7 人工 Gate，不因其确定性而绕行。
 """
 
+import hashlib
+import math
+import re
+from collections import Counter
 from collections.abc import Callable
+from itertools import pairwise
+
+from app.product.atom.models import EMBEDDING_DIM
 
 
 def _signal_score(text: str) -> float:
@@ -159,4 +166,72 @@ BUILDERS: dict[str, Callable[[dict], dict]] = {
     "PWC-BUILDER": build_pwc_builder,
     "TYPE-MATCH": build_type_match,
     "DIM-MERGE": build_dim_merge,
+}
+
+
+# ---------- embedding 替身（Q86 ATOM-AFFINITY） -----------------------------------
+
+# 每个选中维度产出的两条候选共享的长前缀：仅末字不同（甲/乙），使确定性
+# 字袋向量的余弦 ≥ 成簇线（0.9），用于在无真实模型时复现 Q19 成簇路径。
+_CP_SHARED = (
+    "synthetic conflict precheck "
+    "这是用于字段原子池扩充的合成冲突预检确定性结构候选条目内容"
+)
+
+
+def build_conflict_precheck(variables: dict) -> dict:
+    """CONFLICT-PRECHECK 结构替身（Q86）：每个选中维度产一对近似原子。
+
+    两条内容共享长前缀、仅末字不同（归一化后不重复，余弦 ≥ 0.9 成簇）；
+    不出 affinity/cluster_id（由编排侧本地计算），ai_risk 固定 low（词表
+    强制升级仍由 submit_batch 执行），不造 fact_type/evidence。
+    """
+    batch_size = int(variables.get("_batch_size", 1))
+    dims = list(variables.get("_selected_dims", []) or [])
+    items: list[dict] = []
+    for dim in dims:
+        if len(items) >= batch_size:
+            break
+        base = _CP_SHARED + str(dim.get("field_name") or dim["dimension_id"])
+        items.append({
+            "content": base + "甲",
+            "dimension_id": dim["dimension_id"],
+            "ai_risk": "low",
+        })
+        if len(items) < batch_size:
+            items.append({
+                "content": base + "乙",
+                "dimension_id": dim["dimension_id"],
+                "ai_risk": "low",
+            })
+    return {"batch_size": batch_size, "items": items}
+
+
+BUILDERS["CONFLICT-PRECHECK"] = build_conflict_precheck
+
+
+def _embed_one(text: str) -> list[float]:
+    # 字袋哈希向量：ascii 词 + CJK 单字 + CJK 相邻二元组，各桶 ±1 计数后
+    # L2 归一化。相同文本必相同向量；共享长前缀的文本余弦高（确定性、无随机）。
+    lowered = text.lower()
+    ascii_words = re.findall(r"[a-z0-9]+", lowered)
+    cjk = re.findall(r"[一-鿿]", lowered)
+    tokens = ascii_words + cjk + [a + b for a, b in pairwise(cjk)]
+    counts = Counter(tokens)
+    vec = [0.0] * EMBEDDING_DIM
+    for token, count in counts.items():
+        digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+        bucket = int.from_bytes(digest[:4], "little") % EMBEDDING_DIM
+        sign = 1.0 if digest[4] & 1 else -1.0
+        vec[bucket] += sign * count
+    norm = math.sqrt(sum(v * v for v in vec))
+    return [v / norm for v in vec] if norm else [0.0] * EMBEDDING_DIM
+
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    return [_embed_one(t) for t in texts]
+
+
+EMBED_BUILDERS: dict[str, Callable[[list[str]], list[list[float]]]] = {
+    "ATOM-AFFINITY": embed_texts,
 }

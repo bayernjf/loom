@@ -87,6 +87,8 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         data = dict(payload)
         data.pop("actor", None)
         data.pop("source", None)
+        # Q86：_embeddings 是编排层机读键（normalized→向量），不属投递契约。
+        data.pop("_embeddings", None)
         try:
             BatchSubmitRequest(
                 **data, source="ai", actor={"id": "_delivery_validation", "roles": []}
