@@ -1,4 +1,5 @@
-"""Q82/Q83 底座种子：合成确定性模型 + CAT-RECOG/PWC-BUILDER 场景路由与 Prompt v0.1。
+"""Q82/Q83/Q84 底座种子：合成确定性模型 + CAT-RECOG/PWC-BUILDER/TYPE-MATCH
+场景路由与 Prompt v0.1。
 
 供 Alembic 迁移与测试共用（同 0008 平台种子模式）。仓库不持任何真实供应商
 凭证：synthetic 驱动仅用于本地/测试的确定性替身，真模型由部署环境经注册页登记。
@@ -10,6 +11,7 @@ SYNTHETIC_MODEL_CODE = "synthetic-deterministic"
 SYNTHETIC_PROVIDER = "synthetic"
 SCENE_CAT_RECOG = "CAT-RECOG"
 SCENE_PWC_BUILDER = "PWC-BUILDER"
+SCENE_TYPE_MATCH = "TYPE-MATCH"
 
 # 固定主键，便于迁移/测试/路由解析引用同一行。
 SYNTHETIC_MODEL_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:ai-model:synthetic-deterministic"))
@@ -17,6 +19,8 @@ CAT_RECOG_PROMPT_VERSION = "v0.1"
 CAT_RECOG_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:CAT-RECOG:v0.1"))
 PWC_BUILDER_PROMPT_VERSION = "v0.1"
 PWC_BUILDER_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:PWC-BUILDER:v0.1"))
+TYPE_MATCH_PROMPT_VERSION = "v0.1"
+TYPE_MATCH_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:TYPE-MATCH:v0.1"))
 
 CAT_RECOG_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台的类目识别 Skill（CAT-RECOG）。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
 
@@ -64,4 +68,35 @@ PWC_BUILDER_PROMPT_VARIABLES = [
     "ready_count",
     "target_platforms",
     "batch_limit",
+]
+
+TYPE_MATCH_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段2 的 TYPE-MATCH Skill，按 C7 四层兜底为已识别类目解析必填字段，仅在 G2 active 字段覆盖不足时提出 Layer4 新字段候选。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【目标类目】category_id 必须原样回传：
+$category
+
+【必填字段 fid 列表】required_fids 必须原样回传（同集合同顺序），禁止 fid:'-'：
+$required_fids
+
+【Layer1 本类目已 approved 模板】
+$own_template
+
+【Layer2 approved 兄弟模板计数】$sibling_summary
+【Layer3 G2 active 覆盖现状】（floor=$coverage_floor）
+$g2_coverage
+
+硬性规则：
+1. l4_proposals 只为 Layer3 未覆盖的必填 fid 提新字段，每条必须含非空 field_name，可附 definition。
+2. 禁止输出任何 confidence/score/weight/fid/status/source_route 等字段；新字段不打置信分。
+3. Layer3 覆盖已达 floor 或无可信新字段时 l4_proposals 给空数组。
+4. 只输出 {"category_id": "...", "required_fids": ["..."], "l4_proposals": [{"field_name": "...", "definition": "..."}]}。
+"""
+
+TYPE_MATCH_PROMPT_VARIABLES = [
+    "category",
+    "required_fids",
+    "own_template",
+    "sibling_summary",
+    "coverage_floor",
+    "g2_coverage",
 ]

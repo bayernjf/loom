@@ -102,3 +102,38 @@ def test_synthetic_pwc_builder_caps_at_five_and_requires_two_dimensions():
         {"_approved_atoms": [{"atom_id": "a1", "dimension_id": "d1"}]}
     ) == {"combos": []}
     assert synthetic.build_pwc_builder({"_approved_atoms": []}) == {"combos": []}
+
+
+def test_synthetic_type_match_emits_only_coverage_gap_proposals():
+    # Q84-3：原样回传类目/必填位；只给未覆盖位造结构提案，不打任何分。
+    variables = {
+        "_category_id": "cat-1",
+        "_required_fids": ["f_name", "m1", "m2"],
+        "_active_fids": ["f_name", "f_brief"],
+    }
+    out = synthetic.build_type_match(variables)
+    assert out == {
+        "category_id": "cat-1",
+        "required_fids": ["f_name", "m1", "m2"],
+        "l4_proposals": [
+            {"field_name": "待补字段·m1", "definition": "synthetic TYPE-MATCH 覆盖率缺口结构提案"},
+            {"field_name": "待补字段·m2", "definition": "synthetic TYPE-MATCH 覆盖率缺口结构提案"},
+        ],
+    }
+    assert all(
+        "confidence" not in p and "score" not in p and "fid" not in p
+        for p in out["l4_proposals"]
+    )
+    assert synthetic.build_type_match(variables) == out  # 确定性
+
+
+def test_synthetic_type_match_full_coverage_gives_empty_proposals():
+    out = synthetic.build_type_match({
+        "_category_id": "cat-1",
+        "_required_fids": ["f_name"],
+        "_active_fids": ["f_name"],
+    })
+    assert out["l4_proposals"] == []
+    assert synthetic.build_type_match({"_category_id": "c"}) == {
+        "category_id": "c", "required_fids": [], "l4_proposals": [],
+    }
