@@ -16,7 +16,7 @@
 5. Q90 瞬态退避：重试次数/next_attempt_at 落 restock_retry_state 游标表
    （requested 行不 mutate），指数退避 base×2^(attempts-1) 封顶；上游传输错
    累计 max_attempts 次转终态 failed（人工介入），日预算硬停（UTC 次日恢复）
-   永不转终态；手工 /run（respect_backoff=False）绕过退避窗口。
+   永不转终态；手工 /run（honor_backoff=False）绕过退避窗口。
 """
 
 import asyncio
