@@ -184,3 +184,48 @@ def test_synthetic_dim_merge_non_sensitive_has_no_risk_dimension():
     })
     assert len(out["dimensions"]) == 8  # 受 dim_max 截断
     assert all(d["role"] == "product_attribute" for d in out["dimensions"])
+
+
+# ---------- Q86：CONFLICT-PRECHECK 结构替身 + 确定性 embedding ----------
+
+def test_synthetic_conflict_precheck_batch_shape_and_echo():
+    out = synthetic.build_conflict_precheck({
+        "_batch_size": 3,
+        "_selected_dims": [
+            {"dimension_id": "d1", "field_name": "容量"},
+            {"dimension_id": "d2", "field_name": "成分"},
+        ],
+    })
+    assert out["batch_size"] == 3 and len(out["items"]) == 3
+    assert all(set(i) == {"content", "dimension_id", "ai_risk"} for i in out["items"])
+    assert all(i["ai_risk"] == "low" for i in out["items"])
+    # 不出 affinity/cluster_id/fact_type/evidence（编排侧本地计算/不造事实）。
+    pair = [i for i in out["items"] if i["dimension_id"] == "d1"]
+    assert len(pair) == 2 and pair[0]["content"] != pair[1]["content"]
+
+
+def test_synthetic_conflict_precheck_caps_at_batch_size():
+    out = synthetic.build_conflict_precheck({
+        "_batch_size": 1,
+        "_selected_dims": [{"dimension_id": "d1", "field_name": "x"}],
+    })
+    assert len(out["items"]) == 1
+
+
+def test_embed_texts_deterministic_dim_and_pair_similarity():
+    from app.product.atom import atom_rules
+    from app.product.atom.models import EMBEDDING_DIM
+
+    out = synthetic.build_conflict_precheck({
+        "_batch_size": 4,
+        "_selected_dims": [
+            {"dimension_id": "d1", "field_name": "容量毫升"},
+            {"dimension_id": "d2", "field_name": "主要成分浓度"},
+        ],
+    })
+    texts = [i["content"] for i in out["items"]]
+    vectors = synthetic.embed_texts(texts)
+    assert all(len(v) == EMBEDDING_DIM for v in vectors)
+    assert vectors[0] == synthetic.embed_texts([texts[0]])[0]  # 同文本同向量
+    # 同维近似对 ≥ 0.9 成簇；跨维（即使共享前缀）不连边由 labels 保证。
+    assert atom_rules.cosine_similarity(vectors[0], vectors[1]) >= 0.9
