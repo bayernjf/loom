@@ -1,0 +1,40 @@
+/* 组件样式只引用 Semantic 层与刻度变量，禁止裸色值/Primitive 直引（docs/18 §3.1）。 */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 100vh;
+  margin: 0;
+  padding: var(--space-6);
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-cjk);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.tagline {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.badge {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-brand);
+  border-radius: var(--radius-2);
+  background: var(--color-brand-bg);
+  color: var(--color-brand-active);
+  font-size: var(--font-size-sm);
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}

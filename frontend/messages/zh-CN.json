@@ -1,0 +1,17 @@
+{
+  "common": {
+    "appName": "Loom",
+    "appTagline": "私域内容生产白名单平台"
+  },
+  "home": {
+    "scaffoldTitle": "前端脚手架已就位",
+    "scaffoldNote": "i18n（next-intl/zh-CN）与设计 Token 三层变量已接通，V1 菜单随 M12 任务包逐片落地。"
+  },
+  "error": {
+    "403": "无权执行该操作",
+    "404": "资源不存在",
+    "409": "当前状态不允许该操作",
+    "422": "请求内容未通过校验",
+    "unknown": "操作失败，请稍后重试"
+  }
+}
