@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check-tokens": "node scripts/check-tokens.mjs",
+    "check-nav": "node scripts/check-nav.mjs",
     "lint": "next lint"
   },
   "dependencies": {
