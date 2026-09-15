@@ -4,6 +4,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ## [Unreleased]
 
+- **Q96 前端 i18n+tokens.css 脚手架落地（2026-09-16，feat 946a774/test 8b614b6）** — next-intl v4（routing/request/middleware，仅 zh-CN，无前缀 307 实测→/zh-CN）+ `app/[locale]` 段（旧根页面删除）+ messages/zh-CN.json（common/home/error）+ tokens.css 三层 85 变量唯一事实源与 tokens.ts 镜像，`scripts/check-tokens.mjs` 零依赖逐值校验（npm run check-tokens）；Semantic 补 `--color-brand-bg` 并补登 docs/18 §5。typecheck/build 通过，curl 307/200 与 9222 Chrome 可视验收通过；无后端/迁移变化（头仍 0023，401 测试、101 eval 不变）。M12 菜单页面逐片点工。
+
 ### Added
 
 - **Q96 前端 i18n+设计 Token 方案拍板定稿（2026-09-16，纯文档；18 号文档 🟡→✅）** — 四接缝全甲：next-intl + `[locale]`（V1 仅 zh-CN，V3 首外语默认 en-US）；CSS Modules + tokens.css 三层 Token（不引 Tailwind/AntD 组件库）；运营数据字典多语言延 V3、V1 不预埋翻译列（Q58 分治）；色值借 AntD5 默认调色板作 primitive 工程初值（只借值不装依赖）。docs/18 补 §2.4 落码结构与 §3.6 全量 CSS 初值，可直接照做；02 C1.40 记录、docs/README 升 ✅。无代码/迁移/测试变化；前端页面仍按 M12 逐片点工。

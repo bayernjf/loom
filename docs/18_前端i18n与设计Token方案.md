@@ -25,7 +25,7 @@
 ### 2.1 技术选型建议：next-intl + App Router 语言前缀路由
 
 - 栈已定为 Next.js 15 App Router + React 19（14）。建议 **next-intl**：App Router/RSC 原生支持、ICU MessageFormat（复数/日期/插值标准语法）、消息可按组件静态切片；**不建议** next-i18n/react-i18next（Pages Router 时代方案，与 RSC/15 契合度差）。
-- 路由：`/[locale]/...` 语言前缀；V1 仅注册 `zh-CN`，路由层默认把无前缀请求 308 到 `/zh-CN`。V3 加语言时只增注册不改组件。
+- 路由：`/[locale]/...` 语言前缀；V1 仅注册 `zh-CN`，路由层默认把无前缀请求 307 到 `/zh-CN`（状态码为 next-intl 默认，2026-09-16 实测）。V3 加语言时只增注册不改组件。
 - 消息文件：`frontend/messages/{locale}.json`（V1 只建 `zh-CN.json`），扁平点分 key、按功能域命名空间，例如：
   - `intake.status.ai_recognizing`、`fieldpool.gate.approve`、`common.action.submit`
   - key 用**语义**不用文案（✅ `gate.rejectedReason` / ❌ `gate.请填写驳回原因`）。
@@ -48,7 +48,7 @@
 ```
 frontend/
   package.json                 # 新增依赖：next-intl（与 Next.js 15 兼容版本），无其他 i18n 依赖
-  middleware.ts                # next-intl 标准 matcher：无语言前缀请求 308 → /zh-CN
+  middleware.ts                # next-intl 标准 matcher：无语言前缀请求 307 → /zh-CN（实测）
   i18n/
     routing.ts                 # defineRouting({ locales: ["zh-CN"], defaultLocale: "zh-CN" })
     request.ts                 # getRequestConfig：按 locale import 对应 messages
@@ -60,6 +60,8 @@ frontend/
       page.tsx …               # 现有 app/page.tsx、layout.tsx 迁入，原 app/ 目录不留页面
   tokens.css                   # 见 §3.6，:root 全量 primitive+semantic 变量
   tokens.ts                    # 同值 TS 镜像（图表/Canvas 消费），配一致性测试（见 §3.5）
+  scripts/
+    check-tokens.mjs           # 零依赖 tokens.css ↔ tokens.ts 逐值一致性校验（npm run check-tokens）
 ```
 
 落码步骤（顺序即依赖序）：
@@ -220,3 +222,14 @@ z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-
 
 - V1 不做：外语消息文件、翻译管理平台（TMS）、RTL、深色模式、租户主题包、字典表翻译列、W3C token 构建工具链、网络中文字体；
 - 不把内容多语言（Q58）塞进界面 i18n；不在前端自创/硬编码业务状态词。
+
+---
+
+## 5. 实现补登（脚手架切片，2026-09-16）
+
+按 §2.3/§3.6 落地前端 i18n + tokens 脚手架（feat 946a774 / test 8b614b6，Q96 首个代码切片）：
+
+- **文件落位**：`i18n/routing.ts`（仅注册 zh-CN）、`i18n/request.ts`（hasLocale 兜底 defaultLocale + 动态 import 消息 JSON）、`middleware.ts`（matcher 排除 api/_next/_vercel/带点文件）、`messages/zh-CN.json`（目前仅 common/home/error 三命名空间，M12 页面随片扩 §2.3 步骤 3 所列域）、`app/[locale]/{layout,page,page.module.css}`；旧根 `app/layout.tsx`、`app/page.tsx` 已删，页面只存于 `[locale]` 段；`next.config.mjs` 接 createNextIntlPlugin("./i18n/request.ts")。
+- **Token 落地偏差一处**：Semantic 层在 §3.6 清单外新增 `--color-brand-bg: var(--color-brand-1)`（浅蓝品牌浅底，badge 示范消费）；理由同 §3.1 三层纪律——组件不得直引 Primitive，brand-1 需要一个语义出口。tokens.css 与 tokens.ts 两侧同步，共 85 个变量。
+- **验收记录**：`npm run typecheck` 通过；`npm run build` 通过（`/zh-CN` SSG 预渲染）；生产服务器实测 `GET /` → **307** Location `/zh-CN`、`GET /zh-CN` → 200（本文 §2.1/§2.3 原写 308 已更正）；chrome-devtools MCP 挂载本机 9222 Chrome 可视验收：文案全部来自消息表、`<html lang="zh-CN">`、badge 计算背景 rgb(230,244,255)=#e6f4ff（经 `--color-brand-bg` 解析）；控制台仅 favicon.ico 404（裸脚手架无图标，matcher 对带点文件放行，非本切片缺陷）。
+- **校验脚本**：`scripts/check-tokens.mjs` 零依赖解析两侧（多行值做空白归一化），键集合与值任一不一致即 exit 1；开发期曾以缺 4 个多行元组验证过失败路径。
