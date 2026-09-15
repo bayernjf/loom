@@ -30,6 +30,13 @@ class IntakeView(BaseModel):
     category_pending_id: str | None = None
 
 
+class IntakeList(BaseModel):
+    items: list[IntakeView]
+    total: int
+    limit: int
+    offset: int
+
+
 class ProductSpaceView(BaseModel):
     product_space_id: str
     tenant_id: str

@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
@@ -60,6 +60,22 @@ async def get_intake(session: AsyncSession, intake_id: str) -> ProductIntakeAppl
     if intake is None:
         raise IntakeNotFound(intake_id)
     return intake
+
+
+async def list_intakes(
+    session: AsyncSession, *, tenant_id: str, limit: int, offset: int
+) -> tuple[list[ProductIntakeApplication], int]:
+    # Q98：按租户只读列表；读路径不触发 Q95 准入门，未知租户返回空列表。
+    stmt = select(ProductIntakeApplication).where(
+        ProductIntakeApplication.tenant_id == tenant_id
+    )
+    total = await session.scalar(
+        select(func.count()).select_from(stmt.subquery())
+    )
+    rows = await session.scalars(
+        stmt.order_by(ProductIntakeApplication.created_at.desc()).limit(limit).offset(offset)
+    )
+    return list(rows.all()), int(total or 0)
 
 
 class ProfileNotEditable(Exception):

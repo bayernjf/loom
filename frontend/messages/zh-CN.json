@@ -19,6 +19,34 @@
     "placeholderV1": "该模块将随 M12 后续切片落地。",
     "placeholderV2": "V2 规划中，V1 暂不提供。"
   },
+  "products": {
+    "myProducts": "我的产品",
+    "productTemplates": "产品模板",
+    "library": "资料库",
+    "newProduct": "新建产品",
+    "columnName": "产品名称",
+    "columnStatus": "状态",
+    "empty": "还没有产品，点击「新建产品」创建第一份产品录入单。",
+    "unconfigured": "未配置当前租户（服务端环境变量 LOOM_TENANT_ID），请先完成配置。",
+    "new": {
+      "title": "新建产品",
+      "nameLabel": "产品名称",
+      "namePlaceholder": "请输入产品名称",
+      "nameRequired": "请输入产品名称",
+      "profileKeyNote": "产品名称暂以工程临时键 product_name 保存；G2 通用字段 fid 基线回填后将对齐（挂账）。",
+      "submit": "创建草稿",
+      "submitting": "创建中…"
+    },
+    "detail": {
+      "title": "产品详情",
+      "fieldId": "录入单 ID",
+      "fieldStatus": "状态",
+      "fieldTenant": "租户",
+      "fieldProfile": "已填资料",
+      "profileEmpty": "暂无已填资料",
+      "back": "返回我的产品"
+    }
+  },
   "error": {
     "403": "没有操作权限",
     "404": "资源不存在",
