@@ -7,6 +7,7 @@ pending_review。create_all 不跑迁移种子，synthetic 模型/路由/Prompt 
 """
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -31,7 +32,12 @@ from app.core.model_registry.seeds import (
     SYNTHETIC_MODEL_ID,
 )
 from app.core.models import AuditLog
-from app.core.restock.worker import RestockWorker, run_restock
+from app.core.restock.models import RestockRetryState
+from app.core.restock.worker import (
+    RestockWorker,
+    _backoff_delay_seconds,
+    run_restock,
+)
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.core.skill7.service import PWC_BUILDER, WF04
 from app.main import app
@@ -335,8 +341,21 @@ async def test_restock_budget_exhausted_defers_and_retries(client, session_facto
         )).one()
         assert audit.detail["reason"] == "BudgetExhausted"
 
-    # 信号仍可被下一轮认领（恢复后自然成功，此处先验证不被反连接吃掉）。
-    assert (await run_restock(session_factory, limit=20))["claimed"] == 1
+    # Q90：退避窗口内的定时轮不再认领（游标 attempts=1、下次时间在未来）。
+    assert (await run_restock(session_factory, limit=20))["claimed"] == 0
+    async with session_factory() as session:
+        cursor = await session.get(RestockRetryState, str(signal_id))
+        assert cursor is not None
+        assert cursor.attempts == 1
+        assert cursor.last_reason == "BudgetExhausted"
+        assert cursor.next_attempt_at.replace(tzinfo=UTC) > datetime.now(UTC)
+
+    # 手工 /run 同口径（honor_backoff=False）绕过窗口，仍瞬态则 attempts 累加到 2。
+    report = await run_restock(session_factory, limit=20, honor_backoff=False)
+    assert report["claimed"] == 1 and report["deferred"] == 1
+    async with session_factory() as session:
+        cursor = await session.get(RestockRetryState, str(signal_id))
+        assert cursor.attempts == 2
 
 
 # ---------- 管理端点 / worker 生命周期 ------------------------------------------------
@@ -360,3 +379,170 @@ async def test_restock_worker_lifecycle_start_stop(session_factory):
     assert worker.running
     await worker.stop()
     assert not worker.running
+
+
+# ---------- Q90 瞬态退避游标 -----------------------------------------------------------
+
+def test_backoff_delay_sequence_and_cap():
+    # 默认 base=60s：60,120,240,480,960，第 6 次 1920 被封顶到 1800。
+    assert [_backoff_delay_seconds(n) for n in range(1, 7)] == [
+        60.0, 120.0, 240.0, 480.0, 960.0, 1800.0
+    ]
+    assert _backoff_delay_seconds(20) == 1800.0
+
+
+async def test_backoff_window_expires_then_signal_claimed_again(
+    client, session_factory
+):
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+    r = await client.post("/api/admin/ai-models", json={
+        "model_code": "synthetic-zero", "provider": "synthetic",
+        "daily_budget": 0, "actor": PLATFORM_ADMIN,
+    })
+    zero_id = r.json()["model_id"]
+    r = await client.put(f"/api/admin/ai-scene-routes/{SCENE_PWC_BUILDER}", json={
+        "model_id": zero_id, "actor": OPS,
+    })
+    assert r.status_code == 200
+
+    report = await run_restock(session_factory, limit=20)
+    assert report["deferred"] == 1
+    # 窗口内定时轮跳过。
+    assert (await run_restock(session_factory, limit=20))["claimed"] == 0
+
+    # 把下次可重试时间拨到过去（模拟退避窗口已过），定时轮重新认领、attempts 累加。
+    async with session_factory() as session:
+        cursor = await session.get(RestockRetryState, str(signal_id))
+        cursor.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+    report = await run_restock(session_factory, limit=20)
+    assert report["claimed"] == 1 and report["deferred"] == 1
+    async with session_factory() as session:
+        cursor = await session.get(RestockRetryState, str(signal_id))
+        assert cursor.attempts == 2
+
+
+async def test_budget_exhausted_never_escalates(client, session_factory):
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+    r = await client.post("/api/admin/ai-models", json={
+        "model_code": "synthetic-zero", "provider": "synthetic",
+        "daily_budget": 0, "actor": PLATFORM_ADMIN,
+    })
+    zero_id = r.json()["model_id"]
+    r = await client.put(f"/api/admin/ai-scene-routes/{SCENE_PWC_BUILDER}", json={
+        "model_id": zero_id, "actor": OPS,
+    })
+    assert r.status_code == 200
+
+    # 超过上限（10）连续手动强试，仍只 defer（UTC 次日预算自愈，绝不转终态）。
+    for _ in range(11):
+        report = await run_restock(
+            session_factory, limit=20, honor_backoff=False
+        )
+        assert report["deferred"] == 1
+    async with session_factory() as session:
+        cursor = await session.get(RestockRetryState, str(signal_id))
+        assert cursor.attempts == 11
+        assert cursor.last_reason == "BudgetExhausted"
+        assert (await session.scalars(
+            select(SkillRun).where(SkillRun.source == "llm_auto")
+        )).all() == []
+        assert (await session.scalars(
+            select(AuditLog).where(AuditLog.action == "skill7.restock_failed")
+        )).all() == []
+
+
+async def test_upstream_error_escalates_after_max_attempts(
+    client, session_factory, monkeypatch
+):
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+
+    async def _upstream_down(self, **kwargs):
+        raise drivers.DriverError("upstream 502")
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _upstream_down)
+
+    # 前 9 次（手动绕窗口）defer，第 10 次转终态。
+    for attempt in range(1, 10):
+        report = await run_restock(
+            session_factory, limit=20, honor_backoff=False
+        )
+        assert report["deferred"] == 1
+        async with session_factory() as session:
+            cursor = await session.get(RestockRetryState, str(signal_id))
+            assert cursor.attempts == attempt
+    report = await run_restock(session_factory, limit=20, honor_backoff=False)
+    assert report["failed"] == 1
+    assert report["runs"][str(signal_id)]["attempts"] == 10
+
+    async with session_factory() as session:
+        # 终态：failed/llm_auto 子 run + restock_failed(terminal, attempts=10)，游标删除。
+        assert await session.get(RestockRetryState, str(signal_id)) is None
+        failed = (await session.scalars(
+            select(SkillRun).where(SkillRun.status == "failed")
+        )).one()
+        assert failed.source == "llm_auto"
+        assert "GenerationUpstreamError" in failed.error
+        audit = (await session.scalars(
+            select(AuditLog).where(
+                AuditLog.action == "skill7.restock_failed"
+            )
+        )).one()
+        assert audit.detail["terminal"] is True
+        assert audit.detail["attempts"] == 10
+
+    # 终态后信号被反连接排除，不再认领。
+    assert (await run_restock(session_factory, limit=20))["claimed"] == 0
+
+
+async def test_success_clears_backoff_cursor(client, session_factory):
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+    r = await client.post("/api/admin/ai-models", json={
+        "model_code": "synthetic-zero", "provider": "synthetic",
+        "daily_budget": 0, "actor": PLATFORM_ADMIN,
+    })
+    zero_id = r.json()["model_id"]
+    r = await client.put(f"/api/admin/ai-scene-routes/{SCENE_PWC_BUILDER}", json={
+        "model_id": zero_id, "actor": OPS,
+    })
+    assert r.status_code == 200
+    assert (await run_restock(session_factory, limit=20))["deferred"] == 1
+
+    # 预算恢复：路由切回 synthetic 正常模型，手动强试成功后游标删除。
+    r = await client.put(f"/api/admin/ai-scene-routes/{SCENE_PWC_BUILDER}", json={
+        "model_id": SYNTHETIC_MODEL_ID, "actor": OPS,
+    })
+    assert r.status_code == 200
+    report = await run_restock(session_factory, limit=20, honor_backoff=False)
+    assert report["succeeded"] == 1
+    async with session_factory() as session:
+        assert await session.get(RestockRetryState, str(signal_id)) is None
+
+
+async def test_terminal_failure_clears_existing_cursor(
+    client, session_factory, monkeypatch
+):
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+    async with session_factory() as session:
+        session.add(RestockRetryState(
+            request_id=str(signal_id),
+            attempts=3,
+            next_attempt_at=datetime.now(UTC) + timedelta(hours=1),
+            last_reason="BudgetExhausted",
+        ))
+        await session.commit()
+
+    async def _broken(self, **kwargs):
+        return GenerationResult(text="not json", input_tokens=3, output_tokens=4)
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _broken)
+    # 终态错误即使在退避窗口内也由手动触发撞出；定时轮因窗口跳过。
+    report = await run_restock(session_factory, limit=20, honor_backoff=False)
+    assert report["failed"] == 1
+    async with session_factory() as session:
+        assert await session.get(RestockRetryState, str(signal_id)) is None

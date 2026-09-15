@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     restock_interval_seconds: float = 60.0
     restock_batch_size: int = 20
 
+    # Q90 restock 瞬态失败指数退避（env 运维参数，非 Q9 业务旋钮）：
+    # base×2^(attempts-1)，封顶 max；上游传输错累计 max_attempts 次转终态，
+    # 日预算硬停（UTC 次日恢复）永不转终态。
+    restock_backoff_base_seconds: float = 60.0
+    restock_backoff_max_seconds: float = 1800.0
+    restock_backoff_max_attempts: int = 10
+
     # Q89 多副本单实例锁：Redis SET NX PX leader 锁，env 门控默认关
     # （单副本/本地零依赖）；开启后 Redis 不可用 fail-closed 跳过本轮。
     distributed_lock_enabled: bool = False

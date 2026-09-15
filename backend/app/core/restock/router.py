@@ -33,6 +33,7 @@ async def run_restock_once(
 
     手工触发归 platform_admin（同 Q75 SLA /run）；定时 worker 为系统内部调度不经此闸。
     多副本下与定时 worker 抢同一把 leader 锁（Q89），抢不到 409、锁后端故障 503。
+    Q90：platform_admin 显式"立即试一次"，绕过退避窗口（瞬态仍累加 attempts 并重排窗口）。
     """
     try:
         require_any_role(body.actor, PLATFORM_ADMIN)
@@ -45,7 +46,11 @@ async def run_restock_once(
 
     try:
         async with leader_lock(RESTOCK_LOCK):
-            return await run_restock(factory, limit=settings.restock_batch_size)
+            return await run_restock(
+                factory,
+                limit=settings.restock_batch_size,
+                honor_backoff=False,
+            )
     except LockUnavailable as exc:
         raise HTTPException(
             status_code=409, detail="restock sweep already running"
