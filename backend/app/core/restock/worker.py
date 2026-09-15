@@ -4,7 +4,8 @@
 
 1. 形态：V1 进程内 asyncio loop（RestockWorker），与 SLA SweepScheduler 同构；
    默认关闭（LOOM_RESTOCK_WORKER_ENABLED=true 显式开启，因为会自动花真 token）；
-   Redis Streams/多副本单实例锁挂账 V2（docs/07 §7.5 队列选型 V1 裁决为进程内轮询）。
+   多副本下单实例执行由 Q89 Redis leader 锁保证（env 门控，默认关）；
+   Redis Streams/每信号行细粒度认领挂账 V2（docs/07 §7.5）。
 2. 认领纯追加：requested 信号行绝不 mutate；成功追加 succeeded/llm_auto 子 run
    （input.restock_request_id 回链），终态失败追加 failed/llm_auto 子 run；
    认领查询 = requested 行反连接已有子 run。瞬态失败不留子 run，下一轮重试。
@@ -22,6 +23,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
+from app.core.locking import (
+    RESTOCK_LOCK,
+    LockBackendError,
+    LockUnavailable,
+    leader_lock,
+)
 from app.core.model_registry import gateway, pwc_build
 from app.core.model_registry.pwc_build import SYSTEM_ACTOR
 from app.core.skill7.models import SkillRun
@@ -186,6 +193,20 @@ class RestockWorker:
         self._stop.clear()
         self._task = asyncio.create_task(self._loop(), name="loom-restock-worker")
 
+    async def _tick(self) -> None:
+        """跑一轮补货；多副本下非持锁副本/Redis 故障均跳过（Q89，防双花）。"""
+        try:
+            async with leader_lock(RESTOCK_LOCK):
+                report = await run_restock(self._factory, limit=self._batch_size)
+        except LockUnavailable:
+            logger.info("restock tick skipped: leader lock held by another replica")
+            return
+        except LockBackendError:
+            logger.exception("restock tick skipped: lock backend unavailable")
+            return
+        if report["claimed"]:
+            logger.info("restock sweep: %s", report)
+
     async def _loop(self) -> None:
         while not self._stop.is_set():
             try:
@@ -195,9 +216,7 @@ class RestockWorker:
             if self._stop.is_set():
                 break
             try:
-                report = await run_restock(self._factory, limit=self._batch_size)
-                if report["claimed"]:
-                    logger.info("restock sweep: %s", report)
+                await self._tick()
             except Exception:
                 logger.exception("restock sweep failed")
 

@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     restock_interval_seconds: float = 60.0
     restock_batch_size: int = 20
 
+    # Q89 多副本单实例锁：Redis SET NX PX leader 锁，env 门控默认关
+    # （单副本/本地零依赖）；开启后 Redis 不可用 fail-closed 跳过本轮。
+    distributed_lock_enabled: bool = False
+
     # Q82：outbound 供应商 API Key 落库密文的主密钥（只从环境变量注入，不入库不入仓）。
     # 未设置时测试/本地用进程内临时密钥（重启后旧密文不可解，仅限开发态）。
     master_key: str = ""

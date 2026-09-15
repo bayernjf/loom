@@ -326,7 +326,8 @@
 
 **api_keys（API Key）** — 04 §3 待补
 - 一 Agent 一 Key，可吊销；唯一入口（真接 LLM 时模型注册页是唯一入口，line 2101）；effect-callback 鉴权
-- **outbound 供应商密钥半套已实现（Q82，物理表 ai_model_keys 见上 model_registry；入站一 Agent 一 Key 全字段仍待 Q60 效果回调切片）**
+- **outbound 供应商密钥半套已实现（Q82，物理表 ai_model_keys 见上 model_registry；Fernet 可逆加密，因出站须还原明文）**
+- **入站一 Agent 一 Key 半套已实现（Q88，2026-09-15，迁移 0019_agent_api_keys，down_revision=0018_atom_affinity_embedding；物理表落 `app/core/api_keys/models.py`，PG16 一次性容器 up/downgrade-1/up 实测）**：物理表名 `agent_api_keys`——key_id String36 PK（uuid1 默认）/ name String128 NOT NULL（Agent 标识/运营备注）/ key_hash String64 NOT NULL（明文的 SHA-256 hex；唯一约束 `uq_agent_api_key_hash` + 索引 `ix_agent_api_keys_key_hash`）/ key_prefix String24 NOT NULL（明文前 12 字符展示码，非凭证）/ status String16 NOT NULL server_default `active`（active|revoked）/ created_by String64 可空 / created_at timestamptz NOT NULL server_default now() / revoked_by String64 可空 / revoked_at timestamptz 可空 / last_used_at timestamptz 可空；**无 tenant_id**（平台级凭证，单租户绑定原文未给【待补】）。明文 = `loom_`+secrets.token_urlsafe(32)，仅签发响应返回一次，任何读路径不回显；吊销=状态位 append-only（不物理删除）。与 ai_model_keys 刻意分表分域：入站只需哈希比对（库泄露不暴露可用 Key），出站须 Fernet 还原。downgrade  drop index + drop table。**未含（随段13/P3 V2）**：effect-callback 端点、effect_records 时序表、孤儿队列表、Q60a content_id↔platform_post_id 映射与运营回填——本迁移只落凭证底座。
 
 **dict_management（字典管理）** — Q25/Q38/Q43/Q46
 - 内容目的字典（contentGoals）/ 降级动作字典（REMOVE_BRAND/REMOVE_CLAIM/REMOVE_HOOK/REWRITE/…，Q38）/ 17 池选项字典 / 通用底座（Q46 权限单列）

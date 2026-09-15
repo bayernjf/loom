@@ -11,6 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.actor import Actor
 from app.core.db import get_session
+from app.core.locking import (
+    SWEEP_LOCK,
+    LockBackendError,
+    LockUnavailable,
+    leader_lock,
+)
 from app.core.rbac import PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.core.sla.policies import sla_state
 from app.core.sla.runner import run_jobs
@@ -30,6 +36,7 @@ async def run_sweep(
     """手工触发全部 SLA 作业（与定时调度同一 runner，每作业独立提交/回滚）。
 
     手工触发归 platform_admin（Q75）；定时调度为系统内部调用，不经此闸。
+    多副本下与定时调度抢同一把 leader 锁（Q89），抢不到 409、锁后端故障 503。
     """
     try:
         require_any_role(body.actor, PLATFORM_ADMIN)
@@ -40,7 +47,13 @@ async def run_sweep(
     async def factory() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
-    return await run_jobs(factory)
+    try:
+        async with leader_lock(SWEEP_LOCK):
+            return await run_jobs(factory)
+    except LockUnavailable as exc:
+        raise HTTPException(status_code=409, detail="sweep already running") from exc
+    except LockBackendError as exc:
+        raise HTTPException(status_code=503, detail="lock backend unavailable") from exc
 
 
 @router.get("/todos")
