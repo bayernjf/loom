@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
+from app.core.tenants import service as tenant_service
 from app.product.product_intake import service
 from app.product.product_intake.models import ProductSpace
 from app.product.product_intake.schemas import (
@@ -25,9 +26,14 @@ router = APIRouter(prefix="/api/intakes", tags=["product-intake"])
 async def create_intake(
     body: IntakeCreate, session: AsyncSession = Depends(get_session)
 ) -> IntakeView:
-    intake = await service.create_intake(
-        session, tenant_id=body.tenant_id, profile=body.profile
-    )
+    try:
+        intake = await service.create_intake(
+            session, tenant_id=body.tenant_id, profile=body.profile
+        )
+    except tenant_service.TenantNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"tenant not found: {exc}") from exc
+    except tenant_service.TenantPaused as exc:
+        raise HTTPException(status_code=409, detail=f"tenant is paused: {exc}") from exc
     return IntakeView(
         intake_id=intake.intake_id,
         tenant_id=intake.tenant_id,

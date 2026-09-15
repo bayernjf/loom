@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
+from app.core.tenants.models import Tenant
 from app.main import app
 from app.product.modeling.models import (
     C1IndustryThreshold,
@@ -51,6 +52,8 @@ async def client(session_factory):
     async with session_factory() as session:
         session.add_all(
             [
+                # Q95：段1 准入闸要求 t1 已注册。
+                Tenant(tenant_id="t1", name="试点客户", plan="basic", status="active"),
                 # Q2 文本三信号 0.50/0.33/0.17（Σ=1）；Q7 general 默认档 0.85。
                 C1SignalWeight(signal="name", signal_name="产品名", enabled=True, weight=0.50),
                 C1SignalWeight(signal="brief", signal_name="简介", enabled=True, weight=0.33),

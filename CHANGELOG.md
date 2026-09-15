@@ -4,7 +4,14 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ## [Unreleased]
 
+- **Q97 应用外壳+D5 八菜单导航骨架落地（2026-09-16，feat 345e15e/test 09deafd）** — `(shell)` 路由组：240px 侧栏+顶栏+1280 内容列，nav.ts 注册表驱动 8 菜单（next-intl Link/usePathname active）；段8/12/13 三项（content/analytics/social-accounts）V2 徽标占位，余五项 V1 占位；`/[locale]` 307 到 workbench，欢迎页删除；新增 `--color-bg-hover`（86 token）、`scripts/check-nav.mjs` 三方漂移校验、`i18n/navigation.ts`；管理端 `/[locale]/admin` 独立布局不预埋。typecheck/build、两级 307/8×200、9222 Chrome 验收通过；无后端/迁移变化（头仍 0023，401 测试、101 eval 不变）。
+- **Q96 前端 i18n+tokens.css 脚手架落地（2026-09-16，feat 946a774/test 8b614b6）** — next-intl v4（routing/request/middleware，仅 zh-CN，无前缀 307 实测→/zh-CN）+ `app/[locale]` 段（旧根页面删除）+ messages/zh-CN.json（common/home/error）+ tokens.css 三层 85 变量唯一事实源与 tokens.ts 镜像，`scripts/check-tokens.mjs` 零依赖逐值校验（npm run check-tokens）；Semantic 补 `--color-brand-bg` 并补登 docs/18 §5。typecheck/build 通过，curl 307/200 与 9222 Chrome 可视验收通过；无后端/迁移变化（头仍 0023，401 测试、101 eval 不变）。M12 菜单页面逐片点工。
+
 ### Added
+
+- **Q96 前端 i18n+设计 Token 方案拍板定稿（2026-09-16，纯文档；18 号文档 🟡→✅）** — 四接缝全甲：next-intl + `[locale]`（V1 仅 zh-CN，V3 首外语默认 en-US）；CSS Modules + tokens.css 三层 Token（不引 Tailwind/AntD 组件库）；运营数据字典多语言延 V3、V1 不预埋翻译列（Q58 分治）；色值借 AntD5 默认调色板作 primitive 工程初值（只借值不装依赖）。docs/18 补 §2.4 落码结构与 §3.6 全量 CSS 初值，可直接照做；02 C1.40 记录、docs/README 升 ✅。无代码/迁移/测试变化；前端页面仍按 M12 逐片点工。
+
+- **Q95 租户管理+客户 Onboarding 落地（2026-09-16，09 D3.11①③；迁移 0023 建 tenants 表+存量回填）** — 四接缝经负责人拍板追加 Q95（02 C1.39，“四项全按推荐（甲）”）：①租户注册表+platform_admin 生命周期端点（开通/列表/详情/改套餐/暂停/恢复，全程审计；GET query actor 422·403，写 actor 在体 403·404·409·422），段1 `POST /api/intakes` 未知租户 404、暂停租户 409（应用层闸，无硬外键，链内仍走 intake/PS 派生）；②plan 四档 trial/basic/pro/enterprise、status 三态 trial/active/paused，试用档月 token 额度 50 万（line 1466），付费档额度【待补】、价格仅展示不计费不拦截，改套餐不动 status；③Onboarding 不建状态机，详情派生 intakes/product_spaces 计数；④0023 回填存量 DISTINCT tenant_id 为 basic/active+backfilled 标记。勘误：租户实体此前误链 Q33（Q33 实为同租户指纹查重），以 Q95 为准。新包 `app/core/tenants/`；backend **401 测试全绿**（+10 集成 test_tenants_api.py，7 个既有 HTTP 建单测试补 t1 租户种子），ruff 通过；eval 不新增、仍 101/101。M12 余量：CSV 导出、客户前端与页面（18 🟡 门控）、额度/计费/团队账号（V2）。详见 08 §2.2 Q95 完成情况。
 
 - **Q94 候选审核 SLA 待办自动挂接落地（2026-09-16，Q70②；迁移 0022 五条纯配置种子）** — 四接缝经负责人拍板追加 Q94（02 C1.38，“四项全按推荐（甲）”）：①五型时限各一键 `review.sla_hours.*` 种子统一 72h（原文无数值，source_ref 标待补，热更不改码）；②投递（人工/llm_auto 同事务）一候选一 ops_todo，assignee 取 WF 注册表 review_role，裁决（含工作台批量）即 resolve（applied/archived），escalated 不阻断裁决，挂接前存量不回填；③五型五个 todo_type（review_pwc_combo 等），Q92 驾驶舱积压自动分型，Q49 升级审计统一 `skill7.review_sla_escalated`，黄色窗口原文未给挂账。新模块 `app/core/skill7/review_sla.py`，Q49 sweep/调度器零改动；backend **391 测试全绿**（+7 集成 test_skill7_review_sla_api.py；WF-01 两例改按类型计数），ruff 通过；eval 不新增、仍 101/101。Q70 一期三件（统一列表/批量/SLA）已齐；M12 余量：五型时限待业务定值、租户 Onboarding/CSV/客户前端与页面。详见 08 §2.2 Q94 完成情况。
 

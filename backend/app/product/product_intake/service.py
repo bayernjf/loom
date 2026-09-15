@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
+from app.core.tenants.service import assert_intake_admitted
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import (
     G2Field,
@@ -31,6 +32,8 @@ async def _required_common_fids(session: AsyncSession) -> list[str]:
 async def create_intake(
     session: AsyncSession, *, tenant_id: str, profile: dict, actor_id: str | None = None
 ) -> ProductIntakeApplication:
+    # Q95 段1 准入：未知租户拒登、暂停租户拒登（应用层闸，不设硬外键）。
+    await assert_intake_admitted(session, tenant_id)
     intake = ProductIntakeApplication(
         tenant_id=tenant_id,
         profile=dict(profile),

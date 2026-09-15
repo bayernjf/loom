@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "check-tokens": "node scripts/check-tokens.mjs",
+    "check-nav": "node scripts/check-nav.mjs",
     "lint": "next lint"
   },
   "dependencies": {
     "next": "^15.1.0",
+    "next-intl": "^4.14.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

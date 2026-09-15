@@ -1,0 +1,29 @@
+{
+  "common": {
+    "appName": "Loom",
+    "appTagline": "私域内容生产白名单平台"
+  },
+  "nav": {
+    "workbench": "工作台",
+    "products": "产品中心",
+    "content": "内容生产与发布",
+    "templates": "模板管理",
+    "analytics": "数据分析",
+    "socialAccounts": "社媒账号",
+    "compliance": "合规风控",
+    "settings": "系统设置"
+  },
+  "shell": {
+    "primaryNav": "主导航",
+    "v2Badge": "V2",
+    "placeholderV1": "该模块将随 M12 后续切片落地。",
+    "placeholderV2": "V2 规划中，V1 暂不提供。"
+  },
+  "error": {
+    "403": "没有操作权限",
+    "404": "资源不存在",
+    "409": "操作冲突，请刷新后重试",
+    "422": "提交内容有误，请检查后重试",
+    "unknown": "操作失败，请稍后重试"
+  }
+}

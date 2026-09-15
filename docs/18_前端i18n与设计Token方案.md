@@ -1,6 +1,6 @@
 # 18. 前端 i18n 与设计 Token 方案
 
-> **状态**：🟡 **工程建议（待负责人确认）**——本文档为 2026-09-13 起草的前端工程方案，非已裁决决策。确认后升 ✅ 并在 02 追加 Q 记录（建议编号 Q75）；确认前不作为实现强制依据。
+> **状态**：✅ **2026-09-16 经负责人拍板定稿（Q96，02 C1.40）**——四项接缝全按推荐甲案：next-intl / CSS Modules + tokens.css / V1 仅 zh-CN 且字典多语言延 V3 / 色值借 Ant Design 5 默认调色板作工程初值（只借值、不引组件库）。本文 2026-09-13 起草稿的“建议”表述据此生效为实现强制依据；具体可落码值见 §2.3、§3.6。旧稿“拍板后追加 Q75”编号作废——Q75 已用于 RBAC 裁决，本项编号 Q96。
 > **定位**：只覆盖**界面层**（管理后台 + 客户前端 UI）的国际化与视觉基础。内容侧多语言（Q58）是业务规则，不在此重定义，仅做边界对齐。
 > **关联**：14（技术栈 Next.js 15 + React 19 + TS）、09（客户前端 8 菜单/13 管理菜单展示口径）、08（M12 客户前端基础版；V3 国际化/白牌定制）、02 Q58/Q73、15（前端目录落位）。
 > **事实纪律**：业务规则一律引用 Q 编号/文档；本文新增的只是工程选型建议与数值约定（色板/字号/间距等无原文来源，属设计工程建议，非业务事实）。
@@ -18,12 +18,14 @@
 
 ---
 
-## 2. 界面 i18n 方案（建议）
+## 2. 界面 i18n 方案（Q96 定稿）
+
+> **接缝①拍板（Q96）**：库 = **next-intl**（自研轻量字典否掉，V3 外语期会重写）；接缝③拍板：V1 仅 zh-CN、首个外语 V3 再启用（工程默认 en-US，语种顺序届时按客户输入定）、运营数据字典多语言延 V3 且 V1 不预留 name_i18n 字段。
 
 ### 2.1 技术选型建议：next-intl + App Router 语言前缀路由
 
 - 栈已定为 Next.js 15 App Router + React 19（14）。建议 **next-intl**：App Router/RSC 原生支持、ICU MessageFormat（复数/日期/插值标准语法）、消息可按组件静态切片；**不建议** next-i18n/react-i18next（Pages Router 时代方案，与 RSC/15 契合度差）。
-- 路由：`/[locale]/...` 语言前缀；V1 仅注册 `zh-CN`，路由层默认把无前缀请求 308 到 `/zh-CN`。V3 加语言时只增注册不改组件。
+- 路由：`/[locale]/...` 语言前缀；V1 仅注册 `zh-CN`，路由层默认把无前缀请求 307 到 `/zh-CN`（状态码为 next-intl 默认，2026-09-16 实测）。V3 加语言时只增注册不改组件。
 - 消息文件：`frontend/messages/{locale}.json`（V1 只建 `zh-CN.json`），扁平点分 key、按功能域命名空间，例如：
   - `intake.status.ai_recognizing`、`fieldpool.gate.approve`、`common.action.submit`
   - key 用**语义**不用文案（✅ `gate.rejectedReason` / ❌ `gate.请填写驳回原因`）。
@@ -40,7 +42,37 @@
 3. 后端枚举码 → 前端消息 key 的映射表集中在 `frontend/messages/zh-CN.json` 对应命名空间，与 docs/13 状态词一一对应；
 4. M12 验收追加一条：页面无硬编码业务文案、无前端自创状态词（状态口径以 13/01 为准）。
 
-### 2.3 V3 启用外语时（路线图已列"国际化（多语言界面）"）
+
+### 2.3 落码结构（Q96 定稿，照此落码）
+
+```
+frontend/
+  package.json                 # 新增依赖：next-intl（与 Next.js 15 兼容版本），无其他 i18n 依赖
+  middleware.ts                # next-intl 标准 matcher：无语言前缀请求 307 → /zh-CN（实测）
+  i18n/
+    routing.ts                 # defineRouting({ locales: ["zh-CN"], defaultLocale: "zh-CN" })
+    request.ts                 # getRequestConfig：按 locale import 对应 messages
+  messages/
+    zh-CN.json                 # V1 唯一消息文件；扁平点分 key，按功能域命名空间
+  app/
+    [locale]/
+      layout.tsx               # import ../../tokens.css；NextIntlClientProvider 包裹；generateStaticParams=[zh-CN]
+      page.tsx …               # 现有 app/page.tsx、layout.tsx 迁入，原 app/ 目录不留页面
+  tokens.css                   # 见 §3.6，:root 全量 primitive+semantic 变量
+  tokens.ts                    # 同值 TS 镜像（图表/Canvas 消费），配一致性测试（见 §3.5）
+  scripts/
+    check-tokens.mjs           # 零依赖 tokens.css ↔ tokens.ts 逐值一致性校验（npm run check-tokens）
+```
+
+落码步骤（顺序即依赖序）：
+1. `npm i next-intl`；建 i18n/routing.ts、i18n/request.ts、middleware.ts（next-intl App Router 官方三件套结构，不自造变体）；
+2. `app/*` 迁入 `app/[locale]/*`，layout 注入 NextIntlClientProvider 并 import tokens.css；
+3. 建 messages/zh-CN.json，现有页面文案全部改 `useTranslations`/`getTranslations`；命名空间按后端域：`common.*`、`nav.*`（Q97 八菜单）、`shell.*`（Q97 外壳/占位）、`intake.*`（含 `intake.status.*`，与 docs/13 状态词一一对应）、`fieldpool.*`、`pwc.*`、`pws.*`、`skill7.*`（候选/裁决/工作台）、`dashboard.*`、`tenant.*`（Q95 租户管理/引导）、`error.*`（错误码映射）；
+4. 后端错误体只消费 `code`+参数，前端按 `error.<code>` 拼文案（HTTP 403/404/409/422 各有通用兜底 key）；枚举码、fid、审计 action 码不进消息表；
+5. 时间展示统一 `Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", … })`，时区作为配置常量不散落组件；
+6. M12 页面验收口径（评审项，V1 不上 lint 插件）：页面无硬编码中文业务文案、无前端自创状态词。
+
+### 2.4 V3 启用外语时（路线图已列"国际化（多语言界面）"）
 
 - 建议首个外语 `en-US`（非业务裁决，仅工程默认；实际语种顺序待负责人/客户输入决定）；
 - 加语言切换器（账号级偏好）、运营数据 name_i18n 扩展（见 §1）、消息翻译完整性检查（缺 key 构建期失败）；
@@ -48,7 +80,9 @@
 
 ---
 
-## 3. 设计 Token 方案（建议）
+## 3. 设计 Token 方案（Q96 定稿）
+
+> **接缝②拍板（Q96）**：载体 = **CSS Modules + tokens.css CSS 变量**（Tailwind 否掉、Ant Design 组件库否掉——不引 antd 依赖，仅借其色值，见 §3.6）；V1 仅浅色。
 
 ### 3.1 分层模型：Primitive → Semantic → Component
 
@@ -106,23 +140,121 @@ Component（组件级覆写，能少则少）
 
 ---
 
+### 3.6 具体值初版（Q96 接缝④拍板：借 Ant Design 5 默认调色板，2026-09-16）
+
+> 色值无业务原文来源（line NNNN 无视觉规格），属工程建议值；负责人 Q96 拍板借用 Ant Design 5 默认 token 色板作为 primitive 初值，**只抄值不装 antd 依赖、不引其组件/主题系统**。设计日后产出品牌视觉时只换 primitive 层，semantic/component 与组件代码不动。
+
+Primitive（只定义，组件不直接引用）：
+
+```css
+:root {
+  /* 文本/中性（AntD5 黑透明阶） */
+  --color-text-primary: rgba(0, 0, 0, 0.88);
+  --color-text-secondary: rgba(0, 0, 0, 0.65);
+  --color-text-tertiary: rgba(0, 0, 0, 0.45);
+  --color-text-disabled: rgba(0, 0, 0, 0.25);
+  --color-text-on-brand: #ffffff;
+  /*  surfaces */
+  --color-surface-1: #ffffff;   /* 卡片/弹层 */
+  --color-surface-2: #fafafa;   /* 斑马纹/浅底区块 */
+  --color-surface-3: #f5f5f5;   /* 页面底色 */
+  /* 边框 */
+  --color-border-subtle: #f0f0f0;
+  --color-border-strong: #d9d9d9;
+  /* 品牌（AntD blue 阶，#1677ff = blue-6） */
+  --color-brand-1: #e6f4ff;     /* 选中底/浅底 */
+  --color-brand-5: #4096ff;     /* hover */
+  --color-brand-6: #1677ff;     /* 默认主色 */
+  --color-brand-7: #0958d9;     /* active/文字态（AA） */
+  /* 状态四态：base=图标/边框，strong=文字（AA 对比度），bg=浅底 */
+  --color-success: #52c41a;  --color-success-strong: #389e0d;  --color-success-bg: #f6ffed;
+  --color-warning: #faad14;  --color-warning-strong: #d48806;  --color-warning-bg: #fffbe6;
+  --color-danger:  #ff4d4f;  --color-danger-strong:  #cf1322;  --color-danger-bg:  #fff2f0;
+  --color-info:    #1677ff;  --color-info-strong:    #0958d9;  --color-info-bg:    #e6f4ff;
+}
+```
+
+Semantic（组件唯一允许引用层；在 tokens.css 同文件下一段落定义）：
+
+```css
+:root {
+  --color-bg-page: var(--color-surface-3);
+  --color-bg-card: var(--color-surface-1);
+  --color-border: var(--color-border-strong);
+  --color-brand: var(--color-brand-6);
+  --color-brand-hover: var(--color-brand-5);
+  --color-brand-active: var(--color-brand-7);
+  --color-state-success: var(--color-success);
+  --color-state-warning: var(--color-warning);
+  --color-state-danger: var(--color-danger);
+  --color-state-info: var(--color-info);
+  /* 状态文字一律走 *-strong，禁止直接用 base 色排正文（AA） */
+}
+```
+
+其余类别沿用本文件 §3.2–3.3 已定刻度，落码即这些值：间距 4/8/12/16/24/32/48/64；圆角 4/8/12/16；字号 12/13/14/16/18/20/24/30（正文 14、表格 13）；阴影三档：
+
+```css
+--shadow-1: 0 1px 2px 0 rgba(0,0,0,0.06);                                  /* 卡片 */
+--shadow-2: 0 6px 16px 0 rgba(0,0,0,0.08), 0 3px 6px -4px rgba(0,0,0,0.12);/* 悬浮/弹层 */
+--shadow-3: 0 9px 28px 8px rgba(0,0,0,0.05), 0 6px 16px 0 rgba(0,0,0,0.08), 0 3px 6px -4px rgba(0,0,0,0.12); /* 模态 */
+```
+
+z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-modal-popover:1040; --z-toast:1050;`（popover/modal 同级以 DOM 顺序定）。业务状态→状态色映射严格按 §3.4 表，同色同源。
+
 ## 4. 迭代落位
 
 | 阶段 | i18n | Token |
 |---|---|---|
-| V1（M12 客户前端 8 菜单基础版 + 管理端页面） | zh-CN 单语；`[locale]` 路由 + next-intl + 文案全量走消息表；枚举码不翻译；时间 UTC 存储/上海展示 | tokens.css 初版（色值待设计给 HEX）；CSS Modules；状态色映射 13 状态词；无深色 |
+| V1（M12 客户前端 8 菜单基础版 + 管理端页面） | zh-CN 单语；`[locale]` 路由 + next-intl + 文案全量走消息表（§2.3 结构）；枚举码不翻译；时间 UTC 存储/上海展示 | tokens.css 初版（§3.6 AntD5 借值已可落码）；CSS Modules；状态色映射 13 状态词；无深色 |
 | V2 | 无界面外语；内容多语言按 Q58 独立推进（与本方案解耦） | 按实际页面补 token，不新增机制 |
 | V3（路线图已列国际化/白牌） | 启用 en-US（语种顺序待拍板）；语言切换器；运营数据 name_i18n 扩展（04/10 加字段迁移） | 深色主题（如需要）、租户白牌变量包、stylelint 硬编码拦截、W3C token 构建链（多主题证实需要时） |
 
-### 4.1 待负责人拍板项（确认后转 Q75 并升本文档状态）
+### 4.1 拍板结果（Q96，2026-09-16，四项接缝全甲；旧第 5 项并入接缝③）
 
-1. i18n 库：next-intl（建议）vs 自研轻量字典 vs 其他；
-2. V1 样式载体：CSS Modules + tokens.css（建议）vs 引入 Tailwind；
-3. V1 仅 zh-CN、首个外语 V3 再上、默认 en-US 工程默认是否认可；
-4. token 具体色值/品牌色：需设计产出（无原文，本文不编造）；
-5. 运营数据多语言（类目名/字典）确认延至 V3、V1 不预留字段。
+1. i18n 库：**next-intl**（否掉自研轻量字典）；
+2. V1 样式载体：**CSS Modules + tokens.css**（否掉 Tailwind 与 AntD 组件库；AntD 仅借色值，不装依赖）；
+3. V1 仅 zh-CN、首个外语 V3 再上、工程默认 en-US（语种顺序 V3 按客户输入定）；运营数据字典（G1/G2/contentGoals/动作字典）多语言延 V3，V1 只存中文 canonical、不预留 name_i18n 字段；
+4. token 具体色值：**借 Ant Design 5 默认调色板作工程初值**（§3.6 全量列出，可直接落码）；设计产出后只换 primitive 层；
+5. （旧第 5 项）同 3：延 V3，V1 不预埋翻译列。
 
 ### 4.2 明确不做（防止过度建设）
 
 - V1 不做：外语消息文件、翻译管理平台（TMS）、RTL、深色模式、租户主题包、字典表翻译列、W3C token 构建工具链、网络中文字体；
 - 不把内容多语言（Q58）塞进界面 i18n；不在前端自创/硬编码业务状态词。
+
+---
+
+## 5. 实现补登（脚手架切片，2026-09-16）
+
+按 §2.3/§3.6 落地前端 i18n + tokens 脚手架（feat 946a774 / test 8b614b6，Q96 首个代码切片）：
+
+- **文件落位**：`i18n/routing.ts`（仅注册 zh-CN）、`i18n/request.ts`（hasLocale 兜底 defaultLocale + 动态 import 消息 JSON）、`middleware.ts`（matcher 排除 api/_next/_vercel/带点文件）、`messages/zh-CN.json`（目前仅 common/home/error 三命名空间，M12 页面随片扩 §2.3 步骤 3 所列域）、`app/[locale]/{layout,page,page.module.css}`；旧根 `app/layout.tsx`、`app/page.tsx` 已删，页面只存于 `[locale]` 段；`next.config.mjs` 接 createNextIntlPlugin("./i18n/request.ts")。
+- **Token 落地偏差一处**：Semantic 层在 §3.6 清单外新增 `--color-brand-bg: var(--color-brand-1)`（浅蓝品牌浅底，badge 示范消费）；理由同 §3.1 三层纪律——组件不得直引 Primitive，brand-1 需要一个语义出口。tokens.css 与 tokens.ts 两侧同步，共 85 个变量。
+- **验收记录**：`npm run typecheck` 通过；`npm run build` 通过（`/zh-CN` SSG 预渲染）；生产服务器实测 `GET /` → **307** Location `/zh-CN`、`GET /zh-CN` → 200（本文 §2.1/§2.3 原写 308 已更正）；chrome-devtools MCP 挂载本机 9222 Chrome 可视验收：文案全部来自消息表、`<html lang="zh-CN">`、badge 计算背景 rgb(230,244,255)=#e6f4ff（经 `--color-brand-bg` 解析）；控制台仅 favicon.ico 404（裸脚手架无图标，matcher 对带点文件放行，非本切片缺陷）。
+- **校验脚本**：`scripts/check-tokens.mjs` 零依赖解析两侧（多行值做空白归一化），键集合与值任一不一致即 exit 1；开发期曾以缺 4 个多行元组验证过失败路径。
+
+---
+
+## 6. 应用外壳与导航（Q97 定稿，2026-09-16）
+
+客户前端第一个页面切片（M12）边界由 Q97 四接缝拍板（02 C1.41）：
+
+- **结构**：路由组 `app/[locale]/(shell)/`（layout + `sidebar.tsx` client 组件 + `menu-placeholder` 共享占位 + 8 个菜单目录）；导航注册表 `app/[locale]/nav.ts` 为唯一菜单事实源（`{href,labelKey,phase}` ×8），`i18n/navigation.ts` 由 createNavigation 产出 Link/usePathname。
+- **布局**：左侧固定 240px（`--sidebar-width`）+ 顶栏 64px（`--space-8`）+ 内容区 max-width 1280（`--layout-content-max`）；当前项 `aria-current="page"`；样式全部 Semantic/刻度变量（Q97 新增语义别名 `--color-bg-hover: var(--color-surface-2)`，tokens 总数 85→86）。
+- **八菜单路由与阶段标**（slug 为 URL 事实，label 走 `nav.*` 消息）：
+
+| 菜单（D5） | slug | phase |
+|---|---|---|
+| 工作台 | `/workbench` | v1（默认落地页，`/[locale]` 307 至此） |
+| 产品中心 | `/products` | v1 |
+| 内容生产与发布 | `/content` | **v2**（段12，Q73） |
+| 模板管理 | `/templates` | v1（段7 静态底表侧） |
+| 数据分析 | `/analytics` | **v2**（段13） |
+| 社媒账号 | `/social-accounts` | **v2**（段8/发布账号完整版） |
+| 合规风控 | `/compliance` | v1（段10 侧） |
+| 系统设置 | `/settings` | v1（账号子项随 V2 真实认证） |
+
+- **占位口径**：v1 页文案 `shell.placeholderV1`（随 M12 后续切片落地），v2 页标题旁与导航项均挂"V2"徽标 + `shell.placeholderV2`；菜单全显不隐藏。
+- **管理端分治**：Q92/Q93/Q95 等管理页面未来落 `/[locale]/admin/*` 独立布局，不与客户外壳共用导航（真实认证 V2 前不做角色显隐）。
+- **漂移防护**：`scripts/check-nav.mjs`（npm run check-nav）校验 nav.ts↔messages↔页面文件三方一致，随 Q96 的 check-tokens 同为零依赖脚本测试。
