@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     # （单副本/本地零依赖）；开启后 Redis 不可用 fail-closed 跳过本轮。
     distributed_lock_enabled: bool = False
 
+    # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
+    # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。
+    orch_max_concurrency: int = 4
+
     # Q82：outbound 供应商 API Key 落库密文的主密钥（只从环境变量注入，不入库不入仓）。
     # 未设置时测试/本地用进程内临时密钥（重启后旧密文不可解，仅限开发态）。
     master_key: str = ""
