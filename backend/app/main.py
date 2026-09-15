@@ -8,6 +8,8 @@ from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
 from app.core.db import SessionLocal, settings
 from app.core.model_registry.router import router as model_registry_router
+from app.core.restock.router import router as restock_router
+from app.core.restock.worker import RestockWorker
 from app.core.skill7.router import router as skill7_router
 from app.core.sla.router import router as sla_router
 from app.core.sla.runner import run_jobs
@@ -26,11 +28,12 @@ from app.product.whitelist_center.router import router as pws_router
 logger = logging.getLogger("loom.startup")
 
 _scheduler: SweepScheduler | None = None
+_restock_worker: RestockWorker | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _scheduler
+    global _scheduler, _restock_worker
     # M10c：启动引导配置缓存。失败不阻断启动——knob() 回落种子默认值，
     # 进程仍可健康启动，配置中心在下次发布或重启后恢复（单进程 V1）。
     try:
@@ -41,9 +44,19 @@ async def lifespan(app: FastAPI):
     if settings.scheduler_enabled:
         _scheduler = SweepScheduler(SessionLocal, run_jobs, settings.sweep_interval_seconds)
         await _scheduler.start()
+    if settings.restock_worker_enabled:
+        _restock_worker = RestockWorker(
+            SessionLocal,
+            settings.restock_interval_seconds,
+            settings.restock_batch_size,
+        )
+        await _restock_worker.start()
     try:
         yield
     finally:
+        if _restock_worker is not None:
+            await _restock_worker.stop()
+            _restock_worker = None
         if _scheduler is not None:
             await _scheduler.stop()
             _scheduler = None
@@ -59,6 +72,7 @@ app.include_router(config_router)
 app.include_router(model_registry_router)
 app.include_router(skill7_router)
 app.include_router(sla_router)
+app.include_router(restock_router)
 app.include_router(atom_router)
 app.include_router(pwc_router)
 app.include_router(pws_router)

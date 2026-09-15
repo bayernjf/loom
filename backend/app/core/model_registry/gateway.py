@@ -46,6 +46,10 @@ class ModelUnavailable(Exception):
     """模型停用且无可用 fallback，或日预算耗尽（Q82 实现补登：硬停）。"""
 
 
+class BudgetExhausted(ModelUnavailable):
+    """日预算硬停（Q87：worker 侧判为瞬态，区别于停用无 fallback 的终态）。"""
+
+
 class GenerationUpstreamError(Exception):
     pass
 
@@ -347,7 +351,7 @@ async def invoke(session: AsyncSession, scene: str, variables: dict) -> Invocati
     model = await _resolve_model(session, scene)
     budget = model.daily_budget
     if budget is not None and await spend_today(session, model.model_id) >= Decimal(str(budget)):
-        raise ModelUnavailable(f"daily budget exhausted for model {model.model_code!r}")
+        raise BudgetExhausted(f"daily budget exhausted for model {model.model_code!r}")
 
     user_message = await _render_current_prompt(session, scene, variables)
     kwargs: dict = {"model_code": model.model_code, "provider": model.provider}
@@ -380,7 +384,7 @@ async def embed(session: AsyncSession, scene: str, texts: list[str]) -> Embeddin
     model = await _resolve_model(session, scene, capability="embedding")
     budget = model.daily_budget
     if budget is not None and await spend_today(session, model.model_id) >= Decimal(str(budget)):
-        raise ModelUnavailable(f"daily budget exhausted for model {model.model_code!r}")
+        raise BudgetExhausted(f"daily budget exhausted for model {model.model_code!r}")
 
     kwargs: dict = {"model_code": model.model_code, "provider": model.provider}
     if model.provider != "synthetic":
