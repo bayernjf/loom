@@ -5,6 +5,7 @@
 Key 为平台级凭证不绑租户（Q88-3，租户绑定口径原文未给【待补】）。
 """
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, String, UniqueConstraint, func
@@ -14,7 +15,7 @@ from app.core.db import Base
 
 
 def _uuid_pk() -> Mapped[str]:
-    return mapped_column(String(36), primary_key=True)
+    return mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid1()))
 
 
 class AgentApiKey(Base):
