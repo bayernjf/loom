@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "check-tokens": "node scripts/check-tokens.mjs",
     "lint": "next lint"
   },
   "dependencies": {
