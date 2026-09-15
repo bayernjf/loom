@@ -74,6 +74,8 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("agent.pm_audit_max_tokens", "agent", "int", 6000, "line2119", {"min": 1}),
     ("agent.support_max_turns", "agent", "int", 20, "line2119", {"min": 1}),
     ("agent.support_max_tokens", "agent", "int", 4000, "line2119", {"min": 1}),
+    # ---- M12 统一审核工作台（Q70 一期③批量通过阈值；Q93 不挪用 fieldpool 命名空间）----
+    ("review.batch_pass_confidence", "review", "float", 0.85, "Q70/Q9", {"min": 0.0, "max": 1.0}),
 ]
 
 SEED_BY_KEY = {row[0]: row for row in CONFIG_SEEDS}
