@@ -67,7 +67,7 @@ frontend/
 落码步骤（顺序即依赖序）：
 1. `npm i next-intl`；建 i18n/routing.ts、i18n/request.ts、middleware.ts（next-intl App Router 官方三件套结构，不自造变体）；
 2. `app/*` 迁入 `app/[locale]/*`，layout 注入 NextIntlClientProvider 并 import tokens.css；
-3. 建 messages/zh-CN.json，现有页面文案全部改 `useTranslations`/`getTranslations`；命名空间按后端域：`common.*`、`nav.*`（Q97 八菜单）、`shell.*`（Q97 外壳/占位）、`intake.*`（含 `intake.status.*`，与 docs/13 状态词一一对应）、`fieldpool.*`、`pwc.*`、`pws.*`、`skill7.*`（候选/裁决/工作台）、`dashboard.*`、`tenant.*`（Q95 租户管理/引导）、`error.*`（错误码映射）；
+3. 建 messages/zh-CN.json，现有页面文案全部改 `useTranslations`/`getTranslations`；命名空间按后端域：`common.*`、`nav.*`（Q97 八菜单）、`shell.*`（Q97 外壳/占位）、`products.*`（Q98 产品中心）、`intake.*`（含 `intake.status.*`，与 docs/13 状态词一一对应）、`fieldpool.*`、`pwc.*`、`pws.*`、`skill7.*`（候选/裁决/工作台）、`dashboard.*`、`tenant.*`（Q95 租户管理/引导）、`error.*`（错误码映射）；
 4. 后端错误体只消费 `code`+参数，前端按 `error.<code>` 拼文案（HTTP 403/404/409/422 各有通用兜底 key）；枚举码、fid、审计 action 码不进消息表；
 5. 时间展示统一 `Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", … })`，时区作为配置常量不散落组件；
 6. M12 页面验收口径（评审项，V1 不上 lint 插件）：页面无硬编码中文业务文案、无前端自创状态词。
@@ -258,3 +258,16 @@ z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-
 - **占位口径**：v1 页文案 `shell.placeholderV1`（随 M12 后续切片落地），v2 页标题旁与导航项均挂"V2"徽标 + `shell.placeholderV2`；菜单全显不隐藏。
 - **管理端分治**：Q92/Q93/Q95 等管理页面未来落 `/[locale]/admin/*` 独立布局，不与客户外壳共用导航（真实认证 V2 前不做角色显隐）。
 - **漂移防护**：`scripts/check-nav.mjs`（npm run check-nav）校验 nav.ts↔messages↔页面文件三方一致，随 Q96 的 check-tokens 同为零依赖脚本测试。
+
+## 7. 产品中心功能页（Q98 定稿，2026-09-16）
+
+D5 菜单 2「产品中心」由 Q98 四接缝拍板（02 C1.42，全甲）：跨栈最小闭环、env 固定租户、Next 服务端代理、仅产品名（fid 挂账）。
+
+- **路由**（均在 `(shell)/products/`，subnav 三项 + 新建按钮）：
+  - `/products` RSC 列表（我的产品），`export const dynamic = "force-dynamic"`——租户/基址运行时从 env 读，不得构建期静态固化；
+  - `/products/new` 新建产品（client 表单，仅"产品名称"必填 ≤100 字）→ Server Action `actions.ts`（`"use server"`）调后端 POST 建 draft → 跳详情；
+  - `/products/[intakeId]` 只读详情（录入单 id/租户/状态/profile 键值；后端 404 → Next `notFound()`）；
+  - `/products/templates`、`/products/library` 产品模板/资料库 V1 占位（复用 menu-placeholder + subnav）；**15 态迁移操作不在本切片**。
+- **服务端访问层纪律**：`frontend/lib/api.ts` 是对 FastAPI 的唯一访问层，只允许 RSC/Server Action 引用；env 一律不带 `NEXT_PUBLIC` 前缀（`LOOM_API_BASE_URL` 默认 http://localhost:8000、`LOOM_TENANT_ID`），不进浏览器包；浏览器零直连后端（后端无 CORS 的现状不变，V2 认证后租户由会话派生）。错误按 HTTP 状态码映射既有 `error.403/404/409/422/unknown`。
+- **profile 键挂账**：产品名以工程临时键 `product_name` 存 intake.profile；G2 cat='common' 18 字段 fid 基线未回填（docs/04:58 仅中文名，溯 line 682-698；g2_fields 空表），种子基线落地后对齐替换，列表/详情名称缺失时回退 intake_id 前 8 位；状态在 V1 直接显示后端英文码，不自造状态词。
+- **漂移防护**：`scripts/check-products.mjs`（npm run check-products）校验 products.* 必备消息键、页面/文件齐备、lib/api.ts 不得出现 `process.env.NEXT_PUBLIC`、Server Action/表单组件指令边界，失败 exit 1。
