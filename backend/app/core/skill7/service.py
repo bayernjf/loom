@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
 from app.core.rbac import OPERATIONS, require_any_role
-from app.core.skill7 import registry
+from app.core.skill7 import registry, review_sla
 from app.core.skill7.adapters import ADAPTERS
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.core.skill7.schemas import CandidateDecisionRequest, DeliverRunRequest
@@ -264,6 +264,10 @@ async def _persist_delivery(
         session.add(row)
         created.append(row)
 
+    await session.flush()
+    # Q70②/Q94：投递即挂审核 SLA 待办（同事务，回滚与候选一体）。
+    await review_sla.create_review_todos(session, created)
+
     await append_audit(
         session,
         tenant_id=tenant_id,
@@ -344,6 +348,7 @@ async def decide_candidate(
         cand.review_note = body.reason
         cand.reviewed_by = body.actor.id
         cand.reviewed_at = now
+        await review_sla.resolve_review_todo(session, cand, "archived")
         await append_audit(
             session,
             tenant_id=cand.tenant_id,
@@ -373,6 +378,7 @@ async def decide_candidate(
     cand.reviewed_at = now
     cand.review_note = body.reason
     cand.applied_refs = applied_refs
+    await review_sla.resolve_review_todo(session, cand, "applied")
     await append_audit(
         session,
         tenant_id=cand.tenant_id,

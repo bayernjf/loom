@@ -213,10 +213,19 @@ async def test_confirm_high_confidence_direct_approve(client, session_factory):
     view = ok.json()
     assert view["state"] == "applied"
     assert len(view["applied_refs"]) == 1
-    # Q1 高置信：auto_confirm 直接 submitted，无 OpsTodo。
+    # Q1 高置信：auto_confirm 直接 submitted，无 ops_assist 类 OpsTodo。
+    # Q94：另一条 review_c1_recognition 审核 SLA 待办随裁决 resolved（行仍在）。
     detail = await client.get(f"/api/intakes/{intake_id}")
     assert detail.json()["status"] == sm.SUBMITTED
-    assert await _count(session_factory, OpsTodo) == 0
+    async with session_factory() as session:
+        ops_assist = (
+            await session.scalars(
+                select(func.count())
+                .select_from(OpsTodo)
+                .where(OpsTodo.todo_type == "ops_assist_category")
+            )
+        ).one()
+    assert ops_assist == 0
     assert await _count(session_factory, C1Record) == 1
 
 
@@ -231,10 +240,19 @@ async def test_confirm_mid_confidence_creates_ops_todo(client, session_factory):
     )
     assert ok.status_code == 200, ok.text
     assert ok.json()["state"] == "applied"
-    # Q1 中置信：pending_confirm + 72h OpsTodo，准入后无第二道运营确认以外的变化。
+    # Q1 中置信：pending_confirm + 72h OpsTodo（ops_assist 类）；
+    # Q94：另一条 review_c1_recognition 审核 SLA 待办随裁决 resolved。
     detail = await client.get(f"/api/intakes/{intake_id}")
     assert detail.json()["status"] == sm.PENDING_CONFIRM
-    assert await _count(session_factory, OpsTodo) == 1
+    async with session_factory() as session:
+        ops_assist = (
+            await session.scalars(
+                select(func.count())
+                .select_from(OpsTodo)
+                .where(OpsTodo.todo_type == "ops_assist_category")
+            )
+        ).one()
+    assert ops_assist == 1
 
 
 async def test_low_confidence_without_pending_id_fails_then_modified_succeeds(
