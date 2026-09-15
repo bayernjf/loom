@@ -6,6 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
+from app.core.skill7.review_sla import ESCALATION_ACTION as REVIEW_ESCALATION_ACTION
+from app.core.skill7.review_sla import TODO_TYPE as REVIEW_TODO_TYPES
 from app.product.modeling.models import OpsTodo
 
 # 各待办类型的升级审计动作（ops_assist 沿用 M2 既有口径，保护既有契约/测试）。
@@ -14,6 +16,8 @@ ESCALATION_ACTIONS = {
     "pws_ready": "pws.ready_todo_escalated",
     "law_review": "law_review.escalated",
     "wordlist_rescan": "wordlist.rescan_todo_escalated",
+    # Q70②/Q94：五型审核待办共用一个升级动作，target_type 在 todo.detail 可溯。
+    **{todo_type: REVIEW_ESCALATION_ACTION for todo_type in REVIEW_TODO_TYPES.values()},
 }
 DEFAULT_ESCALATION_ACTION = "sla.todo_escalated"
 
