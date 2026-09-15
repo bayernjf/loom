@@ -47,6 +47,7 @@ async def create_model(body: AIModelCreate, session: AsyncSession = Depends(get_
     await session.commit()
     return AIModelView(
         model_id=model.model_id, model_code=model.model_code, provider=model.provider,
+        capability=model.capability,
         input_price_per_1m=float(model.input_price_per_1m),
         output_price_per_1m=float(model.output_price_per_1m),
         currency_code=model.currency_code,
@@ -61,6 +62,7 @@ async def list_models(session: AsyncSession = Depends(get_session)):
     return [
         AIModelView(
             model_id=m.model_id, model_code=m.model_code, provider=m.provider,
+            capability=m.capability,
             input_price_per_1m=float(m.input_price_per_1m),
             output_price_per_1m=float(m.output_price_per_1m),
             currency_code=m.currency_code,
@@ -87,6 +89,7 @@ async def patch_model(
     await session.commit()
     return AIModelView(
         model_id=model.model_id, model_code=model.model_code, provider=model.provider,
+        capability=model.capability,
         input_price_per_1m=float(model.input_price_per_1m),
         output_price_per_1m=float(model.output_price_per_1m),
         currency_code=model.currency_code,

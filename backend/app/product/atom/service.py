@@ -83,7 +83,7 @@ PLATFORM_TENANT = "_platform"
 
 # ---------- 拓展批次提交 ----------
 
-async def submit_batch(session, product_space_id: str, body, actor) -> AtomBatch:
+async def submit_batch(session, product_space_id: str, body, actor, *, embeddings=None) -> AtomBatch:
     ps = await session.get(ProductSpace, product_space_id)
     if ps is None:
         raise ProductSpaceNotFound(product_space_id)
@@ -197,6 +197,9 @@ async def submit_batch(session, product_space_id: str, body, actor) -> AtomBatch
             evidence=item.evidence,
             evidence_due_at=due,
             cluster_id=item.cluster_id,
+            embedding=(embeddings or {}).get(
+                atom_rules.normalize_text(item.content)
+            ),
             status=status,
             submitted_by=actor.id,
         )
@@ -375,6 +378,7 @@ async def approve_candidate(
         risk_source=cand.risk_source,
         affinity=cand.affinity,
         evidence=cand.evidence,
+        embedding=cand.embedding,
         status=atom_rules.ATOM_APPROVED,
         created_by=actor.id,
     )

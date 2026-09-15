@@ -8,10 +8,14 @@ Q19（同义簇留高亲和者，余为 alias）/Q20（冻结/合规/废弃权�
 
 WF-03 四个 Skill（ATOM-EXPAND/CANON/AFFINITY/CONFLICT-PRECHECK）的 AI 产物
 由 M10 skill7 通道接入；M4 只接收结构化候选并做确定性定级、冲突、Guard 与流转。
+Q86 起 AFFINITY 的 affinity/cluster 由 embedding 向量在本地确定性算出
+（成簇线 atom.cluster_line 借 Q10 0.9，原文未给【待补】）。
 
 拍板值经配置中心热更（02 §C2 已登记 20/50、0.5、7 天、15-30；M10c 接入）。
 """
 
+import math
+import uuid
 from dataclasses import dataclass, field
 
 from app.core.config_center.knobs import knob
@@ -32,6 +36,11 @@ def low_affinity_line() -> float:
 
 def evidence_timeout_days() -> int:
     return knob("atom.evidence_timeout_days")
+
+
+def cluster_line() -> float:
+    # Q86：成簇线原文未给【待补】，借 Q10 字段去重 0.9 同义线（02 §C2）。
+    return knob("atom.cluster_line")
 
 # Q17：原文只给 critical/high；medium/low 为实现补全等级，标【实现补】。
 RISK_CRITICAL = "critical"
@@ -202,3 +211,67 @@ def pick_cluster_keeper(items: list) -> tuple | None:
 def target_reached(approved_atom_count: int, target_atom_max: int) -> bool:
     """Q15：已通过原子数达标 → 停止自动拓展（手动追加批次不受限）。"""
     return approved_atom_count >= target_atom_max
+
+
+# ---------- Q86：embedding 向量相似度与同义簇（Q16/Q19 的向量实现化） ----------
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    if not a or len(a) != len(b):
+        raise ValueError("embedding vectors must be non-empty and of equal length")
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return max(0.0, min(1.0, dot / (norm_a * norm_b)))
+
+
+def max_affinity(vector: list[float], basis: list[list[float]]) -> float | None:
+    """Q16：与同维度已批准原子的最大余弦；无比较基时给 None（不凑 0 分）。"""
+    if not basis:
+        return None
+    return round(max(cosine_similarity(vector, other) for other in basis), 6)
+
+
+def assign_clusters(
+    vectors: list[list[float]],
+    line: float | None = None,
+    *,
+    labels: list | None = None,
+) -> list[str | None]:
+    """Q19：批内余弦 ≥ 成簇线者并查集聚成同义簇，返回每条的 cluster_id。
+
+    labels 给定时仅在同 label 之间连边（Q86：只在同一选中维度内成簇，
+    与同维度 affinity 基口径一致）；仅 ≥2 条的连通成分分配 cluster_id
+    （uuid4），单条为 None。
+    """
+    threshold = cluster_line() if line is None else line
+    n = len(vectors)
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i: int, j: int) -> None:
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[rj] = ri
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if labels is not None and labels[i] != labels[j]:
+                continue
+            if cosine_similarity(vectors[i], vectors[j]) >= threshold:
+                union(i, j)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+    cluster_ids: dict[int, str] = {
+        root: str(uuid.uuid4()) for root, members in groups.items() if len(members) >= 2
+    }
+    return [cluster_ids.get(find(i)) for i in range(n)]

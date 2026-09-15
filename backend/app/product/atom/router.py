@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
+from app.core.model_registry import atom_expand, gateway
+from app.core.model_registry.schemas import AtomExpandInvokeRequest
+from app.core.rbac import PermissionDenied
 from app.product.atom import service
 from app.product.atom.models import AtomCandidate, AtomConflict, ProductAtomInstance
 from app.product.atom.schemas import (
@@ -121,6 +124,57 @@ async def submit_batch(
         "source": batch.source,
         "candidates": [
             _candidate_view(c, by_cand.get(c.candidate_id)) for c in candidates
+        ],
+    }
+
+
+@router.post(
+    "/product-spaces/{product_space_id}/atom-batches/llm-expand", status_code=201
+)
+async def llm_expand(
+    product_space_id: str,
+    body: AtomExpandInvokeRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Q86：operations 显式触发 CONFLICT-PRECHECK + ATOM-AFFINITY 双调用补池。
+
+    不自动串链（restock_auto 留给 M8 worker）；产出整批单候选落 pending_review。
+    """
+    try:
+        run, candidates = await atom_expand.invoke_atom_expand(
+            session, product_space_id, body, body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except atom_expand.AtomExpandInvokeNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except atom_expand.AtomExpandInvokeState as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.ModelUnavailable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.ModelConfigError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except gateway.GenerationUpstreamError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except atom_expand.AtomExpandOutputInvalid as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await session.commit()
+    return {
+        "run_id": run.run_id,
+        "source": run.source,
+        "model_id": run.model_id,
+        "input_tokens": run.input_tokens,
+        "output_tokens": run.output_tokens,
+        "candidates": [
+            {"candidate_id": c.candidate_id, "state": c.state, "target_type": c.target_type}
+            for c in candidates
         ],
     }
 

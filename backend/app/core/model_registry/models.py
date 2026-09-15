@@ -47,6 +47,8 @@ class AIModel(Base):
     daily_budget: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
     # active / disabled；disabled 时路由指 fallback_model_id（不做失败自动转移）。
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    # Q86：chat=生成式场景（invoke），embedding=向量化场景（embed）。
+    capability: Mapped[str] = mapped_column(String(16), nullable=False, default="chat")
     fallback_model_id: Mapped[str | None] = mapped_column(
         ForeignKey("ai_models.model_id"), nullable=True
     )

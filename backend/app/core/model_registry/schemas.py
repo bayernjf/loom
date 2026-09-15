@@ -1,5 +1,7 @@
 """模型注册表/场景路由/Key/Prompt 管理 Pydantic 契约（Q67/Q82，05 §1.4 实现登记）。"""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.core.actor import Actor
@@ -8,6 +10,7 @@ from app.core.actor import Actor
 class AIModelCreate(BaseModel):
     model_code: str = Field(min_length=1, max_length=64)
     provider: str = Field(min_length=1, max_length=32)
+    capability: Literal["chat", "embedding"] = "chat"
     input_price_per_1m: float = Field(default=0, ge=0)
     output_price_per_1m: float = Field(default=0, ge=0)
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
@@ -22,6 +25,7 @@ class AIModelPatch(BaseModel):
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     daily_budget: float | None = Field(default=None, ge=0)
     status: str | None = None  # active / disabled
+    capability: Literal["chat", "embedding"] | None = None
     fallback_model_id: str | None = None
     actor: Actor
 
@@ -30,6 +34,7 @@ class AIModelView(BaseModel):
     model_id: str
     model_code: str
     provider: str
+    capability: Literal["chat", "embedding"] = "chat"
     input_price_per_1m: float
     output_price_per_1m: float
     currency_code: str | None
@@ -103,4 +108,11 @@ class FieldPlanInvokeRequest(BaseModel):
     # 侧给定（缺省走 Q15 旋钮），模型必须原样回传。
     target_atom_min: int | None = Field(default=None, ge=1)
     target_atom_max: int | None = Field(default=None, ge=1)
+    actor: Actor
+
+
+class AtomExpandInvokeRequest(BaseModel):
+    # Q86：operations 显式触发 ATOM-EXPAND 原子批量补池；batch_size 缺省走
+    # Q14 敏感行业 20 / 默认 50，模型必须原样回传。
+    batch_size: int | None = Field(default=None, ge=1)
     actor: Actor
