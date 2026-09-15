@@ -5,8 +5,9 @@
 （去评分，Q22b）→ 一条组合一条 pwc_combo 候选经 skill7 同一条投递通道落
 pending_review；M5 漏斗全部规则只在 product_reviewer confirm 后由适配器执行。
 
-Q71 restock_auto 的 SkillRun(requested) 本切片不自动消费（Q83-1，自动触发等
-M8 异步 worker）。
+Q71 restock_auto 的 SkillRun(requested) 由 Q87 M8 worker 自动消费：HTTP 端点
+走 invoke_pwc_build（operations 闸保留），worker 走 invoke_pwc_build_for_restock
+（系统内部入口，不过角色闸，子 run input 回链 restock_request_id）。
 """
 
 import json
@@ -45,7 +46,24 @@ class PwcBuildOutputInvalid(Exception):
 
 async def invoke_pwc_build(session: AsyncSession, product_space_id: str, trigger_actor: Actor):
     require_any_role(trigger_actor, OPERATIONS)
+    return await _run_pwc_build(session, product_space_id)
 
+
+async def invoke_pwc_build_for_restock(
+    session: AsyncSession, product_space_id: str, *, restock_request_id: str
+):
+    """Q87：restock worker 系统内部入口，不过 HTTP 角色闸（受信进程内调度）。"""
+    return await _run_pwc_build(
+        session, product_space_id, restock_request_id=restock_request_id
+    )
+
+
+async def _run_pwc_build(
+    session: AsyncSession,
+    product_space_id: str,
+    *,
+    restock_request_id: str | None = None,
+):
     ps = await session.get(ProductSpace, product_space_id)
     if ps is None:
         raise ProductSpaceNotFound(product_space_id)
@@ -169,16 +187,20 @@ async def invoke_pwc_build(session: AsyncSession, product_space_id: str, trigger
     if not combos:
         raise PwcBuildOutputInvalid("model output combos are all duplicates")
 
+    run_input = {
+        "approved_atom_count": len(atoms),
+        "dimension_count": len({d for d in dim_of.values() if d}),
+        "active_goal_count": len(active_goals),
+        "capacity": pool_cfg["capacity"],
+        "ready_count": ready_count,
+    }
+    if restock_request_id is not None:
+        # Q87：纯追加认领——子 llm_auto run 回链 requested 信号行（信号行不 mutate）。
+        run_input["restock_request_id"] = restock_request_id
     body = DeliverRunRequest(
         skill_id=SCENE_PWC_BUILDER,
         product_space_id=product_space_id,
-        input={
-            "approved_atom_count": len(atoms),
-            "dimension_count": len({d for d in dim_of.values() if d}),
-            "active_goal_count": len(active_goals),
-            "capacity": pool_cfg["capacity"],
-            "ready_count": ready_count,
-        },
+        input=run_input,
         output={"combos": combos},
         candidates=[
             CandidateInput(target_type="pwc_combo", payload={"combos": [combo]})

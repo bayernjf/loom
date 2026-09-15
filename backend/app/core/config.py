@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     sweep_interval_seconds: float = 300.0
 
+    # Q87 M8 restock_auto worker：自动花真 token，默认关闭、部署显式 opt-in。
+    restock_worker_enabled: bool = False
+    restock_interval_seconds: float = 60.0
+    restock_batch_size: int = 20
+
     # Q82：outbound 供应商 API Key 落库密文的主密钥（只从环境变量注入，不入库不入仓）。
     # 未设置时测试/本地用进程内临时密钥（重启后旧密文不可解，仅限开发态）。
     master_key: str = ""
