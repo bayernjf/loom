@@ -274,6 +274,27 @@ async def test_queue_orders_by_risk_then_creation_and_flags_eligibility(
     assert by_id["c-c1-low"]["batch_eligible"] is True
     assert by_id["c-pwc"]["batch_eligible"] is False  # confidence 0.5 <= 0.85
     assert by_id["c-none"]["batch_eligible"] is False  # confidence missing
+    # Q104：队列视图回传裁决备注；未裁决候选为 None。
+    assert crit["review_note"] is None
+
+
+async def test_queue_echoes_review_note_after_rejection(client, session_factory):
+    await _seed_queue(session_factory)
+    resp = await client.post(
+        "/api/skill-candidates/c-crit/decision",
+        json={"decision": "rejected", "reason": "manual reject note", "actor": OPS},
+    )
+    assert resp.status_code == 200, resp.text
+
+    resp = await client.get(
+        "/api/review-workbench/candidates",
+        params=_params(OPS, state="archived"),
+    )
+    rows = {row["candidate_id"]: row for row in resp.json()["candidates"]}
+    assert set(rows) == {"c-crit"}
+    assert rows["c-crit"]["state"] == "archived"
+    assert rows["c-crit"]["review_note"] == "manual reject note"
+    assert rows["c-crit"]["human_modified"] is False
 
 
 async def test_queue_filters_and_paginates(client, session_factory):

@@ -101,9 +101,23 @@ const requiredKeys = [
     "colCreated",
     "colTenant",
     "colPayload",
+    "colDecision",
     "showPayload",
     "humanModified",
     "reviewedBy",
+    "reviewedAt",
+    "reviewNote",
+    "decideConfirm",
+    "decideModify",
+    "decideReject",
+    "submitDecision",
+    "submitReject",
+    "cancel",
+    "reasonField",
+    "payloadReplacement",
+    "invalidJson",
+    "criticalConfirm",
+    "decideSuccess",
     "batchApprove",
     "batchReason",
     "batchSuccess",
@@ -126,6 +140,7 @@ const requiredFiles = [
   join("review-queue", "page.tsx"),
   join("review-queue", "actions.ts"),
   join("review-queue", "batch-bar.tsx"),
+  join("review-queue", "decision-cell.tsx"),
 ];
 
 const problems = [];
@@ -225,8 +240,10 @@ for (const token of [
   "getReviewWorkloadDashboard",
   "getReviewQueue",
   "batchApprove",
+  "decideCandidate",
   "/api/review-workbench/candidates",
   "/api/review-workbench/batch-approve",
+  "/api/skill-candidates/",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -331,6 +348,50 @@ const workbenchService = readFileSync(
 );
 if (!workbenchService.includes('"payload": cand.payload'))
   problems.push("workbench queue view must return raw candidate payload (Q103 additive)");
+if (!workbenchService.includes('"review_note": cand.review_note'))
+  problems.push("workbench queue view must return review_note (Q104 additive)");
+
+// Q104：逐条裁决（confirmed/modified/rejected + payload 替换编辑器）。
+const decisionCellPath = join("review-queue", "decision-cell.tsx");
+const decisionCell = existsSync(join(adminDir, decisionCellPath))
+  ? readAdmin(decisionCellPath)
+  : "";
+
+if (decisionCell) {
+  if (!/^"use client"/m.test(decisionCell))
+    problems.push("decision cell must be a client island");
+  if (decisionCell.includes("@/lib/api") || /https?:\/\//.test(decisionCell))
+    problems.push("decision cell must call only the Server Action, never the API directly");
+  for (const token of [
+    "decideCandidateAction",
+    "router.refresh",
+    "JSON.parse",
+    "window.confirm",
+    "modified",
+    "rejected",
+    "confirmed",
+  ]) {
+    if (!decisionCell.includes(token))
+      problems.push(`decision cell must contain ${token}`);
+  }
+}
+if (!/"use server"/.test(queueActions))
+  problems.push("review-queue actions must be a Server Action module");
+if (!/\bdecideCandidateAction\b/.test(queueActions))
+  problems.push("review-queue actions must expose decideCandidateAction");
+const decideActionBody = queueActions.split("decideCandidateAction")[1] ?? "";
+for (const status of [403, 404, 409, 422]) {
+  if (!decideActionBody.includes(String(status)))
+    problems.push(`decideCandidateAction must map failure status ${status}`);
+}
+if (!/\/api\/skill-candidates\//.test(apiText))
+  problems.push("per-candidate decision must POST to /api/skill-candidates/{id}/decision");
+if (!apiText.includes("/decision`"))
+  problems.push("decideCandidate must hit the /decision sub-path");
+if (!queuePage.includes("<DecisionCell") || !queuePage.includes("colDecision"))
+  problems.push("review-queue page must render the decision column and island");
+if (!queuePage.includes('cand.state === "pending_review"'))
+  problems.push("decision island must render only for pending_review rows");
 
 if (problems.length > 0) {
   console.error(`check-admin: ${problems.length} problem(s)\n${problems.join("\n")}`);

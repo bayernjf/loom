@@ -248,8 +248,9 @@ export async function getReviewWorkloadDashboard(): Promise<ReviewWorkloadDashbo
 }
 
 // Q103：统一审核工作台（Q93 后端）。可见角色 = 注册表 WF skill7 Gate 角色并集
-// （operations+product_reviewer）；本切片仅队列消费 + 批量通过，逐条
-// confirmed/modified/rejected 裁决留下一切片。
+// （operations+product_reviewer）；Q104 起逐条裁决复用既有
+// POST /api/skill-candidates/{id}/decision（confirmed/modified/rejected，
+// modified 携带替换 payload），工作台不另设写口。
 export interface ReviewQueueCandidate {
   candidate_id: string;
   run_id: string;
@@ -263,6 +264,7 @@ export interface ReviewQueueCandidate {
   payload: unknown;
   state: string;
   human_modified: boolean;
+  review_note: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string | null;
@@ -320,4 +322,32 @@ export async function batchApprove(
       actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
     }),
   });
+}
+
+export type CandidateDecision = "confirmed" | "modified" | "rejected";
+
+export interface CandidateDecisionBody {
+  decision: CandidateDecision;
+  payload?: unknown;
+  reason?: string | null;
+}
+
+// Q104：逐条裁决。后端按该候选所属 WF 的 review_role 校角色，modified 必给
+// 替换 payload（先结构校验再过适配器业务规则），403/404/409/422 齐。
+export async function decideCandidate(
+  candidateId: string,
+  body: CandidateDecisionBody,
+): Promise<{ candidate_id: string; state: string }> {
+  return request<{ candidate_id: string; state: string }>(
+    `/api/skill-candidates/${candidateId}/decision`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        decision: body.decision,
+        payload: body.payload ?? null,
+        reason: body.reason ?? null,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+      }),
+    },
+  );
 }
