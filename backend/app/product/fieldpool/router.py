@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.core.model_registry import field_plan, gateway
 from app.core.model_registry.schemas import FieldPlanInvokeRequest
-from app.core.rbac import PermissionDenied
+from app.core.rbac import OPERATIONS, PermissionDenied, require_any_role
 from app.product.fieldpool import service
 from app.product.fieldpool.models import FPDimension
 from app.product.fieldpool.schemas import (
@@ -19,6 +19,18 @@ from app.product.fieldpool.schemas import (
 from app.product.product_intake.schemas import Actor
 
 router = APIRouter(prefix="/api", tags=["field-pool"])
+
+
+def require_routes_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, OPERATIONS)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 def _dim_view(d: FPDimension) -> dict:
@@ -58,7 +70,10 @@ async def _pool_payload(session, pool) -> dict:
 # ---- Q8 来源路由表 ----
 
 @router.get("/admin/fp-source-routes")
-async def get_routes(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def get_routes(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_routes_view),
+) -> list[dict]:
     rows = await service.list_routes(session)
     return [
         {"route": r.route, "name": r.name, "enabled": r.enabled, "sort_order": r.sort_order}

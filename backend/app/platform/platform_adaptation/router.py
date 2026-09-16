@@ -1,9 +1,11 @@
 """段7/8 静态底表 REST 端点（08 M11）。"""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
+from app.core.rbac import OPERATIONS, PermissionDenied, require_any_role
 from app.platform.platform_adaptation import service
 from app.platform.platform_adaptation.schemas import (
     ActorOnly,
@@ -16,6 +18,18 @@ from app.platform.platform_adaptation.schemas import (
 )
 
 router = APIRouter(tags=["platform-adaptation"])
+
+
+def require_fit_weights_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, OPERATIONS)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 def _slot_view(s) -> dict:
@@ -131,7 +145,10 @@ async def fit_score(
 # ---------- Q34 目的权重矩阵 ----------
 
 @router.get("/api/admin/fit-weights")
-async def list_fit_weights(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def list_fit_weights(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_fit_weights_view),
+) -> list[dict]:
     return [
         {"goal": r.goal, "weights": r.weights, "updated_by": r.updated_by}
         for r in await service.list_fit_weights(session)
