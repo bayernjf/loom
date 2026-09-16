@@ -428,3 +428,67 @@
   color: var(--color-text-tertiary);
 }
 
+
+/* Q105：租户管理。套餐/状态码原样直出，状态三态消费 info/success/warning 语义色；
+   只消费既有 86 个 token，不新增。 */
+.provisionForm {
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-2);
+}
+
+.provisionFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+.provisionFields input,
+.provisionFields select,
+.decisionCell select {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.planChip {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+.statusTrial {
+  background: var(--color-info-bg);
+  color: var(--color-state-info-text);
+}
+
+.statusActive {
+  background: var(--color-success-bg);
+  color: var(--color-state-success-text);
+}
+
+.statusPaused {
+  background: var(--color-warning-bg);
+  color: var(--color-state-warning-text);
+}
+
+.detailList {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-3) 0;
+  font-size: var(--font-size-sm);
+}
+
+.detailList dt {
+  color: var(--color-text-secondary);
+}
+
+.onboardingNote {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}

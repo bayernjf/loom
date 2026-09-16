@@ -351,3 +351,91 @@ export async function decideCandidate(
     },
   );
 }
+
+// Q105：租户管理 + Onboarding（Q95 后端，platform_admin 红线）。
+// 读端点 actor 走 query（adminPath），写端点 actor 在请求体；无删除端点。
+export interface TenantView {
+  tenant_id: string;
+  name: string | null;
+  plan: string;
+  status: string;
+  monthly_token_quota: number | null;
+  detail: Record<string, unknown>;
+  created_at: string | null;
+}
+
+export interface TenantOnboarding {
+  intakes: number;
+  product_spaces: number;
+  first_modeling_started: boolean;
+}
+
+export interface TenantDetailView extends TenantView {
+  onboarding: TenantOnboarding;
+}
+
+export async function listTenants(): Promise<TenantView[]> {
+  return request<TenantView[]>(adminPath("/api/admin/tenants"));
+}
+
+export async function getTenant(tenantId: string): Promise<TenantDetailView> {
+  return request<TenantDetailView>(
+    adminPath(`/api/admin/tenants/${encodeURIComponent(tenantId)}`),
+  );
+}
+
+export async function provisionTenant(body: {
+  tenantId: string;
+  name: string | null;
+  plan: string;
+}): Promise<TenantView> {
+  return request<TenantView>("/api/admin/tenants", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: body.tenantId,
+      name: body.name,
+      plan: body.plan,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+    }),
+  });
+}
+
+export async function changeTenantPlan(
+  tenantId: string,
+  plan: string,
+): Promise<TenantView> {
+  return request<TenantView>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/change-plan`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        plan,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+      }),
+    },
+  );
+}
+
+export async function pauseTenant(tenantId: string): Promise<TenantView> {
+  return request<TenantView>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/pause`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+      }),
+    },
+  );
+}
+
+export async function resumeTenant(tenantId: string): Promise<TenantView> {
+  return request<TenantView>(
+    `/api/admin/tenants/${encodeURIComponent(tenantId)}/resume`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+      }),
+    },
+  );
+}

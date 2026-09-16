@@ -9,6 +9,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/token-cost", labelKey: "admin.tokenCostNav" },
   { href: "/admin/review-workload", labelKey: "admin.reviewWorkloadNav" },
   { href: "/admin/review-queue", labelKey: "admin.reviewQueueNav" },
+  { href: "/admin/tenants", labelKey: "admin.tenantsNav" },
 ] as const;
 
 export function AdminSidebar() {
