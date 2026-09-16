@@ -89,6 +89,15 @@ const formText = readFileSync(
 if (!formText.startsWith('"use client"'))
   problems.push("new-product-form.tsx must start with \"use client\"");
 
+// Q99：intake.status.* 十五态消息落地后，列表/详情状态位不得回退为裸英文码。
+for (const rel of ["products/page.tsx", "products/[intakeId]/page.tsx"]) {
+  const text = readFileSync(join(shell, rel), "utf8");
+  if (/\{\s*intake\.status\s*\}/.test(text))
+    problems.push(`${rel} must render status via intake.status.* messages, not the raw code`);
+  if (!text.includes('getTranslations("intake.status")'))
+    problems.push(`${rel} must load the intake.status message namespace`);
+}
+
 if (problems.length > 0) {
   console.error(`check-products: ${problems.length} problem(s)\n${problems.join("\n")}`);
   process.exit(1);
