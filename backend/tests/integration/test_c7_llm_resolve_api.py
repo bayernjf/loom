@@ -40,6 +40,13 @@ OPS = {"id": "ops-1", "roles": ["operations"]}
 PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
 CUSTOMER = {"id": "cust-1", "roles": ["customer"]}
+DICTIONARY_ADMIN = {"id": "dict-1", "roles": ["dictionary_admin"]}
+
+# Q109：GET /api/categories 补 dictionary_admin 读闸（query actor 口径）。
+CATEGORY_VIEW_PARAMS = [
+    ("actor_id", DICTIONARY_ADMIN["id"]),
+    ("roles", "dictionary_admin"),
+]
 
 
 @pytest_asyncio.fixture
@@ -86,7 +93,7 @@ async def client(session_factory):
 
 
 async def _category_id(client) -> str:
-    r = await client.get("/api/categories")
+    r = await client.get("/api/categories", params=CATEGORY_VIEW_PARAMS)
     cats = r.json()
     return cats[0]["category_id"] if isinstance(cats, list) else cats["categories"][0]
 

@@ -161,7 +161,10 @@ async def test_fit_weights_validation(client):
         json={"goal": "TRUST", "weights": {"traffic": 0.25, "safe": 0.25, "conv": 0.25, "load": 0.25}, "actor": OPS},
     )
     assert ok.status_code == 200, ok.text
-    rows = await client.get("/api/admin/fit-weights")
+    rows = await client.get(
+        "/api/admin/fit-weights",
+        params=[("actor_id", OPS["id"]), ("roles", "operations")],
+    )
     goals = {r["goal"] for r in rows.json()}
     assert {"ENGAGEMENT", "CONVERSION", "TRUST"} <= goals
 
