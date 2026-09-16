@@ -31,6 +31,9 @@ venv/
 .env.*
 !.env.example
 
+# Tooling
+.codegraph/
+
 # Temp
 *.tmp
 *.bak
