@@ -250,3 +250,105 @@ async def test_terminal_and_role_guards(client, seeded_common_fields):
 
     r = await _fire(client, intake_id, "submit", actor=CUSTOMER)
     assert r.status_code == 409  # 驳回终态
+
+
+# ---- Q107：运营跨租户队列 GET /api/intakes/ops-queue ----
+
+
+async def test_ops_queue_requires_actor_and_ops_or_platform_role(client):
+    # 缺 actor_id query → FastAPI 422；有身份但角色不符 → 403。
+    assert (await client.get("/api/intakes/ops-queue")).status_code == 422
+    r = await client.get(
+        "/api/intakes/ops-queue",
+        params=[("actor_id", "cust-1"), ("roles", "customer")],
+    )
+    assert r.status_code == 403
+
+    for roles in [["operations"], ["platform_admin"]]:
+        r = await client.get(
+            "/api/intakes/ops-queue",
+            params=[("actor_id", "admin-1"), *[("roles", role) for role in roles]],
+        )
+        assert r.status_code == 200, roles
+        assert r.json() == {"items": [], "total": 0, "limit": 20, "offset": 0}
+
+
+async def test_ops_queue_cross_tenant_status_filter_and_pagination(
+    client, session_factory
+):
+    async with session_factory() as session:
+        session.add(Tenant(tenant_id="t2", name="第二客户", plan="basic", status="active"))
+        await session.commit()
+
+    t1_ids = []
+    for name in ["甲", "乙", "丙"]:
+        r = await client.post(
+            "/api/intakes", json={"tenant_id": "t1", "profile": {"product_name": name}}
+        )
+        t1_ids.append(r.json()["intake_id"])
+    r = await client.post(
+        "/api/intakes", json={"tenant_id": "t2", "profile": {"product_name": "他租户"}}
+    )
+    t2_id = r.json()["intake_id"]
+
+    ops_params = [("actor_id", "ops-1"), ("roles", "operations")]
+
+    # 跨租户可见：t1 三单 + t2 一单，且行携带 created_at。
+    r = await client.get("/api/intakes/ops-queue", params=ops_params)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 4
+    assert sorted(item["intake_id"] for item in body["items"]) == sorted(t1_ids + [t2_id])
+    assert {item["tenant_id"] for item in body["items"]} == {"t1", "t2"}
+    assert all("created_at" in item for item in body["items"])
+
+    # 状态过滤：四单均为 draft；非法状态 422。
+    r = await client.get("/api/intakes/ops-queue", params=[*ops_params, ("status", "draft")])
+    assert r.json()["total"] == 4
+    r = await client.get(
+        "/api/intakes/ops-queue", params=[*ops_params, ("status", "submitted")]
+    )
+    assert r.json()["total"] == 0
+    r = await client.get(
+        "/api/intakes/ops-queue", params=[*ops_params, ("status", "not_a_state")]
+    )
+    assert r.status_code == 422
+
+    # 分页：两页不重不漏覆盖四单。
+    page1 = await client.get(
+        "/api/intakes/ops-queue", params=[*ops_params, ("limit", "2"), ("offset", "0")]
+    )
+    assert page1.json()["limit"] == 2
+    assert len(page1.json()["items"]) == 2
+    page2 = await client.get(
+        "/api/intakes/ops-queue", params=[*ops_params, ("limit", "2"), ("offset", "2")]
+    )
+    page_ids = [item["intake_id"] for item in page1.json()["items"]] + [
+        item["intake_id"] for item in page2.json()["items"]
+    ]
+    assert sorted(page_ids) == sorted(t1_ids + [t2_id])
+
+
+async def test_ops_queue_follows_transitions(client, seeded_common_fields):
+    r = await client.post(
+        "/api/intakes",
+        json={"tenant_id": "t1", "profile": {"f_name": "面霜", "f_brief": "保湿"}},
+    )
+    intake_id = r.json()["intake_id"]
+    await _fire(client, intake_id, "submit", actor=CUSTOMER)
+    await _fire(client, intake_id, "wf01_confirm", actor=OPS)
+
+    ops_params = [("actor_id", "ops-1"), ("roles", "operations"), ("status", "pending_confirm")]
+    r = await client.get("/api/intakes/ops-queue", params=ops_params)
+    assert r.status_code == 200
+    assert [item["intake_id"] for item in r.json()["items"]] == [intake_id]
+
+    # 运营确认推进到已提交后，pending_confirm 队列清空。
+    assert (await _fire(client, intake_id, "ops_confirm", actor=OPS)).status_code == 200
+    r = await client.get("/api/intakes/ops-queue", params=ops_params)
+    assert r.json()["items"] == []
+    r = await client.get(
+        "/api/intakes/ops-queue",
+        params=[("actor_id", "ops-1"), ("roles", "operations"), ("status", "submitted")],
+    )
+    assert [item["intake_id"] for item in r.json()["items"]] == [intake_id]

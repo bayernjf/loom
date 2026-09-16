@@ -207,7 +207,7 @@ export async function getComplianceOverview(tenantId: string): Promise<Complianc
 // Q102：管理端（Q92 驾驶舱）管理员身份。V1 actor 自报（同写端点口径），
 // 真认证随 V2 改会话派生；不进浏览器包，shell 客户侧不持有该身份。
 export const CURRENT_ADMIN_ACTOR_ID = process.env.LOOM_ADMIN_ACTOR_ID ?? "";
-const ADMIN_ROLES = (process.env.LOOM_ADMIN_ROLES ?? "platform_admin")
+export const ADMIN_ROLE_LIST = (process.env.LOOM_ADMIN_ROLES ?? "platform_admin")
   .split(",")
   .map((role) => role.trim())
   .filter(Boolean);
@@ -295,7 +295,7 @@ export interface ReviewWorkloadDashboard {
 
 function adminPath(path: string): string {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
-  for (const role of ADMIN_ROLES) params.append("roles", role);
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   return `${path}?${params}`;
 }
 
@@ -355,7 +355,7 @@ export interface ReviewQueueQuery {
 
 export async function getReviewQueue(query: ReviewQueueQuery = {}): Promise<ReviewQueue> {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
-  for (const role of ADMIN_ROLES) params.append("roles", role);
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   if (query.state) params.set("state", query.state);
   for (const type of query.targetTypes ?? []) params.append("target_type", type);
   if (query.wfId) params.set("wf_id", query.wfId);
@@ -379,7 +379,7 @@ export async function batchApprove(
     body: JSON.stringify({
       candidate_ids: candidateIds,
       reason,
-      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
     }),
   });
 }
@@ -406,7 +406,7 @@ export async function decideCandidate(
         decision: body.decision,
         payload: body.payload ?? null,
         reason: body.reason ?? null,
-        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
       }),
     },
   );
@@ -455,7 +455,7 @@ export async function provisionTenant(body: {
       tenant_id: body.tenantId,
       name: body.name,
       plan: body.plan,
-      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
     }),
   });
 }
@@ -470,7 +470,7 @@ export async function changeTenantPlan(
       method: "POST",
       body: JSON.stringify({
         plan,
-        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
       }),
     },
   );
@@ -482,7 +482,7 @@ export async function pauseTenant(tenantId: string): Promise<TenantView> {
     {
       method: "POST",
       body: JSON.stringify({
-        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
       }),
     },
   );
@@ -494,7 +494,50 @@ export async function resumeTenant(tenantId: string): Promise<TenantView> {
     {
       method: "POST",
       body: JSON.stringify({
-        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
+// Q107：录入单运营跨租户队列（GET /api/intakes/ops-queue，operations|platform_admin）。
+// 写操作复用段1 既有 POST /{id}/transitions，仅 actor 换成管理员身份（须含 operations，
+// 状态机对 ops 事件硬角色闸）；不另设写口。
+export interface OpsIntakeView extends IntakeView {
+  created_at: string;
+}
+
+export interface OpsIntakeList {
+  items: OpsIntakeView[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function getOpsIntakeQueue(
+  opts: { status?: string; limit?: number; offset?: number } = {},
+): Promise<OpsIntakeList> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.status) params.set("status", opts.status);
+  if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+  if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+  return request<OpsIntakeList>(`/api/intakes/ops-queue?${params}`);
+}
+
+export async function adminTransitionIntake(
+  intakeId: string,
+  event: string,
+  categoryPendingId?: string | null,
+): Promise<IntakeView> {
+  return request<IntakeView>(
+    `/api/intakes/${encodeURIComponent(intakeId)}/transitions`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        event,
+        category_pending_id: categoryPendingId ?? null,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
       }),
     },
   );

@@ -78,6 +78,20 @@ async def list_intakes(
     return list(rows.all()), int(total or 0)
 
 
+async def list_ops_intakes(
+    session: AsyncSession, *, status: str | None, limit: int, offset: int
+) -> tuple[list[ProductIntakeApplication], int]:
+    # Q107：运营跨租户队列（与 Q98 租户内列表分离，RBAC 在路由层 operations|platform_admin）。
+    stmt = select(ProductIntakeApplication)
+    if status is not None:
+        stmt = stmt.where(ProductIntakeApplication.status == status)
+    total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = await session.scalars(
+        stmt.order_by(ProductIntakeApplication.created_at.desc()).limit(limit).offset(offset)
+    )
+    return list(rows.all()), int(total or 0)
+
+
 async def overview_intakes(
     session: AsyncSession, *, tenant_id: str
 ) -> tuple[int, dict[str, int]]:

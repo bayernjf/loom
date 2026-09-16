@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
+from app.core.rbac import OPERATIONS, PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.core.tenants import service as tenant_service
 from app.product.product_intake import service
 from app.product.product_intake.models import ProductSpace
@@ -13,15 +15,31 @@ from app.product.product_intake.schemas import (
     IntakeProfilePatch,
     IntakeTransition,
     IntakeView,
+    OpsIntakeList,
+    OpsIntakeView,
     ProductSpaceView,
 )
 from app.product.product_intake.statemachine import (
+    STATE_LABELS,
     IllegalTransition,
     RoleRequired,
     allowed_events,
 )
 
 router = APIRouter(prefix="/api/intakes", tags=["product-intake"])
+
+
+def require_ops_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    # Q107：运营跨租户队列只读，operations 与 platform_admin 可见。
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 def _to_view(intake) -> IntakeView:
@@ -62,6 +80,38 @@ async def overview_intakes(
     # 读路径与 Q98 列表同口径：不触发 Q95 准入门，未知租户返回零值。
     total, by_status = await service.overview_intakes(session, tenant_id=tenant_id)
     return IntakeOverview(total=total, by_status=by_status)
+
+
+@router.get("/ops-queue", response_model=OpsIntakeList)
+async def list_ops_intakes(
+    status: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_ops_view),
+) -> OpsIntakeList:
+    # Q107：运营跨租户队列；必须注册在 /{intake_id} 之前以免被路径参数吞掉。
+    if status is not None and status not in STATE_LABELS:
+        raise HTTPException(status_code=422, detail=f"unknown intake status: {status}")
+    items, total = await service.list_ops_intakes(
+        session, status=status, limit=limit, offset=offset
+    )
+    return OpsIntakeList(
+        items=[
+            OpsIntakeView(
+                intake_id=item.intake_id,
+                tenant_id=item.tenant_id,
+                status=item.status,
+                profile=item.profile,
+                category_pending_id=item.category_pending_id,
+                created_at=item.created_at,
+            )
+            for item in items
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("", response_model=IntakeView, status_code=201)

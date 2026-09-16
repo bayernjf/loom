@@ -30,6 +30,7 @@ const requiredKeys = [
   "admin.reviewWorkloadNav",
   "admin.reviewQueueNav",
   "admin.tenantsNav",
+  "admin.opsIntakesNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -160,6 +161,48 @@ const requiredKeys = [
     "yes",
     "no",
   ].map((k) => `admin.tenants.${k}`),
+  ...[
+    "title",
+    "intro",
+    "filters",
+    "filterStatus",
+    "filterAll",
+    "apply",
+    "reset",
+    "colIntake",
+    "colTenant",
+    "colStatus",
+    "colCreated",
+    "empty",
+    "prev",
+    "next",
+    "pageInfo",
+    "detailTitle",
+    "detailSection",
+    "fieldIntake",
+    "fieldTenant",
+    "fieldStatus",
+    "fieldCategoryPending",
+    "profileTitle",
+    "profileEmpty",
+    "actionsTitle",
+    "noOpsActions",
+    "actorUnconfigured",
+    "actorMissingRole",
+    "actionPending",
+    "actionSuccess",
+    "eventLabels.ops_confirm",
+    "eventLabels.to_cold_start",
+    "eventLabels.reject",
+    "eventLabels.b2_approved",
+    "eventLabels.b2_parent_fallback",
+    "eventLabels.b2_rejected",
+    "spaceTitle",
+    "spaceFieldId",
+    "spaceFieldLifecycle",
+    "spaceSnapshot",
+    "backToQueue",
+  ].map((k) => `admin.opsIntakes.${k}`),
 ];
 
 const requiredFiles = [
@@ -179,6 +222,11 @@ const requiredFiles = [
   join("tenants", "provision-form.tsx"),
   join("tenants", "tenant-row-actions.tsx"),
   join("tenants", "[tenantId]", "page.tsx"),
+  join("intakes", "page.tsx"),
+  join("intakes", "[intakeId]", "page.tsx"),
+  join("intakes", "actions.ts"),
+  join("intakes", "ops-intake-codes.ts"),
+  join("intakes", "ops-intake-actions.tsx"),
 ];
 
 const problems = [];
@@ -266,6 +314,13 @@ if (!sidebarText.includes("/admin/review-queue"))
   problems.push("admin sidebar must link the unified review queue");
 if (!sidebarText.includes("/admin/tenants"))
   problems.push("admin sidebar must link tenant management");
+if (!sidebarText.includes("/admin/intakes"))
+  problems.push("admin sidebar must link the ops intake queue (Q107)");
+{
+  const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
+  if (navCount !== 5)
+    problems.push(`admin sidebar must keep exactly 5 admin entries, got ${navCount}`);
+}
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
 if (!layoutText.includes("AdminSidebar"))
@@ -540,6 +595,137 @@ if (!/require_admin_view/.test(tenantsRouter))
 for (const route of ['@router.post("",', '@router.get("",', '@router.get("/{tenant_id}"', 'change-plan",', 'pause",', 'resume",']) {
   if (!tenantsRouter.includes(route))
     problems.push(`backend tenants router must register route ${route}`);
+}
+
+// Q107：录入单运营跨租户队列与操作岛（后端一只读端点，写复用 transitions）。
+const intakesDir = join(adminDir, "intakes");
+const opsListPage = readFileSync(join(intakesDir, "page.tsx"), "utf8");
+const opsDetailPage = readFileSync(join(intakesDir, "[intakeId]", "page.tsx"), "utf8");
+const opsActions = readFileSync(join(intakesDir, "actions.ts"), "utf8");
+const opsCodes = readFileSync(join(intakesDir, "ops-intake-codes.ts"), "utf8");
+const opsIsland = readFileSync(join(intakesDir, "ops-intake-actions.tsx"), "utf8");
+
+for (const [name, text] of [
+  ["intakes/page.tsx", opsListPage],
+  ["intakes/[intakeId]/page.tsx", opsDetailPage],
+]) {
+  if (!/export const dynamic = "force-dynamic"/.test(text))
+    problems.push(`${name} must be force-dynamic (server-only env)`);
+  if (/NEXT_PUBLIC/.test(text) || /https?:\/\//.test(text))
+    problems.push(`${name} must not read NEXT_PUBLIC_* or hardcode URLs`);
+  for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+    if (text.includes(forbidden))
+      problems.push(`${name} is read-only; must not contain ${forbidden}`);
+  }
+}
+if (!/\bgetOpsIntakeQueue\b/.test(opsListPage))
+  problems.push("ops intake list page must fetch via getOpsIntakeQueue");
+for (const token of ["getIntake", "getAllowedEvents", "getProductSpace", "OpsIntakeActions"]) {
+  if (!opsDetailPage.includes(token))
+    problems.push(`ops intake detail page must use ${token}`);
+}
+if (!/notFound\(/.test(opsDetailPage))
+  problems.push("ops intake detail page must map 404 to notFound()");
+
+// 白名单恰为 6 个 requires_role=operations 事件；系统/客户事件一律不得外放。
+const opsEventKeys = [
+  "ops_confirm",
+  "to_cold_start",
+  "reject",
+  "b2_approved",
+  "b2_parent_fallback",
+  "b2_rejected",
+];
+{
+  const listMatch = opsCodes.match(/OPS_INTAKE_EVENTS\s*=\s*\[([\s\S]*?)\]/);
+  const listed = listMatch ? [...listMatch[1].matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]) : [];
+  if (JSON.stringify(listed) !== JSON.stringify(opsEventKeys))
+    problems.push(`OPS_INTAKE_EVENTS must be exactly ${opsEventKeys.join(",")}, got ${listed.join(",")}`);
+  // 注释行只做排除说明（白名单设计依据），禁词扫描只看代码本体。
+  const opsCode = opsCodes.replace(/^\s*\/\/.*$/gm, "");
+  const opsActionCode = opsActions.replace(/^\s*\/\/.*$/gm, "");
+  for (const banned of [
+    "auto_confirm",
+    "wf01_",
+    "send_review",
+    "review_approve",
+    "review_reject",
+    "start_modeling",
+    "params_completed",
+    "quota_confirmed",
+    "resubmit",
+  ]) {
+    if (opsCode.includes(banned) || opsIsland.includes(banned) || opsActionCode.includes(banned))
+      problems.push(`ops intake whitelist must not expose non-ops event: ${banned}`);
+  }
+  const statusMatch = opsCodes.match(/INTAKE_STATUS_FILTERS\s*=\s*\[([\s\S]*?)\]/);
+  const statuses = statusMatch
+    ? [...statusMatch[1].matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1])
+    : [];
+  if (statuses.length !== 15)
+    problems.push(`INTAKE_STATUS_FILTERS must list all 15 productIntake states, got ${statuses.length}`);
+}
+{
+  const labels = messages.admin?.opsIntakes?.eventLabels ?? {};
+  if (JSON.stringify(Object.keys(labels).sort()) !== JSON.stringify([...opsEventKeys].sort()))
+    problems.push("admin.opsIntakes.eventLabels must cover exactly the 6 ops event codes");
+}
+
+if (!/^"use server"/m.test(opsActions))
+  problems.push("ops intake actions must be a Server Action module");
+if (!/\bopsTransitionIntakeAction\b/.test(opsActions))
+  problems.push("ops intake actions must expose opsTransitionIntakeAction");
+for (const status of [403, 404, 409, 422]) {
+  if (!opsActions.includes(String(status)))
+    problems.push(`opsTransitionIntakeAction must map failure status ${status}`);
+}
+for (const token of ["unconfigured", "missing_role", "CURRENT_ADMIN_ACTOR_ID", "ADMIN_ROLE_LIST", "isOpsIntakeEvent"]) {
+  if (!opsActions.includes(token))
+    problems.push(`ops intake actions must contain ${token}`);
+}
+if (!/^"use client"/m.test(opsIsland))
+  problems.push("ops intake action island must be a client island");
+if (opsIsland.includes("@/lib/api") || /https?:\/\//.test(opsIsland))
+  problems.push("ops intake island must call only the Server Action, never the API directly");
+if (!opsIsland.includes("router.refresh"))
+  problems.push("ops intake island must refresh the RSC view after success");
+if (!opsIsland.includes("OPS_INTAKE_EVENTS") || !opsIsland.includes("isOpsIntakeEvent"))
+  problems.push("ops intake island must render buttons in whitelist order intersect allowed-events");
+
+for (const token of [
+  "getOpsIntakeQueue",
+  "adminTransitionIntake",
+  "/api/intakes/ops-queue",
+  "ADMIN_ROLE_LIST",
+]) {
+  if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
+}
+
+const intakeRouter = readFileSync(
+  join(repoRoot, "backend", "app", "product", "product_intake", "router.py"),
+  "utf8",
+);
+if (!intakeRouter.includes('@router.get("/ops-queue"'))
+  problems.push("intake router must register GET /api/intakes/ops-queue");
+if (!/require_ops_view/.test(intakeRouter))
+  problems.push("ops queue endpoint must depend on require_ops_view");
+if (!/require_any_role\(actor, OPERATIONS, PLATFORM_ADMIN\)/.test(intakeRouter))
+  problems.push("require_ops_view must allow OPERATIONS and PLATFORM_ADMIN only");
+if (!/STATE_LABELS/.test(intakeRouter) || !/status_code=422/.test(intakeRouter))
+  problems.push("ops queue must reject unknown status filters with 422 against STATE_LABELS");
+if (
+  intakeRouter.indexOf('@router.get("/ops-queue"') === -1 ||
+  intakeRouter.indexOf('@router.get("/ops-queue"') >
+    intakeRouter.indexOf('@router.get("/{intake_id}"')
+)
+  problems.push("/ops-queue must be registered before /{intake_id} to avoid path capture");
+{
+  const opsService = readFileSync(
+    join(repoRoot, "backend", "app", "product", "product_intake", "service.py"),
+    "utf8",
+  );
+  if (!/async def list_ops_intakes/.test(opsService))
+    problems.push("intake service must define list_ops_intakes (cross-tenant)");
 }
 
 if (problems.length > 0) {

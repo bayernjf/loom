@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from app.core.actor import Actor
@@ -32,6 +34,18 @@ class IntakeView(BaseModel):
 
 class IntakeList(BaseModel):
     items: list[IntakeView]
+    total: int
+    limit: int
+    offset: int
+
+
+class OpsIntakeView(IntakeView):
+    # Q107：运营跨租户队列行在租户内 IntakeView 之上加创建时间。
+    created_at: datetime
+
+
+class OpsIntakeList(BaseModel):
+    items: list[OpsIntakeView]
     total: int
     limit: int
     offset: int
