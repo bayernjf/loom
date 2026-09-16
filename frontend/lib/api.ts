@@ -21,6 +21,11 @@ export interface IntakeList {
   offset: number;
 }
 
+export interface IntakeOverview {
+  total: number;
+  by_status: Record<string, number>;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -74,6 +79,11 @@ export async function createIntake(
 
 export async function getIntake(intakeId: string): Promise<IntakeView> {
   return request<IntakeView>(`/api/intakes/${encodeURIComponent(intakeId)}`);
+}
+
+export async function getIntakeOverview(tenantId: string): Promise<IntakeOverview> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<IntakeOverview>(`/api/intakes/overview?${params}`);
 }
 
 export function intakeDisplayName(intake: IntakeView): string {

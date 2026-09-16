@@ -47,6 +47,43 @@
       "back": "返回我的产品"
     }
   },
+  "intake": {
+    "status": {
+      "draft": "草稿",
+      "ai_recognizing": "AI识别中",
+      "pending_confirm": "待确认",
+      "pending_params": "待补充参数",
+      "pending_quota": "待确认额度",
+      "submitted": "已提交",
+      "in_review": "审核中",
+      "need_more_info": "需补充资料",
+      "approved": "已通过",
+      "modeling": "建模中",
+      "stored": "已入库",
+      "store_failed": "入库失败",
+      "rejected": "驳回",
+      "archived": "已归档",
+      "category_creating": "类目创建中"
+    }
+  },
+  "workbench": {
+    "productOverview": "我的产品概览",
+    "totalProducts": "产品总数",
+    "statusBreakdown": "状态分布",
+    "empty": "还没有产品录入单。",
+    "unconfigured": "未配置当前租户（服务端环境变量 LOOM_TENANT_ID），请先完成配置。",
+    "quickActions": "快捷操作",
+    "newProduct": "新建产品",
+    "viewAll": "查看全部产品",
+    "metricsNote": "V2 随内容生产与反馈回流开放",
+    "metrics": {
+      "generated": "今日生成",
+      "published": "发布",
+      "interactions": "互动",
+      "trends": "趋势",
+      "health": "健康度"
+    }
+  },
   "error": {
     "403": "没有操作权限",
     "404": "资源不存在",

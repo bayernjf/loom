@@ -37,6 +37,11 @@ class IntakeList(BaseModel):
     offset: int
 
 
+class IntakeOverview(BaseModel):
+    total: int
+    by_status: dict[str, int]
+
+
 class ProductSpaceView(BaseModel):
     product_space_id: str
     tenant_id: str

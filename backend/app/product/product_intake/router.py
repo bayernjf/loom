@@ -9,6 +9,7 @@ from app.product.product_intake.models import ProductSpace
 from app.product.product_intake.schemas import (
     IntakeCreate,
     IntakeList,
+    IntakeOverview,
     IntakeProfilePatch,
     IntakeTransition,
     IntakeView,
@@ -50,6 +51,17 @@ async def list_intakes(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/overview", response_model=IntakeOverview)
+async def overview_intakes(
+    tenant_id: str = Query(min_length=1),
+    session: AsyncSession = Depends(get_session),
+) -> IntakeOverview:
+    # Q99：工作台总览。必须注册在 /{intake_id} 之前，否则会被路径参数吞掉。
+    # 读路径与 Q98 列表同口径：不触发 Q95 准入门，未知租户返回零值。
+    total, by_status = await service.overview_intakes(session, tenant_id=tenant_id)
+    return IntakeOverview(total=total, by_status=by_status)
 
 
 @router.post("", response_model=IntakeView, status_code=201)

@@ -78,6 +78,19 @@ async def list_intakes(
     return list(rows.all()), int(total or 0)
 
 
+async def overview_intakes(
+    session: AsyncSession, *, tenant_id: str
+) -> tuple[int, dict[str, int]]:
+    # Q99：工作台总览只读聚合；读路径不触发 Q95 准入门，未知租户返回零值。
+    rows = await session.execute(
+        select(ProductIntakeApplication.status, func.count())
+        .where(ProductIntakeApplication.tenant_id == tenant_id)
+        .group_by(ProductIntakeApplication.status)
+    )
+    by_status = {status: int(count) for status, count in rows.all()}
+    return sum(by_status.values()), by_status
+
+
 class ProfileNotEditable(Exception):
     pass
 
