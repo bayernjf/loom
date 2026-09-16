@@ -191,9 +191,11 @@
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
 | POST `/sla/run` | 手工触发全部 sweep 作业（**platform_admin**，body 带 actor，越权 403；Q75）：①待办到期升级（所有 open ops_todo 过 due_at→escalated，按类型写审计）②Q18 证据超时自动驳回 ③Q24 冷却到期回 available ④Q51 未来生效词条到点激活并补扫；每作业独立会话/提交，单作业失败回滚不阻断其余，响应回带每作业 `{changed}` 或 `{error}`；**Q89 起与定时调度抢同一把 Redis leader 锁 `loom:lock:sla-sweep`，锁被占 409、锁后端故障 503**（`LOOM_DISTRIBUTED_LOCK_ENABLED` 默认关） | Q49/Q18/Q24/Q51/Q75/Q89 |
-| GET `/sla/todos?status=open\|all` | 待办 SLA 看板（due_at 升序），派生 `sla_state`：green/yellow/red/resolved（黄色仅法审 created_at+24h，其余类型黄色口径【原文未给出，待补】） | Q49/Q70 |
+| GET `/sla/todos?status=open\|escalated\|resolved\|all` | 待办 SLA 看板（跨租户、不分页、due_at 升序），派生 `sla_state`：green/yellow/red/resolved（黄色仅法审 created_at+24h，其余类型黄色口径【原文未给出，待补】）。**Q108 起**：query actor_id 必填（缺参 422）+重复 roles，require_sla_view 仅放行 **platform_admin**（operations/internal_compliance/customer 均 403）；status 白名单恰 4 值，非法 422 `unknown todo status: {status}`，默认 open。Q108 前该端点为 M10b 裸端点无鉴权 | Q49/Q70/**Q108** |
 
 > 定时调度：FastAPI lifespan 内 asyncio 循环，默认 300s 一轮（`LOOM_SWEEP_INTERVAL_SECONDS`、`LOOM_SCHEDULER_ENABLED=false` 可关）；多副本部署以 Redis leader 锁保证单实例 tick（**Q89 已落地**：`LOOM_DISTRIBUTED_LOCK_ENABLED` 默认关，开启后非持锁副本跳过该轮、锁后端故障 fail-closed 跳过；看门狗 TTL/3 续约）。法审黄色小时数读配置中心 `sla.yellow_hours`（种子 24，缓存未引导时回退默认）——首个配置中心消费方。Q71 critical→target 自动补货（5 分钟防抖）仍未实现：V1 无 skill7 AI 漏斗可调用，挂 skill7 切片，不构造虚拟候选。**RBAC 收口已于切片 d 完成（Q75）**：`/sla/run` 与 `/admin/ops-todos/sweep` 手工触发归 platform_admin；其余端点级角色映射见切片 d 小节。
+
+> **Q108 补登（2026-09-16，M12 第六片——裸看板端点补闸 + 管理端只读页；无新端点/无新写口/无迁移）**：M10b 落地的 `GET /api/admin/sla/todos` 自切片 d 起仍为**无鉴权裸端点**（Q75 补闸矩阵只收 POST /run），Q108 补 require_sla_view query 依赖——actor_id 必填（缺参 422）+重复 roles，require_any_role 仅 PLATFORM_ADMIN，operations/internal_compliance/customer 全 403；status 由原 open|all 两值扩为白名单 {open,escalated,resolved,all}，非法 422 `unknown todo status: {status}`，默认 open；不分页、due_at ASC 与返回字段集（含 sla_state）不变，sla_state 派生仍走 `core/sla/policies.py`。POST /run 的 body 内闸与 409/503 口径不动。前端新页 `/[locale]/admin/sla-todos` 纯只读 RSC（GET 表单四筛选、9 列、枚举码原样、sla_state 四色 chip、yellowNote 如实声明"黄色仅法审、其他类型黄口径【待补】"），写口 /sla/run 不上页面。测试 421 全绿（+3 集成），eval 不受影响。
 
 **M10 切片 d · RBAC 红线收口**（2026-09-14，无新表/无新端点；Q75 销账）
 
