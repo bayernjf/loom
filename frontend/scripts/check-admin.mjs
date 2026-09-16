@@ -28,6 +28,7 @@ const requiredKeys = [
   "admin.navLabel",
   "admin.tokenCostNav",
   "admin.reviewWorkloadNav",
+  "admin.reviewQueueNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -78,6 +79,41 @@ const requiredKeys = [
     "count",
     "todosResolved",
   ].map((k) => `admin.workload.${k}`),
+  ...[
+    "title",
+    "intro",
+    "thresholdNote",
+    "filters",
+    "state",
+    "targetType",
+    "riskLevel",
+    "wfId",
+    "apply",
+    "reset",
+    "colBatch",
+    "colType",
+    "colRisk",
+    "colConfidence",
+    "colWait",
+    "colWf",
+    "colSkill",
+    "colCandidate",
+    "colCreated",
+    "colTenant",
+    "colPayload",
+    "showPayload",
+    "humanModified",
+    "reviewedBy",
+    "batchApprove",
+    "batchReason",
+    "batchSuccess",
+    "selectFirst",
+    "notEligible",
+    "prev",
+    "next",
+    "pageInfo",
+    "empty",
+  ].map((k) => `admin.reviewQueue.${k}`),
 ];
 
 const requiredFiles = [
@@ -87,6 +123,9 @@ const requiredFiles = [
   "page.tsx",
   join("token-cost", "page.tsx"),
   join("review-workload", "page.tsx"),
+  join("review-queue", "page.tsx"),
+  join("review-queue", "actions.ts"),
+  join("review-queue", "batch-bar.tsx"),
 ];
 
 const problems = [];
@@ -102,9 +141,22 @@ for (const key of requiredKeys) {
 }
 
 // 枚举码不得被翻译进消息表（守 docs/18：系统标识原样展示）。
-for (const banned of ["pwc_combo", "field_plan", "c1_recognition", "atom_batch", "c7_layer4"]) {
+for (const banned of [
+  "pwc_combo",
+  "field_plan",
+  "c1_recognition",
+  "atom_batch",
+  "c7_layer4",
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "pending_review",
+  "applied",
+  "archived",
+]) {
   const flat = JSON.stringify(messages.admin ?? {});
-  if (flat.includes(banned))
+  if (flat.includes(`"${banned}"`) || flat.includes(`>${banned}<`))
     problems.push(`enum code must not be translated into admin messages: ${banned}`);
 }
 
@@ -151,6 +203,8 @@ for (const [name, text] of [
 
 if (!sidebarText.includes("/admin/token-cost") || !sidebarText.includes("/admin/review-workload"))
   problems.push("admin sidebar must link both dashboards");
+if (!sidebarText.includes("/admin/review-queue"))
+  problems.push("admin sidebar must link the unified review queue");
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
 if (!layoutText.includes("AdminSidebar"))
@@ -169,6 +223,10 @@ for (const token of [
   "/api/admin/dashboards/review-workload",
   "getTokenCostDashboard",
   "getReviewWorkloadDashboard",
+  "getReviewQueue",
+  "batchApprove",
+  "/api/review-workbench/candidates",
+  "/api/review-workbench/batch-approve",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -203,6 +261,76 @@ for (const path of ["/token-cost", "/review-workload"]) {
 }
 if (!/require_admin_view/.test(routerText))
   problems.push("dashboards router must depend on require_admin_view");
+
+// Q103：统一审核工作台页（队列消费 + 批量通过 Server Action）。
+const queuePage = readAdmin(join("review-queue", "page.tsx"));
+const queueActions = readAdmin(join("review-queue", "actions.ts"));
+const queueClient = readAdmin(join("review-queue", "batch-bar.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(queuePage))
+  problems.push("review-queue/page.tsx must be force-dynamic (server-only env)");
+if (!/\bgetReviewQueue\b/.test(queuePage))
+  problems.push("review-queue page must fetch via getReviewQueue");
+if (/NEXT_PUBLIC/.test(queuePage) || /https?:\/\//.test(queuePage))
+  problems.push("review-queue page must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (queuePage.includes(forbidden))
+    problems.push(`review-queue page is read-only; must not contain ${forbidden}`);
+}
+for (const code of [
+  "pwc_combo",
+  "field_plan",
+  "c1_recognition",
+  "atom_batch",
+  "c7_layer4",
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "pending_review",
+  "applied",
+  "archived",
+]) {
+  if (!queuePage.includes(code))
+    problems.push(`review-queue page must render enum code raw: ${code}`);
+}
+if (!queuePage.includes("data-batch-candidate"))
+  problems.push("review-queue rows must expose data-batch-candidate checkboxes");
+if (!queuePage.includes("<details>") || !queuePage.includes("JSON.stringify"))
+  problems.push("review-queue payload must render as raw JSON in a details/pre fold");
+if (!/"use server"/.test(queueActions))
+  problems.push("review-queue actions must be a Server Action module");
+if (!/\bbatchApproveAction\b/.test(queueActions))
+  problems.push("review-queue actions must expose batchApproveAction");
+for (const status of [403, 404, 409, 422]) {
+  if (!queueActions.includes(String(status)))
+    problems.push(`batchApproveAction must map failure status ${status}`);
+}
+if (!/CURRENT_ADMIN_ACTOR_ID/.test(queueActions))
+  problems.push("batchApproveAction must derive actor from server env");
+if (queueClient.includes("@/lib/api") || /https?:\/\//.test(queueClient))
+  problems.push("batch bar client island must call only the Server Action, never the API directly");
+if (!queueClient.includes("data-batch-candidate") || !queueClient.includes("router.refresh"))
+  problems.push("batch bar must collect checked rows and refresh the RSC list");
+
+const workbenchRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "workbench", "router.py"),
+  "utf8",
+);
+if (!workbenchRouter.includes('prefix="/api/review-workbench"'))
+  problems.push("backend workbench router must mount at /api/review-workbench");
+if (!/@router\.get\("\/candidates"\)/.test(workbenchRouter))
+  problems.push("workbench router must register GET /candidates");
+if (!/@router\.post\("\/batch-approve"\)/.test(workbenchRouter))
+  problems.push("workbench router must register POST /batch-approve");
+if (!/require_workbench_view/.test(workbenchRouter))
+  problems.push("workbench queue endpoint must depend on require_workbench_view");
+const workbenchService = readFileSync(
+  join(repoRoot, "backend", "app", "core", "workbench", "service.py"),
+  "utf8",
+);
+if (!workbenchService.includes('"payload": cand.payload'))
+  problems.push("workbench queue view must return raw candidate payload (Q103 additive)");
 
 if (problems.length > 0) {
   console.error(`check-admin: ${problems.length} problem(s)\n${problems.join("\n")}`);

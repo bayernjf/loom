@@ -8,6 +8,7 @@ import styles from "./admin.module.css";
 const ADMIN_NAV_ITEMS = [
   { href: "/admin/token-cost", labelKey: "admin.tokenCostNav" },
   { href: "/admin/review-workload", labelKey: "admin.reviewWorkloadNav" },
+  { href: "/admin/review-queue", labelKey: "admin.reviewQueueNav" },
 ] as const;
 
 export function AdminSidebar() {
