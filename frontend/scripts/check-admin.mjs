@@ -29,6 +29,7 @@ const requiredKeys = [
   "admin.tokenCostNav",
   "admin.reviewWorkloadNav",
   "admin.reviewQueueNav",
+  "admin.tenantsNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -128,6 +129,37 @@ const requiredKeys = [
     "pageInfo",
     "empty",
   ].map((k) => `admin.reviewQueue.${k}`),
+  ...[
+    "title",
+    "intro",
+    "provisionTitle",
+    "tenantId",
+    "nameOptional",
+    "plan",
+    "provisionSubmit",
+    "provisionSuccess",
+    "changePlan",
+    "pause",
+    "resume",
+    "actionSuccess",
+    "colTenantId",
+    "colName",
+    "colPlan",
+    "colStatus",
+    "colQuota",
+    "colCreated",
+    "colActions",
+    "empty",
+    "detailTitle",
+    "backToList",
+    "onboardingTitle",
+    "onboardingNote",
+    "intakeCount",
+    "spaceCount",
+    "firstModelingStarted",
+    "yes",
+    "no",
+  ].map((k) => `admin.tenants.${k}`),
 ];
 
 const requiredFiles = [
@@ -141,6 +173,12 @@ const requiredFiles = [
   join("review-queue", "actions.ts"),
   join("review-queue", "batch-bar.tsx"),
   join("review-queue", "decision-cell.tsx"),
+  join("tenants", "page.tsx"),
+  join("tenants", "actions.ts"),
+  join("tenants", "tenant-codes.ts"),
+  join("tenants", "provision-form.tsx"),
+  join("tenants", "tenant-row-actions.tsx"),
+  join("tenants", "[tenantId]", "page.tsx"),
 ];
 
 const problems = [];
@@ -169,6 +207,12 @@ for (const banned of [
   "pending_review",
   "applied",
   "archived",
+  "trial",
+  "basic",
+  "pro",
+  "enterprise",
+  "active",
+  "paused",
 ]) {
   const flat = JSON.stringify(messages.admin ?? {});
   if (flat.includes(`"${banned}"`) || flat.includes(`>${banned}<`))
@@ -220,6 +264,8 @@ if (!sidebarText.includes("/admin/token-cost") || !sidebarText.includes("/admin/
   problems.push("admin sidebar must link both dashboards");
 if (!sidebarText.includes("/admin/review-queue"))
   problems.push("admin sidebar must link the unified review queue");
+if (!sidebarText.includes("/admin/tenants"))
+  problems.push("admin sidebar must link tenant management");
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
 if (!layoutText.includes("AdminSidebar"))
@@ -241,9 +287,16 @@ for (const token of [
   "getReviewQueue",
   "batchApprove",
   "decideCandidate",
+  "listTenants",
+  "getTenant",
+  "provisionTenant",
+  "changeTenantPlan",
+  "pauseTenant",
+  "resumeTenant",
   "/api/review-workbench/candidates",
   "/api/review-workbench/batch-approve",
   "/api/skill-candidates/",
+  "/api/admin/tenants",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -392,6 +445,102 @@ if (!queuePage.includes("<DecisionCell") || !queuePage.includes("colDecision"))
   problems.push("review-queue page must render the decision column and island");
 if (!queuePage.includes('cand.state === "pending_review"'))
   problems.push("decision island must render only for pending_review rows");
+
+// Q105：租户管理 + Onboarding（Q95 后端的前端消费；纯前端无迁移）。
+const tenantsDir = join(adminDir, "tenants");
+const tenantsPage = readFileSync(join(tenantsDir, "page.tsx"), "utf8");
+const tenantDetailPage = readFileSync(
+  join(tenantsDir, "[tenantId]", "page.tsx"),
+  "utf8",
+);
+const tenantsActions = readFileSync(join(tenantsDir, "actions.ts"), "utf8");
+const tenantCodes = readFileSync(join(tenantsDir, "tenant-codes.ts"), "utf8");
+const provisionClient = readFileSync(join(tenantsDir, "provision-form.tsx"), "utf8");
+const rowClient = readFileSync(join(tenantsDir, "tenant-row-actions.tsx"), "utf8");
+
+for (const [name, text] of [
+  ["tenants/page.tsx", tenantsPage],
+  ["tenants/[tenantId]/page.tsx", tenantDetailPage],
+]) {
+  if (!/export const dynamic = "force-dynamic"/.test(text))
+    problems.push(`${name} must be force-dynamic (server-only env)`);
+  if (/NEXT_PUBLIC/.test(text) || /https?:\/\//.test(text))
+    problems.push(`${name} must not read NEXT_PUBLIC_* or hardcode URLs`);
+  for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+    if (text.includes(forbidden))
+      problems.push(`${name} is read-only; must not contain ${forbidden}`);
+  }
+}
+if (!/\blistTenants\b/.test(tenantsPage))
+  problems.push("tenants page must fetch via listTenants");
+if (!/\bgetTenant\b/.test(tenantDetailPage))
+  problems.push("tenant detail page must fetch via getTenant");
+for (const field of ["intakes", "product_spaces", "first_modeling_started"]) {
+  if (!tenantDetailPage.includes(field))
+    problems.push(`tenant detail page must render derived onboarding field ${field}`);
+}
+if (!/"use server"/.test(tenantsActions))
+  problems.push("tenants actions must be a Server Action module");
+for (const name of [
+  "provisionTenantAction",
+  "changePlanAction",
+  "pauseTenantAction",
+  "resumeTenantAction",
+]) {
+  if (!tenantsActions.includes(name))
+    problems.push(`tenants actions must expose ${name}`);
+}
+for (const status of [403, 404, 409, 422]) {
+  if (!tenantsActions.includes(String(status)))
+    problems.push(`tenant actions must map failure status ${status}`);
+}
+if (!/CURRENT_ADMIN_ACTOR_ID/.test(tenantsActions))
+  problems.push("tenant actions must derive actor from server env");
+for (const [name, text] of [
+  ["provision-form", provisionClient],
+  ["tenant-row-actions", rowClient],
+]) {
+  if (!/^"use client"/m.test(text))
+    problems.push(`${name} must be a client island`);
+  if (text.includes("@/lib/api") || /https?:\/\//.test(text))
+    problems.push(`${name} client island must call only Server Actions, never the API directly`);
+  if (!text.includes("router.refresh"))
+    problems.push(`${name} island must refresh the RSC view after success`);
+}
+for (const token of [
+  "provisionTenantAction",
+  "changePlanAction",
+  "pauseTenantAction",
+  "resumeTenantAction",
+]) {
+  if (!provisionClient.includes(token) && !rowClient.includes(token))
+    problems.push(`no tenant island calls ${token}`);
+}
+for (const code of ["trial", "basic", "pro", "enterprise"]) {
+  if (!tenantCodes.includes(`"${code}"`))
+    problems.push(`tenant plan code must render raw: ${code}`);
+}
+for (const code of ["trial", "active", "paused"]) {
+  if (!tenantCodes.includes(`"${code}"`) && !tenantsPage.includes(`"${code}"`) && !tenantDetailPage.includes(`"${code}"`))
+    problems.push(`tenant status code must appear raw in codes or pages: ${code}`);
+}
+if (!/statusTrial/.test(tenantsPage) || !/statusActive/.test(tenantsPage) || !/statusPaused/.test(tenantsPage))
+  problems.push("tenant status chips must map trial/active/paused to semantic styles");
+if (!/\/change-plan/.test(apiText) || !/\/pause`/.test(apiText) || !/\/resume`/.test(apiText))
+  problems.push("lib/api.ts must expose change-plan/pause/resume tenant endpoints");
+
+const tenantsRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "tenants", "router.py"),
+  "utf8",
+);
+if (!tenantsRouter.includes('prefix="/api/admin/tenants"'))
+  problems.push("backend tenants router must mount at /api/admin/tenants");
+if (!/require_admin_view/.test(tenantsRouter))
+  problems.push("tenants read endpoints must depend on require_admin_view (platform_admin)");
+for (const route of ['@router.post("",', '@router.get("",', '@router.get("/{tenant_id}"', 'change-plan",', 'pause",', 'resume",']) {
+  if (!tenantsRouter.includes(route))
+    problems.push(`backend tenants router must register route ${route}`);
+}
 
 if (problems.length > 0) {
   console.error(`check-admin: ${problems.length} problem(s)\n${problems.join("\n")}`);
