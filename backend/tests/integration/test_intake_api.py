@@ -177,6 +177,57 @@ async def test_list_intakes_rejects_bad_params(client):
     ).status_code == 422
 
 
+async def test_overview_empty_for_unknown_tenant(client):
+    # Q99：读路径不触发 Q95 准入门；且 /overview 不得被 /{intake_id} 路由吞掉。
+    r = await client.get("/api/intakes/overview", params={"tenant_id": "ghost"})
+    assert r.status_code == 200
+    assert r.json() == {"total": 0, "by_status": {}}
+
+
+async def test_overview_groups_by_status_and_tenant(
+    client, session_factory, seeded_common_fields
+):
+    async with session_factory() as session:
+        session.add(Tenant(tenant_id="t2", name="第二客户", plan="basic", status="active"))
+        await session.commit()
+
+    for name in ["甲", "乙", "丙"]:
+        r = await client.post(
+            "/api/intakes", json={"tenant_id": "t1", "profile": {"product_name": name}}
+        )
+        assert r.status_code == 201
+
+    # 资料完整的一单推进到已提交：草稿 -2、AI识别中→待确认→已提交各 +1。
+    r = await client.post(
+        "/api/intakes",
+        json={"tenant_id": "t1", "profile": {"f_name": "面霜", "f_brief": "保湿"}},
+    )
+    moving_id = r.json()["intake_id"]
+    await _fire(client, moving_id, "submit", actor=CUSTOMER)
+    await _fire(client, moving_id, "wf01_confirm", actor=OPS)
+    await _fire(client, moving_id, "ops_confirm", actor=OPS)
+
+    r = await client.post(
+        "/api/intakes", json={"tenant_id": "t2", "profile": {"product_name": "他租户"}}
+    )
+    assert r.status_code == 201
+
+    r = await client.get("/api/intakes/overview", params={"tenant_id": "t1"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 4
+    assert body["by_status"] == {"draft": 3, "submitted": 1}
+
+    r = await client.get("/api/intakes/overview", params={"tenant_id": "t2"})
+    assert r.json() == {"total": 1, "by_status": {"draft": 1}}
+
+
+async def test_overview_rejects_empty_tenant(client):
+    assert (
+        await client.get("/api/intakes/overview", params={"tenant_id": ""})
+    ).status_code == 422
+
+
 async def test_terminal_and_role_guards(client, seeded_common_fields):
     r = await client.post(
         "/api/intakes",
