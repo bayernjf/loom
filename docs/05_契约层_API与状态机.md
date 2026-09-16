@@ -53,7 +53,7 @@
 | DB 浏览 / AI 调试台 / 调用日志 / 配额 / Key 管理 | D9.5 | 后台内部接口【待补】 |
 | 中台对接 API + Webhook 反馈回流 | D4 | V2 项：中台调 API 拿白名单 + Webhook 回流【待补】 |
 | 中台 SDK 嵌入 | D4 | V3 项：中台集成 Loom SDK【待补】 |
-| 中台 CSV/JSON 导出 | D4 | V1 项：导出白名单包，中台手动用【待补】 |
+| 中台 CSV/JSON 导出 | D4 | V1 项：CSV 已定稿（Q100）=仅 final_id 单列同步 GET，中台手动用；JSON 形态仍【待补，挂后续】 |
 
 ### 1.3 鉴权与治理（横切）
 - **API Key 唯一入口**：真接 LLM 时模型注册页是唯一入口（line 2101）；Q67 合并为一张模型注册表（per-1M）。**Q82 已落地 outbound 半套**：Key 密文落库 + env 主密钥、注册页录入/轮换/吊销，明文永不回显；**入站“一 Agent 一 Key 可吊销”Key 半套已随 Q88（2026-09-15）落地**：独立新表 `agent_api_keys` 存 SHA-256 哈希（非可逆加密，入站只需比对）+ 展示前缀，`/api/admin/agent-keys` 签发/列表/吊销（platform_admin），Bearer 401 验签依赖已备；effect-callback 业务端点本体仍随段13/P3（V2）。
@@ -165,6 +165,7 @@
 | POST `/fcw/assembly-tasks` | Q55 任务驱动批量（operations；product×platform×goal×count，可选 slot_ids 长度须=count 且不重复否则 422）：同步逐条组装，不给 slot_ids 时取该平台 active 发布位前 N；单项失败（Guard/材料/去重）不阻断其余，任务 completed，results 留痕 issued/failures 每条原因；每条发证 writeAudit `fcw.issued`（六路材料+Guard 结果+E1_owner=publishFCW），任务另记 `fcw.assembly_task` | Q55 |
 | GET `/fcw/assembly-tasks/{task_id}` | 任务结果（不存在 404） | Q55 |
 | GET `/product-spaces/{id}/fcw`、GET `/fcw/{final_id}` | 成品列表（新→旧）/单条明细（含 guards 明细、score/score_detail/incomplete） | line 870 |
+| GET `/exports/fcw.csv` | M12 中台导出（Q100）：同步流式 CSV，**仅 final_id 单列**（含表头），query tenant_id 必填（空 422）、product_space_id 可选收窄；只导 published、created_at DESC；读路径不触发 Q95 准入门，未知租户 200 仅表头；`Content-Disposition: attachment; filename="fcw-<tenant>.csv"` | Q100/D4 |
 
 > Guard 七项 code：`g1_pws_frozen`（PWS status=frozen）/`g2_compliance_clear`（block_required=false **且** cleaning_passed=true，无报告不放行【实现补】）/`g3_packages_active`（PCP active + CSP/CSTP/CEP active 且 gate=approved）/`g4_product_space_consistent`（六路 PS 一致）/`g5_tenant_consistent`（六路 tenant 一致）/`g6_law_review`（仅法审被触发时要求 approved，Q49）/`g7_pws_active_version`（is_active=true）。Q54 score（pwc×100×0.4 + fit×0.3 + 三包 conf 均值×100×0.3）仅排序，缺失即 null/incomplete=true，永不做门槛。draft publish_status V1 无创建入口；WF-09 AI Skill 随 V2。
 
@@ -261,6 +262,8 @@
 > **Q98 补登（2026-09-16，M12 客户前端切片 2·产品中心跨栈最小闭环；无迁移，Alembic 头仍 0023）**：段1 新增只读端点 `GET /api/intakes`——query `tenant_id`（必填非空，缺/空 422）、`limit`（默认 20，1..100）、`offset`（默认 0，≥0），响应 `IntakeList{items: IntakeView[], total, limit, offset}`，排序 created_at DESC。**读路径不触发 Q95 准入门**：未知租户与暂停租户均返回 200 空列表（只读不放宽写闸：POST 建单的未知 404/暂停 409 一字不动）；只读不 writeAudit。配套前端：RSC 列表 + Server Action 建 draft + 只读详情（02 C1.42 四接缝全甲），server-only env `LOOM_TENANT_ID`/`LOOM_API_BASE_URL`，产品名走工程临时键 `product_name`（G2 cat='common' fid 基线回填后对齐，挂账）。测试 404 全绿（+3 集成），eval 仍 101/101。
 
 > **Q99 补登（2026-09-16，M12 客户前端切片 3·工作台最小总览；无迁移，Alembic 头仍 0023）**：段1 再增只读端点 `GET /api/intakes/overview`——query `tenant_id`（必填非空，缺/空 422），响应 `IntakeOverview{total:int, by_status:{状态码:计数}}`，单次 group by status 聚合、total 为分组计数之和；读路径同 Q98 **不触发 Q95 准入门**（未知/暂停租户返回 `{total:0,by_status:{}}`，写闸一字不动），只读不 writeAudit；**路由必须注册在 `GET /{intake_id}` 之前**，否则字面量 overview 被路径参数吞成 intake_id。配套前端工作台（02 C1.43 四接缝全甲）：录入单总数 + 15 态分组（`intake.status.*` 消息对齐 docs/13 §1.1，仅渲染计数 > 0）+ 快捷入口；D5 原文五指标（今日生成/发布/互动/趋势/健康度，数据源属段 12/13）渲染禁用态 V2 卡，不显示任何数字（含 0）。测试 407 全绿（+3 集成），eval 仍 101/101。
+
+> **Q100 补登（2026-09-16，M12 中台导出·FCW final_id 单列 CSV；无迁移，Alembic 头仍 0023）**：新横切只读包 `app/core/exports/` 挂 `GET /api/exports/fcw.csv`（02 C1.44 四接缝全甲）：query `tenant_id`（必填非空，缺/空 422）、`product_space_id`（可选，按产品空间收窄）；响应 `text/csv; charset=utf-8` + `Content-Disposition: attachment; filename="fcw-<tenant>.csv"`，正文表头 `final_id` 后每条 published 一行一个 final_id（created_at DESC），**严格单列、不拼 6 层原料包**——docs/09:87 的 6 层包口径属台内详情/复制，不进导出文件；D4 行【待补】就 CSV 部分收口（JSON 形态仍挂后续）。读路径纪律同 Q98/Q99：不触发 Q95 准入门、不 writeAudit，未知租户 200 返回仅表头空文件；只导 published（draft 排除；Q32 revoked 急停 V1 未落地，其态一旦实现由 published 过滤自然排除——前向兼容）。curl 实测：t1 表头+3 条（draft/t2 排除）、product_space_id 收窄、ghost 仅表头 200、空 tenant 422。测试 410 全绿（+3 集成），eval 仍 101/101。
 
 
 ---
