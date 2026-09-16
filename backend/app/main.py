@@ -9,6 +9,7 @@ from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
 from app.core.dashboards.router import router as dashboards_router
 from app.core.db import SessionLocal, settings
+from app.core.exports.router import router as exports_router
 from app.core.model_registry.router import router as model_registry_router
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
@@ -88,6 +89,7 @@ app.include_router(ccr_router)
 app.include_router(platform_router)
 app.include_router(package_router)
 app.include_router(fcw_router)
+app.include_router(exports_router)
 
 
 @app.get("/healthz")
