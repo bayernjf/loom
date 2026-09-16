@@ -45,6 +45,28 @@
       "fieldProfile": "已填资料",
       "profileEmpty": "暂无已填资料",
       "back": "返回我的产品"
+    },
+    "editProfileTitle": "编辑资料",
+    "actionsTitle": "可执行操作",
+    "neutralAnalyzing": "资料分析中",
+    "actorUnconfigured": "未配置操作人身份（服务端环境变量 LOOM_ACTOR_ID），请先完成配置。",
+    "saveProfile": "保存资料",
+    "profileSaved": "资料已保存。",
+    "actionPending": "处理中…",
+    "actionSuccess": "操作已提交。",
+    "noCustomerActions": "当前状态暂无可执行操作。",
+    "missingFields": "资料不完整，缺失字段：{fids}",
+    "eventLabels": {
+      "submit": "提交",
+      "params_completed": "补全参数并提交",
+      "quota_confirmed": "确认额度并提交",
+      "resubmit": "补资料后重新提交"
+    },
+    "spaceTitle": "产品空间",
+    "space": {
+      "fieldId": "产品空间 ID",
+      "fieldLifecycle": "生命周期状态",
+      "snapshot": "资料快照"
     }
   },
   "intake": {
@@ -131,6 +153,7 @@
     "tokenCostNav": "Token 成本",
     "reviewWorkloadNav": "人工审核工作量",
     "reviewQueueNav": "统一审核台",
+    "tenantsNav": "租户管理",
     "unconfigured": "未配置管理员身份（服务端环境变量 LOOM_ADMIN_ACTOR_ID），请先完成配置。",
     "window": "统计窗口：{from} ~ {to}",
     "empty": "当前窗口暂无数据。",
@@ -230,6 +253,37 @@
       "next": "下一页",
       "pageInfo": "第 {from}–{to} 条，共 {total} 条",
       "empty": "当前筛选条件下没有候选。"
+    },
+    "tenants": {
+      "title": "租户管理",
+      "intro": "租户注册表：开通（trial 开通为试用态、选付费档开通即生效）、改套餐（不动状态）、暂停 / 恢复（暂停租户段 1 录入被拒）。团队账号与成员绑定随真实认证在 V2 提供。",
+      "provisionTitle": "开通租户",
+      "tenantId": "租户 ID",
+      "nameOptional": "租户名称（可选）",
+      "plan": "套餐",
+      "provisionSubmit": "开通",
+      "provisionSuccess": "租户已开通，列表已刷新。",
+      "changePlan": "改套餐",
+      "pause": "暂停",
+      "resume": "恢复",
+      "actionSuccess": "操作已提交，列表已刷新。",
+      "colTenantId": "租户 ID",
+      "colName": "名称",
+      "colPlan": "套餐",
+      "colStatus": "状态",
+      "colQuota": "月度 token 额度",
+      "colCreated": "创建时间",
+      "colActions": "操作",
+      "empty": "还没有租户。",
+      "detailTitle": "租户详情",
+      "backToList": "返回租户列表",
+      "onboardingTitle": "入驻进度（派生）",
+      "onboardingNote": "进度由业务锚点实时派生（无独立引导状态机）：注册 / 套餐取自注册表，建模与上线看录入单与产品空间计数。",
+      "intakeCount": "录入单数",
+      "spaceCount": "产品空间数",
+      "firstModelingStarted": "已开始首次建模",
+      "yes": "是",
+      "no": "否"
     }
   }
 }

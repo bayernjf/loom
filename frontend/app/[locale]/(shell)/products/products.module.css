@@ -155,6 +155,34 @@
   font-size: var(--font-size-sm);
 }
 
+.successText {
+  color: var(--color-state-success-text);
+  font-size: var(--font-size-sm);
+}
+
+.actions {
+  margin-top: var(--space-3);
+}
+
+.actionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.snapshotDetails {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+.snapshotPre {
+  padding: var(--space-3);
+  overflow-x: auto;
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
 .form .primaryButton {
   margin-top: var(--space-3);
 }
