@@ -12,6 +12,7 @@
     "check-products": "node scripts/check-products.mjs",
     "check-workbench": "node scripts/check-workbench.mjs",
     "check-compliance": "node scripts/check-compliance.mjs",
+    "check-admin": "node scripts/check-admin.mjs",
     "lint": "next lint"
   },
   "dependencies": {
