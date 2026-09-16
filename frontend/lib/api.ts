@@ -143,3 +143,106 @@ export async function getComplianceOverview(tenantId: string): Promise<Complianc
   const params = new URLSearchParams({ tenant_id: tenantId });
   return request<ComplianceOverview>(`/api/compliance/overview?${params}`);
 }
+
+// Q102：管理端（Q92 驾驶舱）管理员身份。V1 actor 自报（同写端点口径），
+// 真认证随 V2 改会话派生；不进浏览器包，shell 客户侧不持有该身份。
+export const CURRENT_ADMIN_ACTOR_ID = process.env.LOOM_ADMIN_ACTOR_ID ?? "";
+const ADMIN_ROLES = (process.env.LOOM_ADMIN_ROLES ?? "platform_admin")
+  .split(",")
+  .map((role) => role.trim())
+  .filter(Boolean);
+
+export interface TokenCostDailyRow {
+  date: string;
+  model_id: string;
+  currency_code: string | null;
+  runs: number;
+  input_tokens: number;
+  output_tokens: number;
+  input_cost: number;
+  output_cost: number;
+  total_cost: number;
+}
+
+export interface TokenCostSkillRow {
+  skill_id: string;
+  currency_code: string | null;
+  runs: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_cost: number;
+}
+
+export interface FailedSkillRow {
+  skill_id: string;
+  failed_runs: number;
+}
+
+export interface TokenCostDashboard {
+  window: { from: string; to: string };
+  daily: TokenCostDailyRow[];
+  by_skill: TokenCostSkillRow[];
+  failed_by_skill: FailedSkillRow[];
+  totals: {
+    runs: number;
+    input_tokens: number;
+    output_tokens: number;
+    failed_runs: number;
+  };
+}
+
+export interface CandidateBacklogRow {
+  target_type: string;
+  pending: number;
+  oldest_wait_seconds: number | null;
+}
+
+export interface TodoBacklogRow {
+  todo_type: string;
+  open: number;
+  overdue: number;
+  escalated: number;
+}
+
+export interface DecidedCountRow {
+  state: string;
+  count: number;
+}
+
+export interface ResolvedCountRow {
+  todo_type: string;
+  count: number;
+}
+
+export interface ReviewWorkloadDashboard {
+  window: { from: string; to: string };
+  snapshot_at: string;
+  backlog: {
+    candidates: CandidateBacklogRow[];
+    todos: TodoBacklogRow[];
+    totals: {
+      pending_candidates: number;
+      open_todos: number;
+      overdue_todos: number;
+      escalated_todos: number;
+    };
+  };
+  window_output: {
+    candidates_decided: DecidedCountRow[];
+    todos_resolved: ResolvedCountRow[];
+  };
+}
+
+function adminPath(path: string): string {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLES) params.append("roles", role);
+  return `${path}?${params}`;
+}
+
+export async function getTokenCostDashboard(): Promise<TokenCostDashboard> {
+  return request<TokenCostDashboard>(adminPath("/api/admin/dashboards/token-cost"));
+}
+
+export async function getReviewWorkloadDashboard(): Promise<ReviewWorkloadDashboard> {
+  return request<ReviewWorkloadDashboard>(adminPath("/api/admin/dashboards/review-workload"));
+}
