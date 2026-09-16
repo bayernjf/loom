@@ -19,6 +19,71 @@
     "placeholderV1": "该模块将随 M12 后续切片落地。",
     "placeholderV2": "V2 规划中，V1 暂不提供。"
   },
+  "products": {
+    "myProducts": "我的产品",
+    "productTemplates": "产品模板",
+    "library": "资料库",
+    "newProduct": "新建产品",
+    "columnName": "产品名称",
+    "columnStatus": "状态",
+    "empty": "还没有产品，点击「新建产品」创建第一份产品录入单。",
+    "unconfigured": "未配置当前租户（服务端环境变量 LOOM_TENANT_ID），请先完成配置。",
+    "new": {
+      "title": "新建产品",
+      "nameLabel": "产品名称",
+      "namePlaceholder": "请输入产品名称",
+      "nameRequired": "请输入产品名称",
+      "profileKeyNote": "产品名称暂以工程临时键 product_name 保存；G2 通用字段 fid 基线回填后将对齐（挂账）。",
+      "submit": "创建草稿",
+      "submitting": "创建中…"
+    },
+    "detail": {
+      "title": "产品详情",
+      "fieldId": "录入单 ID",
+      "fieldStatus": "状态",
+      "fieldTenant": "租户",
+      "fieldProfile": "已填资料",
+      "profileEmpty": "暂无已填资料",
+      "back": "返回我的产品"
+    }
+  },
+  "intake": {
+    "status": {
+      "draft": "草稿",
+      "ai_recognizing": "AI识别中",
+      "pending_confirm": "待确认",
+      "pending_params": "待补充参数",
+      "pending_quota": "待确认额度",
+      "submitted": "已提交",
+      "in_review": "审核中",
+      "need_more_info": "需补充资料",
+      "approved": "已通过",
+      "modeling": "建模中",
+      "stored": "已入库",
+      "store_failed": "入库失败",
+      "rejected": "驳回",
+      "archived": "已归档",
+      "category_creating": "类目创建中"
+    }
+  },
+  "workbench": {
+    "productOverview": "我的产品概览",
+    "totalProducts": "产品总数",
+    "statusBreakdown": "状态分布",
+    "empty": "还没有产品录入单。",
+    "unconfigured": "未配置当前租户（服务端环境变量 LOOM_TENANT_ID），请先完成配置。",
+    "quickActions": "快捷操作",
+    "newProduct": "新建产品",
+    "viewAll": "查看全部产品",
+    "metricsNote": "V2 随内容生产与反馈回流开放",
+    "metrics": {
+      "generated": "今日生成",
+      "published": "发布",
+      "interactions": "互动",
+      "trends": "趋势",
+      "health": "健康度"
+    }
+  },
   "error": {
     "403": "没有操作权限",
     "404": "资源不存在",

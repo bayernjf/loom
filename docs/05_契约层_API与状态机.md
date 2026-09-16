@@ -68,6 +68,8 @@
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
 | POST `` | 创建申请单 | 13 §1.1 |
+| GET `` | 按租户分页列表（Q98；tenant_id 必填，limit≤100；读路径不触发准入门，未知租户空列表） | Q98 |
+| GET `/overview` | 按租户状态聚合（Q99；tenant_id 必填；读路径不触发准入门，未知租户零值；注册序先于 `/{intake_id}`） | Q99 |
 | GET `/{intake_id}` / `/{intake_id}/allowed-events` / `/{intake_id}/product-space` | 查询/可迁事件/生成的 PS | — |
 | PATCH `/{intake_id}/profile` | 补资料（审核后不可改 409） | Q74 |
 | POST `/{intake_id}/transitions` | 15 态事件迁移（缺字段 422 / 越权 403 / 非法迁移 409） | Q3/Q5 |
@@ -254,6 +256,12 @@
 > **Q94 补登（2026-09-16，M12 第三片——Q70②候选审核 SLA 待办自动挂接，02 C1.38 四接缝均选甲案；迁移 0022 五条纯配置种子）**：skill7 候选生命周期补 SLA 挂接（HTTP 契约不变，无新端点）：**投递** `POST /api/skill-runs`（人工/llm_auto 同路径）每候选同事务落一条 ops_todos：todo_type=`review_{target_type}`（五型五个）、entity_type=skill_candidate、assignee_role=该 WF 注册表 review_role（WF-01 operations／WF-02/03/04 product_reviewer）、detail={wf_id,target_type,run_id,candidate_index}、due_at=投递时刻+`review.sla_hours.<target_type>`（五键种子均 72h，数值【原文未给出，待补】，配置中心热更）；**裁决**（`POST /api/skill-candidates/{id}/decision` 与 `/api/review-workbench/batch-approve` 复用同一路径）即把 open/escalated 待办置 resolved（resolution=applied｜archived，resolved_at 落戳），升级不阻断裁决，查无待办静默（挂接前存量不回填）。**到期**仍由 Q49 sweep 统一置 escalated，五型升级审计动作=`skill7.review_sla_escalated`；黄色预警窗口原文未给→到期前 green（挂账）。驾驶舱 review-workload 的 todos 积压按 todo_type 自动新增五型分组。测试 391 全绿（+7 集成），eval 仍 101/101。
 
 > **Q95 补登（2026-09-16，M12 第四片——租户管理+Onboarding，02 C1.39 四接缝均选甲案；迁移 0023 建 tenants 表+存量回填）**：新横切包 `/api/admin/tenants`（platform_admin 红线）：`POST /api/admin/tenants` 开通（体 `{tenant_id,name?,plan=trial,actor}`，201；默认 trial/trial+月额度 50 万，付费档→active/额度 null；重复 409、未知 plan 422、非管理员 403）；`GET /api/admin/tenants` 列表、`GET /api/admin/tenants/{tenant_id}` 详情（GET 走 query actor：actor_id 必填 422、roles 不符 403；详情额外回派生 `onboarding={intakes,product_spaces,first_modeling_started}`，无引导状态机）；`POST /api/admin/tenants/{id}/change-plan`（续费口径只改 plan 不改 status；付费档额度 null、改回 trial 写 50 万）、`/pause`（trial/active→paused，重复 409）、`/resume`（paused→active，未暂停 409），写端点 actor 在体，全部 append-only 审计 tenant.provisioned/plan_changed/paused/resumed。**段1 准入新增错误口径**：`POST /api/intakes` 写单前校验租户存在且未暂停——未知租户 **404**、暂停租户 **409**（闸在应用层，无硬外键；链内其余端点仍从 intake/PS 锚点派生租户，不新增校验）。价格（Basic $999/Pro $2999/Enterprise $9999）仅 D3.11 展示用，无计费端点；团队账号/Onboarding 页面随 V2/前端门控。测试 401 全绿（+10 集成），eval 仍 101/101。
+
+
+> **Q98 补登（2026-09-16，M12 客户前端切片 2·产品中心跨栈最小闭环；无迁移，Alembic 头仍 0023）**：段1 新增只读端点 `GET /api/intakes`——query `tenant_id`（必填非空，缺/空 422）、`limit`（默认 20，1..100）、`offset`（默认 0，≥0），响应 `IntakeList{items: IntakeView[], total, limit, offset}`，排序 created_at DESC。**读路径不触发 Q95 准入门**：未知租户与暂停租户均返回 200 空列表（只读不放宽写闸：POST 建单的未知 404/暂停 409 一字不动）；只读不 writeAudit。配套前端：RSC 列表 + Server Action 建 draft + 只读详情（02 C1.42 四接缝全甲），server-only env `LOOM_TENANT_ID`/`LOOM_API_BASE_URL`，产品名走工程临时键 `product_name`（G2 cat='common' fid 基线回填后对齐，挂账）。测试 404 全绿（+3 集成），eval 仍 101/101。
+
+> **Q99 补登（2026-09-16，M12 客户前端切片 3·工作台最小总览；无迁移，Alembic 头仍 0023）**：段1 再增只读端点 `GET /api/intakes/overview`——query `tenant_id`（必填非空，缺/空 422），响应 `IntakeOverview{total:int, by_status:{状态码:计数}}`，单次 group by status 聚合、total 为分组计数之和；读路径同 Q98 **不触发 Q95 准入门**（未知/暂停租户返回 `{total:0,by_status:{}}`，写闸一字不动），只读不 writeAudit；**路由必须注册在 `GET /{intake_id}` 之前**，否则字面量 overview 被路径参数吞成 intake_id。配套前端工作台（02 C1.43 四接缝全甲）：录入单总数 + 15 态分组（`intake.status.*` 消息对齐 docs/13 §1.1，仅渲染计数 > 0）+ 快捷入口；D5 原文五指标（今日生成/发布/互动/趋势/健康度，数据源属段 12/13）渲染禁用态 V2 卡，不显示任何数字（含 0）。测试 407 全绿（+3 集成），eval 仍 101/101。
+
 
 ---
 ## Part 2 · 状态机定义

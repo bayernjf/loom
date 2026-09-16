@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +8,8 @@ from app.product.product_intake import service
 from app.product.product_intake.models import ProductSpace
 from app.product.product_intake.schemas import (
     IntakeCreate,
+    IntakeList,
+    IntakeOverview,
     IntakeProfilePatch,
     IntakeTransition,
     IntakeView,
@@ -22,6 +24,46 @@ from app.product.product_intake.statemachine import (
 router = APIRouter(prefix="/api/intakes", tags=["product-intake"])
 
 
+def _to_view(intake) -> IntakeView:
+    return IntakeView(
+        intake_id=intake.intake_id,
+        tenant_id=intake.tenant_id,
+        status=intake.status,
+        profile=intake.profile,
+        category_pending_id=intake.category_pending_id,
+    )
+
+
+@router.get("", response_model=IntakeList)
+async def list_intakes(
+    tenant_id: str = Query(min_length=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> IntakeList:
+    # Q98：按租户只读列表；读路径不触发 Q95 准入门，未知租户返回空列表。
+    items, total = await service.list_intakes(
+        session, tenant_id=tenant_id, limit=limit, offset=offset
+    )
+    return IntakeList(
+        items=[_to_view(intake) for intake in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/overview", response_model=IntakeOverview)
+async def overview_intakes(
+    tenant_id: str = Query(min_length=1),
+    session: AsyncSession = Depends(get_session),
+) -> IntakeOverview:
+    # Q99：工作台总览。必须注册在 /{intake_id} 之前，否则会被路径参数吞掉。
+    # 读路径与 Q98 列表同口径：不触发 Q95 准入门，未知租户返回零值。
+    total, by_status = await service.overview_intakes(session, tenant_id=tenant_id)
+    return IntakeOverview(total=total, by_status=by_status)
+
+
 @router.post("", response_model=IntakeView, status_code=201)
 async def create_intake(
     body: IntakeCreate, session: AsyncSession = Depends(get_session)
@@ -34,13 +76,7 @@ async def create_intake(
         raise HTTPException(status_code=404, detail=f"tenant not found: {exc}") from exc
     except tenant_service.TenantPaused as exc:
         raise HTTPException(status_code=409, detail=f"tenant is paused: {exc}") from exc
-    return IntakeView(
-        intake_id=intake.intake_id,
-        tenant_id=intake.tenant_id,
-        status=intake.status,
-        profile=intake.profile,
-        category_pending_id=intake.category_pending_id,
-    )
+    return _to_view(intake)
 
 
 @router.get("/{intake_id}", response_model=IntakeView)
