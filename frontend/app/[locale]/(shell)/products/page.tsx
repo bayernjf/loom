@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage() {
   const t = await getTranslations("products");
   const te = await getTranslations("error");
+  const tStatus = await getTranslations("intake.status");
 
   let body: React.ReactNode;
 
@@ -47,7 +48,7 @@ export default async function ProductsPage() {
                     </Link>
                   </td>
                   <td>
-                    <span className={styles.statusChip}>{intake.status}</span>
+                    <span className={styles.statusChip}>{tStatus(intake.status)}</span>
                   </td>
                 </tr>
               ))}

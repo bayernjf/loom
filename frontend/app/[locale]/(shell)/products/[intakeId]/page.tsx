@@ -13,6 +13,7 @@ export default async function ProductDetailPage({
 }) {
   const { intakeId } = await params;
   const t = await getTranslations("products");
+  const tStatus = await getTranslations("intake.status");
 
   let intake;
   try {
@@ -35,7 +36,7 @@ export default async function ProductDetailPage({
         <dd className={styles.mono}>{intake.tenant_id}</dd>
         <dt>{t("detail.fieldStatus")}</dt>
         <dd>
-          <span className={styles.statusChip}>{intake.status}</span>
+          <span className={styles.statusChip}>{tStatus(intake.status)}</span>
         </dd>
       </dl>
       <h2 className={styles.subtitle}>{t("detail.fieldProfile")}</h2>
