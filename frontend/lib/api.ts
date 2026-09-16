@@ -89,3 +89,57 @@ export async function getIntakeOverview(tenantId: string): Promise<IntakeOvervie
 export function intakeDisplayName(intake: IntakeView): string {
   return intake.profile[PRODUCT_NAME_PROFILE_KEY]?.trim() || intake.intake_id.slice(0, 8);
 }
+
+export interface CcrBanHit {
+  word: string;
+  level: string;
+  layer: string;
+  country: string | null;
+  entry_id: string;
+}
+
+export interface CcrDowngradeHit extends CcrBanHit {
+  downgrade_target: string;
+}
+
+export interface CcrMarket {
+  country: string | null;
+  status: string;
+  block_required: boolean;
+  created_at: string | null;
+  bans: CcrBanHit[];
+  downgrades: CcrDowngradeHit[];
+}
+
+export interface CcrOverview {
+  worst_status: string;
+  block_required: boolean;
+  latest_at: string | null;
+  markets: CcrMarket[];
+}
+
+export interface LawReviewView {
+  status: string;
+  domain: string;
+  conclusion: string | null;
+  decided_at: string | null;
+}
+
+export interface ComplianceOverviewItem {
+  pws_id: string;
+  product_space_id: string;
+  intake_id: string | null;
+  product_name: string | null;
+  version: string;
+  ccr: CcrOverview | null;
+  law_review: LawReviewView | null;
+}
+
+export interface ComplianceOverview {
+  items: ComplianceOverviewItem[];
+}
+
+export async function getComplianceOverview(tenantId: string): Promise<ComplianceOverview> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<ComplianceOverview>(`/api/compliance/overview?${params}`);
+}

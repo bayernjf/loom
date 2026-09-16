@@ -11,6 +11,7 @@
     "check-nav": "node scripts/check-nav.mjs",
     "check-products": "node scripts/check-products.mjs",
     "check-workbench": "node scripts/check-workbench.mjs",
+    "check-compliance": "node scripts/check-compliance.mjs",
     "lint": "next lint"
   },
   "dependencies": {
