@@ -228,6 +228,7 @@
     "workload": {
       "title": "人工审核工作量",
       "intro": "当前待审积压快照加窗口内审核产出；候选/待办按类型分组，类型码为系统标识原样展示。",
+      "empty": "暂无数据。",
       "snapshotAt": "快照时间：{at}",
       "candidateBacklog": "待审候选（当前快照）",
       "targetType": "候选类型",
