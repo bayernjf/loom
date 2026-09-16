@@ -81,6 +81,7 @@ const requiredKeys = [
     "state",
     "count",
     "todosResolved",
+    "empty",
   ].map((k) => `admin.workload.${k}`),
   ...[
     "title",
