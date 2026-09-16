@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,21 @@ from app.core.sla.runner import run_jobs
 from app.product.modeling.models import OpsTodo
 
 router = APIRouter(prefix="/api/admin/sla", tags=["sla"])
+
+# Q108：看板状态过滤白名单（OpsTodo.status 三态 + all）；非法值 422。
+TODO_STATUS_FILTERS = {"open", "escalated", "resolved", "all"}
+
+
+def require_sla_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, PLATFORM_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 class _SweepBody(BaseModel):
@@ -59,9 +74,12 @@ async def run_sweep(
 @router.get("/todos")
 async def todo_board(
     status: str = "open",
+    _: Actor = Depends(require_sla_view),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     """待办看板：附带派生 sla_state（green/yellow/red/resolved；黄色口径见 policies）。"""
+    if status not in TODO_STATUS_FILTERS:
+        raise HTTPException(status_code=422, detail=f"unknown todo status: {status}")
     now = datetime.now(UTC)
     stmt = select(OpsTodo).order_by(OpsTodo.due_at.asc())
     if status != "all":

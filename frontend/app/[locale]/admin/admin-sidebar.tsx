@@ -11,6 +11,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/review-queue", labelKey: "admin.reviewQueueNav" },
   { href: "/admin/tenants", labelKey: "admin.tenantsNav" },
   { href: "/admin/intakes", labelKey: "admin.opsIntakesNav" },
+  { href: "/admin/sla-todos", labelKey: "admin.slaTodosNav" },
 ] as const;
 
 export function AdminSidebar() {

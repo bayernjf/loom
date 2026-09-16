@@ -542,3 +542,23 @@ export async function adminTransitionIntake(
     },
   );
 }
+
+export interface SlaTodoView {
+  todo_id: string;
+  tenant_id: string;
+  todo_type: string;
+  entity_type: string;
+  entity_id: string;
+  status: string;
+  assignee_role: string;
+  due_at: string;
+  escalated_at: string | null;
+  sla_state: "green" | "yellow" | "red" | "resolved";
+}
+
+export async function getSlaTodos(status: string): Promise<SlaTodoView[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  params.set("status", status);
+  return request<SlaTodoView[]>(`/api/admin/sla/todos?${params}`);
+}
