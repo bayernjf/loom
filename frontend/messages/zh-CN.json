@@ -329,6 +329,30 @@
       "firstModelingStarted": "已开始首次建模",
       "yes": "是",
       "no": "否"
+    },
+    "slaTodosNav": "待办 SLA 看板",
+    "slaTodos": {
+      "title": "待办 SLA 看板",
+      "intro": "跨租户运营待办，按截止时间升序排列；看板态由后端依据 due_at 与升级状态实时派生。",
+      "yellowNote": "黄色预警目前仅法审待办（到期前 24 小时）；其他待办类型到期前显绿色，超时或已升级显红色。",
+      "filters": "筛选",
+      "filterStatus": "状态",
+      "filter_open": "待处理",
+      "filter_escalated": "已升级",
+      "filter_resolved": "已解决",
+      "filter_all": "全部状态",
+      "apply": "应用",
+      "reset": "重置",
+      "colTodo": "待办",
+      "colTenant": "租户",
+      "colType": "类型",
+      "colRole": "负责角色",
+      "colEntity": "关联实体",
+      "colStatus": "状态",
+      "colSlaState": "SLA 态",
+      "colDue": "截止时间",
+      "colEscalated": "升级时间",
+      "empty": "当前筛选下暂无待办。"
     }
   }
 }

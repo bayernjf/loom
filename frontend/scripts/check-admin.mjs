@@ -31,6 +31,7 @@ const requiredKeys = [
   "admin.reviewQueueNav",
   "admin.tenantsNav",
   "admin.opsIntakesNav",
+  "admin.slaTodosNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -203,6 +204,29 @@ const requiredKeys = [
     "spaceSnapshot",
     "backToQueue",
   ].map((k) => `admin.opsIntakes.${k}`),
+  ...[
+    "title",
+    "intro",
+    "yellowNote",
+    "filters",
+    "filterStatus",
+    "filter_open",
+    "filter_escalated",
+    "filter_resolved",
+    "filter_all",
+    "apply",
+    "reset",
+    "colTodo",
+    "colTenant",
+    "colType",
+    "colRole",
+    "colEntity",
+    "colStatus",
+    "colSlaState",
+    "colDue",
+    "colEscalated",
+    "empty",
+  ].map((k) => `admin.slaTodos.${k}`),
 ];
 
 const requiredFiles = [
@@ -227,6 +251,7 @@ const requiredFiles = [
   join("intakes", "actions.ts"),
   join("intakes", "ops-intake-codes.ts"),
   join("intakes", "ops-intake-actions.tsx"),
+  join("sla-todos", "page.tsx"),
 ];
 
 const problems = [];
@@ -316,10 +341,12 @@ if (!sidebarText.includes("/admin/tenants"))
   problems.push("admin sidebar must link tenant management");
 if (!sidebarText.includes("/admin/intakes"))
   problems.push("admin sidebar must link the ops intake queue (Q107)");
+if (!sidebarText.includes("/admin/sla-todos"))
+  problems.push("admin sidebar must link the SLA todo board (Q108)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 5)
-    problems.push(`admin sidebar must keep exactly 5 admin entries, got ${navCount}`);
+  if (navCount !== 6)
+    problems.push(`admin sidebar must keep exactly 6 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -726,6 +753,65 @@ if (
   );
   if (!/async def list_ops_intakes/.test(opsService))
     problems.push("intake service must define list_ops_intakes (cross-tenant)");
+}
+
+// Q108：待办 SLA 看板（纯只读 RSC；枚举码原样，POST /sla/run 不上页面）。
+const slaPage = readFileSync(join(adminDir, "sla-todos", "page.tsx"), "utf8");
+if (!/export const dynamic = "force-dynamic"/.test(slaPage))
+  problems.push("sla-todos/page.tsx must be force-dynamic (server-only env)");
+if (/"use server"/.test(slaPage))
+  problems.push("sla-todos/page.tsx must stay read-only (no Server Actions)");
+const slaPageCode = slaPage.replace(/^\s*\/\/.*$/gm, "");
+if (/NEXT_PUBLIC/.test(slaPageCode) || /https?:\/\//.test(slaPageCode))
+  problems.push("sla-todos/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+if (/\/zh-CN\//.test(slaPageCode))
+  problems.push("sla-todos/page.tsx must use i18n Link, no hardcoded locale paths");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE", "/sla/run"]) {
+  if (slaPageCode.includes(forbidden))
+    problems.push(`sla-todos/page.tsx is read-only; must not contain ${forbidden}`);
+}
+for (const token of [
+  "getSlaTodos",
+  "CURRENT_ADMIN_ACTOR_ID",
+  '"open"',
+  '"escalated"',
+  '"resolved"',
+  '"all"',
+  "yellowNote",
+  "shortId",
+  "riskCritical",
+  "riskMedium",
+  "riskLow",
+  "stateArchived",
+  "sla_state",
+]) {
+  if (!slaPage.includes(token))
+    problems.push(`sla-todos/page.tsx must contain ${token}`);
+}
+
+for (const token of [
+  "getSlaTodos",
+  "SlaTodoView",
+  "/api/admin/sla/todos",
+]) {
+  if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
+}
+
+const slaRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "sla", "router.py"),
+  "utf8",
+);
+if (!/def require_sla_view/.test(slaRouter))
+  problems.push("SLA board must gate via require_sla_view");
+if (!/require_any_role\(actor, PLATFORM_ADMIN\)/.test(slaRouter))
+  problems.push("require_sla_view must allow PLATFORM_ADMIN only");
+if (!/Depends\(require_sla_view\)/.test(slaRouter))
+  problems.push("GET /todos must depend on require_sla_view");
+if (!/@router\.get\("\/todos"\)/.test(slaRouter))
+  problems.push("SLA router must register GET /todos");
+for (const token of ["TODO_STATUS_FILTERS", "unknown todo status:"]) {
+  if (!slaRouter.includes(token))
+    problems.push(`SLA router must contain ${token} (422 whitelist)`);
 }
 
 if (problems.length > 0) {

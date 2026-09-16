@@ -146,7 +146,10 @@ async def test_model_crud_rbac_and_validation(client):
     r = await client.post("/api/admin/ai-models", json=payload)
     assert r.status_code == 422  # model_code 唯一
 
-    r = await client.get("/api/admin/ai-models")
+    r = await client.get(
+        "/api/admin/ai-models",
+        params=[("actor_id", "pa-1"), ("roles", "platform_admin")],
+    )
     codes = {row["model_code"] for row in r.json()}
     assert {"synthetic-deterministic", "gpt-x"} <= codes
 
@@ -208,7 +211,10 @@ async def test_key_lifecycle_never_returns_plaintext(client):
     assert sorted(k["status"] for k in rows) == ["active", "revoked"]
 
     # 模型列表 has_active_key 翻正。
-    r = await client.get("/api/admin/ai-models")
+    r = await client.get(
+        "/api/admin/ai-models",
+        params=[("actor_id", "pa-1"), ("roles", "platform_admin")],
+    )
     view = next(m for m in r.json() if m["model_id"] == model_id)
     assert view["has_active_key"] is True
 
@@ -240,7 +246,12 @@ async def test_scene_routes_operations_may_change(client):
     })
     assert r.status_code == 200, r.text
     assert r.json() == {"scene": "PWC-BUILDER", "model_id": model_id}
-    routes = (await client.get("/api/admin/ai-scene-routes")).json()
+    routes = (
+        await client.get(
+            "/api/admin/ai-scene-routes",
+            params=[("actor_id", "ops-1"), ("roles", "operations")],
+        )
+    ).json()
     assert {row["scene"] for row in routes} == {"CAT-RECOG", "PWC-BUILDER"}
 
 

@@ -79,19 +79,19 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET/PUT `/admin/c1/signal-weights` | Q2 权重表（Σ≠1 → 422；operations；越权 403，Q75 补闸） | Q2 |
-| GET/POST `/admin/c1/industries`，PATCH/DELETE `/admin/c1/industries/{industry}` | Q7 阈值 CRUD（operations；越权 403，Q75 补闸；默认档删 → 409） | Q7/Q75 |
+| GET/PUT `/admin/c1/signal-weights` | Q2 权重表（Σ≠1 → 422；operations；越权 403，Q75 补闸；**Q109 起 GET 补 operations query 读闸：缺 actor_id 422、越权 403**） | Q2/**Q109** |
+| GET/POST `/admin/c1/industries`，PATCH/DELETE `/admin/c1/industries/{industry}` | Q7 阈值 CRUD（operations；越权 403，Q75 补闸；默认档删 → 409；**Q109 起 GET 同补 operations query 读闸**） | Q7/Q75/**Q109** |
 | POST `/intakes/{intake_id}/c1-recognition` | conf 三分支（高置信 auto_confirm；中置信出待办；低置信须带 category_pending_id） | Q1/Q3/Q5 |
 | POST `/intakes/{intake_id}/ops-decision` | 运营选定/全否 | Q3 |
 | POST `/admin/ops-todos/sweep` | 72h 到期升级（手工触发，**platform_admin**，越权 403；Q75；调度随 M10） | Q4/Q75 |
-| POST/GET `/categories`，PUT `/categories/{category_id}/template` | G1 最小切片 + 叶子模板（**dictionary_admin**，越权 403；fid:'-'/未知 fid → 422；Q75） | Q68/Q75 |
+| POST/GET `/categories`，PUT `/categories/{category_id}/template` | G1 最小切片 + 叶子模板（**dictionary_admin**，越权 403；fid:'-'/未知 fid → 422；Q75；**Q109 起 GET 同补 dictionary_admin query 读闸：缺 actor_id 422、越权 403**） | Q68/Q75/**Q109** |
 | POST `/intakes/{intake_id}/c7-runs` | C7 L1–L4 兜底（L4 提案入库候选） | Q6/Q68 |
 
 **M3 段3 字段池规划（前缀 `/api`）**
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET `/admin/fp-source-routes`，PUT/DELETE `/admin/fp-source-routes/{route}` | Q8 来源路由 CRUD（operations；越权 403，Q75 补闸；被维度引用 → 409） | Q8/Q75 |
+| GET `/admin/fp-source-routes`，PUT/DELETE `/admin/fp-source-routes/{route}` | Q8 来源路由 CRUD（operations；越权 403，Q75 补闸；被维度引用 → 409；**Q109 起 GET 同补 operations query 读闸**） | Q8/Q75/**Q109** |
 | POST/GET `/product-spaces/{product_space_id}/field-pools`（+ `/current`） | 方案提交（一品一池；违规落 violations 仍 pending_gate）/查当前池 | PT-FP-PLAN |
 | POST `/field-pools/{pool_id}/gate` | WF-02 HumanGate（product_reviewer；非合规批 → 409） | Q9/Q11/Q12 |
 | POST `/field-pools/{pool_id}/dimensions/{dimension_id}/restore` | 备选档捞回（满 8 挤回最低置信） | Q12 |
@@ -101,7 +101,7 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET/POST `/admin/compliance-wordlist`，PUT/DELETE `/admin/compliance-wordlist/{entry_id}` | Q48 统一词表 CRUD（operations/internal_compliance；downgrade 缺目标 422；DELETE=软归档；段 5/10 后续同表读取） | Q48/Q51 |
+| GET/POST `/admin/compliance-wordlist`，PUT/DELETE `/admin/compliance-wordlist/{entry_id}` | Q48 统一词表 CRUD（operations/internal_compliance；downgrade 缺目标 422；DELETE=软归档；段 5/10 后续同表读取；**Q109 起 GET 同补 operations/internal_compliance query 读闸**——platform_admin 不在内、403） | Q48/Q51/**Q109** |
 | POST `/product-spaces/{product_space_id}/atom-batches` | WF-03 候选批次（仅产 candidate；池非 approved → 409；Q14 超限 422 可覆盖；Q15 AI 达标 409、manual 放行；同批去重/维度归属 422；事实原子跨产品撞值 409）；响应内嵌 AtomConflict | Q14/Q15/PT-ATOM-EXP/line 11189 |
 | GET `/product-spaces/{product_space_id}/atom-candidates`、`/atoms` | 候选列表（可按 status）/正式原子列表 | — |
 | POST `/atom-candidates/{id}/approve`、POST `/atom-candidates/batch-approve` | approveAtomGuard（product_reviewer；违规码数组 409；high/critical 批量 409，Q70） | line 2633/Q70 |
@@ -152,7 +152,7 @@
 |---|---|---|
 | GET/POST `/admin/publish-slots`，PUT/DELETE `/admin/publish-slots/{slot_id}` | 发布位档案 CRUD（operations；code 唯一 409；四维分 score_source=manual_eval + source_url；DELETE=软归档）；**无平台目录种子（line 1098-1221 原文【待补】）** | Q35/line 1098 |
 | GET `/admin/publish-slots/{slot_id}/fit-score?goal=` | Q34 派生值（不落库）：Σ 四维分×目的权重；目的未配权重 → fit_score=null/incomplete=true，不凑分 | Q34 |
-| GET/PUT `/admin/fit-weights` | 目的权重矩阵（operations；4 维齐 + Σ=1 硬校验 422，不归一化；goal 须活跃 content_goals 否则 404；种子 ENGAGEMENT/CONVERSION） | Q34 |
+| GET/PUT `/admin/fit-weights` | 目的权重矩阵（operations；4 维齐 + Σ=1 硬校验 422，不归一化；goal 须活跃 content_goals 否则 404；种子 ENGAGEMENT/CONVERSION；**Q109 起 GET 同补 operations query 读闸**） | Q34/**Q109** |
 | GET/POST `/admin/platform-rules`，DELETE `/admin/platform-rules/{rule_id}`，GET `/admin/platform-rules/match` | 4 层 selector + country 横切；层级必填字段 422、effect 仅 blocked/partial；同级同条件异结论保存 → 409 回冲突行，`overwrite=true` 重发归档旧行；match=高优先级层级覆盖、同级从严；native 默认不存 | Q36/line 1383 |
 | GET/PUT `/admin/slot-type-defaults` | slotType 默认值（operations；min>max 422；约 40 列走 defaults JSON，明细【待补】） | line 1428 |
 | GET `/admin/pcp-templates` | Q39 四模板只读（种子 short_video/community/photo_text/ecommerce，17 键 Σ=1.0；实现期初值草稿） | Q39 |
@@ -191,9 +191,11 @@
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
 | POST `/sla/run` | 手工触发全部 sweep 作业（**platform_admin**，body 带 actor，越权 403；Q75）：①待办到期升级（所有 open ops_todo 过 due_at→escalated，按类型写审计）②Q18 证据超时自动驳回 ③Q24 冷却到期回 available ④Q51 未来生效词条到点激活并补扫；每作业独立会话/提交，单作业失败回滚不阻断其余，响应回带每作业 `{changed}` 或 `{error}`；**Q89 起与定时调度抢同一把 Redis leader 锁 `loom:lock:sla-sweep`，锁被占 409、锁后端故障 503**（`LOOM_DISTRIBUTED_LOCK_ENABLED` 默认关） | Q49/Q18/Q24/Q51/Q75/Q89 |
-| GET `/sla/todos?status=open\|all` | 待办 SLA 看板（due_at 升序），派生 `sla_state`：green/yellow/red/resolved（黄色仅法审 created_at+24h，其余类型黄色口径【原文未给出，待补】） | Q49/Q70 |
+| GET `/sla/todos?status=open\|escalated\|resolved\|all` | 待办 SLA 看板（跨租户、不分页、due_at 升序），派生 `sla_state`：green/yellow/red/resolved（黄色仅法审 created_at+24h，其余类型黄色口径【原文未给出，待补】）。**Q108 起**：query actor_id 必填（缺参 422）+重复 roles，require_sla_view 仅放行 **platform_admin**（operations/internal_compliance/customer 均 403）；status 白名单恰 4 值，非法 422 `unknown todo status: {status}`，默认 open。Q108 前该端点为 M10b 裸端点无鉴权 | Q49/Q70/**Q108** |
 
 > 定时调度：FastAPI lifespan 内 asyncio 循环，默认 300s 一轮（`LOOM_SWEEP_INTERVAL_SECONDS`、`LOOM_SCHEDULER_ENABLED=false` 可关）；多副本部署以 Redis leader 锁保证单实例 tick（**Q89 已落地**：`LOOM_DISTRIBUTED_LOCK_ENABLED` 默认关，开启后非持锁副本跳过该轮、锁后端故障 fail-closed 跳过；看门狗 TTL/3 续约）。法审黄色小时数读配置中心 `sla.yellow_hours`（种子 24，缓存未引导时回退默认）——首个配置中心消费方。Q71 critical→target 自动补货（5 分钟防抖）仍未实现：V1 无 skill7 AI 漏斗可调用，挂 skill7 切片，不构造虚拟候选。**RBAC 收口已于切片 d 完成（Q75）**：`/sla/run` 与 `/admin/ops-todos/sweep` 手工触发归 platform_admin；其余端点级角色映射见切片 d 小节。
+
+> **Q108 补登（2026-09-16，M12 第六片——裸看板端点补闸 + 管理端只读页；无新端点/无新写口/无迁移）**：M10b 落地的 `GET /api/admin/sla/todos` 自切片 d 起仍为**无鉴权裸端点**（Q75 补闸矩阵只收 POST /run），Q108 补 require_sla_view query 依赖——actor_id 必填（缺参 422）+重复 roles，require_any_role 仅 PLATFORM_ADMIN，operations/internal_compliance/customer 全 403；status 由原 open|all 两值扩为白名单 {open,escalated,resolved,all}，非法 422 `unknown todo status: {status}`，默认 open；不分页、due_at ASC 与返回字段集（含 sla_state）不变，sla_state 派生仍走 `core/sla/policies.py`。POST /run 的 body 内闸与 409/503 口径不动。前端新页 `/[locale]/admin/sla-todos` 纯只读 RSC（GET 表单四筛选、9 列、枚举码原样、sla_state 四色 chip、yellowNote 如实声明"黄色仅法审、其他类型黄口径【待补】"），写口 /sla/run 不上页面。测试 421 全绿（+3 集成），eval 不受影响。
 
 **M10 切片 d · RBAC 红线收口**（2026-09-14，无新表/无新端点；Q75 销账）
 
@@ -201,6 +203,8 @@
 > 新增/补闸矩阵：①`POST /api/admin/sla/run`、`POST /api/admin/ops-todos/sweep` → **platform_admin**（Q75 新裁决；sla/run 请求体新增 `actor`）；②`POST /categories`、`PUT /categories/{id}/template` → **dictionary_admin**（Q75；CategoryCreate 请求体新增 `actor`）；③`POST /pws/{id}/ccr/run` → **internal_compliance**（Q75）；④补闸既有裁决：信号权重 PUT、行业阈值 CRUD = operations（Q2/Q7），来源路由 PUT/DELETE = operations（Q8）；⑤`POST /api/admin/restock/run` → **platform_admin**（Q87，手工触发一轮补货，同 Q75 sla/run 口径；Q89 起与定时 worker 抢 `loom:lock:restock-worker`，409/503 同 sla/run；Q90 起手工触发绕过瞬态退避窗口，但瞬态结果仍累加 attempts 并重排窗口）。
 > **有意开放、不加闸**（Q75 第 4 条，实现补登）：`POST /pws/{id}/pws/evaluate`（Q28"系统提请"——机械求值 + 幂等出单，非人工决策）、`POST /atom-candidates/{id}/revive`（仅 evidence_timeout 驳回可复活，前置状态即闸）。
 > 既有各模块服务内 `RoleNotAllowed`（config_center/whitelist_center/compliance_center 等）保持不动，本次只收口红线，不做全库异常类合并；统一 403 口径不变。
+
+> **Q109 补登（2026-09-16，M12 第七片——管理面读端点鉴权审计 + 同型补闸；无新端点/无新写口/无迁移，前端零改动）**：对全部 `/api/admin` GET 穷举审计后，8 个表行把 GET 与写口同组标注角色、但 Q75 矩阵方法枚举只收写口的裸读口，统一补 query actor 依赖（actor_id 必填缺参 422、重复 roles、require_any_role 不符 403；口径同 Q92/Q108）：①c1/signal-weights ②c1/industries = operations；③/categories（无 /admin 前缀）= dictionary_admin；④fp-source-routes ⑤fit-weights = operations；⑥compliance-wordlist = operations/internal_compliance（platform_admin 不在内）；⑦ai-models = platform_admin；⑧ai-scene-routes = operations|platform_admin。**矩阵未定读角色，保持开放并挂【原文未给出，待补】**：config 三读口（``、`/{key}`、`/{key}/history`）、g2-candidates、skill-prompts 三读口（指针/版本历史/单版本）。**矩阵明确有意开放、测试锁定**：agent-keys 列表（"GET 无 actor 体（同 outbound Key 列表口径）"）与 ai-models/{id}/keys（仅元数据）；fcw.csv Q100 tenant_id 隔离不在列。系统内部（CCR/建模等）读词表/权重/路由均走服务层不经 HTTP，闸不影响内部调用；前端全仓确认无这 8 个端点消费方。444 测试（+23），见 02 C1.53、08 Q109。
 
 **M10 切片 e · skill7 AI 候选通道（WF-04 试点；WF-02 字段池 Q78、WF-01 冷启动识别 Q79、WF-03 原子批次 Q80、WF-01 C7 Layer4 Q81 为复用切片）**（2026-09-14，迁移 0012 + 0013，Q76/Q78/Q79/Q80/Q81；路由前缀 `/api`）
 
@@ -220,12 +224,12 @@
 
 | 方法与路径 | 契约 | 来源 |
 |---|---|---|
-| POST `/admin/ai-models` / GET `/admin/ai-models` | 建模：body=model_code(唯一)/provider/input_price_per_1m/output_price_per_1m(≥0)/currency_code(3 字符可空，币种【原文未给出，待补】)/daily_budget(可空)/fallback_model_id(创建时禁带，422)/actor；**platform_admin**，越权 403；重码 422；201 视图含 has_active_key。列表按 model_code 排序，带 has_active_key | Q67 / Q82 |
+| POST `/admin/ai-models` / GET `/admin/ai-models` | 建模：body=model_code(唯一)/provider/input_price_per_1m/output_price_per_1m(≥0)/currency_code(3 字符可空，币种【原文未给出，待补】)/daily_budget(可空)/fallback_model_id(创建时禁带，422)/actor；**platform_admin**，越权 403；重码 422；201 视图含 has_active_key。列表按 model_code 排序，带 has_active_key。**Q109 起 GET 补 platform_admin query 读闸（缺 actor_id 422/越权 403）** | Q67 / Q82 / **Q109** |
 | PATCH `/admin/ai-models/{id}` | 改价/币种/日预算/status(active\|disabled)/fallback_model_id；自引用 fallback 422、目标不存在 422、模型不存在 404；platform_admin | Q82 |
 | POST `/admin/ai-models/{id}/keys` | 录入/轮换 outbound Key：body=secret(min 8)/actor；platform_admin，模型 404；原子地把旧 active 行置 revoked 并插新密文行；201 仅回 key_id/fingerprint(末 4 位)/status，**明文/密文均不回显**；writeAudit `ai_model_key.rotate` | Q82-3 |
 | GET `/admin/ai-models/{id}/keys` | Key 清单：仅 key_id/fingerprint/status/时间元数据 | Q82-3 |
 | POST `/admin/ai-model-keys/{key_id}/revoke` | 吊销（body=actor；platform_admin；幂等，重复吊销不报错）；Key 404；writeAudit `ai_model_key.revoke` | Q82-3 |
-| PUT `/admin/ai-scene-routes/{scene}` / GET `/admin/ai-scene-routes` | 场景键 = `skill_id`；body=model_id/actor，模型不存在 422；**operations\|platform_admin** 可改不动代码；writeAudit `ai_scene_route.update` | Q67 / Q82 |
+| PUT `/admin/ai-scene-routes/{scene}` / GET `/admin/ai-scene-routes` | 场景键 = `skill_id`；body=model_id/actor，模型不存在 422；**operations\|platform_admin** 可改不动代码；writeAudit `ai_scene_route.update`。**Q109 起 GET 同补 operations\|platform_admin query 读闸** | Q67 / Q82 / **Q109** |
 | POST `/admin/skill-prompts/{skill_id}/versions` | 发布 Prompt 新版本：template(非空)/change_note/variables/actor，platform_admin；首版 v0.1，之后 v0.N+1；同步移动 skill_prompts 指针，版本行 append-only；writeAudit `skill_prompt.publish` | Q82-4 |
 | GET `/admin/skill-prompts` / GET `/admin/skill-prompts/{skill_id}/versions` / GET `.../versions/{version}` | 指针列表 / 版本历史（不含 template 全文）/ 单版本详情（含 template+variables）；单版本不存在 404 | Q82-4 |
 | POST `/admin/agent-keys` | **入站**一 Agent 一 Key 签发（**Q88**；body=name(1..128 非空白)/actor；platform_admin，越权 403、空名 422；201 视图含 key_id/key_prefix/status/created_at 与 **secret（明文仅本次返回，后台不可再读）**；writeAudit `agent_api_key.issue`；Key 不绑租户） | Q60 / Q88 |

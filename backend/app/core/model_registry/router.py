@@ -5,9 +5,10 @@
 = operations（与 skill7 投递同档）。
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import c7_resolve, extraction, gateway
 from app.core.model_registry.schemas import (
@@ -25,11 +26,40 @@ from app.core.model_registry.schemas import (
     SceneRouteUpsert,
     SceneRouteView,
 )
-from app.core.rbac import PermissionDenied
+from app.core.rbac import (
+    OPERATIONS,
+    PLATFORM_ADMIN,
+    PermissionDenied,
+    require_any_role,
+)
 from app.product.modeling import c7 as c7_rules
 from app.product.modeling.service import CategoryNotFound
 
 router = APIRouter(tags=["model-registry"])
+
+
+def require_models_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, PLATFORM_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
+
+
+def require_scene_routes_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 def _http409(message: str) -> HTTPException:
@@ -57,7 +87,10 @@ async def create_model(body: AIModelCreate, session: AsyncSession = Depends(get_
 
 
 @router.get("/api/admin/ai-models", response_model=list[AIModelView])
-async def list_models(session: AsyncSession = Depends(get_session)):
+async def list_models(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_models_view),
+):
     rows = await gateway.list_models(session)
     return [
         AIModelView(
@@ -158,7 +191,10 @@ async def upsert_route(
 
 
 @router.get("/api/admin/ai-scene-routes", response_model=list[SceneRouteView])
-async def list_routes(session: AsyncSession = Depends(get_session)):
+async def list_routes(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_scene_routes_view),
+):
     rows = await gateway.list_routes(session)
     return [SceneRouteView(scene=r.scene, model_id=r.model_id) for r in rows]
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,8 +6,26 @@ from app.core.actor import Actor
 from app.core.compliance_wordlist import service
 from app.core.compliance_wordlist.schemas import WordlistUpsert
 from app.core.db import get_session
+from app.core.rbac import (
+    INTERNAL_COMPLIANCE,
+    OPERATIONS,
+    PermissionDenied,
+    require_any_role,
+)
 
 router = APIRouter(prefix="/api/admin/compliance-wordlist", tags=["compliance-wordlist"])
+
+
+def require_wordlist_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, OPERATIONS, INTERNAL_COMPLIANCE)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 async def _q51_rescan(session, entry) -> list[dict]:
@@ -43,6 +61,7 @@ async def list_entries(
     status: str = "active",
     level: str | None = None,
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_wordlist_view),
 ) -> list[dict]:
     rows = await service.list_entries(session, status=status, level=level)
     return [_view(e) for e in rows]

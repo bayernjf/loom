@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
-from app.core.rbac import PermissionDenied
+from app.core.rbac import (
+    DICTIONARY_ADMIN,
+    OPERATIONS,
+    PermissionDenied,
+    require_any_role,
+)
 from app.product.modeling import c7, service
 from app.product.modeling.c1 import WeightSumError
 from app.product.modeling.schemas import (
@@ -31,10 +36,37 @@ from app.product.product_intake.statemachine import (
 router = APIRouter(prefix="/api", tags=["product-modeling"])
 
 
+def require_operations_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, OPERATIONS)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
+
+
+def require_dictionary_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, DICTIONARY_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
+
+
 # ---- Q2 信号权重 ----
 
 @router.get("/admin/c1/signal-weights")
-async def get_signal_weights(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def get_signal_weights(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_operations_view),
+) -> list[dict]:
     rows = await service.list_signal_weights(session)
     return [
         {
@@ -64,7 +96,10 @@ async def put_signal_weights(
 # ---- Q7 行业阈值 CRUD ----
 
 @router.get("/admin/c1/industries")
-async def get_industries(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def get_industries(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_operations_view),
+) -> list[dict]:
     rows = await service.list_industries(session)
     return [
         {
@@ -209,7 +244,10 @@ async def post_category(
 
 
 @router.get("/categories")
-async def get_categories(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def get_categories(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_dictionary_view),
+) -> list[dict]:
     rows = await service.list_categories(session)
     return [
         {
