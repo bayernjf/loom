@@ -246,3 +246,78 @@ export async function getTokenCostDashboard(): Promise<TokenCostDashboard> {
 export async function getReviewWorkloadDashboard(): Promise<ReviewWorkloadDashboard> {
   return request<ReviewWorkloadDashboard>(adminPath("/api/admin/dashboards/review-workload"));
 }
+
+// Q103：统一审核工作台（Q93 后端）。可见角色 = 注册表 WF skill7 Gate 角色并集
+// （operations+product_reviewer）；本切片仅队列消费 + 批量通过，逐条
+// confirmed/modified/rejected 裁决留下一切片。
+export interface ReviewQueueCandidate {
+  candidate_id: string;
+  run_id: string;
+  candidate_index: number;
+  skill_id: string;
+  wf_id: string;
+  tenant_id: string | null;
+  product_space_id: string | null;
+  intake_id: string | null;
+  target_type: string;
+  payload: unknown;
+  state: string;
+  human_modified: boolean;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  wait_seconds: number | null;
+  confidence: number | null;
+  risk_level: string;
+  risk_rank: number;
+  risk_reason: string;
+  batch_eligible: boolean;
+}
+
+export interface ReviewQueue {
+  total: number;
+  limit: number;
+  offset: number;
+  batch_pass_confidence: number;
+  candidates: ReviewQueueCandidate[];
+}
+
+export interface ReviewQueueQuery {
+  state?: string;
+  targetTypes?: string[];
+  wfId?: string;
+  riskLevel?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function getReviewQueue(query: ReviewQueueQuery = {}): Promise<ReviewQueue> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLES) params.append("roles", role);
+  if (query.state) params.set("state", query.state);
+  for (const type of query.targetTypes ?? []) params.append("target_type", type);
+  if (query.wfId) params.set("wf_id", query.wfId);
+  if (query.riskLevel) params.set("risk_level", query.riskLevel);
+  if (query.limit !== undefined) params.set("limit", String(query.limit));
+  if (query.offset !== undefined) params.set("offset", String(query.offset));
+  return request<ReviewQueue>(`/api/review-workbench/candidates?${params}`);
+}
+
+export interface BatchApproveResult {
+  approved: Array<{ candidate_id: string }>;
+  count: number;
+}
+
+export async function batchApprove(
+  candidateIds: string[],
+  reason: string | null,
+): Promise<BatchApproveResult> {
+  return request<BatchApproveResult>("/api/review-workbench/batch-approve", {
+    method: "POST",
+    body: JSON.stringify({
+      candidate_ids: candidateIds,
+      reason,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLES },
+    }),
+  });
+}

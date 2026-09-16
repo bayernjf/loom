@@ -186,3 +186,196 @@
   color: var(--color-text-tertiary);
 }
 
+
+/* Q103：统一审核工作台。风险四档语义色 chip + 筛选条 + 批量条 + 分页，
+   只消费既有 86 个 token，不新增。 */
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.filterGroup {
+  border: none;
+  padding: 0;
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.chip,
+.chipActive {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-bg-card);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+
+.chipActive {
+  border-color: var(--color-brand);
+  background: var(--color-brand-bg);
+}
+
+.filterFields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.filterField select,
+.filterField input,
+.batchReason {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.primaryButton {
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-radius: var(--radius-1);
+  background: var(--color-brand-bg);
+  color: var(--color-text-on-brand);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.primaryButton:hover {
+  background: var(--color-brand-hover);
+}
+
+.primaryButton:active {
+  background: var(--color-brand-active);
+}
+
+.primaryButton:disabled {
+  background: var(--color-bg-hover);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+}
+
+.secondaryButton:hover {
+  background: var(--color-bg-hover);
+}
+
+.riskChip {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.riskCritical {
+  background: var(--color-danger-bg);
+  color: var(--color-state-danger-text);
+}
+
+.riskHigh {
+  background: var(--color-warning-bg);
+  color: var(--color-state-warning-text);
+}
+
+.riskMedium {
+  background: var(--color-info-bg);
+  color: var(--color-state-info-text);
+}
+
+.riskLow {
+  background: var(--color-success-bg);
+  color: var(--color-state-success-text);
+}
+
+.metaLine {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.payloadPre {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  max-width: 420px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.pagerDisabled {
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-sm);
+}
+
+.batchBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.batchReason {
+  flex: 1 1 240px;
+}
+
+.msgOk {
+  color: var(--color-state-success-text);
+  font-size: var(--font-size-sm);
+}
+
+.msgErr {
+  color: var(--color-state-danger-text);
+  font-size: var(--font-size-sm);
+}
+

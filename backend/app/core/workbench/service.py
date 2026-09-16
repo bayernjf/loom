@@ -129,6 +129,7 @@ def _candidate_view(cand: SkillCandidate, meta: dict, *, now: datetime) -> dict:
         "product_space_id": cand.product_space_id,
         "intake_id": cand.intake_id,
         "target_type": cand.target_type,
+        "payload": cand.payload,
         "state": cand.state,
         "human_modified": cand.human_modified,
         "reviewed_by": cand.reviewed_by,

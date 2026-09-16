@@ -259,6 +259,7 @@ async def test_queue_orders_by_risk_then_creation_and_flags_eligibility(
     assert crit["risk_level"] == "critical"
     assert crit["risk_rank"] == 3
     assert crit["risk_reason"] == "c1_recognition.sensitive_industry"
+    assert crit["payload"]["industry"] == "medical"
     assert crit["batch_eligible"] is False
     assert crit["wait_seconds"] is not None and crit["wait_seconds"] >= 3 * 3600 - 60
 
