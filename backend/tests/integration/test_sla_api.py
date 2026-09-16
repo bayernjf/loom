@@ -18,6 +18,7 @@ from app.product.modeling.models import OpsTodo
 NOW = datetime.now(UTC)
 
 PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
+SLA_VIEW_PARAMS = [("actor_id", "pa-1"), ("roles", "platform_admin")]
 
 
 @pytest_asyncio.fixture
@@ -73,10 +74,102 @@ async def test_run_escalates_due_todos_and_reports_per_job(client, session_facto
         )).all()
         assert actions == ["c1.todo_escalated"]
 
-    board = await client.get("/api/admin/sla/todos", params={"status": "all"})
+    board = await client.get(
+        "/api/admin/sla/todos",
+        params=[*SLA_VIEW_PARAMS, ("status", "all")],
+    )
+    assert board.status_code == 200
     states = {row["todo_type"]: row["sla_state"] for row in board.json()}
     assert states["ops_assist"] == "red"
     assert states["law_review"] == "yellow"
+
+
+async def test_todo_board_requires_actor_and_platform_admin(client):
+    # Q108：看板补 RBAC——缺 actor_id query → 422；非 platform_admin → 403。
+    assert (await client.get("/api/admin/sla/todos")).status_code == 422
+    for role in ["operations", "internal_compliance", "customer"]:
+        r = await client.get(
+            "/api/admin/sla/todos",
+            params=[("actor_id", "u1"), ("roles", role)],
+        )
+        assert r.status_code == 403, role
+    r = await client.get("/api/admin/sla/todos", params=SLA_VIEW_PARAMS)
+    assert r.status_code == 200
+    assert r.json() == []  # 默认仅 open
+
+
+async def test_todo_board_rejects_unknown_status(client):
+    r = await client.get(
+        "/api/admin/sla/todos",
+        params=[*SLA_VIEW_PARAMS, ("status", "bogus")],
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == "unknown todo status: bogus"
+
+
+async def test_todo_board_filters_and_derives_sla_state(client, session_factory):
+    async with session_factory() as session:
+        session.add_all(
+            [
+                OpsTodo(
+                    tenant_id="t1", todo_type="pws_ready", entity_type="product_space",
+                    entity_id="ps-open", assignee_role="operations",
+                    due_at=NOW + timedelta(hours=10), created_at=NOW,
+                ),
+                OpsTodo(
+                    tenant_id="t1", todo_type="law_review", entity_type="law_review",
+                    entity_id="lr-yellow", assignee_role="internal_compliance",
+                    due_at=NOW + timedelta(hours=10), created_at=NOW - timedelta(hours=38),
+                ),
+                OpsTodo(
+                    tenant_id="t2", todo_type="review_pwc_combo", entity_type="skill_candidate",
+                    entity_id="sc-red", assignee_role="product_reviewer",
+                    due_at=NOW - timedelta(hours=1), created_at=NOW - timedelta(hours=73),
+                ),
+                OpsTodo(
+                    tenant_id="t1", todo_type="ops_assist_category", entity_type="c1_record",
+                    entity_id="c1-esc", assignee_role="operations", status="escalated",
+                    escalated_at=NOW - timedelta(hours=1),
+                    due_at=NOW - timedelta(hours=2), created_at=NOW - timedelta(hours=74),
+                ),
+                OpsTodo(
+                    tenant_id="t1", todo_type="wordlist_rescan", entity_type="pws",
+                    entity_id="pws-done", assignee_role="internal_compliance", status="resolved",
+                    resolution="applied", resolved_at=NOW - timedelta(hours=2),
+                    due_at=NOW + timedelta(days=2), created_at=NOW - timedelta(days=3),
+                ),
+            ]
+        )
+        await session.commit()
+
+    async def board(status: str | None = None):
+        params = list(SLA_VIEW_PARAMS)
+        if status is not None:
+            params.append(("status", status))
+        r = await client.get("/api/admin/sla/todos", params=params)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    all_rows = await board("all")
+    assert len(all_rows) == 5
+    # due_at 升序。
+    dues = [row["due_at"] for row in all_rows]
+    assert dues == sorted(dues)
+    states = {row["entity_id"]: row["sla_state"] for row in all_rows}
+    assert states == {
+        "ps-open": "green",
+        "lr-yellow": "yellow",
+        "sc-red": "red",
+        "c1-esc": "red",
+        "pws-done": "resolved",
+    }
+
+    open_rows = await board()  # 默认 open
+    assert {row["entity_id"] for row in open_rows} == {"ps-open", "lr-yellow", "sc-red"}
+    assert {row["entity_id"] for row in await board("escalated")} == {"c1-esc"}
+    resolved_rows = await board("resolved")
+    assert {row["entity_id"] for row in resolved_rows} == {"pws-done"}
+    assert resolved_rows[0]["sla_state"] == "resolved"
 
 
 async def test_future_effective_word_activates_and_rescans(client, session_factory):
