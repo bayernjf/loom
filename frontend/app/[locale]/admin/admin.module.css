@@ -379,3 +379,52 @@
   font-size: var(--font-size-sm);
 }
 
+.decisionCell {
+  min-width: 180px;
+}
+
+.decideActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.decidePanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.decideField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.jsonArea {
+  width: 100%;
+  min-width: 260px;
+  max-width: 420px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  white-space: pre;
+}
+
+.stateApplied {
+  background: var(--color-success-bg);
+  color: var(--color-state-success-text);
+}
+
+.stateArchived {
+  background: var(--color-bg-hover);
+  color: var(--color-text-tertiary);
+}
+

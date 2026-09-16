@@ -132,6 +132,7 @@ def _candidate_view(cand: SkillCandidate, meta: dict, *, now: datetime) -> dict:
         "payload": cand.payload,
         "state": cand.state,
         "human_modified": cand.human_modified,
+        "review_note": cand.review_note,
         "reviewed_by": cand.reviewed_by,
         "reviewed_at": reviewed_at.isoformat() if reviewed_at else None,
         "created_at": created_at.isoformat() if created_at else None,

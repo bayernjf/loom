@@ -9,6 +9,7 @@ import {
   type ReviewQueueCandidate,
 } from "@/lib/api";
 import { BatchBar } from "./batch-bar";
+import { DecisionCell } from "./decision-cell";
 import styles from "../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,10 @@ function riskClassName(level: string): string {
   if (level === "high") return styles.riskHigh;
   if (level === "medium") return styles.riskMedium;
   return styles.riskLow;
+}
+
+function stateClassName(state: string): string {
+  return state === "applied" ? styles.stateApplied : styles.stateArchived;
 }
 
 function Filters({
@@ -167,6 +172,7 @@ function CandidateTable({
             <th>{t("colCreated")}</th>
             <th>{t("colTenant")}</th>
             <th>{t("colPayload")}</th>
+            <th>{t("colDecision")}</th>
           </tr>
         </thead>
         <tbody>
@@ -212,6 +218,32 @@ function CandidateTable({
                     {JSON.stringify(cand.payload, null, 2)}
                   </pre>
                 </details>
+              </td>
+              <td>
+                {cand.state === "pending_review" ? (
+                  <DecisionCell
+                    candidateId={cand.candidate_id}
+                    riskLevel={cand.risk_level}
+                    initialPayload={JSON.stringify(cand.payload, null, 2)}
+                  />
+                ) : (
+                  <div className={styles.decisionCell}>
+                    <span className={`${styles.riskChip} ${stateClassName(cand.state)}`}>
+                      {cand.state}
+                    </span>
+                    <span className={styles.metaLine}>
+                      {t("reviewedAt")}: {timeText(cand.reviewed_at)}
+                    </span>
+                    {cand.human_modified ? (
+                      <span className={styles.metaLine}>{t("humanModified")}</span>
+                    ) : null}
+                    {cand.review_note ? (
+                      <span className={styles.metaLine}>
+                        {t("reviewNote")}: {cand.review_note}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
               </td>
             </tr>
           ))}
