@@ -45,6 +45,28 @@
       "fieldProfile": "已填资料",
       "profileEmpty": "暂无已填资料",
       "back": "返回我的产品"
+    },
+    "editProfileTitle": "编辑资料",
+    "actionsTitle": "可执行操作",
+    "neutralAnalyzing": "资料分析中",
+    "actorUnconfigured": "未配置操作人身份（服务端环境变量 LOOM_ACTOR_ID），请先完成配置。",
+    "saveProfile": "保存资料",
+    "profileSaved": "资料已保存。",
+    "actionPending": "处理中…",
+    "actionSuccess": "操作已提交。",
+    "noCustomerActions": "当前状态暂无可执行操作。",
+    "missingFields": "资料不完整，缺失字段：{fids}",
+    "eventLabels": {
+      "submit": "提交",
+      "params_completed": "补全参数并提交",
+      "quota_confirmed": "确认额度并提交",
+      "resubmit": "补资料后重新提交"
+    },
+    "spaceTitle": "产品空间",
+    "space": {
+      "fieldId": "产品空间 ID",
+      "fieldLifecycle": "生命周期状态",
+      "snapshot": "资料快照"
     }
   },
   "intake": {

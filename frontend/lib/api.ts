@@ -39,6 +39,10 @@ const API_BASE = (process.env.LOOM_API_BASE_URL ?? "http://localhost:8000").repl
 
 export const CURRENT_TENANT_ID = process.env.LOOM_TENANT_ID ?? "";
 
+// Q106：V1 无真实认证，客户侧写操作（PATCH profile / transitions）的操作人由 server env 自报，
+// roles 恒空——客户事件在状态机中 requires_role 均为 None；运营事件不在客户页外放。V2 改会话派生。
+export const CURRENT_ACTOR_ID = process.env.LOOM_ACTOR_ID ?? "";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -84,6 +88,62 @@ export async function getIntake(intakeId: string): Promise<IntakeView> {
 export async function getIntakeOverview(tenantId: string): Promise<IntakeOverview> {
   const params = new URLSearchParams({ tenant_id: tenantId });
   return request<IntakeOverview>(`/api/intakes/overview?${params}`);
+}
+
+// Q106：录入单 15 态操作（客户页消费既有段1 端点，无新写口）。
+export interface AllowedEvents {
+  status: string;
+  allowed_events: string[];
+}
+
+export interface ProductSpaceView {
+  product_space_id: string;
+  tenant_id: string;
+  intake_id: string;
+  lifecycle: string;
+  profile_snapshot: Record<string, string>;
+}
+
+export async function getAllowedEvents(intakeId: string): Promise<AllowedEvents> {
+  return request<AllowedEvents>(
+    `/api/intakes/${encodeURIComponent(intakeId)}/allowed-events`,
+  );
+}
+
+export async function transitionIntake(
+  intakeId: string,
+  event: string,
+  categoryPendingId?: string | null,
+): Promise<IntakeView> {
+  return request<IntakeView>(`/api/intakes/${encodeURIComponent(intakeId)}/transitions`, {
+    method: "POST",
+    body: JSON.stringify({
+      event,
+      category_pending_id: categoryPendingId ?? null,
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+    }),
+  });
+}
+
+export async function patchIntakeProfile(
+  intakeId: string,
+  profile: Record<string, string>,
+): Promise<IntakeView> {
+  return request<IntakeView>(`/api/intakes/${encodeURIComponent(intakeId)}/profile`, {
+    method: "PATCH",
+    body: JSON.stringify({ profile, actor: { id: CURRENT_ACTOR_ID, roles: [] } }),
+  });
+}
+
+export async function getProductSpace(intakeId: string): Promise<ProductSpaceView | null> {
+  try {
+    return await request<ProductSpaceView>(
+      `/api/intakes/${encodeURIComponent(intakeId)}/product-space`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
 }
 
 export function intakeDisplayName(intake: IntakeView): string {
