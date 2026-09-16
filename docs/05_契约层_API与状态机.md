@@ -69,6 +69,7 @@
 |---|---|---|
 | POST `` | 创建申请单 | 13 §1.1 |
 | GET `` | 按租户分页列表（Q98；tenant_id 必填，limit≤100；读路径不触发准入门，未知租户空列表） | Q98 |
+| GET `/overview` | 按租户状态聚合（Q99；tenant_id 必填；读路径不触发准入门，未知租户零值；注册序先于 `/{intake_id}`） | Q99 |
 | GET `/{intake_id}` / `/{intake_id}/allowed-events` / `/{intake_id}/product-space` | 查询/可迁事件/生成的 PS | — |
 | PATCH `/{intake_id}/profile` | 补资料（审核后不可改 409） | Q74 |
 | POST `/{intake_id}/transitions` | 15 态事件迁移（缺字段 422 / 越权 403 / 非法迁移 409） | Q3/Q5 |
@@ -258,6 +259,9 @@
 
 
 > **Q98 补登（2026-09-16，M12 客户前端切片 2·产品中心跨栈最小闭环；无迁移，Alembic 头仍 0023）**：段1 新增只读端点 `GET /api/intakes`——query `tenant_id`（必填非空，缺/空 422）、`limit`（默认 20，1..100）、`offset`（默认 0，≥0），响应 `IntakeList{items: IntakeView[], total, limit, offset}`，排序 created_at DESC。**读路径不触发 Q95 准入门**：未知租户与暂停租户均返回 200 空列表（只读不放宽写闸：POST 建单的未知 404/暂停 409 一字不动）；只读不 writeAudit。配套前端：RSC 列表 + Server Action 建 draft + 只读详情（02 C1.42 四接缝全甲），server-only env `LOOM_TENANT_ID`/`LOOM_API_BASE_URL`，产品名走工程临时键 `product_name`（G2 cat='common' fid 基线回填后对齐，挂账）。测试 404 全绿（+3 集成），eval 仍 101/101。
+
+> **Q99 补登（2026-09-16，M12 客户前端切片 3·工作台最小总览；无迁移，Alembic 头仍 0023）**：段1 再增只读端点 `GET /api/intakes/overview`——query `tenant_id`（必填非空，缺/空 422），响应 `IntakeOverview{total:int, by_status:{状态码:计数}}`，单次 group by status 聚合、total 为分组计数之和；读路径同 Q98 **不触发 Q95 准入门**（未知/暂停租户返回 `{total:0,by_status:{}}`，写闸一字不动），只读不 writeAudit；**路由必须注册在 `GET /{intake_id}` 之前**，否则字面量 overview 被路径参数吞成 intake_id。配套前端工作台（02 C1.43 四接缝全甲）：录入单总数 + 15 态分组（`intake.status.*` 消息对齐 docs/13 §1.1，仅渲染计数 > 0）+ 快捷入口；D5 原文五指标（今日生成/发布/互动/趋势/健康度，数据源属段 12/13）渲染禁用态 V2 卡，不显示任何数字（含 0）。测试 407 全绿（+3 集成），eval 仍 101/101。
+
 
 ---
 ## Part 2 · 状态机定义
