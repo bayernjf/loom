@@ -1,0 +1,212 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.pageHeader {
+  margin-bottom: var(--space-2);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+}
+
+.intro {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.notice {
+  padding: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.itemList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.productName {
+  font-weight: 600;
+}
+
+.version {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  border: 1px solid;
+  border-radius: var(--radius-1);
+}
+
+.mutedChip {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+}
+
+.toneDanger {
+  color: var(--color-state-danger-text);
+  background: var(--color-danger-bg);
+  border-color: var(--color-state-danger);
+}
+
+.toneWarning {
+  color: var(--color-state-warning-text);
+  background: var(--color-warning-bg);
+  border-color: var(--color-state-warning);
+}
+
+.toneSuccess {
+  color: var(--color-state-success-text);
+  background: var(--color-success-bg);
+  border-color: var(--color-state-success);
+}
+
+.toneInfo {
+  color: var(--color-state-info-text);
+  background: var(--color-info-bg);
+  border-color: var(--color-state-info);
+}
+
+.blockBadge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-state-danger-text);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-state-danger);
+  border-radius: var(--radius-1);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.detailHeading {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+}
+
+.subHeading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.detailMeta {
+  margin: var(--space-2) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.marketList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.marketItem {
+  padding: var(--space-3);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-1);
+}
+
+.marketHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.marketName {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.marketDate {
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.hitLine {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.banLabel {
+  color: var(--color-state-danger-text);
+  font-weight: 600;
+}
+
+.downgradeList {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--font-size-sm);
+}
+
+.lawList {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.lawList dt {
+  color: var(--color-text-secondary);
+}
+
+.lawList dd {
+  margin: 0;
+}

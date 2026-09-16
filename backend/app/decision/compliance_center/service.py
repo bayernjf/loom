@@ -23,7 +23,10 @@ from app.decision.compliance_center.models import (
 )
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.product.modeling.models import OpsTodo
-from app.product.product_intake.models import ProductSpace
+from app.product.product_intake.models import (
+    ProductIntakeApplication,
+    ProductSpace,
+)
 from app.product.whitelist_center import pws_rules
 from app.product.whitelist_center.models import PwsSnapshot
 
@@ -368,6 +371,142 @@ async def approve_downgrades(session, ccr_id: str, actor) -> CcrReport:
         detail={"suggestions": report.hits.get("downgrades", [])},
     )
     return report
+
+
+# Q101：跨市场 CCR 结论从严序（Q36 同级从严的跨市场应用；数小者严重）。
+_STATUS_SEVERITY = {
+    ccr_rules.REPORT_BLOCKED: 0,
+    ccr_rules.REPORT_DOWNGRADE_PENDING: 1,
+    ccr_rules.REPORT_APPROVED: 2,
+    ccr_rules.REPORT_CLEAN: 3,
+}
+
+
+async def overview_compliance(session, *, tenant_id: str) -> list[dict]:
+    """Q101 客户合规风控页：租户当前 active frozen PWS 的只读聚合。
+
+    读路径纪律同 Q98–Q100：不触发 Q95 准入门、不 writeAudit，未知租户返空。
+    每市场（country None=底座）取最新一行 CCR；行结论为各市场从严；法审一
+    PWS 一条（uq_law_review_pws）。产品名走工程临时键 profile.product_name
+    （G2 fid 基线挂账，同 Q98/Q99）。
+    """
+    snapshots = list(
+        (
+            await session.scalars(
+                select(PwsSnapshot)
+                .where(
+                    PwsSnapshot.tenant_id == tenant_id,
+                    PwsSnapshot.is_active.is_(True),
+                    PwsSnapshot.status == pws_rules.PWS_FROZEN,
+                )
+                .order_by(PwsSnapshot.created_at.desc(), PwsSnapshot.pws_id.desc())
+            )
+        ).all()
+    )
+    if not snapshots:
+        return []
+
+    pws_ids = [s.pws_id for s in snapshots]
+    reports = list(
+        (
+            await session.scalars(
+                select(CcrReport)
+                .where(CcrReport.pws_id.in_(pws_ids))
+                .order_by(CcrReport.created_at.desc(), CcrReport.ccr_id.desc())
+            )
+        ).all()
+    )
+    laws = {
+        lr.pws_id: lr
+        for lr in (
+            await session.scalars(select(LawReview).where(LawReview.pws_id.in_(pws_ids)))
+        ).all()
+    }
+
+    spaces = {
+        ps.product_space_id: ps
+        for ps in (
+            await session.scalars(
+                select(ProductSpace).where(
+                    ProductSpace.product_space_id.in_({s.product_space_id for s in snapshots})
+                )
+            )
+        ).all()
+    }
+    intake_ids = {ps.intake_id for ps in spaces.values() if ps.intake_id}
+    names: dict[str, str] = {}
+    if intake_ids:
+        for intake in (
+            await session.scalars(
+                select(ProductIntakeApplication).where(
+                    ProductIntakeApplication.intake_id.in_(intake_ids)
+                )
+            )
+        ).all():
+            name = intake.profile.get("product_name") if intake.profile else None
+            if isinstance(name, str) and name.strip():
+                names[intake.intake_id] = name
+
+    latest_by_market: dict[str, dict[str | None, CcrReport]] = {}
+    for report in reports:  # 已按新→旧，首见即该市场最新
+        latest_by_market.setdefault(report.pws_id, {}).setdefault(report.country, report)
+
+    items: list[dict] = []
+    for snapshot in snapshots:
+        markets = []
+        worst: str | None = None
+        block_required = False
+        latest_at = None
+        for report in latest_by_market.get(snapshot.pws_id, {}).values():
+            markets.append(
+                {
+                    "country": report.country,
+                    "status": report.status,
+                    "block_required": report.block_required,
+                    "created_at": report.created_at.isoformat() if report.created_at else None,
+                    "bans": report.hits.get("bans", []),
+                    "downgrades": report.hits.get("downgrades", []),
+                }
+            )
+            if worst is None or _STATUS_SEVERITY.get(report.status, 99) < _STATUS_SEVERITY.get(worst, 99):
+                worst = report.status
+            block_required = block_required or report.block_required
+            if report.created_at is not None and (latest_at is None or report.created_at > latest_at):
+                latest_at = report.created_at
+        ccr = None
+        if worst is not None:
+            markets.sort(key=lambda m: (m["country"] is not None, m["country"] or ""))
+            ccr = {
+                "worst_status": worst,
+                "block_required": block_required,
+                "latest_at": latest_at.isoformat() if latest_at else None,
+                "markets": markets,
+            }
+
+        law = laws.get(snapshot.pws_id)
+        law_view = None
+        if law is not None:
+            law_view = {
+                "status": law.status,
+                "domain": law.domain,
+                "conclusion": law.conclusion,
+                "decided_at": law.decided_at.isoformat() if law.decided_at else None,
+            }
+
+        ps = spaces.get(snapshot.product_space_id)
+        intake_id = ps.intake_id if ps else None
+        items.append(
+            {
+                "pws_id": snapshot.pws_id,
+                "product_space_id": snapshot.product_space_id,
+                "intake_id": intake_id,
+                "product_name": names.get(intake_id) if intake_id else None,
+                "version": snapshot.version,
+                "ccr": ccr,
+                "law_review": law_view,
+            }
+        )
+    return items
 
 
 async def list_reports(session, pws_id: str) -> list[CcrReport]:

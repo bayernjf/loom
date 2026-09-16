@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
 from app.decision.compliance_center import service
 from app.decision.compliance_center.schemas import (
     CcrRun,
+    ComplianceOverview,
     DomainArchive,
     DomainUpsert,
     DowngradeApproval,
@@ -109,6 +110,17 @@ async def archive_domain(
 
 
 # ---------- CCR 清洗 ----------
+
+@router.get("/api/compliance/overview", response_model=ComplianceOverview)
+async def compliance_overview(
+    tenant_id: str = Query(min_length=1),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    # Q101：客户合规风控页租户只读聚合。读路径不触发 Q95 准入门，
+    # 未知租户 200 空 items，不 writeAudit；写操作仍是 internal_compliance 台内。
+    items = await service.overview_compliance(session, tenant_id=tenant_id)
+    return {"items": items}
+
 
 @router.post("/api/pws/{pws_id}/ccr/run")
 async def run_ccr(

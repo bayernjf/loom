@@ -90,5 +90,39 @@
     "409": "操作冲突，请刷新后重试",
     "422": "提交内容有误，请检查后重试",
     "unknown": "操作失败，请稍后重试"
+  },
+  "compliance": {
+    "intro": "当前生效白名单版本的合规清洗与法审记录（只读）。规则库维护、清洗触发与法审裁决由平台合规团队在台内执行。",
+    "empty": "当前还没有已冻结的白名单版本，暂无合规记录。",
+    "unconfigured": "未配置当前租户（服务端环境变量 LOOM_TENANT_ID），请先完成配置。",
+    "product": "产品",
+    "version": "冻结版本",
+    "ccrTitle": "合规清洗",
+    "lawTitle": "法审",
+    "noReport": "尚未清洗",
+    "noLawReview": "未触发法审",
+    "blockRequired": "阻断发证",
+    "latestAt": "最近报告",
+    "marketBase": "通用（不分市场）",
+    "market": "市场 {country}",
+    "bans": "禁用命中",
+    "downgrades": "降级建议",
+    "downgradeArrow": "{word} → {target}",
+    "decidedAt": "裁决时间",
+    "lawDomain": "敏感领域",
+    "lawStatusLabel": "法审状态",
+    "lawConclusion": "法审结论",
+    "detailTitle": "合规明细",
+    "ccr": {
+      "clean": "通过",
+      "downgrade_pending": "降级待批准",
+      "approved": "降级已批准",
+      "blocked": "已阻断"
+    },
+    "law": {
+      "pending": "待法审",
+      "approved": "法审通过",
+      "rejected": "法审驳回"
+    }
   }
 }
