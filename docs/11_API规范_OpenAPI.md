@@ -15,8 +15,8 @@
 | 白名单消费 | POST /api/product-spaces/{product_space_id}/pwc/consume（业务方参考路径 /api/whitelist/consume 不采用） | Q71 | 🟢 已落地（M5，见 §2.2） |
 | 白名单查询 | GET /api/product-spaces/{product_space_id}/pwcs（租户内池查询，M5）；D9.5 系统后台页面级清单另计 | D9.5 | 🟡 池内组合查询已落地（M5）；中台页面级清单【待补】 |
 | 使用记录上报 | V1 无独立上报端点：consume 取用即写 usage_record 并回带 usage_record_id（M5） | D9.5 / Q71 | 🟡 V1 随消费内联落地；独立上报接口【待补】 |
-| Key 管理 | 入站 POST/GET /api/admin/agent-keys、POST /api/admin/agent-keys/{id}/revoke（Q88）；出站 GET /api/admin/ai-models/{id}/keys、POST /api/admin/ai-model-keys[/{id}/revoke]（Q82） | Q60b/Q67/Q82/Q88 | 🟢 治理端点已落地（见 §2.4）；受 Key 保护的 effect-callback 本体 V2 |
-| DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部 | D9.5 | 🔶 后台内部接口【待补】 |
+| Key 管理 | 入站 POST/GET /api/admin/agent-keys、POST /api/admin/agent-keys/{id}/revoke（Q88）；出站 POST /api/admin/ai-models/{id}/keys（录入/轮换）、GET /api/admin/ai-models/{id}/keys（清单）、POST /api/admin/ai-model-keys/{key_id}/revoke（Q82） | Q60b/Q67/Q82/Q88 | 🟢 治理端点已落地（见 §2.4）；受 Key 保护的 effect-callback 本体 V2 |
+| DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部；其中 **2 个驾驶舱只读聚合已落地**：GET /api/admin/dashboards/token-cost、GET /api/admin/dashboards/review-workload（Q92） | D9.5 / Q92 | 🟡 驾驶舱两读口已落地（platform_admin，见 05 §1.4）；DB 浏览 / AI 调试台 / 配额【待补】 |
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
 | CSV / JSON 导出 | GET /api/exports/fcw.csv（Q100） | D4 | 🟢 CSV 已落地（见 §2.3）；JSON 形态/异步导出挂后续/V2【待补】 |
@@ -111,7 +111,7 @@
 
 DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 Key）；审计 `agent_api_key.issue/revoke`（tenant=`_platform`）；Key 为平台级凭证、不绑租户（单租户绑定口径【原文未给出，待补】，未来由 content_id→FCW.tenant_id 解析）。验签依赖（Bearer 缺失/未知/已吊销统一 401）已备，但受保护业务端点 POST /api/effect-callback 随段13/P3（V2）。
 
-**出站模型商 Key**（Q82 模型网关，`app/core/model_registry/`）：Fernet 可逆加密入库 + env 主密钥（与入站单向哈希刻意区分——出站需代持调用）；端点 GET /api/admin/ai-models/{model_id}/keys、POST /api/admin/ai-model-keys、POST /api/admin/ai-model-keys/{key_id}/revoke，platform_admin 治理。
+**出站模型商 Key**（Q82 模型网关，`app/core/model_registry/`）：Fernet 可逆加密入库 + env 主密钥（与入站单向哈希刻意区分——出站需代持调用）；端点 **POST /api/admin/ai-models/{model_id}/keys**（录入/轮换，body=secret/actor，原子把旧 active 行置 revoked 并插新密文行）、**GET /api/admin/ai-models/{model_id}/keys**（清单，仅 key_id/fingerprint/status/时间元数据）、POST /api/admin/ai-model-keys/{key_id}/revoke（吊销，幂等），platform_admin 治理。
 
 ---
 
@@ -154,3 +154,4 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 - [x] CSV 导出与 Q100 实现一致（§2.3）
 - [x] 入站/出站 Key 治理端点与 Q88/Q82 实现一致（§2.4）
 - [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、effect-callback 本体（段13/P3）、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、JSON/异步导出——均【待补】，随对应版本补齐后回填 §1
+- [x] 段内业务端点不在本表登记范围：段12 内容成品五端点（POST /api/content/generate、/{id}/approve|reject|revise|regenerate）契约见 05 §1.4 Q116 补登与 13 §1.13（V2 P4 首片，2026-09-17 落地）
