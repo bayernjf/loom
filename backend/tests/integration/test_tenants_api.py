@@ -249,6 +249,32 @@ async def test_unknown_tenant_writes_nothing(client, session_factory):
         assert audits == []
 
 
+# ---------- 客户侧只读账户视图（Q114） ----------
+
+
+async def test_customer_tenant_read(client):
+    # 开通后客户侧可只读拿账户面板字段（无 admin 闸、无写审计）。
+    await client.post(
+        "/api/admin/tenants", json={"tenant_id": "t1", "name": "账户客户", "actor": ADMIN}
+    )
+    r = await client.get("/api/tenants/t1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["tenant_id"] == "t1"
+    assert body["name"] == "账户客户"
+    assert body["plan"] == "trial"
+    assert body["status"] == "trial"
+    assert body["monthly_token_quota"] == TRIAL_MONTHLY_TOKEN_QUOTA
+    # 客户视图不含管理面字段（detail/onboarding 不泄漏）。
+    assert "detail" not in body
+    assert "onboarding" not in body
+    assert "created_at" not in body
+
+    # 未知租户 404（只读，不写审计）。
+    r = await client.get("/api/tenants/ghost")
+    assert r.status_code == 404
+
+
 # ---------- 详情：派生 Onboarding 进度 ----------
 
 
