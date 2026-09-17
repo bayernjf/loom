@@ -39,7 +39,7 @@
 
 ---
 
-## 2. 逐表 Schema（35 设计实体；截至 2026-09-17 物理表 54 张，迁移 0001–0026）
+## 2. 逐表 Schema（35 设计实体；截至 2026-09-18 物理表 54 张，迁移 0001–0027；0027 纯加外键不新增表）
 
 > 字段明细以 04 为唯一来源（本文不重复罗列全部字段，只补建表级要素）；【类型】为建议列。
 
@@ -60,7 +60,7 @@
 | 建表要素 | 说明 | 来源 |
 |---|---|---|
 | 主键 | `product_space_id` | A6 |
-| 外键 | `tenant_id` 必填；`intake_id` → product_intake_applications（**实现为真 FK**，迁移 0001）；`category_node_id` → g1_category_tree（设计名，物理表为 `g1_categories`）；`active_pws_id` → pws_snapshots（同刻仅 1 个 active，Q31）。**2026-09-17 实现核实**：`category_node_id` 与 `active_pws_id` 代码为裸 `String(36)` 软引用、无 DB 级 FK（`app/product/product_intake/models.py`），是否补 DB 约束待负责人拍板（handoff 待办 6） | Q33/Q5/Q31 |
+| 外键 | `tenant_id` 必填；`intake_id` → product_intake_applications（**实现为真 FK**，迁移 0001）；`category_node_id` → g1_category_tree（设计名，物理表为 `g1_categories`）；`active_pws_id` → pws_snapshots（同刻仅 1 个 active，Q31）。**Q118（2026-09-18，迁移 0027）已补 DB 级真 FK**：`category_node_id`→`g1_categories.category_id`、`active_pws_id`→`pws_snapshots.pws_id`（均 nullable，约束名 `fk_product_spaces_category_node_id`/`fk_product_spaces_active_pws_id`；两列 V1 代码零写入，迁移先幂等置空孤儿再建约束；PG16 up/downgrade-1/up 实测） | Q33/Q5/Q31 |
 | 属性 | `industry_tag`（类目路径映射，运营可改 Q7）/ `sensitive_industry` 布尔 / `business_owner`（产品记录字段，非登录角色，09 D8） | Q7/Q11/09 D8 |
 | 生命周期 | `lifecycle`（**列名以迁移 0001/模型为准**，原文与本文旧稿写作 `lifecycle_priority`）：frozen > stale > cold > modeling > active，default=`modeling`（迁移触发条件原文未给，待补） | line 1655 |
 | 关联 | 私有资产：field_pools / product_atom_instances / condition_packages / pws_snapshots（禁止跨产品/跨租户复用，Q24） | line 14813/Q24 |
@@ -354,7 +354,8 @@
 > - **0023_tenant_registry**（建表 + 存量回填，Q95）：新表 **`tenants`** —— tenant_id String(64) PK / name String(128) 可空 / plan String(16) default trial（trial|basic|pro|enterprise）/ status String(16) default trial 索引（trial|active|paused）/ monthly_token_quota Int 可空（试用 500000，付费档 null＝额度【待补】）/ detail JSON（回填标记等机读元数据，0023 回填行 `{"backfilled": true}`）/ created_by / created_at / plan_changed_by·plan_changed_at / paused_by·paused_at。回填口径=product_intake_applications ∪ product_spaces 的 DISTINCT tenant_id，置 basic/active + detail.backfilled + created_by=system-migration-0023。**准入为应用层闸**（未知 404/暂停 409），不加硬外键。物理表落 `app/core/tenants/models.py`。
 > - **0024_g2_common_fields**（纯种子，Q115）：`g2_fields` 落 12 个 cat='common' 字段（fid 英文 slug + field_name 中文 canonical + status=active，ON CONFLICT DO NOTHING 幂等）；余 6 个 common 字段【原文未给出，待补】不落。**G2 fid 为工程定稿标识符，业务事实以 field_name 中文名为准**（Q115，详见 04 §2.2/§2.5、12 §1.2）。
 > - **0025_content_products**（建表，Q116）+ **0026_article_gen_seed**（纯种子，Q116）：见 §2.6 补登。
-> - **当前 head = 0026_article_gen_seed**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0026 各切片的迁移实测记录以 02 对应 C1 条目为准**（Q115/Q116 条目不逐条复记 PG16 up/down/up，勿据此推断已验证）。
+> - **0027_product_space_fks**（纯约束，Q118，不新增表）：`product_spaces.category_node_id`→`g1_categories.category_id`、`active_pws_id`→`pws_snapshots.pws_id` 补 DB 级真 FK（均 nullable，先幂等置空孤儿再建约束，downgrade drop）；同名 ORM 列同步改 ForeignKey。PG16 一次性容器全链 up / downgrade-1 / up + 孤儿拒绝 + NULL 合法实测通过（02 C1.62）。
+> - **当前 head = 0027_product_space_fks**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0027 各切片的迁移实测记录以 02 对应 C1 条目为准**（0027 已实测 PG16 全链 up/down/up；0021–0026 条目不逐条复记，勿据此推断已验证）。
 
 ---
 
@@ -382,7 +383,7 @@
 - [x] Q 编号约束已映射（Q2/Q3/Q5/Q7/Q8/Q12/Q13/Q15/Q17/Q18/Q20/Q21/Q24/Q25/Q27/Q28-Q33/Q34-Q38/Q39-Q43/Q44-Q47/Q48-Q51/Q52-Q55/Q56-Q59/Q60-Q65/Q66-Q72；**Q73–Q116 的新增表/列/种子见各节实现补登**）
 - [x] 配置化清单数值不硬编码进表定义（全部指向配置中心）
 - [x] 存储引擎已定稿并补入 §1.3（2026-09-13，14 选型）
-- [x] 迁移登记完整性（2026-09-17 补登）：迁移 **0001–0026** 均在本文登记（0001–0020 分散于各节，**0021–0026 见 §2.8 汇总补登**）；**当前 head = 0026_article_gen_seed**；物理表 54 张与迁移一一对应。
+- [x] 迁移登记完整性（2026-09-17 补登、2026-09-18 续登）：迁移 **0001–0027** 均在本文登记（0001–0020 分散于各节，**0021–0027 见 §2.8 汇总补登**）；**当前 head = 0027_product_space_fks**；物理表 54 张（0027 纯加两外键，不新增表）。
 - [ ] 字段全定义仍【待补】的实体（memory_layers / 动态信号事件 / 爆款判定记录 / 校准报表 / SLA 待办）——属段 7/13 与横切，随对应阶段任务包补（段 1-6 的 ProductSpace / g2_field_candidates 已于 M0 补齐；~~content_products~~ Q116 已补、~~skill_run_logs~~ Q76 已补、~~audit_logs~~ 迁移 0001 已建、~~api_keys~~ Q88 已补）
 - [ ] 文档列为建表、代码尚未建表的**设计稿实体**（layer_spaces/layer_space_items §2.5、countries §2.5、agent_registry §2.8、cat_feedback·field_impact_items·kup_proposals·knowledge_update_logs §2.7）——属段 9/13 与展示口径，实现随 V2/V3；**读作设计稿，勿当已建表**
 - [ ] 索引【建议】项未落地者（condition_packages 复合索引、product_atom_instances 复合索引等）——实现为单列索引，是否补复合索引随性能实测定

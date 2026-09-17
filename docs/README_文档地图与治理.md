@@ -55,6 +55,7 @@
 | 18 号新增 | 2026-09-16 | 新增 18 号前端 i18n 与设计 Token 方案（原 🟡 待拍板），同日经 **Q96 拍板定稿 ✅**（next-intl + `[locale]` + 三层 Token，色值借 AntD5 调色板） |
 | Q115 收口 | 2026-09-17 | 基准 HTML 确认永久丢失：`line NNNN` 溯源降级为历史痕迹、12 号名单定稿、触发方永久【待补】、G2 fid 改判工程定稿；本库自此完全自洽，不再挂"待找回后核对" |
 | Q117 审计回填 | 2026-09-17 | 文档⇄代码一致性审计：实测基线（472 passed / head 0026 / 7 checker / 86 token）回填至 handoff·08·README·AGENTS 与 04/05/10/11/13，补登迁移 0021–0026 与段12 契约；4 项实现差异只挂账（handoff 待办 6），无业务口径变化 |
+| Q118 收口 | 2026-09-18 | Q117 挂账 4 项均按推荐（甲）拍板落地：4 个漏网管理面 GET 补 query actor 闸、publish_slots.gate 回填 V1 人工直编口径、product_spaces 两 FK（迁移 0027）、CI 六→七 checker；另修 Alembic 版本表列长；基线 483 passed / head 0027 / CI 七 checker / 86 token，待办 6 销账 |
 
 ---
 
