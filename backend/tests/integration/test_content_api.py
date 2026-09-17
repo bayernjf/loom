@@ -12,9 +12,17 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.content.models import CONTENT_REVIEW, ContentProduct
+from app.content.models import (
+    CONTENT_READY,
+    CONTENT_REJECTED,
+    CONTENT_REVIEW,
+    CONTENT_REVISING,
+    MAX_REGENERATE,
+    ContentProduct,
+)
+from app.core.compliance_wordlist.models import ComplianceWordlistEntry
 from app.core.db import Base, get_session
-from app.core.model_registry import drivers
+from app.core.model_registry import drivers, synthetic
 from app.core.model_registry.drivers import GenerationResult
 from app.core.model_registry.models import (
     AIModel,
@@ -148,3 +156,73 @@ async def test_generate_malformed_output_is_502(client, monkeypatch):
         "/api/content/generate", json={"final_id": "fcw-1", "actor": OPS}
     )
     assert r.status_code == 502
+
+
+async def _generate(client) -> str:
+    r = await client.post(
+        "/api/content/generate", json={"final_id": "fcw-1", "actor": OPS}
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["content_id"]
+
+
+async def test_customer_approve(client):
+    cid = await _generate(client)
+    r = await client.post(f"/api/content/{cid}/approve", json={"actor": CUSTOMER})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == CONTENT_READY
+
+
+async def test_reject_requires_reason(client):
+    cid = await _generate(client)
+    r = await client.post(f"/api/content/{cid}/reject", json={"actor": CUSTOMER})
+    assert r.status_code == 422
+    r = await client.post(
+        f"/api/content/{cid}/reject", json={"reason": "不合规", "actor": CUSTOMER}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == CONTENT_REJECTED
+    assert r.json()["reject_reason"] == "不合规"
+
+
+async def test_revise_regenerate_flow(client):
+    cid = await _generate(client)
+    r = await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == CONTENT_REVISING
+
+    r = await client.post(f"/api/content/{cid}/regenerate", json={"actor": OPS})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == CONTENT_REVIEW
+    assert r.json()["regenerate_count"] == 1
+
+
+async def test_revise_capped_at_max(client):
+    cid = await _generate(client)
+    for _ in range(MAX_REGENERATE):
+        await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+        r = await client.post(f"/api/content/{cid}/regenerate", json={"actor": OPS})
+        assert r.status_code == 200, r.text
+    r = await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    assert r.status_code == 422
+
+
+async def test_compliance_wordlist_hit(client, session_factory, monkeypatch):
+    async with session_factory() as session:
+        session.add(
+            ComplianceWordlistEntry(
+                word="违禁词", level="high", action="ban", status="active",
+            )
+        )
+        await session.commit()
+    monkeypatch.setitem(
+        synthetic.BUILDERS, SCENE_ARTICLE_GEN,
+        lambda variables: {"body": "正文包含违禁词"},
+    )
+    r = await client.post(
+        "/api/content/generate", json={"final_id": "fcw-1", "actor": OPS}
+    )
+    assert r.status_code == 201, r.text
+    hits = r.json()["review_hits"]
+    assert hits["block_required"] is True
+    assert any(h["word"] == "违禁词" for h in hits["bans"])
