@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
+from app.core.rbac import INTERNAL_COMPLIANCE, PermissionDenied, require_any_role
 from app.decision.compliance_center import service
 from app.decision.compliance_center.schemas import (
     CcrRun,
@@ -13,6 +15,20 @@ from app.decision.compliance_center.schemas import (
 )
 
 router = APIRouter(tags=["compliance-center"])
+
+
+def require_law_domains_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    # Q118：CP-LAW 敏感领域清单读口与写口同组（docs/05 表行标 internal_compliance），
+    # 补 Q109 审计遗漏的 query actor 闸：缺 actor_id 422、越权 403。
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, INTERNAL_COMPLIANCE)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 def _domain_view(d) -> dict:
@@ -55,7 +71,9 @@ def _law_view(r) -> dict:
 
 @router.get("/api/admin/cp-law-domains")
 async def list_domains(
-    status: str = "active", session: AsyncSession = Depends(get_session)
+    status: str = "active",
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_law_domains_view),
 ) -> list[dict]:
     rows = await service.list_domains(session, status=status)
     return [_domain_view(d) for d in rows]

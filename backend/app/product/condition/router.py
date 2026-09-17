@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import gateway, pwc_build
-from app.core.rbac import PermissionDenied
+from app.core.rbac import DICTIONARY_ADMIN, PermissionDenied, require_any_role
 from app.product.condition import service
 from app.product.condition.models import (
     ConditionPackage,
@@ -22,6 +23,20 @@ from app.product.condition.schemas import (
 )
 
 router = APIRouter(prefix="/api", tags=["pwc"])
+
+
+def require_content_goals_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    # Q118：contentGoals 字典读口与写口同组（docs/05 表行标 dictionary_admin），
+    # 补 Q109 审计遗漏的 query actor 闸：缺 actor_id 422、越权 403。
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, DICTIONARY_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 def _goal_view(g: ContentGoal) -> dict:
@@ -61,7 +76,9 @@ def _pwc_view(p: ConditionPackage, items: list[PwcComboItem] | None = None) -> d
 
 @router.get("/admin/content-goals")
 async def list_goals(
-    include_archived: bool = False, session: AsyncSession = Depends(get_session)
+    include_archived: bool = False,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_content_goals_view),
 ) -> list[dict]:
     rows = await service.list_goals(session, include_archived=include_archived)
     return [_goal_view(g) for g in rows]

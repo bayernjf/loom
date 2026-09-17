@@ -20,10 +20,12 @@ from app.platform.platform_adaptation.schemas import (
 router = APIRouter(tags=["platform-adaptation"])
 
 
-def require_fit_weights_view(
+def require_operations_view(
     actor_id: str = Query(...),
     roles: list[str] = Query(default_factory=list),
 ) -> Actor:
+    # Q109/Q118：矩阵把段7/8 静态底表管理面读口（fit-weights/publish-slots/
+    # slot-type-defaults）与写口同组标 operations，读口同型补 query actor 闸。
     actor = Actor(id=actor_id, roles=roles)
     try:
         require_any_role(actor, OPERATIONS)
@@ -87,6 +89,7 @@ async def list_slots(
     platform: str | None = None,
     status: str | None = "active",
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_operations_view),
 ) -> list[dict]:
     return [_slot_view(s) for s in await service.list_slots(session, platform=platform, status=status)]
 
@@ -147,7 +150,7 @@ async def fit_score(
 @router.get("/api/admin/fit-weights")
 async def list_fit_weights(
     session: AsyncSession = Depends(get_session),
-    _: Actor = Depends(require_fit_weights_view),
+    _: Actor = Depends(require_operations_view),
 ) -> list[dict]:
     return [
         {"goal": r.goal, "weights": r.weights, "updated_by": r.updated_by}
@@ -233,7 +236,10 @@ async def match_rules(
 # ---------- slotType 默认值 ----------
 
 @router.get("/api/admin/slot-type-defaults")
-async def list_slot_type_defaults(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def list_slot_type_defaults(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_operations_view),
+) -> list[dict]:
     return [
         {
             "slot_type": r.slot_type,
