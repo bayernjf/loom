@@ -17,6 +17,13 @@ class ContentGenerateRequest(BaseModel):
     actor: Actor
 
 
+class ContentDecisionRequest(BaseModel):
+    """客户审阅（approve/reject/revise）请求；reject 必选 reason（Q59）。"""
+
+    reason: str | None = None
+    actor: Actor
+
+
 class ContentProductView(BaseModel):
     content_id: str
     tenant_id: str
