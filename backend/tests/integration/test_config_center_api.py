@@ -17,6 +17,8 @@ from app.main import app
 
 ADMIN = {"id": "admin-1", "roles": ["platform_admin"]}
 NOBODY = {"id": "nobody-1", "roles": ["operations"]}
+# Q113：三读口补闸后，GET 走 query actor（与写口 body actor 同角色 platform_admin）。
+ADMIN_Q = [("actor_id", "admin-1"), ("roles", "platform_admin")]
 
 KEY = "pwc.funnel_batch_limit"
 
@@ -71,7 +73,7 @@ async def client(session_factory):
 
 
 async def test_list_and_filter_seeded_items(client):
-    resp = await client.get("/api/admin/config")
+    resp = await client.get("/api/admin/config", params=ADMIN_Q)
     assert resp.status_code == 200
     rows = resp.json()
     assert len(rows) == len(CONFIG_SEEDS)
@@ -80,11 +82,15 @@ async def test_list_and_filter_seeded_items(client):
         "fcw.w_pwc_skeleton",
         "agent.support_max_tokens",
     }
-    pwc = await client.get("/api/admin/config", params={"category": "pwc"})
+    pwc = await client.get(
+        "/api/admin/config", params=[("category", "pwc"), *ADMIN_Q]
+    )
     assert all(r["category"] == "pwc" for r in pwc.json())
-    one = await client.get(f"/api/admin/config/{KEY}")
+    one = await client.get(f"/api/admin/config/{KEY}", params=ADMIN_Q)
     assert one.json()["value"] == 50 and one.json()["version"] == 1
-    assert (await client.get("/api/admin/config/nope.key")).status_code == 404
+    assert (
+        await client.get("/api/admin/config/nope.key", params=ADMIN_Q)
+    ).status_code == 404
 
 
 async def test_update_publishes_version_audit_and_hot_reload(client, session_factory):
@@ -96,7 +102,9 @@ async def test_update_publishes_version_audit_and_hot_reload(client, session_fac
     body = resp.json()
     assert body["value"] == 60 and body["version"] == 2 and body["updated_by"] == "admin-1"
 
-    history = (await client.get(f"/api/admin/config/{KEY}/history")).json()
+    history = (
+        await client.get(f"/api/admin/config/{KEY}/history", params=ADMIN_Q)
+    ).json()
     assert [r["version"] for r in history] == [2, 1]
     assert history[1]["change_note"] == "C2 seed"
 
@@ -126,7 +134,9 @@ async def test_rollback_restores_historical_value_as_new_version(client):
     assert back.status_code == 200, back.text
     body = back.json()
     assert body["value"] == 50 and body["version"] == 3
-    history = (await client.get(f"/api/admin/config/{KEY}/history")).json()
+    history = (
+        await client.get(f"/api/admin/config/{KEY}/history", params=ADMIN_Q)
+    ).json()
     assert [r["version"] for r in history] == [3, 2, 1]
     assert history[0]["change_note"] == "rollback to v1"
 
@@ -159,7 +169,9 @@ async def test_validation_role_and_404_guards(client):
     )
     assert no_version.status_code == 404
     # 值未被任何失败请求改动
-    assert (await client.get(f"/api/admin/config/{KEY}")).json()["version"] == 1
+    assert (
+        await client.get(f"/api/admin/config/{KEY}", params=ADMIN_Q)
+    ).json()["version"] == 1
 
 
 async def test_failed_update_does_not_touch_cache(client):

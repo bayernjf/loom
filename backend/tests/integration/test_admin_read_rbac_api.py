@@ -1,11 +1,14 @@
-"""Q109：管理端读端点鉴权审计后的同型补闸。
+"""Q109/Q113：管理端读端点鉴权审计后的同型补闸。
 
 矩阵（docs/05 各行）把 GET 与写操作同组标注角色、而代码自 Q75 红线收口起
-仅在写口挂角色闸的 8 个管理面 GET，本切片统一补 query actor 依赖：
+仅在写口挂角色闸的管理面 GET，统一补 query actor 依赖：
 缺 actor_id → 422（FastAPI 必填 query），角色不符 → 403，命中 → 200。
 
-矩阵未定读角色或矩阵明确「GET 无 actor 体」的读口保持开放（文件末尾锁定）：
-config 三 GET、g2-candidates、skill-prompts 三 GET 读角色【原文未给出，待补】；
+Q109 首批 8 个读口；Q113 收口当时挂【原文未给出，待补】的三族 7 个读口
+（config 三 GET = platform_admin 写口同组、g2-candidates = dictionary_admin
+矩阵 05:98 GET/POST 同行、skill-prompts 三 GET = platform_admin 写口同组）。
+
+矩阵明确「GET 无 actor 体」的读口保持开放（文件末尾锁定）：
 ai-models/{id}/keys 与 agent-keys 为矩阵明确的无 actor 列表口径（只回元数据）。
 """
 
@@ -29,13 +32,22 @@ GATED_READS = [
     ("/api/admin/fit-weights", ["operations"]),                 # 05:155 Q34
     ("/api/admin/ai-models", ["platform_admin"]),               # 05:225 Q82
     ("/api/admin/ai-scene-routes", ["operations", "platform_admin"]),          # 05:230 Q82
+    # ---- Q113：Q109 挂【待补】三族收口 ----
+    ("/api/admin/config", ["platform_admin"]),                  # 05:177-179 写口同组
+    ("/api/admin/g2-candidates", ["dictionary_admin"]),         # 05:98  GET/POST 同行 Q13/Q68
+    ("/api/admin/skill-prompts", ["platform_admin"]),           # 05:233-234 写口同组 Q82-4
 ]
 
-# 矩阵未定读角色（【原文未给出，待补】）或明确无 actor 体的读口：继续免闸。
+# Q113 子路径读口（资源可能不存在，故只锁鉴权层 422/403，不强制 200）。
+GATED_SUBPATHS = [
+    "/api/admin/config/some.key",
+    "/api/admin/config/some.key/history",
+    "/api/admin/skill-prompts/PWC-BUILDER/versions",
+    "/api/admin/skill-prompts/PWC-BUILDER/versions/v0.1",
+]
+
+# 矩阵明确无 actor 体的读口：继续免闸。
 OPEN_READS = [
-    "/api/admin/config",
-    "/api/admin/g2-candidates",
-    "/api/admin/skill-prompts",
     "/api/admin/agent-keys",
 ]
 
@@ -100,6 +112,44 @@ async def test_categories_read_denies_operations(client):
         "/api/categories", params=[("actor_id", "ops-1"), ("roles", "operations")]
     )
     assert resp.status_code == 403
+
+
+# ---- Q113：三族子路径同样先过鉴权依赖（资源存在与否不影响 422/403）----
+
+@pytest.mark.parametrize("path", GATED_SUBPATHS)
+async def test_q113_subpaths_require_actor_query(client, path):
+    assert (await client.get(path)).status_code == 422
+    denied = await client.get(path, params=[("actor_id", "cust-1"), ("roles", "customer")])
+    assert denied.status_code == 403, (path, denied.status_code, denied.text)
+
+
+async def test_q113_config_read_is_platform_admin_only(client):
+    # 配置中心读口与写口同组：operations/customer 均 403。
+    for role in ("operations", "customer", "dictionary_admin"):
+        resp = await client.get(
+            "/api/admin/config", params=[("actor_id", f"{role}-1"), ("roles", role)]
+        )
+        assert resp.status_code == 403, (role, resp.status_code, resp.text)
+
+
+async def test_q113_g2_candidates_read_is_dictionary_admin_only(client):
+    # G2 候选列表归 dictionary_admin（05:98）：operations/platform_admin 均 403。
+    for role in ("operations", "platform_admin", "customer"):
+        resp = await client.get(
+            "/api/admin/g2-candidates",
+            params=[("actor_id", f"{role}-1"), ("roles", role)],
+        )
+        assert resp.status_code == 403, (role, resp.status_code, resp.text)
+
+
+async def test_q113_prompts_read_is_platform_admin_only(client):
+    # Skill Prompt 读口与发布写口同组：operations/product_reviewer 均 403。
+    for role in ("operations", "product_reviewer", "customer"):
+        resp = await client.get(
+            "/api/admin/skill-prompts",
+            params=[("actor_id", f"{role}-1"), ("roles", role)],
+        )
+        assert resp.status_code == 403, (role, resp.status_code, resp.text)
 
 
 @pytest.mark.parametrize("path", OPEN_READS)
