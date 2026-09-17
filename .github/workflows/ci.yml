@@ -20,14 +20,14 @@ jobs:
       - name: Ruff lint
         working-directory: backend
         run: ruff check .
-      - name: Pytest (444 tests, sqlite, no services)
+      - name: Pytest (sqlite, no services)
         working-directory: backend
         run: python -m pytest -q
       - name: Evaluation Dataset / Golden Cases regression (Q77 staging gate)
         run: python eval/runner.py
 
   frontend:
-    name: Frontend gates (tsc, six checkers)
+    name: Frontend gates (tsc, seven checkers)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,7 +41,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - name: Six frontend contract checkers
+      - name: Seven frontend contract checkers
         run: |
           node scripts/check-tokens.mjs
           node scripts/check-nav.mjs
@@ -49,3 +49,4 @@ jobs:
           node scripts/check-workbench.mjs
           node scripts/check-compliance.mjs
           node scripts/check-admin.mjs
+          node scripts/check-settings.mjs
