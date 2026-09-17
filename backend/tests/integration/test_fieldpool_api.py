@@ -111,7 +111,14 @@ async def test_compliant_plan_submits_pending_with_candidates(client, session_fa
     assert new_dim["fid"] is None
     assert new_dim["candidate_id"] is not None
 
-    candidates = await client.get("/api/admin/g2-candidates?status=pending_gate")
+    candidates = await client.get(
+        "/api/admin/g2-candidates",
+        params=[
+            ("status", "pending_gate"),
+            ("actor_id", "dict-1"),
+            ("roles", "dictionary_admin"),
+        ],
+    )
     assert candidates.status_code == 200
     assert len(candidates.json()) == 1
     assert candidates.json()[0]["source_layer"] == "wf02_dim_source"

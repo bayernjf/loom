@@ -11,14 +11,15 @@
 
 | 接口 | 方法/路径 | 来源决策 | 契约状态 |
 |---|---|---|---|
-| 效果回调 | POST /api/effect-callback | Q60 | 🟢 已定稿（见 §2.1） |
-| 白名单消费 | POST /api/whitelist/consume（业务方参考路径） | Q71 | 🟢 规则已定（见 §2.2） |
-| 白名单查询 | 系统后台 API 端 | D9.5 | 🔶 仅有页面清单【待补】 |
-| 使用记录上报 | 同上 | D9.5 / Q71 | 🔶 同上【待补】 |
-| DB 浏览 / AI 调试台 / 调用日志 / 配额 / Key 管理 | 后台内部 | D9.5 | 🔶 后台内部接口【待补】 |
+| 效果回调 | POST /api/effect-callback | Q60 | 🟢 契约定稿（见 §2.1）；**端点本体随段13 P3/V2 未实现**，Q88 鉴权前置（Bearer 验签 401 依赖）已落地 |
+| 白名单消费 | POST /api/product-spaces/{product_space_id}/pwc/consume（业务方参考路径 /api/whitelist/consume 不采用） | Q71 | 🟢 已落地（M5，见 §2.2） |
+| 白名单查询 | GET /api/product-spaces/{product_space_id}/pwcs（租户内池查询，M5）；D9.5 系统后台页面级清单另计 | D9.5 | 🟡 池内组合查询已落地（M5）；中台页面级清单【待补】 |
+| 使用记录上报 | V1 无独立上报端点：consume 取用即写 usage_record 并回带 usage_record_id（M5） | D9.5 / Q71 | 🟡 V1 随消费内联落地；独立上报接口【待补】 |
+| Key 管理 | 入站 POST/GET /api/admin/agent-keys、POST /api/admin/agent-keys/{id}/revoke（Q88）；出站 GET /api/admin/ai-models/{id}/keys、POST /api/admin/ai-model-keys[/{id}/revoke]（Q82） | Q60b/Q67/Q82/Q88 | 🟢 治理端点已落地（见 §2.4）；受 Key 保护的 effect-callback 本体 V2 |
+| DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部 | D9.5 | 🔶 后台内部接口【待补】 |
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
-| CSV / JSON 导出 | 中台 | D4 | 🔶 V1 项【待补】 |
+| CSV / JSON 导出 | GET /api/exports/fcw.csv（Q100） | D4 | 🟢 CSV 已落地（见 §2.3）；JSON 形态/异步导出挂后续/V2【待补】 |
 
 ---
 
@@ -68,6 +69,50 @@
 
 **⚠ 参考来源**：业务方 E1 `/api/whitelist/consume`（按权重取 + usage_record + 5 池保底）——采纳骨架但**不采用"上限 200"**，一律以本系统池健康度三档为准。
 
+**实现端点（M5 2026-09-14 落地，2026-09-17 据实现补登）**：`POST /api/product-spaces/{product_space_id}/pwc/consume`（业务方参考路径 `/api/whitelist/consume` 不采用）
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| platform | string | ✅ | 目标平台；同 platform+account+slot 去重（Q24/Q71） |
+| account | string | ✅ | 发布账号 |
+| slot | string | ✅ | 发布位 |
+| goals | string[] | ⬜ | 目的码交集过滤（不传不过滤） |
+| actor | object | ✅ | 操作人（id/roles） |
+
+响应 200：`pwc`（组合完整视图，含 score/gate_status/status/combo_atom_ids 等）、`usage_record_id`（取用即写流水）、`platform_state`（platform/state/cooldown_until，per-platform 冷却态）、`pool_ready_count`、`pool_health`（target100/low70/critical50）、`restock_hint`、`restock_run_id`。
+
+错误码：404 product space not found；409 待用池空（PoolEmpty）。
+
+> 自动补货：Q87 restock_auto worker 为进程内轮询（默认关闭 opt-in，platform_admin 可手工 POST /api/admin/restock/run）；补货只产 pending_review 候选，人工 Gate 不改。Q90 瞬态失败指数退避（restock_retry_state 游标）。
+
+### 2.3 GET /api/exports/fcw.csv（中台 CSV 导出 · Q100，已落地）
+
+**用途**：中台手动拉取白名单 final_id 单列（D4 CSV 契约），同步流式生成。
+
+**请求**：query `tenant_id`（必填）、`product_space_id`（可选，缺省导该租户全部）。
+
+**响应 200**：`text/csv; charset=utf-8`，头 `Content-Disposition: attachment; filename="fcw-{tenant_id}.csv"`；正文为 final_id 单列（首行表头）。
+
+**口径**：只导 published（draft 通道 V1 未开；Q32 revoked 过滤随其落地自然生效）；读路径不触发 Q95 租户准入门——未知租户返回仅表头空文件 200，不 404。
+
+**未含**：JSON 形态、异步导出/导出任务记录均挂后续/V2【待补】。
+
+### 2.4 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
+
+**入站一 Agent 一 Key**（`app/core/api_keys/`，platform_admin 红线）：
+
+| 方法/路径 | 说明 |
+|---|---|
+| POST /api/admin/agent-keys | 签发（201）：请求 {name, actor}，空名 422、越权 403；响应含 `secret` 明文（`loom_`+token_urlsafe(32)，**仅签发返回一次**） |
+| GET /api/admin/agent-keys?include_revoked=false | 列表：仅 key_id/name/key_prefix（前 12 字符）/status/created_at/last_used_at，不回明文与哈希 |
+| POST /api/admin/agent-keys/{key_id}/revoke | 吊销：append-only 状态位（不物理删除），未知 key 404、越权 403 |
+
+DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 Key）；审计 `agent_api_key.issue/revoke`（tenant=`_platform`）；Key 为平台级凭证、不绑租户（单租户绑定口径【原文未给出，待补】，未来由 content_id→FCW.tenant_id 解析）。验签依赖（Bearer 缺失/未知/已吊销统一 401）已备，但受保护业务端点 POST /api/effect-callback 随段13/P3（V2）。
+
+**出站模型商 Key**（Q82 模型网关，`app/core/model_registry/`）：Fernet 可逆加密入库 + env 主密钥（与入站单向哈希刻意区分——出站需代持调用）；端点 GET /api/admin/ai-models/{model_id}/keys、POST /api/admin/ai-model-keys、POST /api/admin/ai-model-keys/{key_id}/revoke，platform_admin 治理。
+
 ---
 
 ## 3. 通用规范（原文未定义，均为【建议】）
@@ -105,4 +150,7 @@
 - [x] effect-callback 契约与 05/Q60 逐字段一致（source/records/content_id/platform_post_id/captured_at/metrics）
 - [x] 白名单消费规则与 Q71/Q24 一致（排序取用/去重/保底/三档健康度）
 - [x] 数据更新节奏与 Q62 一致（不做定时拉取，外部推送制）
-- [ ] 待补接口（§1 标 🔶）补齐后回填状态——属 M0 规格仲裁范围（08 §2.1）
+- [x] 白名单消费实现端点与 M5/Q71 代码一致（路径/请求体/响应/错误码，2026-09-17 补登 §2.2）
+- [x] CSV 导出与 Q100 实现一致（§2.3）
+- [x] 入站/出站 Key 治理端点与 Q88/Q82 实现一致（§2.4）
+- [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、effect-callback 本体（段13/P3）、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、JSON/异步导出——均【待补】，随对应版本补齐后回填 §1

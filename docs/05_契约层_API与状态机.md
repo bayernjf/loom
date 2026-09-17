@@ -175,8 +175,8 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET `` （`?category=` 可过滤） | 配置项列表（key/category/value/value_type/validation/source_ref/version/时间）；只读 | 02 §C2 / 07 §2.4 |
-| GET `/{key}` / GET `/{key}/history` | 单项（未知键 404）/版本历史（新→旧，种子为 v1） | 14 §2.4 |
+| GET `` （`?category=` 可过滤） | 配置项列表（key/category/value/value_type/validation/source_ref/version/时间）；只读，**platform_admin（Q113 补闸，与写口同组）** | 02 §C2 / 07 §2.4 |
+| GET `/{key}` / GET `/{key}/history` | 单项（未知键 404）/版本历史（新→旧，种子为 v1）；**platform_admin（Q113 补闸）** | 14 §2.4 |
 | PUT `/{key}` | 改值发布（仅 `platform_admin`【实现补：07 §2.3 平台级管理员 Q46/Q64 的英文角色码】；body=value/change_note/actor）：类型+min/max/choices 校验失败 422、未知键 404、越权 403；发布=coerce→value/version+1→写版本行→writeAudit(`config.update`)→事务提交后进程内快照原子切换 | 14 §2.4 |
 | POST `/{key}/rollback` | 回滚到历史版本（platform_admin；target_version 不存在 404）：以新版本号重发该值（非覆盖历史），默认 change_note `rollback to vN`，writeAudit(`config.rollback`) | 14 §2.4 |
 
@@ -204,7 +204,9 @@
 > **有意开放、不加闸**（Q75 第 4 条，实现补登）：`POST /pws/{id}/pws/evaluate`（Q28"系统提请"——机械求值 + 幂等出单，非人工决策）、`POST /atom-candidates/{id}/revive`（仅 evidence_timeout 驳回可复活，前置状态即闸）。
 > 既有各模块服务内 `RoleNotAllowed`（config_center/whitelist_center/compliance_center 等）保持不动，本次只收口红线，不做全库异常类合并；统一 403 口径不变。
 
-> **Q109 补登（2026-09-16，M12 第七片——管理面读端点鉴权审计 + 同型补闸；无新端点/无新写口/无迁移，前端零改动）**：对全部 `/api/admin` GET 穷举审计后，8 个表行把 GET 与写口同组标注角色、但 Q75 矩阵方法枚举只收写口的裸读口，统一补 query actor 依赖（actor_id 必填缺参 422、重复 roles、require_any_role 不符 403；口径同 Q92/Q108）：①c1/signal-weights ②c1/industries = operations；③/categories（无 /admin 前缀）= dictionary_admin；④fp-source-routes ⑤fit-weights = operations；⑥compliance-wordlist = operations/internal_compliance（platform_admin 不在内）；⑦ai-models = platform_admin；⑧ai-scene-routes = operations|platform_admin。**矩阵未定读角色，保持开放并挂【原文未给出，待补】**：config 三读口（``、`/{key}`、`/{key}/history`）、g2-candidates、skill-prompts 三读口（指针/版本历史/单版本）。**矩阵明确有意开放、测试锁定**：agent-keys 列表（"GET 无 actor 体（同 outbound Key 列表口径）"）与 ai-models/{id}/keys（仅元数据）；fcw.csv Q100 tenant_id 隔离不在列。系统内部（CCR/建模等）读词表/权重/路由均走服务层不经 HTTP，闸不影响内部调用；前端全仓确认无这 8 个端点消费方。444 测试（+23），见 02 C1.53、08 Q109。
+> **Q109 补登（2026-09-16，M12 第七片——管理面读端点鉴权审计 + 同型补闸；无新端点/无新写口/无迁移，前端零改动）**：对全部 `/api/admin` GET 穷举审计后，8 个表行把 GET 与写口同组标注角色、但 Q75 矩阵方法枚举只收写口的裸读口，统一补 query actor 依赖（actor_id 必填缺参 422、重复 roles、require_any_role 不符 403；口径同 Q92/Q108）：①c1/signal-weights ②c1/industries = operations；③/categories（无 /admin 前缀）= dictionary_admin；④fp-source-routes ⑤fit-weights = operations；⑥compliance-wordlist = operations/internal_compliance（platform_admin 不在内）；⑦ai-models = platform_admin；⑧ai-scene-routes = operations|platform_admin。**矩阵未定读角色，保持开放并挂【原文未给出，待补】**：~~config 三读口（``、`/{key}`、`/{key}/history`）、g2-candidates、skill-prompts 三读口（指针/版本历史/单版本）~~ **已于 Q113（2026-09-17，02 C1.57）收口补闸，见下条补登**。**矩阵明确有意开放、测试锁定**：agent-keys 列表（"GET 无 actor 体（同 outbound Key 列表口径）"）与 ai-models/{id}/keys（仅元数据）；fcw.csv Q100 tenant_id 隔离不在列。系统内部（CCR/建模等）读词表/权重/路由均走服务层不经 HTTP，闸不影响内部调用；前端全仓确认无这 8 个端点消费方。444 测试（+23），见 02 C1.53、08 Q109。
+
+> **Q113 补登（2026-09-17，M12 第八片——Q109 挂账三族管理面读口补闸收口；无新端点/无新写口/无迁移，前端零改动）**：负责人"按你的来，狠狠的搞完"授权按推荐方案收口 Q109 挂【待补】的三族 7 个读口，角色全部溯自已落地矩阵表行/写口同组，不新增业务口径：①config 三 GET（``、`/{key}`、`/{key}/history`）= **platform_admin**（写口 PUT/rollback 本表配置中心节明确 platform_admin，配置含 SLA 时限/各域阈值，同 ai-models 先例）；②g2-candidates 列表 = **dictionary_admin**（本表 GET 与 promote 同行同角色 Q13/Q68，与 /categories 同型）；③skill-prompts 三 GET（指针/版本历史/单版本）= **platform_admin**（发布写口本表 = platform_admin，单版本含 template+variables 全文，同 ai-models 平台级敏感口径）。实现同 Q109：3 路由各加本地 query actor 依赖（`require_config_view`/`require_g2_candidates_view`/`require_prompts_view`），处理器末位 `_: Actor = Depends(...)`、函数体零改动，写口 body actor 服务层闸不动；agent-keys 与 ai-models/{id}/keys 仍有意免闸、测试继续锁定。三族前端全仓 grep 零消费。455 测试（445+10），见 02 C1.57、08 Q113。
 
 **M10 切片 e · skill7 AI 候选通道（WF-04 试点；WF-02 字段池 Q78、WF-01 冷启动识别 Q79、WF-03 原子批次 Q80、WF-01 C7 Layer4 Q81 为复用切片）**（2026-09-14，迁移 0012 + 0013，Q76/Q78/Q79/Q80/Q81；路由前缀 `/api`）
 
@@ -231,7 +233,7 @@
 | POST `/admin/ai-model-keys/{key_id}/revoke` | 吊销（body=actor；platform_admin；幂等，重复吊销不报错）；Key 404；writeAudit `ai_model_key.revoke` | Q82-3 |
 | PUT `/admin/ai-scene-routes/{scene}` / GET `/admin/ai-scene-routes` | 场景键 = `skill_id`；body=model_id/actor，模型不存在 422；**operations\|platform_admin** 可改不动代码；writeAudit `ai_scene_route.update`。**Q109 起 GET 同补 operations\|platform_admin query 读闸** | Q67 / Q82 / **Q109** |
 | POST `/admin/skill-prompts/{skill_id}/versions` | 发布 Prompt 新版本：template(非空)/change_note/variables/actor，platform_admin；首版 v0.1，之后 v0.N+1；同步移动 skill_prompts 指针，版本行 append-only；writeAudit `skill_prompt.publish` | Q82-4 |
-| GET `/admin/skill-prompts` / GET `/admin/skill-prompts/{skill_id}/versions` / GET `.../versions/{version}` | 指针列表 / 版本历史（不含 template 全文）/ 单版本详情（含 template+variables）；单版本不存在 404 | Q82-4 |
+| GET `/admin/skill-prompts` / GET `/admin/skill-prompts/{skill_id}/versions` / GET `.../versions/{version}` | 指针列表 / 版本历史（不含 template 全文）/ 单版本详情（含 template+variables）；单版本不存在 404；**三 GET 均 platform_admin（Q113 补闸，与发布写口同组）** | Q82-4 |
 | POST `/admin/agent-keys` | **入站**一 Agent 一 Key 签发（**Q88**；body=name(1..128 非空白)/actor；platform_admin，越权 403、空名 422；201 视图含 key_id/key_prefix/status/created_at 与 **secret（明文仅本次返回，后台不可再读）**；writeAudit `agent_api_key.issue`；Key 不绑租户） | Q60 / Q88 |
 | GET `/admin/agent-keys` | Key 列表：?include_revoked=false（默认仅 active）；视图仅 key_id/name/key_prefix/status/created_at/last_used_at，**永不含 secret/hash**；GET 无 actor 体（同 outbound Key 列表口径） | Q88 |
 | POST `/admin/agent-keys/{key_id}/revoke` | 吊销（body=actor；platform_admin，越权 403；未知 key_id 404；幂等状态位 active→revoked + revoked_by/revoked_at，历史行 append-only 不物理删除，重复吊销不报错）；writeAudit `agent_api_key.revoke` | Q88 |

@@ -1,12 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.config_center import service
 from app.core.config_center.config_rules import ConfigValidationError
 from app.core.config_center.schemas import ConfigRollback, ConfigUpdate
 from app.core.db import get_session
+from app.core.rbac import PLATFORM_ADMIN, PermissionDenied, require_any_role
 
 router = APIRouter(prefix="/api/admin/config", tags=["config-center"])
+
+
+def require_config_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    # Q113：配置中心三读口与写口（PUT/rollback）同组，仅 platform_admin。
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, PLATFORM_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
 
 
 def _view(item) -> dict:
@@ -35,14 +50,20 @@ def _version_view(row) -> dict:
 
 @router.get("")
 async def list_config(
-    category: str | None = None, session: AsyncSession = Depends(get_session)
+    category: str | None = None,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_config_view),
 ) -> list[dict]:
     rows = await service.list_items(session, category=category)
     return [_view(item) for item in rows]
 
 
 @router.get("/{key}")
-async def get_config(key: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def get_config(
+    key: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_config_view),
+) -> dict:
     try:
         item = await service.get_item(session, key)
     except service.ConfigKeyNotFound as exc:
@@ -51,7 +72,11 @@ async def get_config(key: str, session: AsyncSession = Depends(get_session)) -> 
 
 
 @router.get("/{key}/history")
-async def config_history(key: str, session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def config_history(
+    key: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_config_view),
+) -> list[dict]:
     try:
         rows = await service.history(session, key)
     except service.ConfigKeyNotFound as exc:

@@ -276,16 +276,27 @@ async def test_prompt_versioning_is_append_only(client):
     })
     assert r.status_code == 201 and r.json()["version"] == "v0.2"
 
-    rows = (await client.get(url)).json()
+    rows = (
+        await client.get(
+            url, params=[("actor_id", "pa-1"), ("roles", "platform_admin")]
+        )
+    ).json()
     assert [row["version"] for row in rows] == ["v0.2", "v0.1"]
     assert all("template" not in row for row in rows)  # 列表不回全文
 
-    r = await client.get(f"{url}/v0.1")
+    r = await client.get(
+        f"{url}/v0.1", params=[("actor_id", "pa-1"), ("roles", "platform_admin")]
+    )
     assert r.status_code == 200
     assert r.json()["template"].startswith("输出 JSON")
     assert r.json()["variables"] == {"product_profile": "资料"}
 
-    pointers = (await client.get("/api/admin/skill-prompts")).json()
+    pointers = (
+        await client.get(
+            "/api/admin/skill-prompts",
+            params=[("actor_id", "pa-1"), ("roles", "platform_admin")],
+        )
+    ).json()
     pointer = next(row for row in pointers if row["skill_id"] == "PWC-BUILDER")
     assert pointer["current_version"] == "v0.2"
 

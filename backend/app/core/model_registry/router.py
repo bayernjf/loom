@@ -62,6 +62,20 @@ def require_scene_routes_view(
     return actor
 
 
+def require_prompts_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    # Q113：Skill Prompt 三读口与发布写口（docs/05:233）同组，仅 platform_admin；
+    # 单版本详情含 template+variables 全文，按 ai-models 同型平台级敏感配置处理。
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, PLATFORM_ADMIN)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
+
+
 def _http409(message: str) -> HTTPException:
     return HTTPException(status_code=409, detail=message)
 
@@ -219,7 +233,10 @@ async def publish_prompt(
 
 
 @router.get("/api/admin/skill-prompts", response_model=list[PromptView])
-async def list_prompts(session: AsyncSession = Depends(get_session)):
+async def list_prompts(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_prompts_view),
+):
     from sqlalchemy import select
 
     from app.core.model_registry.models import SkillPrompt
@@ -232,7 +249,11 @@ async def list_prompts(session: AsyncSession = Depends(get_session)):
     "/api/admin/skill-prompts/{skill_id}/versions",
     response_model=list[PromptVersionView],
 )
-async def list_prompt_versions(skill_id: str, session: AsyncSession = Depends(get_session)):
+async def list_prompt_versions(
+    skill_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_prompts_view),
+):
     rows = await gateway.list_prompt_versions(session, skill_id)
     return [
         PromptVersionView(
@@ -248,7 +269,10 @@ async def list_prompt_versions(skill_id: str, session: AsyncSession = Depends(ge
     response_model=PromptVersionDetail,
 )
 async def get_prompt_version(
-    skill_id: str, version: str, session: AsyncSession = Depends(get_session)
+    skill_id: str,
+    version: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_prompts_view),
 ):
     from sqlalchemy import select
 
