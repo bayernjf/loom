@@ -42,5 +42,21 @@ def test_workflow_wires_every_agreed_gate() -> None:
         "check-workbench",
         "check-compliance",
         "check-admin",
+        "check-settings",  # Q118：第 7 个 checker 接入 CI（Q117 审计发现本地有、CI 漏跑）
     ):
         assert f"scripts/{checker}.mjs" in frontend_runs
+
+
+def test_every_committed_checker_script_is_wired() -> None:
+    # Q118：目录里新增 check-*.mjs 而 CI 漏接时必须红——CI 集合与磁盘集合一致。
+    data = yaml.safe_load(WORKFLOW.read_text())
+    frontend_runs = _steps(data["jobs"]["frontend"])
+
+    scripts_dir = REPO_ROOT / "frontend" / "scripts"
+    on_disk = {p.name for p in scripts_dir.glob("check-*.mjs")}
+    in_ci = {
+        token.split("/")[-1]
+        for token in frontend_runs.split()
+        if token.startswith("scripts/check-") and token.endswith(".mjs")
+    }
+    assert on_disk == in_ci, f"checker drift: disk={on_disk} ci={in_ci}"

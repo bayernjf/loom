@@ -115,7 +115,7 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET/PUT `/admin/content-goals`，POST `/admin/content-goals/{code}/archive` | Q25 五类 contentGoals 字典（种子 ENGAGEMENT/CONVERSION/EDUCATION/TRUST/RETENTION；dictionary_admin；ratio_min≤ratio_max 否则 422；软归档） | Q25/line 1090 |
+| GET/PUT `/admin/content-goals`，POST `/admin/content-goals/{code}/archive` | Q25 五类 contentGoals 字典（种子 ENGAGEMENT/CONVERSION/EDUCATION/TRUST/RETENTION；dictionary_admin；ratio_min≤ratio_max 否则 422；软归档；**Q118 起 GET 补 dictionary_admin query 读闸：缺 actor_id 422、越权 403**） | Q25/line 1090/**Q118** |
 | GET/PUT `/product-spaces/{id}/pwc-pool-config` | Q27 库容配置（operations；默认 100，capacity=null 无上限；target_platforms/high_reuse_n） | Q27/Q24 |
 | POST `/product-spaces/{id}/pwc/funnel` | WF-04 漏斗：预筛→Q48 合规检测（ban→blocked；手拼不豁免 Q26）→Q22 评分（AI 子分缺失不凑分）→限量 50；池非 approved 409；结构/跨租户/停用 goal 422；返回 PWC 视图数组 | Q21/Q22/Q23/Q26 |
 | GET `/product-spaces/{id}/pwcs` | 条件包列表（score 降序 null 末位，含 combo 原子与合规/评分明细） | — |
@@ -138,7 +138,7 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET/POST `/admin/cp-law-domains`，PUT/DELETE `/admin/cp-law-domains/{id}` | CP-LAW 敏感领域小表 CRUD（internal_compliance；code 唯一 409；DELETE=软归档；迁移种子 medical/children/weight_loss/whitening/medical_device/finance） | Q48/Q49 |
+| GET/POST `/admin/cp-law-domains`，PUT/DELETE `/admin/cp-law-domains/{id}` | CP-LAW 敏感领域小表 CRUD（internal_compliance；code 唯一 409；DELETE=软归档；迁移种子 medical/children/weight_loss/whitening/medical_device/finance；**Q118 起 GET 补 internal_compliance query 读闸：缺 actor_id 422、越权 403**） | Q48/Q49/**Q118** |
 | POST `/pws/{pws_id}/ccr/run` | WF-08 机械清洗（**internal_compliance 触发**，越权 403，Q75）：仅 active frozen 可跑（否则 409）；同源自 M4 词库按行业+市场取词，Q50 国家>平台>底座裁决（同级 Q36 从严）；ban→`blocked/block_required=true`、downgrade→`downgrade_pending` 只出建议、无命中→`clean`；敏感领域同事务幂等触发法审；报告 append-only | PT-COMPLIANCE/Q48-Q50/Q75 |
 | GET `/pws/{pws_id}/ccr`、GET `/pws/{pws_id}/ccr/gate?country=` | 报告历史（新→旧，同秒按 id 兜底）/ 供段11 Guard②⑥ 消费的机械视图（block_required/cleaning_passed/law_review_passed） | Q53 |
 | POST `/ccr/{ccr_id}/approve-downgrades` | 降级建议人工 approval（internal_compliance；仅 downgrade_pending 可批，否则 409）；批后 cleaning_passed | PT-COMPLIANCE |
@@ -150,11 +150,11 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| GET/POST `/admin/publish-slots`，PUT/DELETE `/admin/publish-slots/{slot_id}` | 发布位档案 CRUD（operations；code 唯一 409；四维分 score_source=manual_eval + source_url；DELETE=软归档）；**无平台目录种子（line 1098-1221 原文【待补】）** | Q35/line 1098 |
+| GET/POST `/admin/publish-slots`，PUT/DELETE `/admin/publish-slots/{slot_id}` | 发布位档案 CRUD（operations；code 唯一 409；四维分 score_source=manual_eval + source_url；DELETE=软归档；**Q118 起 GET 补 operations query 读闸**）；**`gate` V1 恒人工直编 `approved`**（Q118 裁决：无 pending_gate 产生路径/无 Gate 翻转端点，AI 拓展候选审核流随段7 完整版/V2，见 13 §1.9）；**无平台目录种子（line 1098-1221 原文【待补】）** | Q35/**Q118**/line 1098 |
 | GET `/admin/publish-slots/{slot_id}/fit-score?goal=` | Q34 派生值（不落库）：Σ 四维分×目的权重；目的未配权重 → fit_score=null/incomplete=true，不凑分 | Q34 |
 | GET/PUT `/admin/fit-weights` | 目的权重矩阵（operations；4 维齐 + Σ=1 硬校验 422，不归一化；goal 须活跃 content_goals 否则 404；种子 ENGAGEMENT/CONVERSION；**Q109 起 GET 同补 operations query 读闸**） | Q34/**Q109** |
 | GET/POST `/admin/platform-rules`，DELETE `/admin/platform-rules/{rule_id}`，GET `/admin/platform-rules/match` | 4 层 selector + country 横切；层级必填字段 422、effect 仅 blocked/partial；同级同条件异结论保存 → 409 回冲突行，`overwrite=true` 重发归档旧行；match=高优先级层级覆盖、同级从严；native 默认不存 | Q36/line 1383 |
-| GET/PUT `/admin/slot-type-defaults` | slotType 默认值（operations；min>max 422；约 40 列走 defaults JSON，明细【待补】） | line 1428 |
+| GET/PUT `/admin/slot-type-defaults` | slotType 默认值（operations；min>max 422；约 40 列走 defaults JSON，明细【待补】；**Q118 起 GET 补 operations query 读闸**） | line 1428/**Q118** |
 | GET `/admin/pcp-templates` | Q39 四模板只读（种子 short_video/community/photo_text/ecommerce，17 键 Σ=1.0；实现期初值草稿） | Q39 |
 | GET/POST `/product-spaces/{id}/pcp`，PUT `/pcp/{pcp_id}` | PCP 实例（operations；PS 不存在 404；模板派生或显式 weights，17 键 Σ≤1.0 统一校验器 422；同 PS×平台 active 唯一 409；PUT 为 Q42 人工直编通道，清空 template_code + before/after 审计） | Q40/Q42/Q52/PT-PCP-V1.5 |
 | GET/POST `/product-spaces/{id}/packages`，PUT/DELETE `/packages/{package_id}` | 段9 CSP/CSTP/CEP 静态实例（operations；payload 键按 04 §2.17 定死，缺/多键 422；产品×平台×目的×包型 active 唯一 409；goal 须活跃；DELETE=软归档；行带 tenant/PS 供段11 Guard④⑤） | Q45/Q52/line 863 |
@@ -207,6 +207,8 @@
 > **Q109 补登（2026-09-16，M12 第七片——管理面读端点鉴权审计 + 同型补闸；无新端点/无新写口/无迁移，前端零改动）**：对全部 `/api/admin` GET 穷举审计后，8 个表行把 GET 与写口同组标注角色、但 Q75 矩阵方法枚举只收写口的裸读口，统一补 query actor 依赖（actor_id 必填缺参 422、重复 roles、require_any_role 不符 403；口径同 Q92/Q108）：①c1/signal-weights ②c1/industries = operations；③/categories（无 /admin 前缀）= dictionary_admin；④fp-source-routes ⑤fit-weights = operations；⑥compliance-wordlist = operations/internal_compliance（platform_admin 不在内）；⑦ai-models = platform_admin；⑧ai-scene-routes = operations|platform_admin。**矩阵未定读角色，保持开放并挂【原文未给出，待补】**：~~config 三读口（``、`/{key}`、`/{key}/history`）、g2-candidates、skill-prompts 三读口（指针/版本历史/单版本）~~ **已于 Q113（2026-09-17，02 C1.57）收口补闸，见下条补登**。**矩阵明确有意开放、测试锁定**：agent-keys 列表（"GET 无 actor 体（同 outbound Key 列表口径）"）与 ai-models/{id}/keys（仅元数据）；fcw.csv Q100 tenant_id 隔离不在列。系统内部（CCR/建模等）读词表/权重/路由均走服务层不经 HTTP，闸不影响内部调用；前端全仓确认无这 8 个端点消费方。444 测试（+23），见 02 C1.53、08 Q109。
 
 > **Q113 补登（2026-09-17，M12 第八片——Q109 挂账三族管理面读口补闸收口；无新端点/无新写口/无迁移，前端零改动）**：负责人"按你的来，狠狠的搞完"授权按推荐方案收口 Q109 挂【待补】的三族 7 个读口，角色全部溯自已落地矩阵表行/写口同组，不新增业务口径：①config 三 GET（``、`/{key}`、`/{key}/history`）= **platform_admin**（写口 PUT/rollback 本表配置中心节明确 platform_admin，配置含 SLA 时限/各域阈值，同 ai-models 先例）；②g2-candidates 列表 = **dictionary_admin**（本表 GET 与 promote 同行同角色 Q13/Q68，与 /categories 同型）；③skill-prompts 三 GET（指针/版本历史/单版本）= **platform_admin**（发布写口本表 = platform_admin，单版本含 template+variables 全文，同 ai-models 平台级敏感口径）。实现同 Q109：3 路由各加本地 query actor 依赖（`require_config_view`/`require_g2_candidates_view`/`require_prompts_view`），处理器末位 `_: Actor = Depends(...)`、函数体零改动，写口 body actor 服务层闸不动；agent-keys 与 ai-models/{id}/keys 仍有意免闸、测试继续锁定。三族前端全仓 grep 零消费。455 测试（445+10），见 02 C1.57、08 Q113。
+
+> **Q118 补登（2026-09-18，Q117 挂账四项收口；纯加固 + 一迁移，前端零改动）**：负责人「一口气开搞」对 Q117 挂账 4 项均按推荐（甲）拍板（02 C1.62）。**(1) Q109 穷举遗漏的 4 个管理面 GET 同型补 query actor 闸**（缺 actor_id 422、角色不符 403、命中 200；写口 body actor 服务层闸不动；角色溯自已落地表行/写口同组，不新增口径；四端点前端零消费）：①`GET /admin/content-goals`=**dictionary_admin**（`require_content_goals_view`）；②`GET /admin/cp-law-domains`=**internal_compliance**（`require_law_domains_view`）；③`GET /admin/publish-slots`、④`GET /admin/slot-type-defaults`=**operations**（platform_adaptation 原 `require_fit_weights_view` 重构为通用 `require_operations_view`，fit-weights/publish-slots/slot-type-defaults 三读口共用）。**(2) publish_slots.gate 口径回填**：V1 仅 Q42 人工直编，`gate` 默认 `approved`（模型列与 SlotUpsert 双默认，集成测试锁定）；无 slot_items 表、无 pending_gate 产生路径、无 Gate 翻转端点（`pa_rules.GATE_PENDING` 为 V2 预留常量零引用）；13 §1.9 的 pending_gate→approved AI 拓展审核流整体随段7 完整版/V2。**(3)** product_spaces 两软引用补 DB 级 FK（迁移 0027，见 docs/10）。**(4)** CI frontend 六 checker→七（check-settings 接入，见 docs/17 与 ci.yml）。另修复审计外发现：Alembic 版本表 version_num 默认 VARCHAR(32) 容纳不下 0021 起 33 字符的 revision id，全新 PG 全链在 0021 截断；env.py 迁移前幂等预置/加宽至 VARCHAR(128)。483 测试（472+11）、ruff 净、eval 101/101、迁移头 0027，见 02 C1.62。
 
 **M10 切片 e · skill7 AI 候选通道（WF-04 试点；WF-02 字段池 Q78、WF-01 冷启动识别 Q79、WF-03 原子批次 Q80、WF-01 C7 Layer4 Q81 为复用切片）**（2026-09-14，迁移 0012 + 0013，Q76/Q78/Q79/Q80/Q81；路由前缀 `/api`）
 

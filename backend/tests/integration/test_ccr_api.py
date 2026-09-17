@@ -170,14 +170,20 @@ async def test_domain_crud_and_role(client):
     )
     assert dup.status_code == 409
 
-    listed = await client.get("/api/admin/cp-law-domains")
+    listed = await client.get(
+        "/api/admin/cp-law-domains",
+        params=[("actor_id", "ic-1"), ("roles", "internal_compliance")],
+    )
     assert any(d["code"] == "diet" for d in listed.json())
 
     archived = await client.request(
         "DELETE", f"/api/admin/cp-law-domains/{domain_id}", json={"actor": COMPLIANCE}
     )
     assert archived.status_code == 200
-    active = await client.get("/api/admin/cp-law-domains")
+    active = await client.get(
+        "/api/admin/cp-law-domains",
+        params=[("actor_id", "ic-1"), ("roles", "internal_compliance")],
+    )
     assert all(d["code"] != "diet" for d in active.json())
 
 

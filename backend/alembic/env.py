@@ -2,6 +2,7 @@ import asyncio
 import os
 from logging.config import fileConfig
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
@@ -47,6 +48,25 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _ensure_version_table(connection) -> None:
+    # Q118：revision id 自 0021 起最长 33 字符，超过 Alembic 默认版本表
+    # version_num VARCHAR(32)，全新库全链 upgrade 会在 0021 处截断报错。
+    # 在独立事务里预置/加宽版本表（alembic 建表 checkfirst=True，存在即复用），
+    # 避免 DDL 混入迁移事务破坏 alembic 的提交边界。
+    connection.execute(
+        sa.text(
+            "CREATE TABLE IF NOT EXISTS alembic_version "
+            "(version_num VARCHAR(128) NOT NULL PRIMARY KEY)"
+        )
+    )
+    if connection.dialect.name == "postgresql":
+        connection.execute(
+            sa.text(
+                "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)"
+            )
+        )
+
+
 def do_run_migrations(connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
@@ -59,6 +79,8 @@ async def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=NullPool,
     )
+    async with connectable.begin() as connection:
+        await connection.run_sync(_ensure_version_table)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()

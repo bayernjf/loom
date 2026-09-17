@@ -59,11 +59,15 @@ class ProductSpace(Base):
         unique=True,
         index=True,
     )
-    category_node_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    category_node_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("g1_categories.category_id"), nullable=True
+    )
     industry_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sensitive_industry: Mapped[bool] = mapped_column(default=False, nullable=False)
     lifecycle: Mapped[str] = mapped_column(String(16), default="modeling", nullable=False)
-    active_pws_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    active_pws_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("pws_snapshots.pws_id"), nullable=True
+    )
     business_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
     profile_snapshot: Mapped[dict] = mapped_column(JSONType, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(

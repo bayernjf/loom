@@ -7,6 +7,9 @@
 Q109 首批 8 个读口；Q113 收口当时挂【原文未给出，待补】的三族 7 个读口
 （config 三 GET = platform_admin 写口同组、g2-candidates = dictionary_admin
 矩阵 05:98 GET/POST 同行、skill-prompts 三 GET = platform_admin 写口同组）。
+Q118 补 Q117 审计发现 Q109 穷举清单遗漏的 4 个读口（content-goals =
+dictionary_admin、cp-law-domains = internal_compliance、publish-slots /
+slot-type-defaults = operations）。
 
 矩阵明确「GET 无 actor 体」的读口保持开放（文件末尾锁定）：
 ai-models/{id}/keys 与 agent-keys 为矩阵明确的无 actor 列表口径（只回元数据）。
@@ -36,6 +39,11 @@ GATED_READS = [
     ("/api/admin/config", ["platform_admin"]),                  # 05:177-179 写口同组
     ("/api/admin/g2-candidates", ["dictionary_admin"]),         # 05:98  GET/POST 同行 Q13/Q68
     ("/api/admin/skill-prompts", ["platform_admin"]),           # 05:233-234 写口同组 Q82-4
+    # ---- Q118：Q117 审计发现 Q109 穷举遗漏的 4 个 ----
+    ("/api/admin/content-goals", ["dictionary_admin"]),        # 05 Q25 字典，写口 dictionary_admin 同组
+    ("/api/admin/cp-law-domains", ["internal_compliance"]),    # 05 Q49 敏感领域清单
+    ("/api/admin/publish-slots", ["operations"]),              # 05 Q35 发布位档案
+    ("/api/admin/slot-type-defaults", ["operations"]),         # 05 Q39 slotType 默认值
 ]
 
 # Q113 子路径读口（资源可能不存在，故只锁鉴权层 422/403，不强制 200）。
@@ -112,6 +120,38 @@ async def test_categories_read_denies_operations(client):
         "/api/categories", params=[("actor_id", "ops-1"), ("roles", "operations")]
     )
     assert resp.status_code == 403
+
+
+# ---- Q118：漏网 4 读口的角色边界 ----
+
+async def test_q118_content_goals_read_is_dictionary_admin_only(client):
+    # contentGoals 字典读口：operations/platform_admin/customer 均 403。
+    for role in ("operations", "platform_admin", "customer"):
+        resp = await client.get(
+            "/api/admin/content-goals",
+            params=[("actor_id", f"{role}-1"), ("roles", role)],
+        )
+        assert resp.status_code == 403, (role, resp.status_code, resp.text)
+    ok = await client.get(
+        "/api/admin/content-goals",
+        params=[("actor_id", "da-1"), ("roles", "dictionary_admin")],
+    )
+    assert ok.status_code == 200
+
+
+async def test_q118_law_domains_read_is_internal_compliance_only(client):
+    # CP-LAW 敏感领域读口：operations/platform_admin/customer 均 403。
+    for role in ("operations", "platform_admin", "customer"):
+        resp = await client.get(
+            "/api/admin/cp-law-domains",
+            params=[("actor_id", f"{role}-1"), ("roles", role)],
+        )
+        assert resp.status_code == 403, (role, resp.status_code, resp.text)
+    ok = await client.get(
+        "/api/admin/cp-law-domains",
+        params=[("actor_id", "ic-1"), ("roles", "internal_compliance")],
+    )
+    assert ok.status_code == 200
 
 
 # ---- Q113：三族子路径同样先过鉴权依赖（资源存在与否不影响 422/403）----

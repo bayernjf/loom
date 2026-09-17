@@ -525,7 +525,10 @@ async def test_hot_mark_and_archive(client, session_factory):
 # ---------- Q25 contentGoals 字典 ----------
 
 async def test_content_goals_dictionary(client, session_factory):
-    goals = await client.get("/api/admin/content-goals")
+    goals = await client.get(
+        "/api/admin/content-goals",
+        params=[("actor_id", "dict-1"), ("roles", "dictionary_admin")],
+    )
     assert {g["code"] for g in goals.json()} == {
         "ENGAGEMENT", "CONVERSION", "EDUCATION", "TRUST", "RETENTION",
     }
