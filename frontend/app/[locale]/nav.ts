@@ -11,7 +11,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/workbench", labelKey: "nav.workbench", phase: "v1" },
   { href: "/products", labelKey: "nav.products", phase: "v1" },
   { href: "/content", labelKey: "nav.content", phase: "v2" },
-  { href: "/templates", labelKey: "nav.templates", phase: "v1" },
+  { href: "/templates", labelKey: "nav.templates", phase: "v2" },
   { href: "/analytics", labelKey: "nav.analytics", phase: "v2" },
   { href: "/social-accounts", labelKey: "nav.socialAccounts", phase: "v2" },
   { href: "/compliance", labelKey: "nav.compliance", phase: "v1" },

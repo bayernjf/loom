@@ -147,6 +147,29 @@
       "rejected": "法审驳回"
     }
   },
+  "settings": {
+    "intro": "账户与平台偏好设置。账户信息只读，由平台开通与维护；更多设置随 V2 开放。",
+    "unconfigured": "未配置当前租户（服务端环境变量 LOOM_TENANT_ID），请先完成配置。",
+    "accountTitle": "账户信息",
+    "accountNote": "账户与套餐由平台开通与维护，此处只读展示。",
+    "fieldTenantId": "租户 ID",
+    "fieldTenantName": "租户名称",
+    "fieldPlan": "套餐",
+    "fieldStatus": "状态",
+    "fieldQuota": "月度 token 额度",
+    "nameEmpty": "（未命名）",
+    "quotaEmpty": "——",
+    "languageTitle": "语言",
+    "languageValue": "简体中文（zh-CN）",
+    "languageNote": "更多语言随 V3 国际化开放。",
+    "moreTitle": "更多设置",
+    "moreNote": "以下功能随 V2 开放。",
+    "itemPlatformAuth": "平台授权",
+    "itemNotifications": "通知",
+    "itemHelp": "帮助",
+    "itemTeam": "团队",
+    "itemBilling": "账单"
+  },
   "admin": {
     "appName": "Loom 管理端",
     "navLabel": "管理导航",
@@ -335,7 +358,7 @@
     "slaTodos": {
       "title": "待办 SLA 看板",
       "intro": "跨租户运营待办，按截止时间升序排列；看板态由后端依据 due_at 与升级状态实时派生。",
-      "yellowNote": "黄色预警目前仅法审待办（到期前 24 小时）；其他待办类型到期前显绿色，超时或已升级显红色。",
+      "yellowNote": "黄色预警 = 到期前 24 小时（法审与五型审核待办共用）；其余待办类型到期前显绿色，超时或已升级显红色。",
       "filters": "筛选",
       "filterStatus": "状态",
       "filter_open": "待处理",

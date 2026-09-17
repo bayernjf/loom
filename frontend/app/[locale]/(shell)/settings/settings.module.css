@@ -1,0 +1,108 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.pageHeader {
+  margin-bottom: var(--space-2);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.intro {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.card {
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.cardNote {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.notice {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.accountList {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-4) 0 0;
+  font-size: var(--font-size-md);
+}
+
+.accountRow {
+  display: contents;
+}
+
+.accountLabel {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.accountValue {
+  margin: 0;
+}
+
+.languageValue {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-md);
+}
+
+.moreList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.moreItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.moreName {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.v2Badge {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-latin);
+}
