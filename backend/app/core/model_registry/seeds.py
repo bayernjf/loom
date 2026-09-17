@@ -176,3 +176,20 @@ CONFLICT_PRECHECK_PROMPT_VARIABLES = [
     "approved_atoms",
     "target_range",
 ]
+
+SCENE_ARTICLE_GEN = "ARTICLE-GEN"
+ARTICLE_GEN_PROMPT_VERSION = "v0.1"
+ARTICLE_GEN_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:ARTICLE-GEN:v0.1"))
+
+ARTICLE_GEN_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段12 的 ARTICLE-GEN Skill：只读消费一个 final_id 的 FCW 原料，生成一篇内容正文。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【FCW 原料】
+$materials
+
+硬性规则：
+1. 只使用上面原料，不重新决策上游、不重新打分、不加入 FCW 之外的原子（PT-ART-GEN-V1.5）。
+2. 只输出 {"body": "..."}；body 为字符串（含标题与正文）。
+3. 无可用原料时 body 给空字符串。
+"""
+
+ARTICLE_GEN_PROMPT_VARIABLES = ["materials"]

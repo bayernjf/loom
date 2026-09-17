@@ -210,6 +210,21 @@ def build_conflict_precheck(variables: dict) -> dict:
 BUILDERS["CONFLICT-PRECHECK"] = build_conflict_precheck
 
 
+def build_article_gen(variables: dict) -> dict:
+    """ARTICLE-GEN 结构替身（P4）：从 FCW 原料确定性拼一篇占位正文。"""
+    final_id = str(variables.get("_final_id", ""))
+    goal = str(variables.get("_goal", ""))
+    return {
+        "body": (
+            f"synthetic 内容标题（{goal or '未指定目的'}）\n"
+            f"synthetic ARTICLE-GEN 占位正文（final_id={final_id}，goal={goal}）"
+        ),
+    }
+
+
+BUILDERS["ARTICLE-GEN"] = build_article_gen
+
+
 def _embed_one(text: str) -> list[float]:
     # 字袋哈希向量：ascii 词 + CJK 单字 + CJK 相邻二元组，各桶 ±1 计数后
     # L2 归一化。相同文本必相同向量；共享长前缀的文本余弦高（确定性、无随机）。
