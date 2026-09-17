@@ -110,6 +110,7 @@ async def test_slot_crud_role_code_and_fit_score(client):
     slot = resp.json()
     assert slot["score_source"] == "manual_eval"  # 主观字段明示人工评估
     assert slot["source_url"] == "https://example.com/rules"
+    assert slot["gate"] == "approved"  # Q118：V1 仅 Q42 人工直编，gate 默认 approved
 
     dup = await client.post("/api/admin/publish-slots", json={"item": SLOT, "actor": OPS})
     assert dup.status_code == 409
@@ -136,7 +137,10 @@ async def test_slot_crud_role_code_and_fit_score(client):
         json={"actor": OPS},
     )
     assert archived.status_code == 204
-    gone = await client.get("/api/admin/publish-slots")
+    gone = await client.get(
+        "/api/admin/publish-slots",
+        params=[("actor_id", "ops-1"), ("roles", "operations")],
+    )
     assert gone.json() == []
 
 
@@ -244,7 +248,10 @@ async def test_slot_type_defaults(client):
         json={"slot_type": "video", "daily_limit_min": 1, "daily_limit_max": 3, "actor": OPS},
     )
     assert ok.status_code == 200
-    rows = await client.get("/api/admin/slot-type-defaults")
+    rows = await client.get(
+        "/api/admin/slot-type-defaults",
+        params=[("actor_id", "ops-1"), ("roles", "operations")],
+    )
     assert rows.json()[0]["daily_limit_max"] == 3
 
 
