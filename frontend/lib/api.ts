@@ -204,6 +204,19 @@ export async function getComplianceOverview(tenantId: string): Promise<Complianc
   return request<ComplianceOverview>(`/api/compliance/overview?${params}`);
 }
 
+// Q114：settings 只读账户面板——客户侧租户读口（无 admin 闸，复用 Q95 租户注册表）。
+export interface CustomerTenantView {
+  tenant_id: string;
+  name: string | null;
+  plan: string;
+  status: string;
+  monthly_token_quota: number | null;
+}
+
+export async function getCurrentTenant(tenantId: string): Promise<CustomerTenantView> {
+  return request<CustomerTenantView>(`/api/tenants/${encodeURIComponent(tenantId)}`);
+}
+
 // Q102：管理端（Q92 驾驶舱）管理员身份。V1 actor 自报（同写端点口径），
 // 真认证随 V2 改会话派生；不进浏览器包，shell 客户侧不持有该身份。
 export const CURRENT_ADMIN_ACTOR_ID = process.env.LOOM_ADMIN_ACTOR_ID ?? "";

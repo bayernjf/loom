@@ -17,6 +17,7 @@ from app.core.skill7.router import router as skill7_router
 from app.core.sla.router import router as sla_router
 from app.core.sla.runner import run_jobs
 from app.core.sla.scheduler import SweepScheduler
+from app.core.tenants.router import customer_router
 from app.core.tenants.router import router as tenants_router
 from app.core.workbench.router import router as workbench_router
 from app.decision.compliance_center.router import router as ccr_router
@@ -82,6 +83,7 @@ app.include_router(sla_router)
 app.include_router(restock_router)
 app.include_router(agent_keys_router)
 app.include_router(tenants_router)
+app.include_router(customer_router)
 app.include_router(atom_router)
 app.include_router(pwc_router)
 app.include_router(pws_router)

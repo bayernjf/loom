@@ -36,3 +36,12 @@ class TenantView(BaseModel):
 class TenantDetailView(TenantView):
     # Q95：Onboarding 进度为派生口径（无引导状态机/无引导表）。
     onboarding: dict
+
+
+class CustomerTenantView(BaseModel):
+    # Q114：客户侧 settings 只读账户面板视图（仅账户面板字段，不含 detail/审计/Onboarding）。
+    tenant_id: str
+    name: str | None
+    plan: str
+    status: str
+    monthly_token_quota: int | None

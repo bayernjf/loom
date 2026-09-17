@@ -12,6 +12,7 @@ from app.core.db import get_session
 from app.core.rbac import PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.core.tenants import service
 from app.core.tenants.schemas import (
+    CustomerTenantView,
     TenantChangePlanRequest,
     TenantDetailView,
     TenantLifecycleRequest,
@@ -128,6 +129,29 @@ async def pause_tenant(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.commit()
     return _view(row)
+
+
+# Q114：客户侧只读账户面板（settings 页）——复用 Q95 租户注册表读服务，无 admin 闸、
+# 无写审计（只读，同 Q98/Q99 客户读路径）；未知租户 404，暂停租户仍可读（面板需显 paused）。
+customer_router = APIRouter(prefix="/api/tenants", tags=["tenant-customer"])
+
+
+@customer_router.get("/{tenant_id}", response_model=CustomerTenantView)
+async def get_current_tenant(
+    tenant_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> CustomerTenantView:
+    try:
+        row = await service.get_tenant(session, tenant_id)
+    except service.TenantNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"tenant not found: {exc}") from exc
+    return CustomerTenantView(
+        tenant_id=row.tenant_id,
+        name=row.name,
+        plan=row.plan,
+        status=row.status,
+        monthly_token_quota=row.monthly_token_quota,
+    )
 
 
 @router.post("/{tenant_id}/resume", response_model=TenantView)

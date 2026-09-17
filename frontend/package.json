@@ -13,6 +13,7 @@
     "check-workbench": "node scripts/check-workbench.mjs",
     "check-compliance": "node scripts/check-compliance.mjs",
     "check-admin": "node scripts/check-admin.mjs",
+    "check-settings": "node scripts/check-settings.mjs",
     "lint": "next lint"
   },
   "dependencies": {

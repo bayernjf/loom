@@ -32,6 +32,20 @@ def test_other_types_have_no_yellow_window():
     assert sla_state(_todo("pws_ready", created, now - timedelta(hours=1)), now) == "red"
 
 
+def test_review_types_have_yellow_window():
+    now = datetime(2026, 9, 14, 12, tzinfo=UTC)
+    for tt in (
+        "review_pwc_combo",
+        "review_field_plan",
+        "review_c1_recognition",
+        "review_atom_batch",
+        "review_c7_layer4",
+    ):
+        # 72h due：黄 = 到期前 24h（Q114 统一占位）——created+47h 尚未进入，created+49h 已进入。
+        assert sla_state(_todo(tt, now - timedelta(hours=47), now + timedelta(hours=25)), now) == "green"
+        assert sla_state(_todo(tt, now - timedelta(hours=49), now + timedelta(hours=23)), now) == "yellow"
+
+
 def test_resolved_state():
     now = datetime(2026, 9, 14, 12, tzinfo=UTC)
     todo = _todo("law_review", now, now + timedelta(hours=48), status="resolved")
