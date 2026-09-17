@@ -39,7 +39,7 @@
 
 ---
 
-## 2. 逐表 Schema（35 实体）
+## 2. 逐表 Schema（35 设计实体；截至 2026-09-17 物理表 54 张，迁移 0001–0026）
 
 > 字段明细以 04 为唯一来源（本文不重复罗列全部字段，只补建表级要素）；【类型】为建议列。
 
@@ -60,9 +60,9 @@
 | 建表要素 | 说明 | 来源 |
 |---|---|---|
 | 主键 | `product_space_id` | A6 |
-| 外键 | `tenant_id` 必填；`intake_id` → product_intake_applications；`category_node_id` → g1_category_tree；`active_pws_id` → pws_snapshots（同刻仅 1 个 active，Q31） | Q33/Q5/Q31 |
+| 外键 | `tenant_id` 必填；`intake_id` → product_intake_applications（**实现为真 FK**，迁移 0001）；`category_node_id` → g1_category_tree（设计名，物理表为 `g1_categories`）；`active_pws_id` → pws_snapshots（同刻仅 1 个 active，Q31）。**2026-09-17 实现核实**：`category_node_id` 与 `active_pws_id` 代码为裸 `String(36)` 软引用、无 DB 级 FK（`app/product/product_intake/models.py`），是否补 DB 约束待负责人拍板（handoff 待办 6） | Q33/Q5/Q31 |
 | 属性 | `industry_tag`（类目路径映射，运营可改 Q7）/ `sensitive_industry` 布尔 / `business_owner`（产品记录字段，非登录角色，09 D8） | Q7/Q11/09 D8 |
-| 生命周期 | `lifecycle_priority`：frozen > stale > cold > modeling > active（迁移触发条件原文未给，待补） | line 1655 |
+| 生命周期 | `lifecycle`（**列名以迁移 0001/模型为准**，原文与本文旧稿写作 `lifecycle_priority`）：frozen > stale > cold > modeling > active，default=`modeling`（迁移触发条件原文未给，待补） | line 1655 |
 | 关联 | 私有资产：field_pools / product_atom_instances / condition_packages / pws_snapshots（禁止跨产品/跨租户复用，Q24） | line 14813/Q24 |
 | 索引 | (tenant_id, lifecycle)；active_pws_id 唯一过滤索引【建议】 | 【建议】 |
 | 资料快照 | `profile_snapshot` JSONB：18 通用字段值不可变快照，建模中生成时从 intake.profile 整体复制（Q74） | Q74 |
@@ -132,7 +132,7 @@
 **condition_packages（PWC）** — 04 §2.10（字段完整）
 | 要素 | 说明 | 来源 |
 |---|---|---|
-| combo | 组合明细子表：`pwc_combo_items(pwc_id, fp_id, atom_id)`（跨字段原子组合） | line 1780 |
+| combo | 组合明细子表：`pwc_combo_items(pwc_id, atom_id)`（跨字段原子组合；**唯一约束 `(pwc_id, atom_id)`**，另带 dimension_id/fid；原文写作 `(pwc_id, fp_id, atom_id)`，实现无 `fp_id`——以迁移 0005 与本文件 §2.3 实现补登为准） | line 1780 |
 | 状态 | 待用/已用/爆款/冷却/待Gate/待入库/候选/阻断/归档 | line 1780-1806 |
 | 复用边界 | **严禁跨产品/跨客户复用**（product_space_id + tenant_id 双重隔离） | Q24 |
 | 库容 | 待用池默认 100（可配无上限） | Q27 |
@@ -245,16 +245,22 @@
 | Guard | 7 项（PWS frozen / block_required=false / 包 active / 6 路 PS 一致 / tenant 一致 / law_review 通过 / PWS active 版本） | Q52/Q53 |
 | score | FCW-SCORE（0.4/0.3/0.3）——仅排序不做门槛 | Q54 |
 
-**content_products（内容成品）** — 04 §3 待补
-- 载体：文章/视频（video-studio 四模块）/多语言版本；各语言版独立成品（Q58）
-- 状态：ready_for_publish / 客户确认 / 已发布 / 驳回 / 改稿（Q59）
-- 字段全定义【待补：原文未给出——属开发第 0 步①】
+**content_products（内容成品）** — 04 §3（**Q116 实现补登**，迁移 0025）
+- 载体：文章/视频（video-studio 四模块）/多语言版本；各语言版独立成品（Q58）。**P4 首片只落文章单语言**（kind=article、language=zh-CN），video/多语言缓做。
+- 状态：draft → generating → review → ready_for_publish / rejected / revising（Q56/Q59，Q116 实现补登；原文只给五态语义）
+- 字段全定义：Q116 实现补登（见下方补登）——原文未给字段，**已由 04 §3 补登 + 迁移 0025 落库**
 
 > **实现补登（2026-09-14，M8 后端切片，迁移 0009_m8_stage11，PG16 up/downgrade-1/up 实测）**：
 > - `final_content_whitelists`：final_id PK（uuid1，时间有序）/ task_id 可空（关联批量任务）/ tenant_id / product_space_id / pws_id / pwc_id / pcp_id / csp_package_id / cstp_package_id / cep_package_id / ccr_report_id / law_review_id（后两者可空，Guards 实际要求 ccr 存在）/ platform / slot_id / goal（均索引）/ country String(8) 可空索引 / score Float 可空 / score_detail JSONB（公式/权重/原始分/缩放）/ score_incomplete Bool（server_default false）/ guards JSONB（7 项逐项结果）/ guards_passed Bool / publish_status String(16) server_default 'published' / issued_by / published_at / created_at / updated_at；`UNIQUE(pws_id, pwc_id, platform, slot_id)`（含 country 维度的重复判定在服务层补 country 条件，uq 约束按 04 §2.21 实现补登口径）。
 > - `fcw_assembly_tasks`（Q55 任务驱动）：task_id PK / tenant_id / product_space_id / pws_id 索引 / platform / goal / country / requested_count / slot_ids JSONB / status(running|completed) / results JSONB（requested/resolved_slots/issued/failures 逐项原因）/ created_by / created_at / completed_at；V1 为同步执行（建单即跑完），异步 worker 随 M10。
 > - 分数口径（Q54，仅排序）：PWC 骨架分与三包 conf 为 0–1 先 ×100 归一，slot fit 本为 0–100；`pwc×100×0.4 + fit×0.3 + mean(三包 conf)×100×0.3`；任一来源缺失 → score=null + incomplete=true，不凑分、不卡发证。
-> - 挂账：WF-09 AI Skills（V2）、draft 生命周期端点（V1 直接 published，draft 列保留无创建入口）、段12 content_products、消费侧 API（Q71 取用走 M5 PWC 消费，FCW 消费契约【待补】）。
+> - 挂账：WF-09 AI Skills（V2）、draft 生命周期端点（V1 直接 published，draft 列保留无创建入口）、消费侧 API（Q71 取用走 M5 PWC 消费，FCW 消费契约【待补】）；~~段12 content_products~~ **✅ Q116 已落地（迁移 0025，见下条补登）**。
+
+> **实现补登（2026-09-17，V2 P4 段12 首片，迁移 0025_content_products + 0026_article_gen_seed；物理表落 `app/content/models.py`，见 02 C1.60 / 05 §1.4 Q116 补登 / 13 §1.13）**：
+> - `content_products`：content_id String36 PK（uuid1）/ tenant_id 索引 / product_space_id 索引 / final_id 索引（**只读软关联**，按 final_id 取 FCW 组装材料，不建 DB FK）/ goal / platform / slot_id 可空 / country 可空 / kind String16（article|video；P4 只产 article）/ language String16 server_default zh-CN / body Text 可空 / review_hits JSONB（词库复检命中）/ status String24 索引（draft/generating/review/ready_for_publish/rejected/revising）/ reject_reason Text 可空（Q59 驳回原因回流段13）/ regenerate_count Int server_default 0（Q56 上限 3，`MAX_REGENERATE=3`）/ created_by / created_at / updated_at。
+> - 生成走**模型网关第 7 场景 ARTICLE-GEN**（0026 纯种子：场景路由 + Prompt v0.1），**不产 skill7 候选、不走运营 Gate**（段12 的 Gate=客户审阅 Q59）；成本经 SkillRun 手动落（Q67）+ writeAudit 留痕。
+> - 复检 V1 仅词库扫描（复用 Q48 词库 + `ccr_rules` 三层裁决）；语义级/施工指令/国家规则 3 项【原文未给出，待补】。
+> - 挂账：客户前端内容页、视频生成、多语言、AI 质量分、复检余 3 项（P4 后续切片）。
 
 ### 2.7 反馈与知识域（段 13）
 
@@ -291,7 +297,7 @@
 - **实现补登（2026-09-15，Q85 WF-02 DIM-MERGE 字段池方案第四站，迁移 0017_dim_merge_seed，纯数据无 schema 变更）**：仅 3 行种子——`ai_scene_routes` DIM-MERGE→synthetic、`skill_prompts` DIM-MERGE v0.1 指针、`skill_prompt_versions` v0.1 模板（变量 product_profile/sensitive_industry/industry_tag/enabled_routes/active_g2_fields/dim_range/target_atom_range）。downgrade 按三表 DELETE。PG16 up/downgrade-1/up 实测。
 - **实现补登（2026-09-15，Q86 WF-03 原子补池第五站，迁移 0018_atom_affinity_embedding——首个带 schema 变更的 LLM 切片，PG16 用 pgvector/pgvector:pg16 一次性容器 up/downgrade-1/up 实测）**：①PG 端 `CREATE EXTENSION IF NOT EXISTS vector`（downgrade `DROP EXTENSION`），SQLite 测试端不经迁移建扩展；②`ai_models` 加 `capability` String16 NOT NULL server_default `chat`（chat|embedding；downgrade 丢列）；③`atom_candidates.embedding` 与 `product_atom_instances.embedding` 两列 nullable——PG 类型 `vector(1536)`、SQLite LargeBinary（float32 小端，可移植 TypeDecorator 双方言承载；1536 为通行 embedding 维实现取值，真模型接入时维度演进只改 TypeDecorator 单点）；历史行 NULL 不 backfill，approve 时从候选复制向量到正式实例；不建 KNN 索引（V1 进程内余弦，`<=>`/千万级切换按 14 §2.3 后置）；④种子：配置项 `atom.cluster_line`（0.9，借 Q10 同义线原文未给【待补】；**用 `postgresql.insert(...).on_conflict_do_nothing()`**——0010 按 CONFIG_SEEDS 快照播种，全新库该行已由 0010 插入，0018 不得重复 INSERT 撞唯一约束，旧库从 0017 升级时正常补行）+ 第二个合成模型 `synthetic-embedding`（capability=embedding，价 0/无预算/active）+ CONFLICT-PRECHECK→synthetic-deterministic 与 ATOM-AFFINITY→synthetic-embedding 两条路由 + CONFLICT-PRECHECK Prompt v0.1（无 ATOM-AFFINITY Prompt，embedding 场景不挂模板）；downgrade 删上述全部种子行再丢列/扩展。**Q87（2026-09-15，restock_auto M8 worker）无 Alembic 迁移**：纯代码切片——`skill_runs.status=failed` 为 Q71 预留枚举，子 run 回链走既有 `input` JSON 的 `restock_request_id`，无新表/新列/新种子，Alembic 头仍为 0018。
 
-**audit_logs（writeAudit）** — 04 §3 待补
+**audit_logs（writeAudit）** — 04 §3 待补（**已实现**：迁移 0001 建表，物理落 `app/core/models.py`）
 - 所有人工操作 + AI 调用全记录，append-only 不可篡改
 
 **approval_tasks（审核任务/待办）** — 04 §2.25
@@ -342,6 +348,14 @@
 - Knowledge Graph / Evidence Center / Evaluation Dataset / Golden Cases / Simulation Sandbox / Rollback Center / Drift Detection / Human Feedback Loop / Multi-model Router / Context Pack Builder
 - **MVP 只建 Evaluation Dataset + Golden Cases 两件套**（14 §2.6 定稿，落 eval/ 目录，与 16 测试联动）；Simulation Sandbox 及其余随 V2-V3
 
+> **迁移 0021–0026 汇总补登（2026-09-17 一次性登记，销 handoff「迁移登记落后」缺口；各切片细节见 02 C1.37–C1.60、08 各完成情况）**：
+> - **0021_review_batch_pass_confidence**（纯配置种子，Q93）：新增 `review.batch_pass_confidence=0.85`（category=review）。
+> - **0022_review_sla_hours**（纯配置种子，Q94）：新增 `review.sla_hours.{pwc_combo,field_plan,c1_recognition,atom_batch,c7_layer4}` 五键，V1 统一 72h（Q114 后 source_ref=Q70②/Q114）。
+> - **0023_tenant_registry**（建表 + 存量回填，Q95）：新表 **`tenants`** —— tenant_id String(64) PK / name String(128) 可空 / plan String(16) default trial（trial|basic|pro|enterprise）/ status String(16) default trial 索引（trial|active|paused）/ monthly_token_quota Int 可空（试用 500000，付费档 null＝额度【待补】）/ detail JSON（回填标记等机读元数据，0023 回填行 `{"backfilled": true}`）/ created_by / created_at / plan_changed_by·plan_changed_at / paused_by·paused_at。回填口径=product_intake_applications ∪ product_spaces 的 DISTINCT tenant_id，置 basic/active + detail.backfilled + created_by=system-migration-0023。**准入为应用层闸**（未知 404/暂停 409），不加硬外键。物理表落 `app/core/tenants/models.py`。
+> - **0024_g2_common_fields**（纯种子，Q115）：`g2_fields` 落 12 个 cat='common' 字段（fid 英文 slug + field_name 中文 canonical + status=active，ON CONFLICT DO NOTHING 幂等）；余 6 个 common 字段【原文未给出，待补】不落。**G2 fid 为工程定稿标识符，业务事实以 field_name 中文名为准**（Q115，详见 04 §2.2/§2.5、12 §1.2）。
+> - **0025_content_products**（建表，Q116）+ **0026_article_gen_seed**（纯种子，Q116）：见 §2.6 补登。
+> - **当前 head = 0026_article_gen_seed**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0026 各切片的迁移实测记录以 02 对应 C1 条目为准**（Q115/Q116 条目不逐条复记 PG16 up/down/up，勿据此推断已验证）。
+
 ---
 
 ## 3. 关系图与约束
@@ -364,8 +378,11 @@
 
 ## 4. 与既有文档的核对项
 
-- [x] 字段名与 04 完全一致，未新增/改名（全部引用 04 章节）
-- [x] Q 编号约束已映射（Q2/Q3/Q5/Q7/Q8/Q12/Q13/Q15/Q17/Q18/Q20/Q21/Q24/Q25/Q27/Q28-Q33/Q34-Q38/Q39-Q43/Q44-Q47/Q48-Q51/Q52-Q55/Q56-Q59/Q60-Q65/Q66-Q72）
+- [x] 字段名与 04 完全一致，未新增/改名（全部引用 04 章节）；**实现补登中的列名/类型以迁移脚本与 ORM 模型为准**（如 product_spaces.lifecycle）
+- [x] Q 编号约束已映射（Q2/Q3/Q5/Q7/Q8/Q12/Q13/Q15/Q17/Q18/Q20/Q21/Q24/Q25/Q27/Q28-Q33/Q34-Q38/Q39-Q43/Q44-Q47/Q48-Q51/Q52-Q55/Q56-Q59/Q60-Q65/Q66-Q72；**Q73–Q116 的新增表/列/种子见各节实现补登**）
 - [x] 配置化清单数值不硬编码进表定义（全部指向配置中心）
 - [x] 存储引擎已定稿并补入 §1.3（2026-09-13，14 选型）
-- [ ] 字段全定义仍【待补】的实体（content_products / skill_run_logs / audit_logs / api_keys / memory_layers / 动态信号事件 / 爆款判定记录 / 校准报表 / SLA 待办）——属段 7/12/13 与横切，随对应阶段任务包补（段 1-6 的 ProductSpace / g2_field_candidates 已于 M0 补齐）
+- [x] 迁移登记完整性（2026-09-17 补登）：迁移 **0001–0026** 均在本文登记（0001–0020 分散于各节，**0021–0026 见 §2.8 汇总补登**）；**当前 head = 0026_article_gen_seed**；物理表 54 张与迁移一一对应。
+- [ ] 字段全定义仍【待补】的实体（memory_layers / 动态信号事件 / 爆款判定记录 / 校准报表 / SLA 待办）——属段 7/13 与横切，随对应阶段任务包补（段 1-6 的 ProductSpace / g2_field_candidates 已于 M0 补齐；~~content_products~~ Q116 已补、~~skill_run_logs~~ Q76 已补、~~audit_logs~~ 迁移 0001 已建、~~api_keys~~ Q88 已补）
+- [ ] 文档列为建表、代码尚未建表的**设计稿实体**（layer_spaces/layer_space_items §2.5、countries §2.5、agent_registry §2.8、cat_feedback·field_impact_items·kup_proposals·knowledge_update_logs §2.7）——属段 9/13 与展示口径，实现随 V2/V3；**读作设计稿，勿当已建表**
+- [ ] 索引【建议】项未落地者（condition_packages 复合索引、product_atom_instances 复合索引等）——实现为单列索引，是否补复合索引随性能实测定

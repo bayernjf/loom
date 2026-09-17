@@ -277,6 +277,20 @@
 
 > **Q107 补登（2026-09-16，M12 管理端第五片·录入单运营队列与跨租户运营操作；无新写口、无迁移，Alembic 头仍 0023）**：段1 增跨租户只读端点 `GET /api/intakes/ops-queue`（02 C1.51 四接缝全甲）——query `actor_id`（必填，缺 422）、重复 `roles`（require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)，不符 403；customer 不可见）、可选 `status`（必须在 15 态 STATE_LABELS 内，否则 422 `unknown intake status: {status}`）、`limit`（默认 20，1..100）/`offset`（≥0）；响应 `OpsIntakeList{items: OpsIntakeView[], total, limit, offset}`，OpsIntakeView 为租户内 IntakeView 加 `created_at: datetime`；无租户过滤、created_at DESC。**路由必须注册在 `GET /{intake_id}` 之前**（同 /overview 教训），service.list_ops_intakes 跨租户 select + count 子查询。**不新增写口**：管理端操作岛的 6 个运营事件（ops_confirm/to_cold_start/reject/b2_approved/b2_parent_fallback/b2_rejected）全部复用 `POST /api/intakes/{id}/transitions`，actor 换成管理员身份，状态机既有 403 RoleRequired/409 IllegalTransition/422 missing_fids 口径一字不动；wf01_*/auto_confirm 与 send_review/review_*/start_modeling/model_*/failed_*（触发方【原文未给出，待补】）不在管理端白名单。配套前端 `/admin/intakes` 列表与 `[intakeId]/` 详情操作岛、platform_admin 默认可看不可执行（缺 operations 角色前端本地 missing_role 零请求）见 02 C1.51、08 Q107、15 Q107。测试 418 全绿（+3 集成），eval 仍 101/101。
 
+> **Q114 补登（2026-09-17，M12 收尾——客户侧 settings 账户面板后端读口；无迁移，Alembic 头仍 0023）**：租户注册表新增**客户侧只读**路由（同包内与 `/api/admin/tenants` 分离的 `customer_router`，前缀 `/api/tenants`）：`GET /api/tenants/{tenant_id}`——**无 actor 闸**（客户读自己租户的元数据；V1 身份仍 env 自报，真实会话派生随 V2），未知租户 404；响应 `CustomerTenantView{tenant_id,name,plan,status,monthly_token_quota}`，**刻意不含 detail/onboarding 等管理面字段**（测试锁定不泄漏）。plan 四档/status 三态码原样不译；`monthly_token_quota=null` 表付费档额度【原文未给出，待补】。消费方：前端 `/[locale]/settings` 只读账户面板（02 C1.58、08 Q114）。
+
+> **Q116 补登（2026-09-17，V2 P4 段12 内容生成首片——文章单语言最小闭环；迁移 0025 建表 + 0026 纯种子，Alembic 头 0024→0026）**：新模块 `app/content/` 挂 `/api/content/*`（02 C1.60、08 Q116）——**段12 的 Gate 是客户审阅（Q59），不走 skill7 运营 Gate（Q66）**：ARTICLE-GEN 为模型网关第 7 场景，**不产 skill7 候选**，成本经 SkillRun 手动落（Q67）+ writeAudit 留痕：
+
+| 方法与路径 | 契约 | 来源 |
+|---|---|---|
+| POST `/api/content/generate` | **operations**（越权 403）：body=`{final_id, kind?=article, language?=zh-CN, actor}`；按 final_id 只读消费 FCW（PT-ART-GEN-V1.5）并从 FCW 取 tenant/product_space/goal/platform/slot/country；201 返回 `ContentProductView`；final_id 不存在 404；kind=video 或未知 422（P4 仅 article）；模型输出非法 502；状态闸（非 generating）409 | Q116 |
+| POST `/api/content/{content_id}/approve` | **客户**通过（Q59）：review→ready_for_publish；不存在 404；状态不合法 409 | Q116 |
+| POST `/api/content/{content_id}/reject` | **客户**驳回（Q59）：**原因必填**，空/空白 422；review→rejected，reason 落 `reject_reason` 供段13 回流；不存在 404；状态不合法 409 | Q116 |
+| POST `/api/content/{content_id}/revise` | **客户**改稿：review→revising（强制重过 CONTENT-COMPLIANCE 复检，V1 仅词库扫描）；重生成次数达上限 422；不存在 404；状态不合法 409 | Q116 |
+| POST `/api/content/{content_id}/regenerate` | **operations**（越权 403）：revising→generating（`regenerate_count`+1）→review；非 revising 或达上限 422；不存在 404；模型输出非法 502 | Q116 |
+
+> 复检口径：V1 只做**词库扫描**（复用 Q48 词库 + ccr_rules 三层裁决，命中落 `review_hits`）；语义级检测/施工指令核对/国家规则核对 3 项【原文未给出，待补】。状态机见 §2.12，表见 04 §3 / 10 §2.9。
+
 
 ---
 ## Part 2 · 状态机定义
@@ -392,6 +406,21 @@
 - conf ≥ 行业阈值 → direct_approve
 - [0.6, 行业阈值) 或 Top1-Top2 差 <0.1 → ops_assist（运营待办选定，客户无感知；72h 未处理升级；全否转 cold_start）
 - conf < 0.6 → cold_start（推 B2 生成候选类目 → 申请单进"类目创建中"）
+
+### 2.12 content_products 内容成品状态机（段12 · Q56/Q59，**实现补登** Q116）
+> 原文只给五态语义与 Q56 重生成 ≤3、Q59 客户三动作，未给完整迁移表；下表为 Q116 实现补登的机械口径（`app/content/statemachine.py`）。
+
+| 当前态 | 事件 | 条件 | 目标态 | 副作用 |
+|---|---|---|---|---|
+| draft | generate | operations 触发，final_id 存在 | generating | 建 content_products 行并对 FCW 只读组装材料 |
+| revising | generate | 同批（改稿后重生成，operations） | generating | `regenerate_count`+1 |
+| generating | complete | 模型返回 + 词库复检完成 | review | body 落库、review_hits 落库 |
+| review | approve | 客户通过 | ready_for_publish | 进发布（运营用托管账号发布 → 回填链接 Q60c） |
+| review | reject | **原因必填** | rejected | 原因数据回流段13 |
+| review | revise | `regenerate_count` < 3（Q56 上限） | revising | 改稿须强制重过复检（Q59） |
+| 任意 | 达重生成上限 | `regenerate_count` ≥ 3 | 仅可 reject | 转人工/作废回池（Q56） |
+
+> 枚举码：`draft/generating/review/ready_for_publish/rejected/revising` 原样不翻译进消息表。
 
 ---
 
