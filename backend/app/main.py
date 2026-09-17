@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.content.router import router as content_router
 from app.core.api_keys.router import router as agent_keys_router
 from app.core.compliance_wordlist.router import router as wordlist_router
 from app.core.config_center.cache import config_cache
@@ -91,6 +92,7 @@ app.include_router(ccr_router)
 app.include_router(platform_router)
 app.include_router(package_router)
 app.include_router(fcw_router)
+app.include_router(content_router)
 app.include_router(exports_router)
 
 
