@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.core.model_registry import field_plan, gateway
 from app.core.model_registry.schemas import FieldPlanInvokeRequest
-from app.core.rbac import OPERATIONS, PermissionDenied, require_any_role
+from app.core.rbac import DICTIONARY_ADMIN, OPERATIONS, PermissionDenied, require_any_role
 from app.product.fieldpool import service
 from app.product.fieldpool.models import FPDimension
 from app.product.fieldpool.schemas import (
@@ -28,6 +28,19 @@ def require_routes_view(
     actor = Actor(id=actor_id, roles=roles)
     try:
         require_any_role(actor, OPERATIONS)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
+
+
+def require_g2_candidates_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    # Q113：G2 候选列表与 Q13/Q68 转正（promote）同组，仅 dictionary_admin（docs/05:98）。
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, DICTIONARY_ADMIN)
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return actor
@@ -249,7 +262,9 @@ async def restore_dimension(
 
 @router.get("/admin/g2-candidates")
 async def list_candidates(
-    status: str | None = None, session: AsyncSession = Depends(get_session)
+    status: str | None = None,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_g2_candidates_view),
 ) -> list[dict]:
     rows = await service.list_candidates(session, status)
     return [
