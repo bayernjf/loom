@@ -202,12 +202,18 @@ const routerText = readFileSync(
 );
 for (const route of [
   '"/api/content"',
+  '"/api/content/languages"',
   '"/api/content/{content_id}"',
   '"/api/content/{content_id}/body"',
 ]) {
   if (!routerText.includes(route))
     problems.push(`backend content router must keep ${route}`);
 }
+// B3：静态 /languages 必须先于 {content_id} 注册，否则被路径参数吞掉。
+const languagesAt = routerText.indexOf('"/api/content/languages"');
+const contentIdAt = routerText.indexOf('"/api/content/{content_id}"');
+if (languagesAt === -1 || contentIdAt === -1 || languagesAt > contentIdAt)
+  problems.push("GET /api/content/languages must be registered before /api/content/{content_id}");
 const smText = readFileSync(join(backend, "app", "content", "statemachine.py"), "utf8");
 for (const token of ["manual_resubmit", "CONTENT_REVISING", "CONTENT_REVIEW"]) {
   if (!smText.includes(token))
