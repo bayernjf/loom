@@ -186,10 +186,13 @@ ARTICLE_GEN_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段12 的 A
 【FCW 原料】
 $materials
 
+目标语言：$language
+
 硬性规则：
 1. 只使用上面原料，不重新决策上游、不重新打分、不加入 FCW 之外的原子（PT-ART-GEN-V1.5）。
 2. 只输出 {"body": "..."}；body 为字符串（含标题与正文）。
 3. 无可用原料时 body 给空字符串。
+4. 正文必须使用「目标语言」撰写（Q58 每语言版为独立成品）；不得混入其他语言。
 """
 
-ARTICLE_GEN_PROMPT_VARIABLES = ["materials"]
+ARTICLE_GEN_PROMPT_VARIABLES = ["materials", "language"]

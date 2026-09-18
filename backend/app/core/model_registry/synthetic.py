@@ -211,9 +211,18 @@ BUILDERS["CONFLICT-PRECHECK"] = build_conflict_precheck
 
 
 def build_article_gen(variables: dict) -> dict:
-    """ARTICLE-GEN 结构替身（P4）：从 FCW 原料确定性拼一篇占位正文。"""
+    """ARTICLE-GEN 结构替身（P4/Q119）：从 FCW 原料确定性拼一篇占位正文。"""
     final_id = str(variables.get("_final_id", ""))
     goal = str(variables.get("_goal", ""))
+    language = str(variables.get("language") or "zh-CN")
+    if language != "zh-CN":
+        return {
+            "body": (
+                f"synthetic article title ({goal or 'unspecified'})\n"
+                f"synthetic ARTICLE-GEN placeholder body "
+                f"(final_id={final_id}, goal={goal}, language={language})"
+            ),
+        }
     return {
         "body": (
             f"synthetic 内容标题（{goal or '未指定目的'}）\n"

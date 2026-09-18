@@ -2,12 +2,15 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.content import generation
+from app.content import languages as l10n
 from app.content import statemachine as sm
 from app.content.models import (
     CONTENT_DRAFT,
+    DEFAULT_LANGUAGE,
     KIND_ARTICLE,
     KIND_VIDEO,
     ContentProduct,
@@ -38,6 +41,14 @@ class ContentRejectReasonRequired(Exception):
 
 class ContentReviseCap(Exception):
     pass
+
+
+class ContentLanguageNotEligible(Exception):
+    """Q119/Q58：请求语言不在「发布位市场 ∩ 产品目标语言」交集内。"""
+
+
+class ContentDuplicateLanguage(Exception):
+    """Q119/Q58：同 final_id + language + kind 成品已存在（每语言独立唯一成品）。"""
 
 
 def _now() -> datetime:
@@ -118,6 +129,28 @@ async def generate_content(
     if fcw is None:
         raise ContentFcwNotFound(body.final_id)
 
+    # Q119/Q58：语言 = 发布位目标市场（fcw.country）∩ 产品目标语言（PS.target_languages）。
+    language = body.language or DEFAULT_LANGUAGE
+    ps = await session.get(ProductSpace, fcw.product_space_id)
+    eligible = await l10n.eligible_for_fcw(session, fcw, ps)
+    if language not in eligible:
+        raise ContentLanguageNotEligible(
+            f"language {language!r} not eligible for final_id {body.final_id}; "
+            f"eligible={eligible}"
+        )
+    duplicate_id = await session.scalar(
+        select(ContentProduct.content_id).where(
+            ContentProduct.final_id == body.final_id,
+            ContentProduct.language == language,
+            ContentProduct.kind == body.kind,
+        )
+    )
+    if duplicate_id is not None:
+        raise ContentDuplicateLanguage(
+            f"{body.kind} content for {body.final_id} in {language} already exists "
+            f"({duplicate_id}); revise/regenerate instead of recreating"
+        )
+
     content = ContentProduct(
         tenant_id=fcw.tenant_id,
         product_space_id=fcw.product_space_id,
@@ -127,7 +160,7 @@ async def generate_content(
         slot_id=fcw.slot_id,
         country=fcw.country,
         kind=body.kind,
-        language=body.language,
+        language=language,
         status=CONTENT_DRAFT,
         created_by=body.actor.id,
     )

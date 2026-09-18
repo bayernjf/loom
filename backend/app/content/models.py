@@ -8,7 +8,7 @@ final_id 为只读软关联（PT-ART-GEN-V1.5：只读消费、不重决策上�
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, JSONType
@@ -40,6 +40,12 @@ class ContentProduct(Base):
     """内容成品：一条 final_id 的一篇生成内容（每语言版独立成品，Q58）。"""
 
     __tablename__ = "content_products"
+    __table_args__ = (
+        # Q119/Q58：一条 final_id 每语言每载体仅一个独立成品（独立复检/独立客户审）。
+        UniqueConstraint(
+            "final_id", "language", "kind", name="uq_content_final_language_kind"
+        ),
+    )
 
     content_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_pk)
     tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
@@ -63,6 +69,36 @@ class ContentProduct(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+# Q119/Q58：语言清单状态。
+LANGUAGE_ACTIVE = "active"
+LANGUAGE_ARCHIVED = "archived"
+
+
+class ContentLanguage(Base):
+    """段12 内容语言清单（Q58「支持语言清单配置化」，Q119 落地）。
+
+    code 为 BCP-47 语言标签（如 zh-CN/en-US）；markets 为适用市场国家码
+    （对齐 FCW.country，String(8)），空列表表示适用全部市场（含 country 为空）。
+    可生成语言 = 清单中 markets 覆盖发布位市场（FCW.country）的 active 语言，
+    再与 ProductSpace.target_languages 取交集（Q58：发布位市场 ∩ 产品目标语言）。
+    """
+
+    __tablename__ = "content_languages"
+
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    markets: Mapped[list] = mapped_column(JSONType, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=LANGUAGE_ACTIVE
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

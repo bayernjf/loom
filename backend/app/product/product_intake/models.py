@@ -70,6 +70,10 @@ class ProductSpace(Base):
     )
     business_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
     profile_snapshot: Mapped[dict] = mapped_column(JSONType, nullable=False, default=dict)
+    # Q119/Q58：产品录入侧目标语言（BCP-47，如 zh-CN/en-US）；NULL/空=未声明，
+    # 段12 语言交集（发布位市场 ∩ 产品目标语言）时不做产品侧收窄。段1 录入表单
+    # 前端后续切片再接，本期提供管理端写入口（PUT target-languages）。
+    target_languages: Mapped[list | None] = mapped_column(JSONType, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
