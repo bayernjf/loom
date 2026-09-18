@@ -288,7 +288,7 @@
 | POST `/api/content/generate` | **operations**（越权 403）：body=`{final_id, kind?=article, language?=zh-CN, actor}`；按 final_id 只读消费 FCW（PT-ART-GEN-V1.5）并从 FCW 取 tenant/product_space/goal/platform/slot/country；201 返回 `ContentProductView`；final_id 不存在 404；kind=video 或未知 422（P4 仅 article）；**Q119：language 不在「发布位市场 ∩ 产品目标语言」交集 → 422（detail 回带 eligible）、同 final_id+language+kind 成品已存在 → 409**；模型输出非法 502；状态闸（非 generating）409 | Q116/Q119 |
 | POST `/api/content/{content_id}/approve` | **客户**通过（Q59）：review→ready_for_publish；不存在 404；状态不合法 409 | Q116 |
 | POST `/api/content/{content_id}/reject` | **客户**驳回（Q59）：**原因必填**，空/空白 422；review→rejected，reason 落 `reject_reason` 供段13 回流；不存在 404；状态不合法 409 | Q116 |
-| POST `/api/content/{content_id}/revise` | **客户**改稿：review→revising（强制重过 CONTENT-COMPLIANCE 复检，V1 仅词库扫描）；重生成次数达上限 422；不存在 404；状态不合法 409 | Q116 |
+| POST `/api/content/{content_id}/revise` | **客户**改稿：review→revising（强制重过 CONTENT-COMPLIANCE 复检，V1 仅词库扫描）；重生成次数达 `content.regen_limit`（默认 3、运营可配，Q120 接通）422（detail 回带 {count}/{limit}）；不存在 404；状态不合法 409 | Q116/Q120 |
 | POST `/api/content/{content_id}/regenerate` | **operations**（越权 403）：revising→generating（`regenerate_count`+1）→review；非 revising 或达上限 422；不存在 404；模型输出非法 502 | Q116 |
 | GET `/api/admin/content-languages` | **dictionary_admin**（query actor 闸 Q118：缺 actor_id 422、越权 403）：语言清单，`include_archived=false` 默认仅 active；返回 `[{code,name,markets,status}]` | Q119 |
 | PUT `/api/admin/content-languages` | **dictionary_admin**（body actor，越权 403）：upsert 语言 `{code(BCP-47),name,markets[] ,actor}`，markets 空数组=全市场（含 country 空）；code/name 空 422、markets 含空串 422；显式 upsert 复活已归档语言（同 content_goals） | Q119 |
@@ -299,6 +299,8 @@
 > 复检口径：V1 只做**词库扫描**（复用 Q48 词库 + ccr_rules 三层裁决，命中落 `review_hits`）；语义级检测/施工指令核对/国家规则核对 3 项【原文未给出，待补】。状态机见 §2.12，表见 04 §3 / 10 §2.9。
 >
 > **Q119 多语言补登（2026-09-18，Q58，迁移 0028，02 C1.63）**：语言 = 发布位目标市场（`fcw.country`）∩ 产品录入目标语言（`product_spaces.target_languages`）；语言清单 `content_languages` 配置化（dictionary_admin），`markets=[]` 覆盖全市场（含 country=NULL），受限语言不覆盖 country=NULL。每个语言版为独立成品（`content_products` 唯一约束 `(final_id,language,kind)`），复检与客户审按 content_id 天然独立（Q59 流程不按语言分叉）；ARTICLE-GEN 模板新增 `$language` 变量（硬性规则 4：须用目标语言撰写），SkillRun.input_payload 记 language。表见 04 §3 / 10 §2.9。
+>
+> **Q120 AI 质量分补登（2026-09-18，Q57 + Q56，迁移 0029/0030，02 C1.64）**：模型网关新增**第 8 场景 `ARTICLE-QC`**（只读打分、不改写，variables `[body,language]`，输出 `{score,issues}`）；generate/regenerate 在 ARTICLE-GEN 写正文、词库复检之后、状态 COMPLETE 之前**内嵌**调用一次（新建 `app/content/quality.py`），**零新 HTTP 端点**。结果落 `content_products.quality_score`(0..1)/`quality_issues`；`ContentProductView` 另回带四字段 `quality_score/quality_issues/quality_threshold/quality_advisory`（threshold 取 `content.ai_quality_threshold` 默认 0.85；advisory 低于阈值=true、分数缺失=null）。**定位纯 advisory（Q57 降级裁决）**：分数不自动发证/驳回、不阻断 approve、不新增状态，段12 Gate 仍是客户审阅 Q59；界面「AI 评估分，仅供参考」标注随 Q122 前端，段13 回流后的相关性校准后置。QC 场景未配置/模型不可用/预算耗尽/上游错误，或输出非法（非 JSON/非对象/score 缺失越界，bool 不算数值）时 score 留空、issues 记 `{"qc_error": ...}`、成品照常进 review（失败写审计 `content.quality_unavailable`、不落 SkillRun；成功落 SkillRun source=llm_auto、wf=WF-10 与审计 `content.quality_scored`）。**Q56 止损**：重生成上限取配置 `content.regen_limit`（默认 3、运营可改），`revise_allowed(status,count,limit)` 超限只能 reject——不自动作废 final_id、不自动回池；a 清洗区人工编辑 / b 作废回池记难产原因均保留为人工动作（前端化挂账 Q122/运营页）。表见 04 §3 / 10 §2.6、§2.8。
 
 
 ---

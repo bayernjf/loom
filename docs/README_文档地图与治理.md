@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q118（持续追加，C1.17–C1.62）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q120（持续追加，C1.17–C1.64）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -58,6 +58,7 @@
 | Q117 审计回填 | 2026-09-17 | 文档⇄代码一致性审计：实测基线（472 passed / head 0026 / 7 checker / 86 token）回填至 handoff·08·README·AGENTS 与 04/05/10/11/13，补登迁移 0021–0026 与段12 契约；4 项实现差异只挂账（handoff 待办 6），无业务口径变化 |
 | Q118 收口 | 2026-09-18 | Q117 挂账 4 项均按推荐（甲）拍板落地：4 个漏网管理面 GET 补 query actor 闸、publish_slots.gate 回填 V1 人工直编口径、product_spaces 两 FK（迁移 0027）、CI 六→七 checker；另修 Alembic 版本表列长；基线 483 passed / head 0027 / CI 七 checker / 86 token，待办 6 销账 |
 | Q119 段12 多语言 | 2026-09-18 | V2 P4 段12 Q58 落地（接缝按甲拍板，02 C1.63）：content_languages 语言清单配置化（dictionary_admin CRUD，种子仅 zh-CN 全市场）、ProductSpace.target_languages、发布位市场∩产品目标语言交集纯函数、content_products 唯一约束 (final_id,language,kind) 每语言独立成品；5 端点；迁移 0028（PG16 往返实测）；基线 494 passed / head 0028 / eval 101 / token 86，前端无变化 |
+| Q120 段12 AI 质量分 | 2026-09-18 | V2 P4 段12 Q57 真打分 + Q56 上限配置化落地（接缝按甲拍板，02 C1.64）：模型网关第 8 场景 ARTICLE-QC 内嵌生成（只读打分、纯 advisory 不自动发证/驳回/阻断 approve、不新增状态），content_products 加 quality_score/issues，view +4 字段含 threshold/advisory；QC 故障/坏输出分数留空不阻断；阈值 content.ai_quality_threshold（0.85）与重生成上限 content.regen_limit（3）接通消费，超限 revise 422 只能 reject；迁移 0029 加列 + 0030 场景种子（PG16 往返实测，物理表仍 55）；基线 511 passed / head 0030 / eval 101·golden 21，前端零变化 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---
