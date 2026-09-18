@@ -211,9 +211,18 @@ BUILDERS["CONFLICT-PRECHECK"] = build_conflict_precheck
 
 
 def build_article_gen(variables: dict) -> dict:
-    """ARTICLE-GEN 结构替身（P4）：从 FCW 原料确定性拼一篇占位正文。"""
+    """ARTICLE-GEN 结构替身（P4/Q119）：从 FCW 原料确定性拼一篇占位正文。"""
     final_id = str(variables.get("_final_id", ""))
     goal = str(variables.get("_goal", ""))
+    language = str(variables.get("language") or "zh-CN")
+    if language != "zh-CN":
+        return {
+            "body": (
+                f"synthetic article title ({goal or 'unspecified'})\n"
+                f"synthetic ARTICLE-GEN placeholder body "
+                f"(final_id={final_id}, goal={goal}, language={language})"
+            ),
+        }
     return {
         "body": (
             f"synthetic 内容标题（{goal or '未指定目的'}）\n"
@@ -223,6 +232,24 @@ def build_article_gen(variables: dict) -> dict:
 
 
 BUILDERS["ARTICLE-GEN"] = build_article_gen
+
+
+def build_article_qc(variables: dict) -> dict:
+    """ARTICLE-QC 结构替身（P4/Q120）：对正文确定性打分，只评不改写。
+
+    供集成测试造高/低分支：正文含哨兵 "[LOW_QC]" 时给低于阈值的 0.62；
+    空正文给 0.55；其余确定性给 0.92（≥ content.ai_quality_threshold 默认 0.85）。
+    该分仅为辅助参考（Q57），不驱动自动发证或驳回。
+    """
+    body = str(variables.get("body") or "")
+    if "[LOW_QC]" in body:
+        return {"score": 0.62, "issues": [{"code": "low_quality", "message": "synthetic low-quality marker"}]}
+    if not body.strip():
+        return {"score": 0.55, "issues": [{"code": "empty_body", "message": "body is empty"}]}
+    return {"score": 0.92, "issues": []}
+
+
+BUILDERS["ARTICLE-QC"] = build_article_qc
 
 
 def _embed_one(text: str) -> list[float]:

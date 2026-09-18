@@ -18,6 +18,7 @@ from app.content.models import (
     CONTENT_REVIEW,
     CONTENT_REVISING,
     MAX_REGENERATE,
+    ContentLanguage,
     ContentProduct,
 )
 from app.core.compliance_wordlist.models import ComplianceWordlistEntry
@@ -35,7 +36,12 @@ from app.core.model_registry.seeds import (
     ARTICLE_GEN_PROMPT_TEMPLATE,
     ARTICLE_GEN_PROMPT_VARIABLES,
     ARTICLE_GEN_PROMPT_VERSION,
+    ARTICLE_QC_PROMPT_ID,
+    ARTICLE_QC_PROMPT_TEMPLATE,
+    ARTICLE_QC_PROMPT_VARIABLES,
+    ARTICLE_QC_PROMPT_VERSION,
     SCENE_ARTICLE_GEN,
+    SCENE_ARTICLE_QC,
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillRun
@@ -97,6 +103,16 @@ async def client(session_factory):
                 version=ARTICLE_GEN_PROMPT_VERSION, template=ARTICLE_GEN_PROMPT_TEMPLATE,
                 variables={"vars": ARTICLE_GEN_PROMPT_VARIABLES},
             ),
+            AISceneRoute(scene=SCENE_ARTICLE_QC, model_id=SYNTHETIC_MODEL_ID),
+            SkillPrompt(skill_id=SCENE_ARTICLE_QC, current_version=ARTICLE_QC_PROMPT_VERSION),
+            SkillPromptVersion(
+                version_id=ARTICLE_QC_PROMPT_ID, skill_id=SCENE_ARTICLE_QC,
+                version=ARTICLE_QC_PROMPT_VERSION, template=ARTICLE_QC_PROMPT_TEMPLATE,
+                variables={"vars": ARTICLE_QC_PROMPT_VARIABLES},
+            ),
+            ContentLanguage(
+                code="zh-CN", name="简体中文", markets=[], status="active"
+            ),
             _fcw(),
         ])
         await session.commit()
@@ -120,11 +136,12 @@ async def test_generate_happy_path(client, session_factory):
         content = await session.get(ContentProduct, body["content_id"])
         assert content.status == CONTENT_REVIEW
         assert content.tenant_id == "t1" and content.product_space_id == "ps-1"
-        runs = (await session.scalars(select(SkillRun))).all()
-        assert len(runs) == 1
-        assert runs[0].skill_id == SCENE_ARTICLE_GEN
-        assert runs[0].model_id == SYNTHETIC_MODEL_ID
-        assert runs[0].input_cost is not None
+        runs = {r.skill_id: r for r in (await session.scalars(select(SkillRun))).all()}
+        # Q120：一次生成 = ARTICLE-GEN 写正文 + ARTICLE-QC 质量分，各一条 SkillRun。
+        assert set(runs) == {SCENE_ARTICLE_GEN, SCENE_ARTICLE_QC}
+        assert runs[SCENE_ARTICLE_GEN].model_id == SYNTHETIC_MODEL_ID
+        assert runs[SCENE_ARTICLE_GEN].input_cost is not None
+        assert runs[SCENE_ARTICLE_QC].output_payload["score"] == 0.92
 
 
 async def test_generate_rbac_and_notfound(client):

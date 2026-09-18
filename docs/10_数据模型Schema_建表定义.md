@@ -39,7 +39,7 @@
 
 ---
 
-## 2. 逐表 Schema（35 设计实体；截至 2026-09-18 物理表 54 张，迁移 0001–0027；0027 纯加外键不新增表）
+## 2. 逐表 Schema（35 设计实体；截至 2026-09-18 物理表 55 张，迁移 0001–0030；0027 纯加外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030 纯场景种子均不新增表）
 
 > 字段明细以 04 为唯一来源（本文不重复罗列全部字段，只补建表级要素）；【类型】为建议列。
 
@@ -62,6 +62,7 @@
 | 主键 | `product_space_id` | A6 |
 | 外键 | `tenant_id` 必填；`intake_id` → product_intake_applications（**实现为真 FK**，迁移 0001）；`category_node_id` → g1_category_tree（设计名，物理表为 `g1_categories`）；`active_pws_id` → pws_snapshots（同刻仅 1 个 active，Q31）。**Q118（2026-09-18，迁移 0027）已补 DB 级真 FK**：`category_node_id`→`g1_categories.category_id`、`active_pws_id`→`pws_snapshots.pws_id`（均 nullable，约束名 `fk_product_spaces_category_node_id`/`fk_product_spaces_active_pws_id`；两列 V1 代码零写入，迁移先幂等置空孤儿再建约束；PG16 up/downgrade-1/up 实测） | Q33/Q5/Q31 |
 | 属性 | `industry_tag`（类目路径映射，运营可改 Q7）/ `sensitive_industry` 布尔 / `business_owner`（产品记录字段，非登录角色，09 D8） | Q7/Q11/09 D8 |
+| 目标语言（Q119） | `target_languages` JSONB nullable（BCP-47 数组；NULL/空=未声明，段12 语言交集不做产品侧收窄）；管理端 operations 写入口 `PUT target-languages` 已落，段1 录入表单控件挂账 | Q58/Q119 |
 | 生命周期 | `lifecycle`（**列名以迁移 0001/模型为准**，原文与本文旧稿写作 `lifecycle_priority`）：frozen > stale > cold > modeling > active，default=`modeling`（迁移触发条件原文未给，待补） | line 1655 |
 | 关联 | 私有资产：field_pools / product_atom_instances / condition_packages / pws_snapshots（禁止跨产品/跨租户复用，Q24） | line 14813/Q24 |
 | 索引 | (tenant_id, lifecycle)；active_pws_id 唯一过滤索引【建议】 | 【建议】 |
@@ -257,10 +258,21 @@
 > - 挂账：WF-09 AI Skills（V2）、draft 生命周期端点（V1 直接 published，draft 列保留无创建入口）、消费侧 API（Q71 取用走 M5 PWC 消费，FCW 消费契约【待补】）；~~段12 content_products~~ **✅ Q116 已落地（迁移 0025，见下条补登）**。
 
 > **实现补登（2026-09-17，V2 P4 段12 首片，迁移 0025_content_products + 0026_article_gen_seed；物理表落 `app/content/models.py`，见 02 C1.60 / 05 §1.4 Q116 补登 / 13 §1.13）**：
-> - `content_products`：content_id String36 PK（uuid1）/ tenant_id 索引 / product_space_id 索引 / final_id 索引（**只读软关联**，按 final_id 取 FCW 组装材料，不建 DB FK）/ goal / platform / slot_id 可空 / country 可空 / kind String16（article|video；P4 只产 article）/ language String16 server_default zh-CN / body Text 可空 / review_hits JSONB（词库复检命中）/ status String24 索引（draft/generating/review/ready_for_publish/rejected/revising）/ reject_reason Text 可空（Q59 驳回原因回流段13）/ regenerate_count Int server_default 0（Q56 上限 3，`MAX_REGENERATE=3`）/ created_by / created_at / updated_at。
+> - `content_products`：content_id String36 PK（uuid1）/ tenant_id 索引 / product_space_id 索引 / final_id 索引（**只读软关联**，按 final_id 取 FCW 组装材料，不建 DB FK）/ goal / platform / slot_id 可空 / country 可空 / kind String16（article|video；P4 只产 article）/ language String16 server_default zh-CN / body Text 可空 / review_hits JSONB（词库复检命中）/ quality_score Float 可空（Q120 ARTICLE-QC 0..1，advisory）/ quality_issues JSONB 可空（问题明细；QC 故障记 qc_error）/ status String24 索引（draft/generating/review/ready_for_publish/rejected/revising）/ reject_reason Text 可空（Q59 驳回原因回流段13）/ regenerate_count Int server_default 0（Q56 上限默认 3、可由 `content.regen_limit` 配置并经 Q120 接入 revise 闸，`MAX_REGENERATE=3` 为兜底常量）/ created_by / created_at / updated_at。
 > - 生成走**模型网关第 7 场景 ARTICLE-GEN**（0026 纯种子：场景路由 + Prompt v0.1），**不产 skill7 候选、不走运营 Gate**（段12 的 Gate=客户审阅 Q59）；成本经 SkillRun 手动落（Q67）+ writeAudit 留痕。
 > - 复检 V1 仅词库扫描（复用 Q48 词库 + `ccr_rules` 三层裁决）；语义级/施工指令/国家规则 3 项【原文未给出，待补】。
-> - 挂账：客户前端内容页、视频生成、多语言、AI 质量分、复检余 3 项（P4 后续切片）。
+> - 挂账：客户前端内容页、视频生成、AI 质量分、复检余 3 项（P4 后续切片）；~~多语言~~ **✅ Q119 已落地（见下条补登）**。
+>
+> **实现补登（2026-09-18，V2 P4 段12 多语言 Q58，迁移 0028_content_languages；见 02 C1.63 / 05 §1.4 Q119 补登）**：
+> - 新表 `content_languages`（语言清单，配置化）：`code` String16 PK（BCP-47，如 zh-CN）/ `name` String64 / `markets` JSONB（适用国家码，对齐 FCW.country；**空数组=全市场，含 country=NULL**）/ `status` String16（active|archived，server_default active）/ created_at / updated_by / updated_at。迁移种子**仅 zh-CN**（简体中文、markets=[]、active，保证单语言向后兼容；其余语言 dictionary_admin 配置，不预置）；dictionary_admin CRUD（content-languages 端点），显式 upsert 复活口径同 content_goals。
+> - `product_spaces` 加 `target_languages` JSONB nullable（产品侧目标语言；NULL/空=未声明不收窄；operations `PUT .../target-languages` 写入，段1 录入表单控件挂账）。
+> - `content_products` 加唯一约束 `uq_content_final_language_kind (final_id, language, kind)`：一条 final_id 每语言每载体仅一个独立成品（独立复检 / 独立客户审）；generate 语言不在交集→422（回带 eligible）、同 final+lang+kind 已存在→409。
+> - 语言交集纯函数 `app/content/languages.py`：active 语言中 markets 覆盖 `fcw.country` 者，再被 `PS.target_languages`（非空时）收窄；空 markets 全覆盖、受限语言不覆盖 country=NULL。PG16（pgvector/pgvector:pg16）一次性容器实测 up / downgrade-1（表列约束全清、head 回 0027）/ 再 up（恢复 zh-CN 种子与约束）往返对称。
+
+> **实现补登（2026-09-18，V2 P4 段12 AI 质量分 Q57 + 重生成上限 Q56，迁移 0029_content_quality + 0030_article_qc_seed；见 02 C1.64 / 05 §1.4 Q120 补登）**：
+> - `content_products` 加两 nullable 列：`quality_score` Float（ARTICLE-QC 0..1 分）、`quality_issues` JSONB（问题明细；QC 故障/坏输出记 `[{"qc_error": ...}]`）。纯 advisory：不自动发证/驳回、不阻断 approve、不新增状态（六态机不动，Gate 仍为客户审阅 Q59）；视图另回带 `quality_threshold`（取 `content.ai_quality_threshold` 默认 0.85）与 `quality_advisory`（低于阈值 true、无分 null）。
+> - 迁移 0030 纯种子：新增模型网关第 8 场景 `ARTICLE-QC`→synthetic 路由 + SkillPrompt/PromptVersion v0.1（只读打分、输出 {score,issues}，variables [body,language]），不建表；0029 仅加两列。
+> - `statemachine.revise_allowed` 增 `limit` 形参，service 读 `content.regen_limit`（默认 3）作为改稿重生成上限，超限 revise 返回 422（detail 回带 {count}/{limit}）只能 reject；Q56 的 a/b 转人工路径保留为人工动作。QC 由新建 `app/content/quality.py` 在正文生成、词库复检之后内嵌调用，零新 HTTP 端点。PG16（pgvector/pgvector:pg16）一次性容器实测：全新库 up（两列 + QC 种子就位）/ downgrade 0030→0029（种子全清、列保留）/ 0029→0028（两列全删）/ 再 up 恢复，往返对称；物理表总数仍 55。
 
 ### 2.7 反馈与知识域（段 13）
 
@@ -355,7 +367,10 @@
 > - **0024_g2_common_fields**（纯种子，Q115）：`g2_fields` 落 12 个 cat='common' 字段（fid 英文 slug + field_name 中文 canonical + status=active，ON CONFLICT DO NOTHING 幂等）；余 6 个 common 字段【原文未给出，待补】不落。**G2 fid 为工程定稿标识符，业务事实以 field_name 中文名为准**（Q115，详见 04 §2.2/§2.5、12 §1.2）。
 > - **0025_content_products**（建表，Q116）+ **0026_article_gen_seed**（纯种子，Q116）：见 §2.6 补登。
 > - **0027_product_space_fks**（纯约束，Q118，不新增表）：`product_spaces.category_node_id`→`g1_categories.category_id`、`active_pws_id`→`pws_snapshots.pws_id` 补 DB 级真 FK（均 nullable，先幂等置空孤儿再建约束，downgrade drop）；同名 ORM 列同步改 ForeignKey。PG16 一次性容器全链 up / downgrade-1 / up + 孤儿拒绝 + NULL 合法实测通过（02 C1.62）。
-> - **当前 head = 0027_product_space_fks**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0027 各切片的迁移实测记录以 02 对应 C1 条目为准**（0027 已实测 PG16 全链 up/down/up；0021–0026 条目不逐条复记，勿据此推断已验证）。
+> - **0028_content_languages**（建表+加列+约束，Q119，新增 1 表）：建 `content_languages`（含 zh-CN 全市场种子）、`product_spaces` 加 `target_languages` JSONB nullable、`content_products` 加唯一约束 `uq_content_final_language_kind(final_id,language,kind)`；downgrade 对称（drop 约束/列/表）。PG16 一次性容器全新库 up / downgrade-1 / 再 up 实测往返对称（02 C1.63）。
+> - **0029_content_quality**（加列，Q120，不新增表）：`content_products` 加 nullable `quality_score` Float、`quality_issues` JSONB；downgrade 对称 drop 两列。
+> - **0030_article_qc_seed**（纯种子，Q120，不新增表）：bulk_insert 第 8 场景 ARTICLE-QC→synthetic 路由及 SkillPrompt/SkillPromptVersion v0.1 三件套；downgrade 三 DELETE。PG16 一次性容器全新库 up / 逐档 downgrade / 再 up 实测往返对称（02 C1.64）。
+> - **当前 head = 0030_article_qc_seed**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0030 各切片的迁移实测记录以 02 对应 C1 条目为准**（0027/0028/0029/0030 已实测 PG16 全链 up/down/up；0021–0026 条目不逐条复记，勿据此推断已验证）。
 
 ---
 
@@ -383,7 +398,7 @@
 - [x] Q 编号约束已映射（Q2/Q3/Q5/Q7/Q8/Q12/Q13/Q15/Q17/Q18/Q20/Q21/Q24/Q25/Q27/Q28-Q33/Q34-Q38/Q39-Q43/Q44-Q47/Q48-Q51/Q52-Q55/Q56-Q59/Q60-Q65/Q66-Q72；**Q73–Q116 的新增表/列/种子见各节实现补登**）
 - [x] 配置化清单数值不硬编码进表定义（全部指向配置中心）
 - [x] 存储引擎已定稿并补入 §1.3（2026-09-13，14 选型）
-- [x] 迁移登记完整性（2026-09-17 补登、2026-09-18 续登）：迁移 **0001–0027** 均在本文登记（0001–0020 分散于各节，**0021–0027 见 §2.8 汇总补登**）；**当前 head = 0027_product_space_fks**；物理表 54 张（0027 纯加两外键，不新增表）。
+- [x] 迁移登记完整性（2026-09-17 补登、2026-09-18 续登）：迁移 **0001–0030** 均在本文登记（0001–0020 分散于各节，**0021–0030 见 §2.8 汇总补登**）；**当前 head = 0030_article_qc_seed**；物理表 55 张（0027 纯加两外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030 纯场景种子均不新增表）。
 - [ ] 字段全定义仍【待补】的实体（memory_layers / 动态信号事件 / 爆款判定记录 / 校准报表 / SLA 待办）——属段 7/13 与横切，随对应阶段任务包补（段 1-6 的 ProductSpace / g2_field_candidates 已于 M0 补齐；~~content_products~~ Q116 已补、~~skill_run_logs~~ Q76 已补、~~audit_logs~~ 迁移 0001 已建、~~api_keys~~ Q88 已补）
 - [ ] 文档列为建表、代码尚未建表的**设计稿实体**（layer_spaces/layer_space_items §2.5、countries §2.5、agent_registry §2.8、cat_feedback·field_impact_items·kup_proposals·knowledge_update_logs §2.7）——属段 9/13 与展示口径，实现随 V2/V3；**读作设计稿，勿当已建表**
 - [ ] 索引【建议】项未落地者（condition_packages 复合索引、product_atom_instances 复合索引等）——实现为单列索引，是否补复合索引随性能实测定

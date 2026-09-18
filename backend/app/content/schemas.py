@@ -41,3 +41,36 @@ class ContentProductView(BaseModel):
     reject_reason: str | None
     regenerate_count: int
     created_at: datetime | None
+    # Q120/Q57：AI 质量分（辅助参考，不自动发证/驳回）。threshold 为当前配置阈值，
+    # advisory=True 表示分数低于阈值（界面提示「需细看」），分数缺失时二者为 None。
+    quality_score: float | None = None
+    quality_issues: list | None = None
+    quality_threshold: float | None = None
+    quality_advisory: bool | None = None
+
+class LanguageUpsertRequest(BaseModel):
+    """dictionary_admin 维护语言清单（Q58/Q119）：code=BCP-47，markets=适用国家码（空=全市场）。"""
+
+    code: str = Field(min_length=2, max_length=16)
+    name: str = Field(min_length=1, max_length=64)
+    markets: list[str] = Field(default_factory=list)
+    actor: Actor
+
+
+class LanguageArchiveRequest(BaseModel):
+    actor: Actor
+
+
+class TargetLanguagesRequest(BaseModel):
+    """operations 设置产品录入侧目标语言（Q58 交集的产品侧）；空列表=未声明/不限。"""
+
+    languages: list[str] = Field(default_factory=list)
+    actor: Actor
+
+
+class ContentLanguageView(BaseModel):
+    code: str
+    name: str
+    markets: list[str]
+    status: str
+

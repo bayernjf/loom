@@ -73,6 +73,13 @@
 - **工程骨架补齐**：新增 10–17 号工程文档（Schema 建表 / OpenAPI / PT 协议补齐清单 / 状态机迁移表 / 技术选型 / 代码结构 / 测试策略 / 部署运维），均为建议/待补状态（见上方状态列）。
 - **治理规则确立**：唯一事实源 = docs；修改先改文档、新决策追加 Q 编号、行号引用指向基准 HTML。
 
+- **2026-09-17 文档整理（纯文档，无新 Q、无代码/迁移、无新口径）**：① **Q111 CI 状态订正**——核实 GitHub Actions 已随 PR #38/#39（dev→main）实际触发：origin 为 `github.com:bayernjf/loom`，dev push / pull_request / main push 共 6 次 run 全部 success，两 job = Backend gates（pytest sqlite + ruff + eval 101）与 Frontend gates（tsc + 六 checker），最新 main 全绿 run 35118202175（2026-09-16）；handoff 原三处"尚未实际触发/本仓不 push"过期表述同步订正。② **08 §2.2 新增「V1 落地状态总览 / 排期骨架」表**：M0–M12 逐包列落地状态（✅/🟡）、关键 Q/迁移、剩余挂账；**工期/人员/计划起止三列原文未给，一律【待补】，不推测工时**，并写明排期填写规则（只填负责人提供的值、新切片同步 Q/迁移、V2/V3 另行排定）。排期实质填写（工期/人员）仍待负责人提供资源信息，见待办③。
+
+
+- **2026-09-18 主文件容量上限滚入（handoff 最近 5 条进度上限，整块原文）**：
+
+- **Q117 文档⇄代码一致性审计与纯事实回填（纯文档，无代码/无迁移/无新业务口径；11 文件；Alembic 头仍 0026，后端 472 测试/101 eval，token 仍 86）**：负责人 2026-09-17「记 Q117 + 4 项只挂账」记 Q117（02 C1.61）。做法：先取实测基线（`cd backend && .venv/bin/python -m pytest -q` → **472 passed**；ruff 净；eval 101/101；`alembic/versions/` 实测 head=**0026_article_gen_seed**；`frontend/scripts/` 实为 **7 个 checker**；tokens.css 86 变量），再逐份订正。(1) **状态类文档**：handoff 当前基线段/最近进度补 Q114–Q116/待办 4·5 数字（378→472、0001–0020→头 0026）；docs/08 §2.2 基线行与完成情况补 Q114–Q116；docs/README 02 范围、12 号名单收口、18 号 ✅、沿革、待裁决说明；README.md「代码尚未启动」、Q1–Q72、17 份、M0–M10；AGENTS.md 当前阶段/行号溯源 Q115/「尚未 git init」。(2) **迁移登记补登**：docs/10 一次性登记 0021–0026 + head=0026，并修正 `product_spaces.lifecycle`（旧稿 lifecycle_priority）与 `pwc_combo_items (pwc_id, atom_id)`（旧稿含 fp_id）。(3) **契约回填**：docs/05 增 Q114/Q116 补登 + §2.12 content_products 状态机；docs/13 增 §1.13 + §1.8 标注（段7 适配为 V2 设计规格）+ §1.9 实现差异标注；docs/11 修正出站 Key 录入路径与驾驶舱登记；docs/04 核销 content_products/writeAudit/api_keys 待补。(4) **4 项实现差异只挂账**（见待办 6）：4 个 `/api/admin` GET 无闸且不在 Q109 穷举内、`publish_slots.gate` 默认 approved 与 13 §1.9 口径不符、`product_spaces` 两外键无 DB 约束、`check-settings.mjs` 未接入 CI。(5) 核销非冲突一处：approveAtomGuard「9 vs 10 项」= 10 项定义 / 9 项机检 + ⑩审计（01 §3 段4、13 §1.5）。**注意**：根目录跑 pytest 会因 `pythonpath=["."]`+`testpaths=["tests"]` 失效而大面积误报失败（实测 317 failed），必须在 `backend/` 下执行。
+
 ## 待办归档（已完成项详细过程，主文件已压缩为一行结论）
 
 ### 待办 5 · 仓库基建（✅ 主体完成，2026-09-18 压缩保留在 handoff）

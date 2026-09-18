@@ -111,6 +111,7 @@ async def invoke_article_gen(
     materials = await _assemble_materials(session, fcw)
     variables = {
         "materials": _materials_text(materials),
+        "language": content.language,
         "_final_id": content.final_id,
         "_goal": content.goal,
     }
@@ -137,7 +138,7 @@ async def invoke_article_gen(
             product_space_id=content.product_space_id,
             status="succeeded",
             source="llm_auto",
-            input_payload={"final_id": content.final_id, "kind": content.kind},
+            input_payload={"final_id": content.final_id, "kind": content.kind, "language": content.language},
             output_payload={"body": body},
             input_tokens=invocation.input_tokens,
             output_tokens=invocation.output_tokens,
