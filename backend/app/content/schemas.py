@@ -24,6 +24,37 @@ class ContentDecisionRequest(BaseModel):
     actor: Actor
 
 
+class ContentBodyPatch(BaseModel):
+    """Q56-a/Q122：客户在 revising 态人工编辑正文后提交（重过复检回 review）。"""
+
+    body: str = Field(min_length=1)
+    actor: Actor
+
+
+class ContentProductListItem(BaseModel):
+    """客户内容列表项（Q122）：与详情同构但不带 body（正文仅在详情返回）。"""
+
+    content_id: str
+    tenant_id: str
+    product_space_id: str
+    final_id: str
+    goal: str
+    platform: str
+    slot_id: str | None
+    country: str | None
+    kind: str
+    language: str
+    review_hits: dict
+    status: str
+    reject_reason: str | None
+    regenerate_count: int
+    created_at: datetime | None
+    quality_score: float | None = None
+    quality_issues: list | None = None
+    quality_threshold: float | None = None
+    quality_advisory: bool | None = None
+
+
 class ContentProductView(BaseModel):
     content_id: str
     tenant_id: str

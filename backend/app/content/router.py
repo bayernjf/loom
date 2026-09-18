@@ -7,9 +7,11 @@ from app.content import generation, service
 from app.content import languages as l10n
 from app.content.models import ContentLanguage
 from app.content.schemas import (
+    ContentBodyPatch,
     ContentDecisionRequest,
     ContentGenerateRequest,
     ContentLanguageView,
+    ContentProductListItem,
     ContentProductView,
     LanguageArchiveRequest,
     LanguageUpsertRequest,
@@ -255,3 +257,57 @@ async def set_target_languages(
         "product_space_id": product_space_id,
         "target_languages": ps.target_languages,
     }
+
+
+# ---- Q122：客户内容页只读列表/详情 + Q56-a 客户人工编辑 ----
+# 注意：含 {content_id} 路径参数的 GET 必须注册在 /api/content/eligible-languages
+# 等静态路径之后（FastAPI 按注册顺序匹配），故本段置于文件末尾。
+
+
+@router.get("/api/content", response_model=list[ContentProductListItem])
+async def list_content(
+    tenant_id: str = Query(min_length=1),
+    session: AsyncSession = Depends(get_session),
+) -> list[ContentProductListItem]:
+    # Q122：客户内容页租户只读列表（口径同 Q101 compliance/overview：
+    # 无 query actor 闸，未知租户 200 返回空列表，不写审计）。
+    rows = await service.list_content(session, tenant_id)
+    return [service.content_list_item(row) for row in rows]
+
+
+@router.get("/api/content/{content_id}", response_model=ContentProductView)
+async def get_content(
+    content_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> ContentProductView:
+    try:
+        content = await service.get_content(session, content_id)
+    except service.ContentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return service.content_view(content)
+
+
+@router.patch(
+    "/api/content/{content_id}/body", response_model=ContentProductView
+)
+async def edit_content_body(
+    content_id: str,
+    body: ContentBodyPatch,
+    session: AsyncSession = Depends(get_session),
+) -> ContentProductView:
+    """Q56-a/Q122：客户在 revising 态人工编辑正文，提交后重过复检回 review。"""
+    try:
+        content = await service.edit_content_body(
+            session, content_id, body.body, body.actor
+        )
+    except service.ContentNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except service.ContentNotEditable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except service.ContentBodyRequired as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await session.commit()
+    return service.content_view(content)
