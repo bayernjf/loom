@@ -290,11 +290,16 @@
 | POST `/api/content/{content_id}/reject` | **客户**驳回（Q59）：**原因必填**，空/空白 422；review→rejected，reason 落 `reject_reason` 供段13 回流；不存在 404；状态不合法 409 | Q116 |
 | POST `/api/content/{content_id}/revise` | **客户**改稿：review→revising（强制重过 CONTENT-COMPLIANCE 复检：词库扫描 + 语义级检测，Q121）；重生成次数达 `content.regen_limit`（默认 3、运营可配，Q120 接通）422（detail 回带 {count}/{limit}）；不存在 404；状态不合法 409 | Q116/Q120 |
 | POST `/api/content/{content_id}/regenerate` | **operations**（越权 403）：revising→generating（`regenerate_count`+1）→review；非 revising 或达上限 422；不存在 404；模型输出非法 502 | Q116 |
+| GET `/api/content?tenant_id=` | **客户·无闸**（Q122）：租户内容成品列表，created_at DESC，**列表项不含 body**（`ContentProductListItem`）；未知租户 200 返空（口径同 Q101），缺 tenant_id 422 | Q122 |
+| GET `/api/content/{content_id}` | **客户·无闸**（Q122）：成品详情（含 body 与完整 review_hits/质量字段）；不存在 404 | Q122 |
+| PATCH `/api/content/{content_id}/body` | **客户·无闸**（Q122，Q56-a 人工编辑）：仅 revising 态可调（非 revising 409），body 空白 422、不存在 404；换正文后**重跑词库 + 语义复检与 ARTICLE-QC**，经 `manual_resubmit` 回 review；**不调 ARTICLE-GEN、不增 regenerate_count**，审计 `content.body_edited` | Q122/Q56 |
 | GET `/api/admin/content-languages` | **dictionary_admin**（query actor 闸 Q118：缺 actor_id 422、越权 403）：语言清单，`include_archived=false` 默认仅 active；返回 `[{code,name,markets,status}]` | Q119 |
 | PUT `/api/admin/content-languages` | **dictionary_admin**（body actor，越权 403）：upsert 语言 `{code(BCP-47),name,markets[] ,actor}`，markets 空数组=全市场（含 country 空）；code/name 空 422、markets 含空串 422；显式 upsert 复活已归档语言（同 content_goals） | Q119 |
 | POST `/api/admin/content-languages/{code}/archive` | **dictionary_admin**：软归档（active→archived）；不存在 404、越权 403 | Q119 |
 | GET `/api/content/eligible-languages?final_id=` | **operations**（query actor 闸，缺 422/越权 403）：生成前查可生成语言，返回 `{final_id,country,ps_target_languages,eligible[]}`；final_id 不存在 404 | Q119 |
 | PUT `/api/product-spaces/{ps_id}/target-languages` | **operations**（body actor，越权 403）：设产品侧目标语言 `{languages[],actor}`，空列表=清空（未声明/不限，返回 null）；产品空间不存在 404、语言重复 422 | Q119 |
+| GET `/api/content/languages` | **客户·无闸**（Q123）：仅返回 active 语言清单 `[{code,name,markets,status}]`（不含归档；管理面含归档清单走 dictionary_admin 的 `/api/admin/content-languages`）；**注册顺序必须先于 `GET /api/content/{content_id}`**，否则被路径参数吞掉 | Q123/Q119 |
+| PATCH `/api/intakes/{intake_id}/target-languages` | **客户·无闸**（Q123）：按 intake 维度设产品目标语言 `{languages[],actor}`，空数组=未声明（写 NULL）；产品空间未生成 404、语言码重复/未知/已归档 422；回显 `ProductSpaceView`（新增 target_languages 字段）；operations 的 PUT 代设入口与 OPERATIONS 闸原样保留 | Q123/Q58 |
 
 > 复检口径（Q59 四项）：①**词库扫描**（复用 Q48 词库 + ccr_rules 三层裁决，ban 命中 `block_required=true` 硬阻断，落 `review_hits.bans/downgrades`）；②**语义级检测**（Q121 已落，模型网关第 9 场景 ARTICLE-SEMANTIC-CHECK，落 `review_hits.semantic`，**纯 advisory** 不阻断）；③施工指令核对、④国家规则核对仍【原文未给出，待补】。状态机见 §2.12，表见 04 §3 / 10 §2.9。
 >
@@ -303,6 +308,10 @@
 > **Q120 AI 质量分补登（2026-09-18，Q57 + Q56，迁移 0029/0030，02 C1.64）**：模型网关新增**第 8 场景 `ARTICLE-QC`**（只读打分、不改写，variables `[body,language]`，输出 `{score,issues}`）；generate/regenerate 在 ARTICLE-GEN 写正文、词库复检之后、状态 COMPLETE 之前**内嵌**调用一次（新建 `app/content/quality.py`），**零新 HTTP 端点**。结果落 `content_products.quality_score`(0..1)/`quality_issues`；`ContentProductView` 另回带四字段 `quality_score/quality_issues/quality_threshold/quality_advisory`（threshold 取 `content.ai_quality_threshold` 默认 0.85；advisory 低于阈值=true、分数缺失=null）。**定位纯 advisory（Q57 降级裁决）**：分数不自动发证/驳回、不阻断 approve、不新增状态，段12 Gate 仍是客户审阅 Q59；界面「AI 评估分，仅供参考」标注随 Q122 前端，段13 回流后的相关性校准后置。QC 场景未配置/模型不可用/预算耗尽/上游错误，或输出非法（非 JSON/非对象/score 缺失越界，bool 不算数值）时 score 留空、issues 记 `{"qc_error": ...}`、成品照常进 review（失败写审计 `content.quality_unavailable`、不落 SkillRun；成功落 SkillRun source=llm_auto、wf=WF-10 与审计 `content.quality_scored`）。**Q56 止损**：重生成上限取配置 `content.regen_limit`（默认 3、运营可改），`revise_allowed(status,count,limit)` 超限只能 reject——不自动作废 final_id、不自动回池；a 清洗区人工编辑 / b 作废回池记难产原因均保留为人工动作（前端化挂账 Q122/运营页）。表见 04 §3 / 10 §2.6、§2.8。
 >
 > **Q121 语义级复检补登（2026-09-19，Q59 复检第②项，迁移 0031，02 C1.65）**：模型网关新增**第 9 场景 `ARTICLE-SEMANTIC-CHECK`**（只读检测、不改写，variables `[body,language]`，输出 `{findings:[{code,message,excerpt}]}`）；generate/regenerate 在词库扫描之后、ARTICLE-QC 之前**内嵌**调用一次（新建 `app/content/semantic.py`），**零新 HTTP 端点 / 零新列 / 零新表**，结果聚合进既有 `review_hits` 的 `semantic` 段 `{checked, findings, ?error}`。**负责人拍板纯 advisory（甲）**：语义命中不抬 `block_required`、不阻断 approve、不新增状态（词库 ban 的确定性硬阻断原样保留；与 Q57 降级、Q66 AI 不持否决权一致）。检测维度四 code（unsubstantiated_claim/absolute_guarantee/off_material_exaggeration/misleading_ambiguity）为 v0.1 工程口径，待业务方/法审校准。场景未配置/模型不可用/上游错误 → `{checked:false, findings:[], error:<类型>}`、审计 `content.semantic_unavailable`、不落 SkillRun，不阻断生成；坏 JSON/非对象/findings 非数组归一为空+错误码但仍落 SkillRun（output 带 parse_error），成功审计 `content.semantic_checked`（source=llm_auto、wf=WF-10）；findings 逐项容错（非法项跳过、message/excerpt 非字符串丢弃）。施工指令核对、国家规则核对两项仍【待补】；语义发现的界面提示随 Q122，视频载体随 video-studio。表见 04 §3 / 10 §2.9。
+
+> **Q122 客户内容页 + Q56-a 人工编辑补登（2026-09-19，零迁移，头仍 0031，02 C1.66）**：第 3 菜单「内容生产与发布」由 v2 占位转 V1 功能页，能力边界 = **只读 + 审阅 + 人工改稿**；生成 / AI 重新生成维持 operations 闸、客户页不调用（前端访问层不得出现这两个端点，check-content 守卫）。后端：六态机新增事件 `manual_resubmit`（**revising→review**，不新增状态）；新增客户三端点（上表，均无 query/body 角色闸，actor roles 恒空）——租户列表（列表项去 body）、详情、`PATCH body`；人工编辑提交后重跑词库复检 + 语义复检（Q121）+ ARTICLE-QC（Q120）回 review，不调 ARTICLE-GEN、不增 regenerate_count（每轮仍须先 revise，间接受 content.regen_limit 约束）；审计 `content.body_edited`。前端：(shell)/content/ 列表（每语言成品并列）/ 详情（正文、AI 质量卡标「仅供参考」、复检卡 bans/downgrades/语义 code 原样不翻译、checked=false 显暂不可用、驳回原因）/ review 态 DecisionIsland（block_required 时禁通过）/ revising 态 BodyEditIsland；nav content v2→v1；新增第八个 checker check-content 并接入 CI。**接缝按推荐甲拍板（交互提问时负责人未在线，沿用其「按你的来/狠狠搞完」授权，待追认）**；Q56-b（作废 final_id 回池记难产原因）继续挂账（六态机无 discarded 态、段11 FCW 无回池原文口径）。测试 523→528（+5 集成）。
+
+> **Q123 段1 客户目标语言控件补登（2026-09-19，零迁移，头仍 0031/表 55，02 C1.67）**：Q119 的 operations 代设入口（PUT /api/product-spaces/{id}/target-languages，OPERATIONS 闸）保留，另开客户侧两个无闸端点（上表）：GET active 语言清单（注册先于 {content_id}）、PATCH 按 intake 设目标语言（产品空间未生成 404，码去重且必须 active，空数组清 NULL，审计 product_space.target_languages.set 带 channel=customer_intake）；ProductSpaceView 回显 target_languages。前端在录入详情产品空间段挂多选控件（空间未生成不渲染），check-products / check-content 加守卫；operations PUT 对 roles=[] 仍 403 有回归锁定。测试 528→534（+6 集成）。
 
 
 ---
@@ -430,8 +439,9 @@
 | generating | complete | 模型返回 + 词库复检完成 + 语义级复检（Q121，advisory）+ ARTICLE-QC 质检（Q120） | review | body 落库、review_hits（含 semantic 段）落库、quality_score/issues 落库（advisory，不驱动迁移） |
 | review | approve | 客户通过 | ready_for_publish | 进发布（运营用托管账号发布 → 回填链接 Q60c） |
 | review | reject | **原因必填** | rejected | 原因数据回流段13 |
-| review | revise | `regenerate_count` < 3（Q56 上限） | revising | 改稿须强制重过复检（Q59） |
-| 任意 | 达重生成上限 | `regenerate_count` ≥ 3 | 仅可 reject | 转人工/作废回池（Q56） |
+| review | revise | `regenerate_count` < `content.regen_limit`（默认 3、运营可配，Q120 接通） | revising | 改稿须强制重过复检（Q59） |
+| revising | **manual_resubmit** | **Q122/Q56-a 客户人工改正文后提交**（PATCH body；不调 ARTICLE-GEN、不增 regenerate_count） | review | 重跑词库 + 语义复检 + ARTICLE-QC；审计 content.body_edited |
+| 任意 | 达重生成上限 | `regenerate_count` ≥ `content.regen_limit`（默认 3） | 仅可 reject | 转人工/作废回池（Q56；Q56-b 回池记难产原因仍挂账，见 C1.66） |
 
 > 枚举码：`draft/generating/review/ready_for_publish/rejected/revising` 原样不翻译进消息表。
 
