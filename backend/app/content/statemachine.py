@@ -60,6 +60,12 @@ def target_status(status: str, event: str) -> str:
     return _TARGET[event]
 
 
-def revise_allowed(status: str, regenerate_count: int) -> bool:
-    """Q56：review 态且重生成次数未达上限才可改稿（超限只能 reject 转人工/作废回池）。"""
-    return status == CONTENT_REVIEW and regenerate_count < MAX_REGENERATE
+def revise_allowed(
+    status: str, regenerate_count: int, limit: int = MAX_REGENERATE
+) -> bool:
+    """Q56：review 态且重生成次数未达上限才可改稿（超限只能 reject 转人工/作废回池）。
+
+    limit 运行值取配置中心 content.regen_limit（Q56 运营可改，默认 3）；
+    MAX_REGENERATE 常量为种子默认/兜底，调用方（service）传入 knob 值。
+    """
+    return status == CONTENT_REVIEW and regenerate_count < limit

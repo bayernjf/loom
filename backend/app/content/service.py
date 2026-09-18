@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.content import generation
 from app.content import languages as l10n
+from app.content import quality as qc
 from app.content import statemachine as sm
 from app.content.models import (
     CONTENT_DRAFT,
@@ -17,6 +18,7 @@ from app.content.models import (
 )
 from app.content.schemas import ContentGenerateRequest, ContentProductView
 from app.core.compliance_wordlist import service as wl_service
+from app.core.config_center.knobs import knob
 from app.core.rbac import OPERATIONS, require_any_role
 from app.decision.compliance_center import ccr_rules
 from app.final.final_whitelist.models import FinalContentWhitelist
@@ -73,6 +75,12 @@ def content_view(content: ContentProduct) -> ContentProductView:
         reject_reason=content.reject_reason,
         regenerate_count=content.regenerate_count,
         created_at=content.created_at,
+        quality_score=content.quality_score,
+        quality_issues=content.quality_issues,
+        quality_threshold=float(knob(qc.QUALITY_THRESHOLD_KEY)),
+        quality_advisory=qc.quality_advisory_for(
+            content.quality_score, float(knob(qc.QUALITY_THRESHOLD_KEY))
+        ),
     )
 
 
@@ -110,6 +118,8 @@ async def _run_generation(
     """generating 态：调 ARTICLE-GEN 写 body → 复检 → review。"""
     await generation.invoke_article_gen(session, content, actor)
     content.review_hits = await run_content_review(session, content)
+    # Q120/Q57：AI 质量分（ARTICLE-QC）辅助参考，advisory 不阻断发证/驳回。
+    await qc.invoke_article_qc(session, content)
     content.status = sm.target_status(content.status, sm.EVENT_COMPLETE)
     content.updated_at = _now()
     return content
@@ -195,9 +205,10 @@ async def reject_content(
 async def revise_content(session: AsyncSession, content_id: str, actor) -> ContentProduct:
     """客户改稿（Q59/Q56）：review → revising；达重生成上限则拒绝。"""
     content = await _get_content(session, content_id)
-    if not sm.revise_allowed(content.status, content.regenerate_count):
+    limit = int(knob(qc.REGEN_LIMIT_KEY))
+    if not sm.revise_allowed(content.status, content.regenerate_count, limit):
         raise ContentReviseCap(
-            f"regenerate cap {content.regenerate_count}/{sm.MAX_REGENERATE} reached; "
+            f"regenerate cap {content.regenerate_count}/{limit} reached; "
             "reject or escalate to manual"
         )
     content.status = sm.target_status(content.status, sm.EVENT_REVISE)

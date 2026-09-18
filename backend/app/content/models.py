@@ -8,7 +8,7 @@ final_id 为只读软关联（PT-ART-GEN-V1.5：只读消费、不重决策上�
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, JSONType
@@ -60,6 +60,10 @@ class ContentProduct(Base):
     language: Mapped[str] = mapped_column(String(16), nullable=False, default=DEFAULT_LANGUAGE)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_hits: Mapped[dict] = mapped_column(JSONType, nullable=False, default=dict)
+    # Q120/Q57：AI 质量分（模型网关第 8 场景 ARTICLE-QC）。定位仅为辅助参考，不阻断
+    # 发证（Q57）；score 0..1，issues 为问题明细；QC 不可用时 score 留空、issues 记 qc_error。
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    quality_issues: Mapped[list | None] = mapped_column(JSONType, nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=CONTENT_DRAFT, index=True
     )

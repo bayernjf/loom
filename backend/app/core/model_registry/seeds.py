@@ -196,3 +196,22 @@ $materials
 """
 
 ARTICLE_GEN_PROMPT_VARIABLES = ["materials", "language"]
+
+SCENE_ARTICLE_QC = "ARTICLE-QC"
+ARTICLE_QC_PROMPT_VERSION = "v0.1"
+ARTICLE_QC_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:ARTICLE-QC:v0.1"))
+
+ARTICLE_QC_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段12 的 ARTICLE-QC Skill：对一篇已生成正文做 AI 质量评估，只打分、不改写正文。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【待评估正文】
+$body
+
+目标语言：$language
+
+硬性规则：
+1. 只依据上面正文评分，不臆造原料、不改写正文。
+2. 只输出 {"score": 0..1 的数值, "issues": [{"code": "...", "message": "..."}]}；无问题时 issues 为空数组。
+3. score 为综合质量分（可读性/相关性/完整度）；该分仅作人工审阅的辅助参考（Q57 降级口径），不是自动发证或自动驳回的硬门槛。
+"""
+
+ARTICLE_QC_PROMPT_VARIABLES = ["body", "language"]
