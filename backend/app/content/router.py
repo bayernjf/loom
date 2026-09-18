@@ -275,6 +275,21 @@ async def list_content(
     return [service.content_list_item(row) for row in rows]
 
 
+@router.get(
+    "/api/content/languages", response_model=list[ContentLanguageView]
+)
+async def list_active_languages(
+    session: AsyncSession = Depends(get_session),
+) -> list[ContentLanguageView]:
+    """B3/Q122：客户录入页目标语言控件的只读清单（仅 active，无闸；
+    管理面含归档清单走 /api/admin/content-languages + dictionary_admin 闸）。
+
+    必须注册在 ``/api/content/{content_id}`` 之前，否则被路径参数吞掉。
+    """
+    rows = await l10n.list_languages(session)
+    return [_language_view(row) for row in rows]
+
+
 @router.get("/api/content/{content_id}", response_model=ContentProductView)
 async def get_content(
     content_id: str,

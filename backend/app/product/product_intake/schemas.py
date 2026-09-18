@@ -17,6 +17,13 @@ class IntakeProfilePatch(BaseModel):
     actor: Actor
 
 
+class IntakeTargetLanguagesPatch(BaseModel):
+    """B3/Q122：客户在段1 录入页设置产品目标语言（Q58 交集的产品侧，客户口径无运营闸）。"""
+
+    languages: list[str] = Field(default_factory=list)
+    actor: Actor
+
+
 class IntakeTransition(BaseModel):
     event: str
     actor: Actor
@@ -62,3 +69,5 @@ class ProductSpaceView(BaseModel):
     intake_id: str
     lifecycle: str
     profile_snapshot: dict[str, str]
+    # Q119/B3：产品目标语言（NULL/空 = 未声明、不收窄语言交集）。
+    target_languages: list[str] | None = None
