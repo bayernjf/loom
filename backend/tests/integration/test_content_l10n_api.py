@@ -16,7 +16,12 @@ from app.core.model_registry.seeds import (
     ARTICLE_GEN_PROMPT_TEMPLATE,
     ARTICLE_GEN_PROMPT_VARIABLES,
     ARTICLE_GEN_PROMPT_VERSION,
+    ARTICLE_QC_PROMPT_ID,
+    ARTICLE_QC_PROMPT_TEMPLATE,
+    ARTICLE_QC_PROMPT_VARIABLES,
+    ARTICLE_QC_PROMPT_VERSION,
     SCENE_ARTICLE_GEN,
+    SCENE_ARTICLE_QC,
     SYNTHETIC_MODEL_ID,
 )
 from app.final.final_whitelist.models import FinalContentWhitelist
@@ -67,6 +72,13 @@ async def client() -> AsyncIterator[AsyncClient]:
                 version_id=ARTICLE_GEN_PROMPT_ID, skill_id=SCENE_ARTICLE_GEN,
                 version=ARTICLE_GEN_PROMPT_VERSION, template=ARTICLE_GEN_PROMPT_TEMPLATE,
                 variables={"vars": ARTICLE_GEN_PROMPT_VARIABLES},
+            ),
+            AISceneRoute(scene=SCENE_ARTICLE_QC, model_id=SYNTHETIC_MODEL_ID),
+            SkillPrompt(skill_id=SCENE_ARTICLE_QC, current_version=ARTICLE_QC_PROMPT_VERSION),
+            SkillPromptVersion(
+                version_id=ARTICLE_QC_PROMPT_ID, skill_id=SCENE_ARTICLE_QC,
+                version=ARTICLE_QC_PROMPT_VERSION, template=ARTICLE_QC_PROMPT_TEMPLATE,
+                variables={"vars": ARTICLE_QC_PROMPT_VARIABLES},
             ),
             # Q119：zh-CN markets=[] 覆盖全市场（迁移种子口径）。
             ContentLanguage(code="zh-CN", name="简体中文", markets=[], status="active"),
