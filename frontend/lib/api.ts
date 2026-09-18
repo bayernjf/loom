@@ -102,6 +102,8 @@ export interface ProductSpaceView {
   intake_id: string;
   lifecycle: string;
   profile_snapshot: Record<string, string>;
+  // B3/Q122：产品目标语言（null = 未声明、不收窄语言交集）。
+  target_languages: string[] | null;
 }
 
 export async function getAllowedEvents(intakeId: string): Promise<AllowedEvents> {
@@ -144,6 +146,23 @@ export async function getProductSpace(intakeId: string): Promise<ProductSpaceVie
     if (err instanceof ApiError && err.status === 404) return null;
     throw err;
   }
+}
+
+// B3/Q122：客户在段1 录入页设置产品目标语言（客户口径，无运营闸；空数组 = 未声明）。
+export async function setIntakeTargetLanguages(
+  intakeId: string,
+  languages: string[],
+): Promise<ProductSpaceView> {
+  return request<ProductSpaceView>(
+    `/api/intakes/${encodeURIComponent(intakeId)}/target-languages`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        languages,
+        actor: { id: CURRENT_ACTOR_ID, roles: [] },
+      }),
+    },
+  );
 }
 
 export function intakeDisplayName(intake: IntakeView): string {
@@ -268,6 +287,18 @@ export interface ContentProductListItem {
 
 export interface ContentProductView extends ContentProductListItem {
   body: string | null;
+}
+
+// B3/Q122：目标语言控件的只读 active 语言清单（无闸；归档语言不返）。
+export interface ContentLanguageView {
+  code: string;
+  name: string;
+  markets: string[];
+  status: string;
+}
+
+export async function getContentLanguages(): Promise<ContentLanguageView[]> {
+  return request<ContentLanguageView[]>("/api/content/languages");
 }
 
 export async function listContent(tenantId: string): Promise<ContentProductListItem[]> {

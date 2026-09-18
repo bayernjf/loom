@@ -67,6 +67,12 @@
       "fieldId": "产品空间 ID",
       "fieldLifecycle": "生命周期状态",
       "snapshot": "资料快照"
+    },
+    "targetLanguages": {
+      "title": "目标语言",
+      "note": "勾选本产品需要生成的语言；不勾选表示不限制，将按发布位市场支持的语言生成。",
+      "save": "保存目标语言",
+      "saved": "目标语言已保存。"
     }
   },
   "intake": {
