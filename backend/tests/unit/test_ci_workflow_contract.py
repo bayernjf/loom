@@ -38,6 +38,7 @@ def test_workflow_wires_every_agreed_gate() -> None:
     for checker in (
         "check-tokens",
         "check-nav",
+        "check-content",  # Q122：第 8 个 checker（客户内容页）
         "check-products",
         "check-workbench",
         "check-compliance",
