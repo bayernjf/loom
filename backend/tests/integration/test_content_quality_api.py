@@ -39,8 +39,13 @@ from app.core.model_registry.seeds import (
     ARTICLE_QC_PROMPT_TEMPLATE,
     ARTICLE_QC_PROMPT_VARIABLES,
     ARTICLE_QC_PROMPT_VERSION,
+    ARTICLE_SEMANTIC_PROMPT_ID,
+    ARTICLE_SEMANTIC_PROMPT_TEMPLATE,
+    ARTICLE_SEMANTIC_PROMPT_VARIABLES,
+    ARTICLE_SEMANTIC_PROMPT_VERSION,
     SCENE_ARTICLE_GEN,
     SCENE_ARTICLE_QC,
+    SCENE_ARTICLE_SEMANTIC,
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillRun
@@ -115,6 +120,13 @@ async def client(session_factory):
                 version_id=ARTICLE_QC_PROMPT_ID, skill_id=SCENE_ARTICLE_QC,
                 version=ARTICLE_QC_PROMPT_VERSION, template=ARTICLE_QC_PROMPT_TEMPLATE,
                 variables={"vars": ARTICLE_QC_PROMPT_VARIABLES},
+            ),
+            AISceneRoute(scene=SCENE_ARTICLE_SEMANTIC, model_id=SYNTHETIC_MODEL_ID),
+            SkillPrompt(skill_id=SCENE_ARTICLE_SEMANTIC, current_version=ARTICLE_SEMANTIC_PROMPT_VERSION),
+            SkillPromptVersion(
+                version_id=ARTICLE_SEMANTIC_PROMPT_ID, skill_id=SCENE_ARTICLE_SEMANTIC,
+                version=ARTICLE_SEMANTIC_PROMPT_VERSION, template=ARTICLE_SEMANTIC_PROMPT_TEMPLATE,
+                variables={"vars": ARTICLE_SEMANTIC_PROMPT_VARIABLES},
             ),
             ContentLanguage(code="zh-CN", name="简体中文", markets=[], status="active"),
             _fcw(),

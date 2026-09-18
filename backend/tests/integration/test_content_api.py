@@ -40,8 +40,13 @@ from app.core.model_registry.seeds import (
     ARTICLE_QC_PROMPT_TEMPLATE,
     ARTICLE_QC_PROMPT_VARIABLES,
     ARTICLE_QC_PROMPT_VERSION,
+    ARTICLE_SEMANTIC_PROMPT_ID,
+    ARTICLE_SEMANTIC_PROMPT_TEMPLATE,
+    ARTICLE_SEMANTIC_PROMPT_VARIABLES,
+    ARTICLE_SEMANTIC_PROMPT_VERSION,
     SCENE_ARTICLE_GEN,
     SCENE_ARTICLE_QC,
+    SCENE_ARTICLE_SEMANTIC,
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillRun
@@ -110,6 +115,13 @@ async def client(session_factory):
                 version=ARTICLE_QC_PROMPT_VERSION, template=ARTICLE_QC_PROMPT_TEMPLATE,
                 variables={"vars": ARTICLE_QC_PROMPT_VARIABLES},
             ),
+            AISceneRoute(scene=SCENE_ARTICLE_SEMANTIC, model_id=SYNTHETIC_MODEL_ID),
+            SkillPrompt(skill_id=SCENE_ARTICLE_SEMANTIC, current_version=ARTICLE_SEMANTIC_PROMPT_VERSION),
+            SkillPromptVersion(
+                version_id=ARTICLE_SEMANTIC_PROMPT_ID, skill_id=SCENE_ARTICLE_SEMANTIC,
+                version=ARTICLE_SEMANTIC_PROMPT_VERSION, template=ARTICLE_SEMANTIC_PROMPT_TEMPLATE,
+                variables={"vars": ARTICLE_SEMANTIC_PROMPT_VARIABLES},
+            ),
             ContentLanguage(
                 code="zh-CN", name="简体中文", markets=[], status="active"
             ),
@@ -137,11 +149,15 @@ async def test_generate_happy_path(client, session_factory):
         assert content.status == CONTENT_REVIEW
         assert content.tenant_id == "t1" and content.product_space_id == "ps-1"
         runs = {r.skill_id: r for r in (await session.scalars(select(SkillRun))).all()}
-        # Q120：一次生成 = ARTICLE-GEN 写正文 + ARTICLE-QC 质量分，各一条 SkillRun。
-        assert set(runs) == {SCENE_ARTICLE_GEN, SCENE_ARTICLE_QC}
+        # 一次生成 = ARTICLE-GEN 写正文 + ARTICLE-QC 质量分（Q120）
+        # + ARTICLE-SEMANTIC-CHECK 语义复检（Q121），各一条 SkillRun。
+        assert set(runs) == {
+            SCENE_ARTICLE_GEN, SCENE_ARTICLE_QC, SCENE_ARTICLE_SEMANTIC,
+        }
         assert runs[SCENE_ARTICLE_GEN].model_id == SYNTHETIC_MODEL_ID
         assert runs[SCENE_ARTICLE_GEN].input_cost is not None
         assert runs[SCENE_ARTICLE_QC].output_payload["score"] == 0.92
+        assert runs[SCENE_ARTICLE_SEMANTIC].output_payload["findings"] == []
 
 
 async def test_generate_rbac_and_notfound(client):
