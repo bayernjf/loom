@@ -6,7 +6,7 @@
 
 Loom：私域内容生产白名单平台（SaaS 后台）。核心是一条 **13 段链（CHAIN_13）** 内容生产链——产品录入 → 冷启动建模 → 字段池规划 → 字段下原子 → PWC 条件包 → PWS 冻结 → 平台适配 → PCP → 策略/结构/表达三包 → 合规清洗 → `final_id` 组装 → 内容生成 → 反馈回流。AI 只产候选、人工 Gate 裁决、`final_id` 唯一出口（E1.1 publishFCW）、反馈回流闭环反哺知识。
 
-**当前阶段**：设计/文档已定稿；代码已进入实现阶段——V1 主链 段1→6→10→11 闭合，V1 任务包 M0–M12 各切片、V2 P4 段12 首片（Q116）、Q118 一致性收口（4 个漏网 GET 补闸 / publish_slots.gate V1 人工直编口径 / 迁移 0027 两 FK / CI 七 checker）与 Q119 段12 多语言 Q58（content_languages 语言清单配置化 / 发布位市场∩产品目标语言交集 / 每语言独立成品唯一约束，迁移 0028）、Q120 段12 AI 质量分 Q57 + 重生成上限 Q56（模型网关第 8 场景 ARTICLE-QC 内嵌生成、纯 advisory 不阻断发证、阈值 content.ai_quality_threshold 与上限 content.regen_limit 配置化，迁移 0029/0030）已落地；迁移头 0030、后端 511 测试、eval 101/101、前端 7 个 checker（CI 七 checker 全接线；Q120 纯后端前端零变化）。当前基线、待办与逐片记录一律以 [handoff.md](handoff.md)「当前状态/待办」与 `docs/02` C1 日志为准，本文件不复述数字。
+**当前阶段**：设计/文档已定稿；代码已进入实现阶段——V1 主链 段1→6→10→11 闭合，V1 任务包 M0–M12 各切片、V2 P4 段12 首片（Q116）、Q118 一致性收口（4 个漏网 GET 补闸 / publish_slots.gate V1 人工直编口径 / 迁移 0027 两 FK / CI 七 checker）与 Q119 段12 多语言 Q58（content_languages 语言清单配置化 / 发布位市场∩产品目标语言交集 / 每语言独立成品唯一约束，迁移 0028）、Q120 段12 AI 质量分 Q57 + 重生成上限 Q56（模型网关第 8 场景 ARTICLE-QC 内嵌生成、纯 advisory 不阻断发证、阈值 content.ai_quality_threshold 与上限 content.regen_limit 配置化，迁移 0029/0030）、Q121 复检第②项语义级检测（模型网关第 9 场景 ARTICLE-SEMANTIC-CHECK 内嵌、纯 advisory 不抬 block_required/不阻断 approve、落 review_hits.semantic，迁移 0031 纯种子）已落地；迁移头 0031、后端 523 测试、eval 101/101、前端 7 个 checker（CI 七 checker 全接线；Q120/Q121 纯后端前端零变化）。当前基线、待办与逐片记录一律以 [handoff.md](handoff.md)「当前状态/待办」与 `docs/02` C1 日志为准，本文件不复述数字。
 
 ## 文档体系与治理规则（必须先读）
 
