@@ -217,6 +217,111 @@ export async function getCurrentTenant(tenantId: string): Promise<CustomerTenant
   return request<CustomerTenantView>(`/api/tenants/${encodeURIComponent(tenantId)}`);
 }
 
+// Q122：客户「内容生产与发布」页（段12 成品只读 + 客户审阅 Q59 + Q56-a 人工编辑）。
+// 生成 / 重生成仍为 operations 端点（Q116 定稿），客户页不调用；列表项不带 body。
+export interface ContentSemanticFinding {
+  code: string;
+  message?: string | null;
+  excerpt?: string | null;
+}
+
+export interface ContentSemanticResult {
+  checked: boolean;
+  findings: ContentSemanticFinding[];
+  error?: string | null;
+}
+
+export interface ContentReviewHits {
+  bans: CcrBanHit[];
+  downgrades: CcrDowngradeHit[];
+  block_required: boolean;
+  semantic?: ContentSemanticResult;
+}
+
+export interface ContentQualityIssue {
+  code?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface ContentProductListItem {
+  content_id: string;
+  tenant_id: string;
+  product_space_id: string;
+  final_id: string;
+  goal: string;
+  platform: string;
+  slot_id: string | null;
+  country: string | null;
+  kind: string;
+  language: string;
+  review_hits: ContentReviewHits;
+  status: string;
+  reject_reason: string | null;
+  regenerate_count: number;
+  created_at: string | null;
+  quality_score: number | null;
+  quality_issues: ContentQualityIssue[] | null;
+  quality_threshold: number | null;
+  quality_advisory: boolean | null;
+}
+
+export interface ContentProductView extends ContentProductListItem {
+  body: string | null;
+}
+
+export async function listContent(tenantId: string): Promise<ContentProductListItem[]> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<ContentProductListItem[]>(`/api/content?${params}`);
+}
+
+export async function getContent(contentId: string): Promise<ContentProductView> {
+  return request<ContentProductView>(
+    `/api/content/${encodeURIComponent(contentId)}`,
+  );
+}
+
+function contentPost(
+  path: string,
+  payload: Record<string, unknown>,
+): Promise<ContentProductView> {
+  return request<ContentProductView>(path, {
+    method: "POST",
+    body: JSON.stringify({
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+      ...payload,
+    }),
+  });
+}
+
+export function approveContent(contentId: string): Promise<ContentProductView> {
+  return contentPost(`/api/content/${encodeURIComponent(contentId)}/approve`, {});
+}
+
+export function rejectContent(
+  contentId: string,
+  reason: string,
+): Promise<ContentProductView> {
+  return contentPost(`/api/content/${encodeURIComponent(contentId)}/reject`, { reason });
+}
+
+export function reviseContent(contentId: string): Promise<ContentProductView> {
+  return contentPost(`/api/content/${encodeURIComponent(contentId)}/revise`, {});
+}
+
+export async function editContentBody(
+  contentId: string,
+  body: string,
+): Promise<ContentProductView> {
+  return request<ContentProductView>(
+    `/api/content/${encodeURIComponent(contentId)}/body`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ body, actor: { id: CURRENT_ACTOR_ID, roles: [] } }),
+    },
+  );
+}
+
 // Q102：管理端（Q92 驾驶舱）管理员身份。V1 actor 自报（同写端点口径），
 // 真认证随 V2 改会话派生；不进浏览器包，shell 客户侧不持有该身份。
 export const CURRENT_ADMIN_ACTOR_ID = process.env.LOOM_ADMIN_ACTOR_ID ?? "";
