@@ -57,6 +57,7 @@
 | Q115 收口 | 2026-09-17 | 基准 HTML 确认永久丢失：`line NNNN` 溯源降级为历史痕迹、12 号名单定稿、触发方永久【待补】、G2 fid 改判工程定稿；本库自此完全自洽，不再挂"待找回后核对" |
 | Q117 审计回填 | 2026-09-17 | 文档⇄代码一致性审计：实测基线（472 passed / head 0026 / 7 checker / 86 token）回填至 handoff·08·README·AGENTS 与 04/05/10/11/13，补登迁移 0021–0026 与段12 契约；4 项实现差异只挂账（handoff 待办 6），无业务口径变化 |
 | Q118 收口 | 2026-09-18 | Q117 挂账 4 项均按推荐（甲）拍板落地：4 个漏网管理面 GET 补 query actor 闸、publish_slots.gate 回填 V1 人工直编口径、product_spaces 两 FK（迁移 0027）、CI 六→七 checker；另修 Alembic 版本表列长；基线 483 passed / head 0027 / CI 七 checker / 86 token，待办 6 销账 |
+| Q119 段12 多语言 | 2026-09-18 | V2 P4 段12 Q58 落地（接缝按甲拍板，02 C1.63）：content_languages 语言清单配置化（dictionary_admin CRUD，种子仅 zh-CN 全市场）、ProductSpace.target_languages、发布位市场∩产品目标语言交集纯函数、content_products 唯一约束 (final_id,language,kind) 每语言独立成品；5 端点；迁移 0028（PG16 往返实测）；基线 494 passed / head 0028 / eval 101 / token 86，前端无变化 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---

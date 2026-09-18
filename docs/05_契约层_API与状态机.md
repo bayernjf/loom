@@ -285,13 +285,20 @@
 
 | 方法与路径 | 契约 | 来源 |
 |---|---|---|
-| POST `/api/content/generate` | **operations**（越权 403）：body=`{final_id, kind?=article, language?=zh-CN, actor}`；按 final_id 只读消费 FCW（PT-ART-GEN-V1.5）并从 FCW 取 tenant/product_space/goal/platform/slot/country；201 返回 `ContentProductView`；final_id 不存在 404；kind=video 或未知 422（P4 仅 article）；模型输出非法 502；状态闸（非 generating）409 | Q116 |
+| POST `/api/content/generate` | **operations**（越权 403）：body=`{final_id, kind?=article, language?=zh-CN, actor}`；按 final_id 只读消费 FCW（PT-ART-GEN-V1.5）并从 FCW 取 tenant/product_space/goal/platform/slot/country；201 返回 `ContentProductView`；final_id 不存在 404；kind=video 或未知 422（P4 仅 article）；**Q119：language 不在「发布位市场 ∩ 产品目标语言」交集 → 422（detail 回带 eligible）、同 final_id+language+kind 成品已存在 → 409**；模型输出非法 502；状态闸（非 generating）409 | Q116/Q119 |
 | POST `/api/content/{content_id}/approve` | **客户**通过（Q59）：review→ready_for_publish；不存在 404；状态不合法 409 | Q116 |
 | POST `/api/content/{content_id}/reject` | **客户**驳回（Q59）：**原因必填**，空/空白 422；review→rejected，reason 落 `reject_reason` 供段13 回流；不存在 404；状态不合法 409 | Q116 |
 | POST `/api/content/{content_id}/revise` | **客户**改稿：review→revising（强制重过 CONTENT-COMPLIANCE 复检，V1 仅词库扫描）；重生成次数达上限 422；不存在 404；状态不合法 409 | Q116 |
 | POST `/api/content/{content_id}/regenerate` | **operations**（越权 403）：revising→generating（`regenerate_count`+1）→review；非 revising 或达上限 422；不存在 404；模型输出非法 502 | Q116 |
+| GET `/api/admin/content-languages` | **dictionary_admin**（query actor 闸 Q118：缺 actor_id 422、越权 403）：语言清单，`include_archived=false` 默认仅 active；返回 `[{code,name,markets,status}]` | Q119 |
+| PUT `/api/admin/content-languages` | **dictionary_admin**（body actor，越权 403）：upsert 语言 `{code(BCP-47),name,markets[] ,actor}`，markets 空数组=全市场（含 country 空）；code/name 空 422、markets 含空串 422；显式 upsert 复活已归档语言（同 content_goals） | Q119 |
+| POST `/api/admin/content-languages/{code}/archive` | **dictionary_admin**：软归档（active→archived）；不存在 404、越权 403 | Q119 |
+| GET `/api/content/eligible-languages?final_id=` | **operations**（query actor 闸，缺 422/越权 403）：生成前查可生成语言，返回 `{final_id,country,ps_target_languages,eligible[]}`；final_id 不存在 404 | Q119 |
+| PUT `/api/product-spaces/{ps_id}/target-languages` | **operations**（body actor，越权 403）：设产品侧目标语言 `{languages[],actor}`，空列表=清空（未声明/不限，返回 null）；产品空间不存在 404、语言重复 422 | Q119 |
 
 > 复检口径：V1 只做**词库扫描**（复用 Q48 词库 + ccr_rules 三层裁决，命中落 `review_hits`）；语义级检测/施工指令核对/国家规则核对 3 项【原文未给出，待补】。状态机见 §2.12，表见 04 §3 / 10 §2.9。
+>
+> **Q119 多语言补登（2026-09-18，Q58，迁移 0028，02 C1.63）**：语言 = 发布位目标市场（`fcw.country`）∩ 产品录入目标语言（`product_spaces.target_languages`）；语言清单 `content_languages` 配置化（dictionary_admin），`markets=[]` 覆盖全市场（含 country=NULL），受限语言不覆盖 country=NULL。每个语言版为独立成品（`content_products` 唯一约束 `(final_id,language,kind)`），复检与客户审按 content_id 天然独立（Q59 流程不按语言分叉）；ARTICLE-GEN 模板新增 `$language` 变量（硬性规则 4：须用目标语言撰写），SkillRun.input_payload 记 language。表见 04 §3 / 10 §2.9。
 
 
 ---
