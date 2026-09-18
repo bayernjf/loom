@@ -230,7 +230,7 @@ z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-
 按 §2.3/§3.6 落地前端 i18n + tokens 脚手架（feat 946a774 / test 8b614b6，Q96 首个代码切片）：
 
 - **文件落位**：`i18n/routing.ts`（仅注册 zh-CN）、`i18n/request.ts`（hasLocale 兜底 defaultLocale + 动态 import 消息 JSON）、`middleware.ts`（matcher 排除 api/_next/_vercel/带点文件）、`messages/zh-CN.json`（目前仅 common/home/error 三命名空间，M12 页面随片扩 §2.3 步骤 3 所列域）、`app/[locale]/{layout,page,page.module.css}`；旧根 `app/layout.tsx`、`app/page.tsx` 已删，页面只存于 `[locale]` 段；`next.config.mjs` 接 createNextIntlPlugin("./i18n/request.ts")。
-- **Token 落地偏差一处**：Semantic 层在 §3.6 清单外新增 `--color-brand-bg: var(--color-brand-1)`（浅蓝品牌浅底，badge 示范消费）；理由同 §3.1 三层纪律——组件不得直引 Primitive，brand-1 需要一个语义出口。tokens.css 与 tokens.ts 两侧同步，共 85 个变量。
+- **Token 落地偏差一处**：Semantic 层在 §3.6 清单外新增 `--color-brand-bg: var(--color-brand-1)`（浅蓝品牌浅底，badge 示范消费）；理由同 §3.1 三层纪律——组件不得直引 Primitive，brand-1 需要一个语义出口。tokens.css 与 tokens.ts 两侧同步，Q96 落地时共 85 个变量（Q97 新增 `--color-bg-hover` 后为 86 个；当前总数 86，见 docs/15 Q97 补登）。
 - **验收记录**：`npm run typecheck` 通过；`npm run build` 通过（`/zh-CN` SSG 预渲染）；生产服务器实测 `GET /` → **307** Location `/zh-CN`、`GET /zh-CN` → 200（本文 §2.1/§2.3 原写 308 已更正）；chrome-devtools MCP 挂载本机 9222 Chrome 可视验收：文案全部来自消息表、`<html lang="zh-CN">`、badge 计算背景 rgb(230,244,255)=#e6f4ff（经 `--color-brand-bg` 解析）；控制台仅 favicon.ico 404（裸脚手架无图标，matcher 对带点文件放行，非本切片缺陷）。
 - **校验脚本**：`scripts/check-tokens.mjs` 零依赖解析两侧（多行值做空白归一化），键集合与值任一不一致即 exit 1；开发期曾以缺 4 个多行元组验证过失败路径。
 
