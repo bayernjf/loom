@@ -1,6 +1,6 @@
 # Contributing
 
-感谢参与 Loom 的建设。Loom 是私域内容生产白名单平台（SaaS 后台）——当前处于**设计/文档阶段**，本仓库的核心资产是 `docs/` 规格体系（13 段链内容生产链的唯一事实源）。
+感谢参与 Loom 的建设。Loom 是私域内容生产白名单平台（SaaS 后台）——设计/文档已定稿、代码已进入实现阶段；`docs/` 规格体系（13 段链内容生产链）是所有业务口径的唯一事实源。
 
 ## 前提
 
@@ -23,7 +23,7 @@
 ## 分支与 PR
 
 - 工作分支为 `dev`（跟踪 `origin/dev`）；`main` 为发布基线，合入由负责人操作。
-- 当前无代码、无 CI；代码启动后 PR 需通过 test / typecheck / build 三绿（见 docs/16 测试策略）。
+- PR 必须通过 GitHub Actions CI（两 job，详见 docs/17 CI/CD）：后端 `ruff check` + `pytest` + eval runner（101 案），前端 `typecheck` + 七个契约 checker；`next build`/lint 非闸门。测试策略见 docs/16。
 
 ## License
 
