@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.content import generation
 from app.content import languages as l10n
 from app.content import quality as qc
+from app.content import semantic as sem
 from app.content import statemachine as sm
 from app.content.models import (
     CONTENT_DRAFT,
@@ -92,10 +93,15 @@ async def _get_content(session: AsyncSession, content_id: str) -> ContentProduct
 
 
 async def run_content_review(session: AsyncSession, content: ContentProduct) -> dict:
-    """段12 复检第 1 项：词库扫描（复用 Q48 词库 + ccr_rules 三层裁决）。
+    """段12 CONTENT-COMPLIANCE 复检（Q59 四项）。
 
-    其余三项（语义级检测 / 施工指令核对 / 国家规则核对）原文未给实现口径，
-    P4 第一片占位【待补】。
+    - 第 1 项词库扫描：复用 Q48 词库 + ccr_rules 三层裁决，ban 命中
+      ``block_required=true`` 为确定性硬阻断；
+    - 第 2 项语义级检测（Q121）：模型网关 ARTICLE-SEMANTIC-CHECK 只读检测，
+      结果落 ``review_hits["semantic"]``，**纯 advisory**（不阻断 approve、
+      不改 block_required）；检测不可用记 checked=false + error，不阻断生成。
+
+    施工指令核对 / 国家规则核对两项原文未给实现口径，仍占位【待补】。
     """
     ps = await session.get(ProductSpace, content.product_space_id)
     industry = ps.industry_tag if ps is not None else None
@@ -105,11 +111,13 @@ async def run_content_review(session: AsyncSession, content: ContentProduct) -> 
         if ccr_rules.applicable_to_market(e, content.country)
     ]
     result = ccr_rules.evaluate(entries, content.body or "")
-    return {
+    review_hits = {
         "bans": result["bans"],
         "downgrades": result["downgrades"],
         "block_required": result["block_required"],
     }
+    review_hits["semantic"] = await sem.run_semantic_check(session, content)
+    return review_hits
 
 
 async def _run_generation(

@@ -215,3 +215,28 @@ $body
 """
 
 ARTICLE_QC_PROMPT_VARIABLES = ["body", "language"]
+
+SCENE_ARTICLE_SEMANTIC = "ARTICLE-SEMANTIC-CHECK"
+ARTICLE_SEMANTIC_PROMPT_VERSION = "v0.1"
+ARTICLE_SEMANTIC_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:ARTICLE-SEMANTIC-CHECK:v0.1"))
+
+ARTICLE_SEMANTIC_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段12 的 ARTICLE-SEMANTIC-CHECK Skill：CONTENT-COMPLIANCE 二次复检（Q59）四项中的第②项「语义级检测」。词库扫描已查过字面违禁词，你只负责词库字面匹配抓不到的语义层面问题；只做检测、不改写正文。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【待检测正文】
+$body
+
+目标语言：$language
+
+检测维度（v0.1 工程口径，待业务方校准）：
+1. unsubstantiated_claim：无法从产品事实推出的功效/承诺性语义（暗示疗效、保证收益等）。
+2. absolute_guarantee：绝对化/保证性语义（「100%」「必」「根治」「永久」等同义表达，即使未命中词库字面）。
+3. off_material_exaggeration：夸大、臆造白名单原料之外的事实或参数。
+4. misleading_ambiguity：误导性省略、歧义、易使受众产生错误预期的表述。
+
+硬性规则：
+1. 只依据上面正文判断，不臆造产品事实，不改写正文。
+2. 只输出 {"findings": [{"code": "上述四个 code 之一", "message": "中文问题说明", "excerpt": "正文中对应的原文片段，没有则给空字符串"}]}；未发现语义问题时 findings 为空数组。
+3. 该检测结果仅作客户审阅与运营清洗的辅助参考（Q121 定稿 advisory），不是自动发证或驳回的硬门槛；确定性词库 ban 的硬阻断不受影响。
+"""
+
+ARTICLE_SEMANTIC_PROMPT_VARIABLES = ["body", "language"]

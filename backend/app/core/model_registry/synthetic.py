@@ -252,6 +252,30 @@ def build_article_qc(variables: dict) -> dict:
 BUILDERS["ARTICLE-QC"] = build_article_qc
 
 
+def build_article_semantic_check(variables: dict) -> dict:
+    """ARTICLE-SEMANTIC-CHECK 结构替身（P4/Q121）：语义复检确定性替身，只检不改写。
+
+    供集成测试造命中分支：正文含哨兵 "[SEMANTIC_RISK]" 时给一条
+    unsubstantiated_claim 发现；其余（含空正文——空正文由质量分覆盖）给空列表。
+    语义检测为 advisory（Q121 拍板），不驱动自动发证或驳回。
+    """
+    body = str(variables.get("body") or "")
+    if "[SEMANTIC_RISK]" in body:
+        return {
+            "findings": [
+                {
+                    "code": "unsubstantiated_claim",
+                    "message": "synthetic semantic risk marker",
+                    "excerpt": "[SEMANTIC_RISK]",
+                }
+            ]
+        }
+    return {"findings": []}
+
+
+BUILDERS["ARTICLE-SEMANTIC-CHECK"] = build_article_semantic_check
+
+
 def _embed_one(text: str) -> list[float]:
     # 字袋哈希向量：ascii 词 + CJK 单字 + CJK 相邻二元组，各桶 ±1 计数后
     # L2 归一化。相同文本必相同向量；共享长前缀的文本余弦高（确定性、无随机）。
