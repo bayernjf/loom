@@ -27,4 +27,4 @@
 
 ## License
 
-By contributing, you agree your contributions are licensed under the MIT License.
+本仓库暂未指定开源许可证（待定）；许可证确定前，贡献内容不按任何开源条款对外分发。
