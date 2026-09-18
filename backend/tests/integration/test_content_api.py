@@ -18,6 +18,7 @@ from app.content.models import (
     CONTENT_REVIEW,
     CONTENT_REVISING,
     MAX_REGENERATE,
+    ContentLanguage,
     ContentProduct,
 )
 from app.core.compliance_wordlist.models import ComplianceWordlistEntry
@@ -96,6 +97,9 @@ async def client(session_factory):
                 version_id=ARTICLE_GEN_PROMPT_ID, skill_id=SCENE_ARTICLE_GEN,
                 version=ARTICLE_GEN_PROMPT_VERSION, template=ARTICLE_GEN_PROMPT_TEMPLATE,
                 variables={"vars": ARTICLE_GEN_PROMPT_VARIABLES},
+            ),
+            ContentLanguage(
+                code="zh-CN", name="简体中文", markets=[], status="active"
             ),
             _fcw(),
         ])
