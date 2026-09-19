@@ -11,6 +11,7 @@ from app.content import quality as qc
 from app.content import semantic as sem
 from app.content import statemachine as sm
 from app.content.models import (
+    CONTENT_DISCARDED,
     CONTENT_DRAFT,
     DEFAULT_LANGUAGE,
     KIND_ARTICLE,
@@ -67,6 +68,14 @@ class ContentNotEditable(Exception):
     """Q56-a/Q122：仅 revising 态允许客户人工编辑正文。"""
 
 
+class ContentDiscardReasonRequired(Exception):
+    """Q56-b/Q124：作废骨架回池必须记录难产原因。"""
+
+
+class ContentNotDiscardable(Exception):
+    """Q56-b/Q124：当前状态不允许作废（仅 review/revising/rejected 可作废）。"""
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -89,6 +98,7 @@ def content_view(content: ContentProduct) -> ContentProductView:
         reject_reason=content.reject_reason,
         regenerate_count=content.regenerate_count,
         created_at=content.created_at,
+        discard_reason=content.discard_reason,
         quality_score=content.quality_score,
         quality_issues=content.quality_issues,
         quality_threshold=float(knob(qc.QUALITY_THRESHOLD_KEY)),
@@ -193,11 +203,14 @@ async def generate_content(
             f"language {language!r} not eligible for final_id {body.final_id}; "
             f"eligible={eligible}"
         )
+    # Q124/Q56-b：已作废（discarded）行不占唯一键，允许同 final+lang+kind 重新生成
+    # （"作废骨架回池"）；与 partial unique index uq_content_final_language_kind 双保险。
     duplicate_id = await session.scalar(
         select(ContentProduct.content_id).where(
             ContentProduct.final_id == body.final_id,
             ContentProduct.language == language,
             ContentProduct.kind == body.kind,
+            ContentProduct.status != CONTENT_DISCARDED,
         )
     )
     if duplicate_id is not None:
@@ -311,6 +324,44 @@ async def edit_content_body(
             "final_id": content.final_id,
             "language": content.language,
             "kind": content.kind,
+        },
+    )
+    return content
+
+
+async def discard_content(
+    session: AsyncSession, content_id: str, reason: str, actor
+) -> ContentProduct:
+    """Q56-b/Q124 运营作废骨架回池（review|revising|rejected → discarded）。
+
+    作废为终态只读动作：记录难产原因、释放 (final_id, language, kind) 唯一占位
+    （partial unique index 排除 discarded，之后可重新生成）。客户无此动作入口。
+    """
+    require_any_role(actor, OPERATIONS)
+    content = await _get_content(session, content_id)
+    if not sm.can_transition(content.status, sm.EVENT_DISCARD):
+        raise ContentNotDiscardable(
+            f"discard only allowed from review/revising/rejected, "
+            f"current {content.status}"
+        )
+    if not reason or not reason.strip():
+        raise ContentDiscardReasonRequired("discard requires a non-empty reason")
+    content.status = sm.target_status(content.status, sm.EVENT_DISCARD)
+    content.discard_reason = reason
+    content.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=content.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="content.discarded",
+        entity_type="content_product",
+        entity_id=content.content_id,
+        detail={
+            "final_id": content.final_id,
+            "language": content.language,
+            "kind": content.kind,
+            "reason": reason,
         },
     )
     return content

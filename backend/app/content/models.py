@@ -8,7 +8,7 @@ final_id 为只读软关联（PT-ART-GEN-V1.5：只读消费、不重决策上�
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, JSONType
@@ -18,13 +18,15 @@ KIND_ARTICLE = "article"
 KIND_VIDEO = "video"
 KINDS = (KIND_ARTICLE, KIND_VIDEO)
 
-# 状态机（见 statemachine.py）：草稿→生成中→待审阅→ready_for_publish / 驳回 / 改稿。
+# 状态机（见 statemachine.py）：草稿→生成中→待审阅→ready_for_publish / 驳回 / 改稿；
+# Q124/Q56-b 增加终态 discarded（运营作废骨架回池，记难产原因）。
 CONTENT_DRAFT = "draft"
 CONTENT_GENERATING = "generating"
 CONTENT_REVIEW = "review"
 CONTENT_READY = "ready_for_publish"
 CONTENT_REJECTED = "rejected"
 CONTENT_REVISING = "revising"
+CONTENT_DISCARDED = "discarded"
 
 # Q56：重生成上限 3 次，超限转人工或作废骨架回池。
 MAX_REGENERATE = 3
@@ -41,9 +43,18 @@ class ContentProduct(Base):
 
     __tablename__ = "content_products"
     __table_args__ = (
-        # Q119/Q58：一条 final_id 每语言每载体仅一个独立成品（独立复检/独立客户审）。
-        UniqueConstraint(
-            "final_id", "language", "kind", name="uq_content_final_language_kind"
+        # Q119/Q58：一条 final_id 每语言每载体仅一个"有效"独立成品（独立复检/
+        # 独立客户审）。Q124/Q56-b：作废（discarded）行释放唯一占位、允许同键
+        # 重新生成（"作废骨架回池"），故唯一约束改为排除 discarded 的 partial
+        # unique index（PG / sqlite 双方言；迁移 0032 由普通唯一约束转换而来）。
+        Index(
+            "uq_content_final_language_kind",
+            "final_id",
+            "language",
+            "kind",
+            unique=True,
+            postgresql_where=text("status <> 'discarded'"),
+            sqlite_where=text("status <> 'discarded'"),
         ),
     )
 
@@ -68,6 +79,8 @@ class ContentProduct(Base):
         String(32), nullable=False, default=CONTENT_DRAFT, index=True
     )
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Q124/Q56-b：运营作废回池记录的难产原因（区别于客户驳回原因 reject_reason）。
+    discard_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     regenerate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

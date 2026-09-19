@@ -9,6 +9,7 @@ from app.content.models import ContentLanguage
 from app.content.schemas import (
     ContentBodyPatch,
     ContentDecisionRequest,
+    ContentDiscardRequest,
     ContentGenerateRequest,
     ContentLanguageView,
     ContentProductListItem,
@@ -161,6 +162,35 @@ async def regenerate_content(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except generation.ArticleGenOutputInvalid as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await session.commit()
+    return service.content_view(content)
+
+
+@router.post(
+    "/api/content/{content_id}/discard", response_model=ContentProductView
+)
+async def discard_content(
+    content_id: str,
+    body: ContentDiscardRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ContentProductView:
+    """Q56-b/Q124：运营作废骨架回池（operations 闸，难产原因必填）。"""
+    try:
+        content = await service.discard_content(
+            session, content_id, body.reason, body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ContentNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except service.ContentNotDiscardable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except service.ContentDiscardReasonRequired as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     await session.commit()
     return service.content_view(content)
 
