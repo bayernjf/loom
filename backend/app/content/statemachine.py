@@ -1,6 +1,7 @@
-"""段12 content_products 状态机（Q56/Q59 实现补登）。
+"""段12 content_products 状态机（Q56/Q59 实现补登；Q124 补 discarded 终态）。
 
-状态：draft → generating → review → ready_for_publish / rejected / revising
+状态：draft → generating → review → ready_for_publish / rejected / revising；
+Q124/Q56-b 增加终态 discarded（运营作废骨架回池）。
 - generate：draft|revising → generating（首次生成 / 改稿重生成）
 - complete：generating → review（生成 + 复检完成）
 - approve：review → ready_for_publish（客户通过）
@@ -8,11 +9,14 @@
 - revise：review → revising（客户改稿，强制重过四项复检）
 - manual_resubmit：revising → review（Q56-a/Q122 客户人工编辑正文后重过复检提交，
   不走 ARTICLE-GEN、不增 regenerate_count）
+- discard：review|revising|rejected → discarded（Q56-b/Q124 运营作废骨架回池，
+  必记难产原因；ready_for_publish 已进发布不可作废，generating/draft 不可作废）
 
 重生成上限（Q56）：regenerate_count ≥ 3 时 revise 拒绝，只能 reject（转人工/作废回池）。
 """
 
 from app.content.models import (
+    CONTENT_DISCARDED,
     CONTENT_DRAFT,
     CONTENT_GENERATING,
     CONTENT_READY,
@@ -28,6 +32,7 @@ EVENT_APPROVE = "approve"
 EVENT_REJECT = "reject"
 EVENT_REVISE = "revise"
 EVENT_MANUAL_RESUBMIT = "manual_resubmit"
+EVENT_DISCARD = "discard"
 
 # event → 允许的前置状态（机械口径；原文未给完整迁移表，Q59 只给五态语义）。
 _TRANSITIONS = {
@@ -37,6 +42,7 @@ _TRANSITIONS = {
     EVENT_REJECT: {CONTENT_REVIEW},
     EVENT_REVISE: {CONTENT_REVIEW},
     EVENT_MANUAL_RESUBMIT: {CONTENT_REVISING},
+    EVENT_DISCARD: {CONTENT_REVIEW, CONTENT_REVISING, CONTENT_REJECTED},
 }
 
 _TARGET = {
@@ -46,6 +52,7 @@ _TARGET = {
     EVENT_REJECT: CONTENT_REJECTED,
     EVENT_REVISE: CONTENT_REVISING,
     EVENT_MANUAL_RESUBMIT: CONTENT_REVIEW,
+    EVENT_DISCARD: CONTENT_DISCARDED,
 }
 
 

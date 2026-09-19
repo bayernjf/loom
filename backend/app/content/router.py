@@ -9,10 +9,12 @@ from app.content.models import ContentLanguage
 from app.content.schemas import (
     ContentBodyPatch,
     ContentDecisionRequest,
+    ContentDiscardRequest,
     ContentGenerateRequest,
     ContentLanguageView,
     ContentProductListItem,
     ContentProductView,
+    ContentPublishInfoRequest,
     LanguageArchiveRequest,
     LanguageUpsertRequest,
     TargetLanguagesRequest,
@@ -22,6 +24,7 @@ from app.core.db import get_session
 from app.core.rbac import (
     DICTIONARY_ADMIN,
     OPERATIONS,
+    PLATFORM_ADMIN,
     PermissionDenied,
     require_any_role,
 )
@@ -31,16 +34,19 @@ from app.product.product_intake.models import ProductSpace
 router = APIRouter(tags=["content"])
 
 
-def _query_actor(role: str):
-    """管理面/业务读口 query actor 闸（Q109/Q118 同构：缺 actor_id 422、越权 403）。"""
+def _query_actor(*roles: str):
+    """管理面/业务读口 query actor 闸（Q109/Q118 同构：缺 actor_id 422、越权 403）。
+
+    传多个角色时为"任一即可"（同 Q107 ops-queue：operations | platform_admin）。
+    """
 
     def dependency(
         actor_id: str = Query(...),
-        roles: list[str] = Query(default_factory=list),
+        roles_param: list[str] = Query(default_factory=list, alias="roles"),
     ) -> Actor:
-        actor = Actor(id=actor_id, roles=roles)
+        actor = Actor(id=actor_id, roles=roles_param)
         try:
-            require_any_role(actor, role)
+            require_any_role(actor, *roles)
         except PermissionDenied as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         return actor
@@ -50,6 +56,8 @@ def _query_actor(role: str):
 
 require_dict_view = _query_actor(DICTIONARY_ADMIN)
 require_ops_view = _query_actor(OPERATIONS)
+# Q125/Q107：运营队列读口对 operations 与 platform_admin 同时开放。
+require_ops_admin_view = _query_actor(OPERATIONS, PLATFORM_ADMIN)
 
 
 def _language_view(lang: ContentLanguage) -> ContentLanguageView:
@@ -161,6 +169,95 @@ async def regenerate_content(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except generation.ArticleGenOutputInvalid as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await session.commit()
+    return service.content_view(content)
+
+
+@router.post(
+    "/api/content/{content_id}/discard", response_model=ContentProductView
+)
+async def discard_content(
+    content_id: str,
+    body: ContentDiscardRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ContentProductView:
+    """Q56-b/Q124：运营作废骨架回池（operations 闸，难产原因必填）。"""
+    try:
+        content = await service.discard_content(
+            session, content_id, body.reason, body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ContentNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except service.ContentNotDiscardable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except service.ContentDiscardReasonRequired as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await session.commit()
+    return service.content_view(content)
+
+
+# ---- Q125/Q60c：运营待发布队列 + 发布链接/ID 回填 ----
+# 静态 GET 路径注册在含 {content_id} 的参数路径之前（同前缀匹配顺序纪律）。
+
+
+@router.get(
+    "/api/admin/content/ready-to-publish",
+    response_model=list[ContentProductListItem],
+)
+async def list_ready_to_publish(
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_admin_view),
+) -> list[ContentProductListItem]:
+    """运营待发布队列：跨租户仅 ready_for_publish 且未回填，先到先发。"""
+    rows = await service.list_ready_to_publish(session, actor)
+    return [service.content_list_item(row) for row in rows]
+
+
+@router.get(
+    "/api/admin/content/needs-attention",
+    response_model=list[ContentProductListItem],
+)
+async def list_needs_attention(
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_admin_view),
+) -> list[ContentProductListItem]:
+    """Q124 运营待处置队列：跨租户 review/revising/rejected，供作废回池操作。"""
+    rows = await service.list_needs_attention(session, actor)
+    return [service.content_list_item(row) for row in rows]
+
+
+@router.put(
+    "/api/admin/content/{content_id}/publish-info",
+    response_model=ContentProductView,
+)
+async def set_publish_info(
+    content_id: str,
+    body: ContentPublishInfoRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ContentProductView:
+    """Q60c/Q125：运营用托管账号发布后回填平台链接/ID（operations 闸）。"""
+    try:
+        content = await service.set_publish_info(
+            session, content_id, body.url, body.platform_post_id, body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ContentNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except service.ContentNotPublishable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except service.ContentPublishUrlRequired as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     await session.commit()
     return service.content_view(content)
 

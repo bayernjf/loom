@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q123（持续追加，C1.17–C1.67）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q125（持续追加，C1.17–C1.69）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -62,6 +62,8 @@
 | Q121 复检语义级检测 | 2026-09-19 | V2 P4 段12 Q59 复检第②项落地（接缝按甲拍板纯 advisory，02 C1.65）：模型网关第 9 场景 ARTICLE-SEMANTIC-CHECK 内嵌生成（只读检测不改写，输出 {findings}，四检测 code 为 v0.1 工程口径待业务方校准），结果落既有 review_hits.semantic 段，不抬 block_required/不阻断 approve/不新增状态（词库 ban 硬阻断不变）；网关异常 checked:false+error 不阻断、不落 SkillRun，坏输出归一容错仍落 SkillRun；零新端点/列/表，迁移 0031 纯场景种子（PG16 往返实测：down 语义三件套全清而 QC 三件套保留，物理表仍 55）；基线 523 passed / head 0031 / eval 101·golden 21，前端零变化；复检余施工指令核对、国家规则核对两项【待补】 |
 | Q122 客户内容页 + Q56-a | 2026-09-19 | 第 3 菜单「内容生产与发布」由 v2 占位转 V1 功能页（02 C1.66；三接缝交互提问超时，沿用「按你的来」授权按推荐甲落地、待追认）：客户页=只读+审阅+人工改稿，generate/regenerate 维持 operations 闸不放客户页；六态机加 manual_resubmit（revising→review），无闸 GET /api/content（列表项去 body）/GET {id}/PATCH {id}/body（仅 revising，重过词库+语义+QC，不调 GEN、不增 regenerate_count）；前端 content 六文件+messages content 命名空间+nav v2→v1+**第八 checker check-content** 接 CI；零迁移头仍 0031；基线 528 passed（+5）/eval 101·golden 21/token 86；Q56-b 作废回池继续挂账 |
 | Q123 段1 客户目标语言控件 | 2026-09-19 | Q58 产品侧客户自助落地（接缝按甲，02 C1.67）：新开客户无闸 PATCH /api/intakes/{id}/target-languages（按 intake 定位 PS，码须 active/去重，空间未生成 404，空数组清 NULL）与 GET /api/content/languages（仅 active，注册先于 {content_id}）；Q119 operations PUT 代设入口与 OPERATIONS 闸原样保留（回归锁 403），ProductSpaceView 回显；前端 TargetLanguagesForm 多选岛+check-products/check-content 守卫；零迁移头仍 0031/物理表 55；基线 534 passed（+6）/eval 101·golden 21/token 86 |
+| Q124 难产骨架作废回池 Q56-b | 2026-09-19 | 负责人「按你推荐的来」拍板（02 C1.68）：内容状态机六态→七态，新增终态 discarded（只读；区别于 rejected=客户驳回可继续改）；事件 discard（operations、reason 必填 1–500）仅 review/revising/rejected→discarded；POST /api/content/{id}/discard + GET /api/admin/content/needs-attention（operations｜platform_admin）；唯一约束换 partial unique index WHERE status<>'discarded' 实现作废后同键回池（双方言），迁移 0032（pg16 往返实测）；基线 545 passed（+11）/head 0032/eval 101·golden 21 |
+| Q125 运营发布回填 Q60c | 2026-09-19 | 负责人「按你推荐的来」拍板（02 C1.69）：不新增 published 态，published_at 非空即已发布；迁移 0033 加 published_url/platform_post_id/published_at 三 nullable 列（pg16 往返实测）；PUT /api/admin/content/{id}/publish-info（operations、仅 ready 409、url 必填、published_at 仅首次落）+ GET ready-to-publish（双角色、返全部 ready 行分待回填/已回填两分区）；前端管理端 /admin/content 内容运营台与 Q124 共用一页（sidebar 6→7，check-admin/check-content 扩守卫、无新 checker 文件）；Agent 抓取/effect-callback/孤儿队列/Q60a 随段13 P3/V2；基线 554 passed（+9）/head 0033/物理表 55/eval 101·golden 21/token 86 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---

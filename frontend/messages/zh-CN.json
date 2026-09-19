@@ -169,6 +169,9 @@
     "submitEdit": "提交改稿并重新复检",
     "editSuccess": "改稿已提交，复检完成。",
     "readyNote": "该成品已通过审阅，进入待发布队列，由平台统一发布。",
+    "publishedLinkTitle": "平台发布链接",
+    "publishedLinkMissing": "待平台统一发布，发布后链接由运营回填。",
+    "discardedReasonTitle": "作废原因",
     "backToList": "返回内容列表",
     "actorUnconfigured": "操作人未配置（LOOM_ACTOR_ID），请联系管理员。",
     "status": {
@@ -177,7 +180,8 @@
       "review": "待审阅",
       "ready_for_publish": "待发布",
       "rejected": "已驳回",
-      "revising": "改稿中"
+      "revising": "改稿中",
+      "discarded": "已作废"
     }
   },
   "compliance": {
@@ -422,6 +426,7 @@
       "no": "否"
     },
     "slaTodosNav": "待办 SLA 看板",
+    "contentOpsNav": "内容运营台",
     "slaTodos": {
       "title": "待办 SLA 看板",
       "intro": "跨租户运营待办，按截止时间升序排列；看板态由后端依据 due_at 与升级状态实时派生。",
@@ -444,6 +449,42 @@
       "colDue": "截止时间",
       "colEscalated": "升级时间",
       "empty": "当前筛选下暂无待办。"
+    },
+    "contentOps": {
+      "title": "内容运营台",
+      "intro": "跨租户内容成品的发布回填与难产作废：待发布队列由运营用托管账号发布后回填平台链接/ID；待处置队列对 review/改稿中/已驳回成品可记录难产原因并作废回池，作废后同白名单键可重新生成。",
+      "publishTitle": "待发布队列",
+      "publishIntro": "仅 ready_for_publish 成品，按创建时间升序（先到先发）；运营发布后回填平台链接，已回填行保留链接可修正。",
+      "publishEmpty": "当前没有待发布成品。",
+      "attentionTitle": "待处置队列",
+      "attentionIntro": "review / revising / rejected 成品；作废为终态操作，需填写 1–500 字难产原因，作废后释放该白名单键的生成机会。",
+      "attentionEmpty": "当前没有待处置成品。",
+      "colFinal": "白名单骨架",
+      "colTenant": "租户",
+      "colPlatform": "平台",
+      "colLanguage": "语言",
+      "colStatus": "状态",
+      "colQuality": "质量分",
+      "colReview": "复检",
+      "colCreated": "创建时间",
+      "colPublish": "发布回填",
+      "colDiscard": "作废回池",
+      "publishFormLabel": "发布信息回填",
+      "urlLabel": "平台链接",
+      "urlPlaceholder": "粘贴平台发布链接（必填）",
+      "postIdLabel": "平台帖子 ID",
+      "postIdPlaceholder": "平台帖子 ID（可选）",
+      "publishSubmit": "回填发布信息",
+      "republishSubmit": "修正回填信息",
+      "publishSuccess": "发布信息已回填。",
+      "discardFormLabel": "作废回池",
+      "reasonLabel": "难产原因",
+      "reasonPlaceholder": "填写难产/作废原因（1–500 字，必填）",
+      "discardSubmit": "作废并回池",
+      "discardConfirm": "作废为终态操作，作废后该成品只读、同白名单键可重新生成。确认作废？",
+      "discardSuccess": "已作废并释放生成机会。",
+      "actorUnconfigured": "未配置管理员身份（服务端环境变量 LOOM_ADMIN_ACTOR_ID），操作未提交。",
+      "actorMissingRole": "当前管理员角色不含 operations，无权执行该操作。"
     }
   }
 }

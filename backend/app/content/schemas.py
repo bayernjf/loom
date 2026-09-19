@@ -31,6 +31,21 @@ class ContentBodyPatch(BaseModel):
     actor: Actor
 
 
+class ContentDiscardRequest(BaseModel):
+    """Q56-b/Q124：运营作废骨架回池（discard），难产原因必填。"""
+
+    reason: str = Field(min_length=1, max_length=500)
+    actor: Actor
+
+
+class ContentPublishInfoRequest(BaseModel):
+    """Q60c/Q125：运营发布后回填平台链接/ID（url 必填，post_id 可选）。"""
+
+    url: str = Field(min_length=1, max_length=1000)
+    platform_post_id: str | None = Field(default=None, max_length=128)
+    actor: Actor
+
+
 class ContentProductListItem(BaseModel):
     """客户内容列表项（Q122）：与详情同构但不带 body（正文仅在详情返回）。"""
 
@@ -49,6 +64,11 @@ class ContentProductListItem(BaseModel):
     reject_reason: str | None
     regenerate_count: int
     created_at: datetime | None
+    discard_reason: str | None = None
+    # Q125/Q60c：运营发布回填（published_at 非空即已发布）。
+    published_url: str | None = None
+    platform_post_id: str | None = None
+    published_at: datetime | None = None
     quality_score: float | None = None
     quality_issues: list | None = None
     quality_threshold: float | None = None
@@ -72,6 +92,12 @@ class ContentProductView(BaseModel):
     reject_reason: str | None
     regenerate_count: int
     created_at: datetime | None
+    # Q124/Q56-b：运营作废回池的难产原因（仅 discarded 态非空）。
+    discard_reason: str | None = None
+    # Q125/Q60c：运营发布回填（published_at 非空即已发布）。
+    published_url: str | None = None
+    platform_post_id: str | None = None
+    published_at: datetime | None = None
     # Q120/Q57：AI 质量分（辅助参考，不自动发证/驳回）。threshold 为当前配置阈值，
     # advisory=True 表示分数低于阈值（界面提示「需细看」），分数缺失时二者为 None。
     quality_score: float | None = None

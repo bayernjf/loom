@@ -11,7 +11,12 @@ from app.content import quality as qc
 from app.content import semantic as sem
 from app.content import statemachine as sm
 from app.content.models import (
+    CONTENT_DISCARDED,
     CONTENT_DRAFT,
+    CONTENT_READY,
+    CONTENT_REJECTED,
+    CONTENT_REVIEW,
+    CONTENT_REVISING,
     DEFAULT_LANGUAGE,
     KIND_ARTICLE,
     KIND_VIDEO,
@@ -25,7 +30,7 @@ from app.content.schemas import (
 from app.core.audit import append_audit
 from app.core.compliance_wordlist import service as wl_service
 from app.core.config_center.knobs import knob
-from app.core.rbac import OPERATIONS, require_any_role
+from app.core.rbac import OPERATIONS, PLATFORM_ADMIN, require_any_role
 from app.decision.compliance_center import ccr_rules
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.product.product_intake.models import ProductSpace
@@ -67,6 +72,22 @@ class ContentNotEditable(Exception):
     """Q56-a/Q122：仅 revising 态允许客户人工编辑正文。"""
 
 
+class ContentDiscardReasonRequired(Exception):
+    """Q56-b/Q124：作废骨架回池必须记录难产原因。"""
+
+
+class ContentNotDiscardable(Exception):
+    """Q56-b/Q124：当前状态不允许作废（仅 review/revising/rejected 可作废）。"""
+
+
+class ContentPublishUrlRequired(Exception):
+    """Q60c/Q125：发布回填必须提供非空白平台链接。"""
+
+
+class ContentNotPublishable(Exception):
+    """Q60c/Q125：仅 ready_for_publish 态可回填发布信息。"""
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -89,6 +110,10 @@ def content_view(content: ContentProduct) -> ContentProductView:
         reject_reason=content.reject_reason,
         regenerate_count=content.regenerate_count,
         created_at=content.created_at,
+        discard_reason=content.discard_reason,
+        published_url=content.published_url,
+        platform_post_id=content.platform_post_id,
+        published_at=content.published_at,
         quality_score=content.quality_score,
         quality_issues=content.quality_issues,
         quality_threshold=float(knob(qc.QUALITY_THRESHOLD_KEY)),
@@ -193,11 +218,14 @@ async def generate_content(
             f"language {language!r} not eligible for final_id {body.final_id}; "
             f"eligible={eligible}"
         )
+    # Q124/Q56-b：已作废（discarded）行不占唯一键，允许同 final+lang+kind 重新生成
+    # （"作废骨架回池"）；与 partial unique index uq_content_final_language_kind 双保险。
     duplicate_id = await session.scalar(
         select(ContentProduct.content_id).where(
             ContentProduct.final_id == body.final_id,
             ContentProduct.language == language,
             ContentProduct.kind == body.kind,
+            ContentProduct.status != CONTENT_DISCARDED,
         )
     )
     if duplicate_id is not None:
@@ -311,6 +339,128 @@ async def edit_content_body(
             "final_id": content.final_id,
             "language": content.language,
             "kind": content.kind,
+        },
+    )
+    return content
+
+
+async def discard_content(
+    session: AsyncSession, content_id: str, reason: str, actor
+) -> ContentProduct:
+    """Q56-b/Q124 运营作废骨架回池（review|revising|rejected → discarded）。
+
+    作废为终态只读动作：记录难产原因、释放 (final_id, language, kind) 唯一占位
+    （partial unique index 排除 discarded，之后可重新生成）。客户无此动作入口。
+    """
+    require_any_role(actor, OPERATIONS)
+    content = await _get_content(session, content_id)
+    if not sm.can_transition(content.status, sm.EVENT_DISCARD):
+        raise ContentNotDiscardable(
+            f"discard only allowed from review/revising/rejected, "
+            f"current {content.status}"
+        )
+    if not reason or not reason.strip():
+        raise ContentDiscardReasonRequired("discard requires a non-empty reason")
+    content.status = sm.target_status(content.status, sm.EVENT_DISCARD)
+    content.discard_reason = reason
+    content.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=content.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="content.discarded",
+        entity_type="content_product",
+        entity_id=content.content_id,
+        detail={
+            "final_id": content.final_id,
+            "language": content.language,
+            "kind": content.kind,
+            "reason": reason,
+        },
+    )
+    return content
+
+
+async def list_ready_to_publish(
+    session: AsyncSession, actor
+) -> list[ContentProduct]:
+    """Q60c/Q125 运营发布队列：跨租户、全部 ready_for_publish 成品（published_at
+    为空=待回填，非空=已回填，前端分区并显链接），按 created_at 升序（先到先发）。
+    行正文不在队列返回（列表项序列化排除 body）。
+    读口同 Q107 ops-queue 对 operations | platform_admin 开放。
+    """
+    require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
+    stmt = (
+        select(ContentProduct)
+        .where(ContentProduct.status == CONTENT_READY)
+        .order_by(ContentProduct.created_at.asc(), ContentProduct.content_id.asc())
+    )
+    return list((await session.scalars(stmt)).all())
+
+
+# Q124/Q56-b：运营可作废的状态（discard 事件白名单），也是管理端"待处置"队列口径。
+DISCARD_CANDIDATE_STATUSES = (CONTENT_REVIEW, CONTENT_REVISING, CONTENT_REJECTED)
+
+
+async def list_needs_attention(
+    session: AsyncSession, actor
+) -> list[ContentProduct]:
+    """Q124 运营待处置队列：跨租户、状态 ∈ review/revising/rejected（可作废回池），
+    按 created_at 升序（先卡住先处置）。行正文不在队列返回。
+    读口同 Q107 ops-queue 对 operations | platform_admin 开放。
+    """
+    require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
+    stmt = (
+        select(ContentProduct)
+        .where(ContentProduct.status.in_(DISCARD_CANDIDATE_STATUSES))
+        .order_by(ContentProduct.created_at.asc(), ContentProduct.content_id.asc())
+    )
+    return list((await session.scalars(stmt)).all())
+
+
+async def set_publish_info(
+    session: AsyncSession,
+    content_id: str,
+    url: str,
+    platform_post_id: str | None,
+    actor,
+) -> ContentProduct:
+    """Q60c/Q125 运营用托管账号发布后回填平台链接/ID（仅 ready_for_publish）。
+
+    可重复回填以修正链接（url 必填）；published_at 仅首次回填时落时间，
+    platform_post_id 缺省（None）表示不动已有值，空串视为清空。
+    Agent 抓取 / effect-callback 回流随段 13（V2），本切片不涉及。
+    """
+    require_any_role(actor, OPERATIONS)
+    content = await _get_content(session, content_id)
+    if content.status != CONTENT_READY:
+        raise ContentNotPublishable(
+            f"publish info only accepted in {CONTENT_READY}, "
+            f"current {content.status}"
+        )
+    if not url or not url.strip():
+        raise ContentPublishUrlRequired("published url must not be empty")
+    content.published_url = url.strip()
+    if platform_post_id is not None:
+        content.platform_post_id = platform_post_id.strip() or None
+    if content.published_at is None:
+        content.published_at = _now()
+    content.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=content.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="content.publish_info_set",
+        entity_type="content_product",
+        entity_id=content.content_id,
+        detail={
+            "final_id": content.final_id,
+            "language": content.language,
+            "kind": content.kind,
+            "url": content.published_url,
+            "platform_post_id": content.platform_post_id,
         },
     )
     return content

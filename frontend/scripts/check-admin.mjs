@@ -32,6 +32,7 @@ const requiredKeys = [
   "admin.tenantsNav",
   "admin.opsIntakesNav",
   "admin.slaTodosNav",
+  "admin.contentOpsNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -208,6 +209,42 @@ const requiredKeys = [
   ...[
     "title",
     "intro",
+    "publishTitle",
+    "publishIntro",
+    "publishEmpty",
+    "attentionTitle",
+    "attentionIntro",
+    "attentionEmpty",
+    "colFinal",
+    "colTenant",
+    "colPlatform",
+    "colLanguage",
+    "colStatus",
+    "colQuality",
+    "colReview",
+    "colCreated",
+    "colPublish",
+    "colDiscard",
+    "publishFormLabel",
+    "urlLabel",
+    "urlPlaceholder",
+    "postIdLabel",
+    "postIdPlaceholder",
+    "publishSubmit",
+    "republishSubmit",
+    "publishSuccess",
+    "discardFormLabel",
+    "reasonLabel",
+    "reasonPlaceholder",
+    "discardSubmit",
+    "discardConfirm",
+    "discardSuccess",
+    "actorUnconfigured",
+    "actorMissingRole",
+  ].map((k) => `admin.contentOps.${k}`),
+  ...[
+    "title",
+    "intro",
     "yellowNote",
     "filters",
     "filterStatus",
@@ -253,6 +290,10 @@ const requiredFiles = [
   join("intakes", "ops-intake-codes.ts"),
   join("intakes", "ops-intake-actions.tsx"),
   join("sla-todos", "page.tsx"),
+  join("content", "page.tsx"),
+  join("content", "actions.ts"),
+  join("content", "publish-info-island.tsx"),
+  join("content", "discard-island.tsx"),
 ];
 
 const problems = [];
@@ -344,10 +385,12 @@ if (!sidebarText.includes("/admin/intakes"))
   problems.push("admin sidebar must link the ops intake queue (Q107)");
 if (!sidebarText.includes("/admin/sla-todos"))
   problems.push("admin sidebar must link the SLA todo board (Q108)");
+if (!sidebarText.includes("/admin/content"))
+  problems.push("admin sidebar must link the content ops page (Q124/Q125)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 6)
-    problems.push(`admin sidebar must keep exactly 6 admin entries, got ${navCount}`);
+  if (navCount !== 7)
+    problems.push(`admin sidebar must keep exactly 7 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -814,6 +857,89 @@ for (const token of ["TODO_STATUS_FILTERS", "unknown todo status:"]) {
   if (!slaRouter.includes(token))
     problems.push(`SLA router must contain ${token} (422 whitelist)`);
 }
+
+// Q124/Q125：管理端内容运营台（发布回填 + 作废回池；读双角色、写 operations）。
+const contentOpsDir = join(adminDir, "content");
+const contentOpsPage = readAdmin(join("content", "page.tsx"));
+const contentOpsActions = readAdmin(join("content", "actions.ts"));
+const publishIsland = readAdmin(join("content", "publish-info-island.tsx"));
+const discardIsland = readAdmin(join("content", "discard-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(contentOpsPage))
+  problems.push("admin/content/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(contentOpsPage) || /https?:\/\//.test(contentOpsPage))
+  problems.push("admin/content/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (contentOpsPage.includes(forbidden))
+    problems.push(`admin/content/page.tsx is read-only; must not contain ${forbidden}`);
+}
+for (const token of ["getReadyToPublishQueue", "getNeedsAttentionQueue", "PublishInfoIsland", "DiscardIsland"]) {
+  if (!contentOpsPage.includes(token))
+    problems.push(`admin/content/page.tsx must use ${token}`);
+}
+if (!/^"use server"/m.test(contentOpsActions))
+  problems.push("admin/content/actions.ts must be a Server Action module");
+for (const token of [
+  "setPublishInfoAction",
+  "discardContentAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "missing_role",
+  "unconfigured",
+  "ADMIN_ROLE_LIST",
+  "setPublishInfo",
+  "adminDiscardContent",
+]) {
+  if (!contentOpsActions.includes(token))
+    problems.push(`admin/content/actions.ts must contain ${token}`);
+}
+for (const status of [403, 404, 409, 422]) {
+  if (!contentOpsActions.includes(String(status)))
+    problems.push(`content ops actions must map failure status ${status}`);
+}
+for (const [name, text] of [
+  ["publish-info-island", publishIsland],
+  ["discard-island", discardIsland],
+]) {
+  if (!/^"use client"/m.test(text))
+    problems.push(`${name} must be a client island`);
+  if (text.includes("@/lib/api") || /\bfetch\s*\(/.test(text) || /https?:\/\//.test(text))
+    problems.push(`${name} must call only the Server Action, never the API directly`);
+  if (!text.includes("router.refresh"))
+    problems.push(`${name} must refresh the RSC view after success`);
+}
+if (!discardIsland.includes("window.confirm"))
+  problems.push("discard island must confirm the terminal discard action");
+for (const token of [
+  "getReadyToPublishQueue",
+  "getNeedsAttentionQueue",
+  "setPublishInfo",
+  "adminDiscardContent",
+  "/api/admin/content/ready-to-publish",
+  "/api/admin/content/needs-attention",
+  "/publish-info",
+  "/discard",
+]) {
+  if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
+}
+
+const contentRouter = readFileSync(
+  join(repoRoot, "backend", "app", "content", "router.py"),
+  "utf8",
+);
+for (const route of [
+  '@router.get(\n    "/api/admin/content/ready-to-publish"',
+  '@router.get(\n    "/api/admin/content/needs-attention"',
+  '@router.put(\n    "/api/admin/content/{content_id}/publish-info"',
+  '@router.post(\n    "/api/content/{content_id}/discard"',
+]) {
+  if (!contentRouter.includes(route))
+    problems.push(`backend content router must register ${route.replace(/\s+/g, " ")}`);
+}
+// 两个静态 GET 队列必须先于参数路径 PUT/POST 注册，避免被 {content_id} 吞掉。
+const needsAttentionAt = contentRouter.indexOf("/api/admin/content/needs-attention");
+const publishInfoAt = contentRouter.indexOf("/api/admin/content/{content_id}/publish-info");
+if (needsAttentionAt === -1 || publishInfoAt === -1 || needsAttentionAt > publishInfoAt)
+  problems.push("GET needs-attention must be registered before the publish-info parameter route");
 
 if (problems.length > 0) {
   console.error(`check-admin: ${problems.length} problem(s)\n${problems.join("\n")}`);
