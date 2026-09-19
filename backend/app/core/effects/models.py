@@ -86,9 +86,40 @@ class EffectRecord(Base):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default=STATUS_ORPHAN
     )
-    # 验签命中的 Agent Key ID（审计/溯源）。
+    # 验签命中的 Agent Key ID（审计/溯源）；客户通道（Q128）存客户 actor id。
     received_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Q127/Q60a：人工认领溯源（认领后行转 matched，claimed_by 非空即人工绑定）。
+    claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class EffectClaim(Base):
+    """Q127/Q60a：external_content_id → 本系统成品的人工认领映射。
+
+    一条推送内容 ID 一行（PK=external_content_id）；认领后该 ID 的后续推送
+    （幂等覆盖与新采集点）一律按映射绑定，不再回落孤儿队列。
+    """
+
+    __tablename__ = "effect_claims"
+
+    # 推送方自报的内容 ID（与 EffectRecord.external_content_id 同值域）。
+    external_content_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # 人工绑定的本系统成品（FK；非 discarded 由服务层保证）。
+    content_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("content_products.content_id", name="fk_effect_claims_content"),
+        nullable=False,
+    )
+    claimed_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    claimed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime | None] = mapped_column(

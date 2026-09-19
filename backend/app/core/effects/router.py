@@ -1,4 +1,4 @@
-"""段13 效果回流端点（Q126）：入站 POST /api/effect-callback + 运营只读队列。"""
+"""段13 效果回流端点（Q126/Q127/Q128）：入站推送、孤儿认领、客户回填 + 运营只读队列。"""
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,8 +9,11 @@ from app.core.api_keys.service import require_agent_key
 from app.core.db import get_session
 from app.core.effects import service
 from app.core.effects.schemas import (
+    CustomerEffectBatchIn,
     EffectBatchIn,
     EffectBatchReceipt,
+    EffectClaimRequest,
+    EffectClaimView,
     EffectRecordView,
 )
 from app.core.rbac import (
@@ -74,6 +77,66 @@ async def receive_effects(
         ) from exc
     await session.commit()
     return EffectBatchReceipt(**receipt)
+
+
+# ---------- Q128：客户回填通道（无 Agent Key，body actor + tenant 行级隔离） ----------
+
+
+@router.post("/api/effects/backfill", response_model=EffectBatchReceipt)
+async def customer_backfill_effects(
+    body: CustomerEffectBatchIn,
+    session: AsyncSession = Depends(get_session),
+) -> EffectBatchReceipt:
+    """Q128 客户专用效果回填（source 固定 customer-backfill）。
+
+    只接受本租户非 discarded 成品，对不上即整批 422（客户通道绝不产生孤儿）；
+    幂等/时序/metrics 纪律与 Agent 通道一致。
+    """
+
+    try:
+        receipt = await service.ingest_customer_backfill(session, batch=body)
+    except service.EffectValidationError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "index": exc.index,
+                "field": exc.field,
+                "message": str(exc),
+            },
+        ) from exc
+    await session.commit()
+    return EffectBatchReceipt(**receipt)
+
+
+# ---------- Q127/Q60a：运营人工认领孤儿（管理面写口，actor 在体，operations 闸） ----------
+
+
+@router.post("/api/admin/effects/claims", response_model=EffectClaimView)
+async def claim_orphan_effect(
+    body: EffectClaimRequest,
+    session: AsyncSession = Depends(get_session),
+) -> EffectClaimView:
+    """把孤儿队列中的一条记录人工绑定到本系统成品（持久映射，后续推送不再回落孤儿）。"""
+
+    try:
+        result = await service.claim_orphan(
+            session,
+            record_id=body.record_id,
+            content_id=body.content_id,
+            actor=body.actor,
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (service.ClaimRecordNotFound, service.ClaimTargetNotFound) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (service.ClaimRecordNotOrphan, service.ClaimTargetDiscarded) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await session.commit()
+    return EffectClaimView(**result)
 
 
 @router.get(

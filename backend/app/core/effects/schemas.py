@@ -1,8 +1,10 @@
-"""段13 效果回流（effect-callback）Pydantic 契约（Q126，05 §1.1.1 / 11 §2.1）。"""
+"""段13 效果回流（effect-callback）Pydantic 契约（Q126/Q127/Q128，05 §1.1.1 / 11 §2.1）。"""
 
 from datetime import datetime
 
 from pydantic import BaseModel, Field
+
+from app.core.actor import Actor
 
 
 class EffectRecordIn(BaseModel):
@@ -19,6 +21,18 @@ class EffectBatchIn(BaseModel):
 
     source: str = Field(min_length=1)
     records: list[EffectRecordIn] = Field(min_length=1)
+
+
+class CustomerEffectBatchIn(BaseModel):
+    """Q128 客户回填通道 POST /api/effects/backfill 请求体。
+
+    source 不接受客户端传入（服务端固定 customer-backfill）；客户只能为本
+    tenant_id 下的成品回填，对不上即整批 422（客户通道绝不产生孤儿）。
+    """
+
+    tenant_id: str = Field(min_length=1)
+    records: list[EffectRecordIn] = Field(min_length=1)
+    actor: Actor
 
 
 class EffectBatchReceipt(BaseModel):
@@ -42,5 +56,25 @@ class EffectRecordView(BaseModel):
     captured_at: datetime
     metrics: dict | None
     status: str
+    claimed_by: str | None = None
+    claimed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime | None
+
+
+class EffectClaimRequest(BaseModel):
+    """Q127/Q60a 运营把一条孤儿记录人工绑定到本系统成品（写口 actor 在体）。"""
+
+    record_id: str = Field(min_length=1)
+    content_id: str = Field(min_length=1)
+    actor: Actor
+
+
+class EffectClaimView(BaseModel):
+    """认领结果视图：映射本体 + 本次回填的历史记录行数。"""
+
+    external_content_id: str
+    content_id: str
+    claimed_by: str
+    claimed_at: datetime
+    updated_rows: int
