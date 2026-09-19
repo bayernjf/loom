@@ -14,6 +14,9 @@ from app.content.models import (
     CONTENT_DISCARDED,
     CONTENT_DRAFT,
     CONTENT_READY,
+    CONTENT_REJECTED,
+    CONTENT_REVIEW,
+    CONTENT_REVISING,
     DEFAULT_LANGUAGE,
     KIND_ARTICLE,
     KIND_VIDEO,
@@ -393,6 +396,26 @@ async def list_ready_to_publish(
             ContentProduct.status == CONTENT_READY,
             ContentProduct.published_at.is_(None),
         )
+        .order_by(ContentProduct.created_at.asc(), ContentProduct.content_id.asc())
+    )
+    return list((await session.scalars(stmt)).all())
+
+
+# Q124/Q56-b：运营可作废的状态（discard 事件白名单），也是管理端"待处置"队列口径。
+DISCARD_CANDIDATE_STATUSES = (CONTENT_REVIEW, CONTENT_REVISING, CONTENT_REJECTED)
+
+
+async def list_needs_attention(
+    session: AsyncSession, actor
+) -> list[ContentProduct]:
+    """Q124 运营待处置队列：跨租户、状态 ∈ review/revising/rejected（可作废回池），
+    按 created_at 升序（先卡住先处置）。行正文不在队列返回。
+    读口同 Q107 ops-queue 对 operations | platform_admin 开放。
+    """
+    require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
+    stmt = (
+        select(ContentProduct)
+        .where(ContentProduct.status.in_(DISCARD_CANDIDATE_STATUSES))
         .order_by(ContentProduct.created_at.asc(), ContentProduct.content_id.asc())
     )
     return list((await session.scalars(stmt)).all())

@@ -219,6 +219,19 @@ async def list_ready_to_publish(
     return [service.content_list_item(row) for row in rows]
 
 
+@router.get(
+    "/api/admin/content/needs-attention",
+    response_model=list[ContentProductListItem],
+)
+async def list_needs_attention(
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_admin_view),
+) -> list[ContentProductListItem]:
+    """Q124 运营待处置队列：跨租户 review/revising/rejected，供作废回池操作。"""
+    rows = await service.list_needs_attention(session, actor)
+    return [service.content_list_item(row) for row in rows]
+
+
 @router.put(
     "/api/admin/content/{content_id}/publish-info",
     response_model=ContentProductView,
