@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q120（持续追加，C1.17–C1.64）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q123（持续追加，C1.17–C1.67）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -59,6 +59,9 @@
 | Q118 收口 | 2026-09-18 | Q117 挂账 4 项均按推荐（甲）拍板落地：4 个漏网管理面 GET 补 query actor 闸、publish_slots.gate 回填 V1 人工直编口径、product_spaces 两 FK（迁移 0027）、CI 六→七 checker；另修 Alembic 版本表列长；基线 483 passed / head 0027 / CI 七 checker / 86 token，待办 6 销账 |
 | Q119 段12 多语言 | 2026-09-18 | V2 P4 段12 Q58 落地（接缝按甲拍板，02 C1.63）：content_languages 语言清单配置化（dictionary_admin CRUD，种子仅 zh-CN 全市场）、ProductSpace.target_languages、发布位市场∩产品目标语言交集纯函数、content_products 唯一约束 (final_id,language,kind) 每语言独立成品；5 端点；迁移 0028（PG16 往返实测）；基线 494 passed / head 0028 / eval 101 / token 86，前端无变化 |
 | Q120 段12 AI 质量分 | 2026-09-18 | V2 P4 段12 Q57 真打分 + Q56 上限配置化落地（接缝按甲拍板，02 C1.64）：模型网关第 8 场景 ARTICLE-QC 内嵌生成（只读打分、纯 advisory 不自动发证/驳回/阻断 approve、不新增状态），content_products 加 quality_score/issues，view +4 字段含 threshold/advisory；QC 故障/坏输出分数留空不阻断；阈值 content.ai_quality_threshold（0.85）与重生成上限 content.regen_limit（3）接通消费，超限 revise 422 只能 reject；迁移 0029 加列 + 0030 场景种子（PG16 往返实测，物理表仍 55）；基线 511 passed / head 0030 / eval 101·golden 21，前端零变化 |
+| Q121 复检语义级检测 | 2026-09-19 | V2 P4 段12 Q59 复检第②项落地（接缝按甲拍板纯 advisory，02 C1.65）：模型网关第 9 场景 ARTICLE-SEMANTIC-CHECK 内嵌生成（只读检测不改写，输出 {findings}，四检测 code 为 v0.1 工程口径待业务方校准），结果落既有 review_hits.semantic 段，不抬 block_required/不阻断 approve/不新增状态（词库 ban 硬阻断不变）；网关异常 checked:false+error 不阻断、不落 SkillRun，坏输出归一容错仍落 SkillRun；零新端点/列/表，迁移 0031 纯场景种子（PG16 往返实测：down 语义三件套全清而 QC 三件套保留，物理表仍 55）；基线 523 passed / head 0031 / eval 101·golden 21，前端零变化；复检余施工指令核对、国家规则核对两项【待补】 |
+| Q122 客户内容页 + Q56-a | 2026-09-19 | 第 3 菜单「内容生产与发布」由 v2 占位转 V1 功能页（02 C1.66；三接缝交互提问超时，沿用「按你的来」授权按推荐甲落地、待追认）：客户页=只读+审阅+人工改稿，generate/regenerate 维持 operations 闸不放客户页；六态机加 manual_resubmit（revising→review），无闸 GET /api/content（列表项去 body）/GET {id}/PATCH {id}/body（仅 revising，重过词库+语义+QC，不调 GEN、不增 regenerate_count）；前端 content 六文件+messages content 命名空间+nav v2→v1+**第八 checker check-content** 接 CI；零迁移头仍 0031；基线 528 passed（+5）/eval 101·golden 21/token 86；Q56-b 作废回池继续挂账 |
+| Q123 段1 客户目标语言控件 | 2026-09-19 | Q58 产品侧客户自助落地（接缝按甲，02 C1.67）：新开客户无闸 PATCH /api/intakes/{id}/target-languages（按 intake 定位 PS，码须 active/去重，空间未生成 404，空数组清 NULL）与 GET /api/content/languages（仅 active，注册先于 {content_id}）；Q119 operations PUT 代设入口与 OPERATIONS 闸原样保留（回归锁 403），ProductSpaceView 回显；前端 TargetLanguagesForm 多选岛+check-products/check-content 守卫；零迁移头仍 0031/物理表 55；基线 534 passed（+6）/eval 101·golden 21/token 86 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---

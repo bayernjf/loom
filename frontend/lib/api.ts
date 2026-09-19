@@ -102,6 +102,8 @@ export interface ProductSpaceView {
   intake_id: string;
   lifecycle: string;
   profile_snapshot: Record<string, string>;
+  // B3/Q122：产品目标语言（null = 未声明、不收窄语言交集）。
+  target_languages: string[] | null;
 }
 
 export async function getAllowedEvents(intakeId: string): Promise<AllowedEvents> {
@@ -144,6 +146,23 @@ export async function getProductSpace(intakeId: string): Promise<ProductSpaceVie
     if (err instanceof ApiError && err.status === 404) return null;
     throw err;
   }
+}
+
+// B3/Q122：客户在段1 录入页设置产品目标语言（客户口径，无运营闸；空数组 = 未声明）。
+export async function setIntakeTargetLanguages(
+  intakeId: string,
+  languages: string[],
+): Promise<ProductSpaceView> {
+  return request<ProductSpaceView>(
+    `/api/intakes/${encodeURIComponent(intakeId)}/target-languages`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        languages,
+        actor: { id: CURRENT_ACTOR_ID, roles: [] },
+      }),
+    },
+  );
 }
 
 export function intakeDisplayName(intake: IntakeView): string {
@@ -215,6 +234,123 @@ export interface CustomerTenantView {
 
 export async function getCurrentTenant(tenantId: string): Promise<CustomerTenantView> {
   return request<CustomerTenantView>(`/api/tenants/${encodeURIComponent(tenantId)}`);
+}
+
+// Q122：客户「内容生产与发布」页（段12 成品只读 + 客户审阅 Q59 + Q56-a 人工编辑）。
+// 生成 / 重生成仍为 operations 端点（Q116 定稿），客户页不调用；列表项不带 body。
+export interface ContentSemanticFinding {
+  code: string;
+  message?: string | null;
+  excerpt?: string | null;
+}
+
+export interface ContentSemanticResult {
+  checked: boolean;
+  findings: ContentSemanticFinding[];
+  error?: string | null;
+}
+
+export interface ContentReviewHits {
+  bans: CcrBanHit[];
+  downgrades: CcrDowngradeHit[];
+  block_required: boolean;
+  semantic?: ContentSemanticResult;
+}
+
+export interface ContentQualityIssue {
+  code?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface ContentProductListItem {
+  content_id: string;
+  tenant_id: string;
+  product_space_id: string;
+  final_id: string;
+  goal: string;
+  platform: string;
+  slot_id: string | null;
+  country: string | null;
+  kind: string;
+  language: string;
+  review_hits: ContentReviewHits;
+  status: string;
+  reject_reason: string | null;
+  regenerate_count: number;
+  created_at: string | null;
+  quality_score: number | null;
+  quality_issues: ContentQualityIssue[] | null;
+  quality_threshold: number | null;
+  quality_advisory: boolean | null;
+}
+
+export interface ContentProductView extends ContentProductListItem {
+  body: string | null;
+}
+
+// B3/Q122：目标语言控件的只读 active 语言清单（无闸；归档语言不返）。
+export interface ContentLanguageView {
+  code: string;
+  name: string;
+  markets: string[];
+  status: string;
+}
+
+export async function getContentLanguages(): Promise<ContentLanguageView[]> {
+  return request<ContentLanguageView[]>("/api/content/languages");
+}
+
+export async function listContent(tenantId: string): Promise<ContentProductListItem[]> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<ContentProductListItem[]>(`/api/content?${params}`);
+}
+
+export async function getContent(contentId: string): Promise<ContentProductView> {
+  return request<ContentProductView>(
+    `/api/content/${encodeURIComponent(contentId)}`,
+  );
+}
+
+function contentPost(
+  path: string,
+  payload: Record<string, unknown>,
+): Promise<ContentProductView> {
+  return request<ContentProductView>(path, {
+    method: "POST",
+    body: JSON.stringify({
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+      ...payload,
+    }),
+  });
+}
+
+export function approveContent(contentId: string): Promise<ContentProductView> {
+  return contentPost(`/api/content/${encodeURIComponent(contentId)}/approve`, {});
+}
+
+export function rejectContent(
+  contentId: string,
+  reason: string,
+): Promise<ContentProductView> {
+  return contentPost(`/api/content/${encodeURIComponent(contentId)}/reject`, { reason });
+}
+
+export function reviseContent(contentId: string): Promise<ContentProductView> {
+  return contentPost(`/api/content/${encodeURIComponent(contentId)}/revise`, {});
+}
+
+export async function editContentBody(
+  contentId: string,
+  body: string,
+): Promise<ContentProductView> {
+  return request<ContentProductView>(
+    `/api/content/${encodeURIComponent(contentId)}/body`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ body, actor: { id: CURRENT_ACTOR_ID, roles: [] } }),
+    },
+  );
 }
 
 // Q102：管理端（Q92 驾驶舱）管理员身份。V1 actor 自报（同写端点口径），

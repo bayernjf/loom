@@ -1,0 +1,297 @@
+/* Q122：客户内容生产与发布页样式（沿用全局 token，与 products/compliance 同构）。 */
+
+.title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.notice {
+  padding: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: start;
+  font-size: var(--font-size-md);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  background: var(--color-bg-hover);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.rowLink {
+  color: var(--color-brand-active);
+  text-decoration: none;
+}
+
+.rowLink:hover {
+  text-decoration: underline;
+}
+
+.mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  word-break: break-all;
+}
+
+.statusChip {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  white-space: nowrap;
+}
+
+.toneReview {
+  background: var(--color-bg-hover);
+}
+
+.toneReady {
+  color: var(--color-state-success-text);
+  border-color: var(--color-state-success-text);
+}
+
+.toneRejected {
+  color: var(--color-state-danger-text);
+  border-color: var(--color-state-danger-text);
+}
+
+.toneRevising {
+  color: #b26a00;
+  border-color: #b26a00;
+}
+
+.toneGenerating {
+  color: var(--color-brand-active);
+  border-color: var(--color-brand);
+}
+
+.flagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flagBan {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-state-danger-text);
+  border: 1px solid var(--color-state-danger-text);
+  border-radius: var(--radius-1);
+}
+
+.flagWarn {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  font-size: var(--font-size-xs);
+  color: #b26a00;
+  border: 1px solid #b26a00;
+  border-radius: var(--radius-1);
+}
+
+.flagOk {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.qualityScore {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.qualityAdvisory {
+  display: block;
+  margin-top: 2px;
+  color: #b26a00;
+  font-size: var(--font-size-xs);
+}
+
+.qualityMissing {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.detailList {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-4) 0;
+  font-size: var(--font-size-md);
+}
+
+.detailList dt {
+  color: var(--color-text-secondary);
+}
+
+.detailList dd {
+  margin: 0;
+}
+
+.bodyPre {
+  padding: var(--space-4);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  font-size: var(--font-size-md);
+  line-height: 1.7;
+}
+
+.island {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+.textArea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  resize: vertical;
+}
+
+.textArea:focus {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
+.actionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-md);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+}
+
+.primaryButton {
+  background: var(--color-brand);
+  color: var(--color-text-on-brand);
+  border: none;
+}
+
+.primaryButton:hover {
+  background: var(--color-brand-hover);
+}
+
+.secondaryButton {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.dangerButton {
+  background: var(--color-bg-card);
+  color: var(--color-state-danger-text);
+  border: 1px solid var(--color-state-danger-text);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.errorText {
+  color: var(--color-state-danger-text);
+  font-size: var(--font-size-sm);
+}
+
+.successText {
+  color: var(--color-state-success-text);
+  font-size: var(--font-size-sm);
+}
+
+.blockNote {
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  color: var(--color-state-danger-text);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-state-danger-text);
+  border-radius: var(--radius-2);
+}
+
+.editNote {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.hitList {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+  font-size: var(--font-size-md);
+}
+
+.hitList li {
+  margin-bottom: var(--space-1);
+}
+
+.backLink {
+  display: inline-block;
+  margin-top: var(--space-5);
+  color: var(--color-brand-active);
+  font-size: var(--font-size-md);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}

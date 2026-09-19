@@ -27,7 +27,7 @@ jobs:
         run: python eval/runner.py
 
   frontend:
-    name: Frontend gates (tsc, seven checkers)
+    name: Frontend gates (tsc, eight checkers)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,10 +41,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - name: Seven frontend contract checkers
+      - name: Eight frontend contract checkers
         run: |
           node scripts/check-tokens.mjs
           node scripts/check-nav.mjs
+          node scripts/check-content.mjs
           node scripts/check-products.mjs
           node scripts/check-workbench.mjs
           node scripts/check-compliance.mjs

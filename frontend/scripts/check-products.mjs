@@ -55,6 +55,10 @@ const requiredKeys = [
   "products.space.fieldId",
   "products.space.fieldLifecycle",
   "products.space.snapshot",
+  "products.targetLanguages.title",
+  "products.targetLanguages.note",
+  "products.targetLanguages.save",
+  "products.targetLanguages.saved",
   "error.403",
   "error.404",
   "error.409",
@@ -72,6 +76,7 @@ const requiredFiles = [
   ["app/[locale]/(shell)/products/intake-codes.ts"],
   ["app/[locale]/(shell)/products/intake-actions.tsx"],
   ["app/[locale]/(shell)/products/draft-profile-form.tsx"],
+  ["app/[locale]/(shell)/products/target-languages-form.tsx"],
   ["app/[locale]/(shell)/products/[intakeId]/page.tsx"],
   ["app/[locale]/(shell)/products/templates/page.tsx"],
   ["app/[locale]/(shell)/products/library/page.tsx"],
@@ -110,10 +115,16 @@ for (const token of [
   "transitionIntake",
   "patchIntakeProfile",
   "getProductSpace",
+  "setIntakeTargetLanguages",
+  "getContentLanguages",
+  "ContentLanguageView",
+  "target_languages",
   "/allowed-events",
   "/transitions",
   "/profile",
   "/product-space",
+  "/target-languages",
+  "/api/content/languages",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must export/use ${token}`);
 }
@@ -135,6 +146,7 @@ if (!actionsText.startsWith('"use server"'))
 for (const token of [
   "transitionIntakeAction",
   "updateDraftProfileAction",
+  "setTargetLanguagesAction",
   "isCustomerIntakeEvent",
   "CURRENT_ACTOR_ID",
   "missing_fids",
@@ -151,7 +163,11 @@ if (!formText.startsWith('"use client"'))
   problems.push("new-product-form.tsx must start with \"use client\"");
 
 // Q106：client 岛纪律——禁直接访问服务端层/裸 URL，必须经 Server Action 并在成功后 router.refresh。
-for (const rel of ["products/intake-actions.tsx", "products/draft-profile-form.tsx"]) {
+for (const rel of [
+  "products/intake-actions.tsx",
+  "products/draft-profile-form.tsx",
+  "products/target-languages-form.tsx",
+]) {
   const text = readFileSync(join(shell, rel), "utf8");
   if (!text.startsWith('"use client"')) problems.push(`${rel} must start with "use client"`);
   if (text.includes("@/lib/api")) problems.push(`${rel} must not import @/lib/api (server-only)`);
@@ -191,8 +207,10 @@ const detailText = readFileSync(
 for (const token of [
   "getAllowedEvents",
   "getProductSpace",
+  "getContentLanguages",
   "IntakeActions",
   "DraftProfileForm",
+  "TargetLanguagesForm",
   "CURRENT_ACTOR_ID",
   '"category_creating"',
   "force-dynamic",
@@ -208,7 +226,13 @@ if (!detailText.includes('intake.status === "draft"'))
 const routerText = readFileSync(
   join(backend, "app", "product", "product_intake", "router.py"), "utf8",
 );
-for (const route of ["/allowed-events", "/transitions", "/profile", "/product-space"]) {
+for (const route of [
+  "/allowed-events",
+  "/transitions",
+  "/profile",
+  "/product-space",
+  "/target-languages",
+]) {
   if (!routerText.includes(route))
     problems.push(`backend product_intake router must keep the ${route} route`);
 }

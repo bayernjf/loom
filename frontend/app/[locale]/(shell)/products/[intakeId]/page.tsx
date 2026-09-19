@@ -7,6 +7,7 @@ import {
   CURRENT_ACTOR_ID,
   PRODUCT_NAME_PROFILE_KEY,
   getAllowedEvents,
+  getContentLanguages,
   getIntake,
   getProductSpace,
   intakeDisplayName,
@@ -14,6 +15,7 @@ import {
 import { ProductsSubnav } from "../products-subnav";
 import { DraftProfileForm } from "../draft-profile-form";
 import { IntakeActions } from "../intake-actions";
+import { TargetLanguagesForm } from "../target-languages-form";
 import styles from "../products.module.css";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +43,8 @@ export default async function ProductDetailPage({
 
   // 已发起建模（approved→modeling）后产品空间可能已生成；未生成时端点 404，本段不渲染。
   const space = await getProductSpace(intakeId);
+  // B3：目标语言控件只在产品空间已生成时出现，选项为 active 语言清单。
+  const languageOptions = space ? await getContentLanguages() : [];
 
   const profileEntries = Object.entries(intake.profile);
   const isDraft = intake.status === "draft";
@@ -119,6 +123,22 @@ export default async function ProductDetailPage({
               {JSON.stringify(space.profile_snapshot, null, 2)}
             </pre>
           </details>
+
+          <h3 className={styles.subsectionTitle}>{t("targetLanguages.title")}</h3>
+          {CURRENT_ACTOR_ID ? (
+            <TargetLanguagesForm
+              intakeId={intake.intake_id}
+              initial={space.target_languages ?? []}
+              options={languageOptions.map((lang) => ({
+                code: lang.code,
+                name: lang.name,
+              }))}
+            />
+          ) : (
+            <p className={styles.errorText} role="status">
+              {t("actorUnconfigured")}
+            </p>
+          )}
         </section>
       )}
 

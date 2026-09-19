@@ -6,6 +6,8 @@
 - approve：review → ready_for_publish（客户通过）
 - reject：review → rejected（客户驳回，Q59 必选原因）
 - revise：review → revising（客户改稿，强制重过四项复检）
+- manual_resubmit：revising → review（Q56-a/Q122 客户人工编辑正文后重过复检提交，
+  不走 ARTICLE-GEN、不增 regenerate_count）
 
 重生成上限（Q56）：regenerate_count ≥ 3 时 revise 拒绝，只能 reject（转人工/作废回池）。
 """
@@ -25,6 +27,7 @@ EVENT_COMPLETE = "complete"
 EVENT_APPROVE = "approve"
 EVENT_REJECT = "reject"
 EVENT_REVISE = "revise"
+EVENT_MANUAL_RESUBMIT = "manual_resubmit"
 
 # event → 允许的前置状态（机械口径；原文未给完整迁移表，Q59 只给五态语义）。
 _TRANSITIONS = {
@@ -33,6 +36,7 @@ _TRANSITIONS = {
     EVENT_APPROVE: {CONTENT_REVIEW},
     EVENT_REJECT: {CONTENT_REVIEW},
     EVENT_REVISE: {CONTENT_REVIEW},
+    EVENT_MANUAL_RESUBMIT: {CONTENT_REVISING},
 }
 
 _TARGET = {
@@ -41,6 +45,7 @@ _TARGET = {
     EVENT_APPROVE: CONTENT_READY,
     EVENT_REJECT: CONTENT_REJECTED,
     EVENT_REVISE: CONTENT_REVISING,
+    EVENT_MANUAL_RESUBMIT: CONTENT_REVIEW,
 }
 
 

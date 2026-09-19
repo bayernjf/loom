@@ -13,6 +13,7 @@ from app.product.product_intake.schemas import (
     IntakeList,
     IntakeOverview,
     IntakeProfilePatch,
+    IntakeTargetLanguagesPatch,
     IntakeTransition,
     IntakeView,
     OpsIntakeList,
@@ -230,4 +231,36 @@ async def get_product_space(
         intake_id=space.intake_id,
         lifecycle=space.lifecycle,
         profile_snapshot=space.profile_snapshot,
+        target_languages=space.target_languages,
+    )
+
+
+@router.patch("/{intake_id}/target-languages", response_model=ProductSpaceView)
+async def patch_target_languages(
+    intake_id: str,
+    body: IntakeTargetLanguagesPatch,
+    session: AsyncSession = Depends(get_session),
+) -> ProductSpaceView:
+    """B3/Q122：客户在段1 录入页设置产品目标语言（客户口径，无运营闸）。"""
+    try:
+        space = await service.set_target_languages(
+            session,
+            intake_id=intake_id,
+            languages=body.languages,
+            actor=body.actor,
+        )
+    except service.ProductSpaceNotCreated:
+        raise HTTPException(
+            status_code=404, detail="product space not created yet"
+        ) from None
+    except service.TargetLanguagesInvalid as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ProductSpaceView(
+        product_space_id=space.product_space_id,
+        tenant_id=space.tenant_id,
+        intake_id=space.intake_id,
+        lifecycle=space.lifecycle,
+        profile_snapshot=space.profile_snapshot,
+        target_languages=space.target_languages,
     )

@@ -7,6 +7,7 @@ import {
   PRODUCT_NAME_PROFILE_KEY,
   createIntake,
   patchIntakeProfile,
+  setIntakeTargetLanguages,
   transitionIntake,
 } from "@/lib/api";
 import { isCustomerIntakeEvent } from "./intake-codes";
@@ -90,6 +91,29 @@ export async function updateDraftProfileAction(
 
   try {
     await patchIntakeProfile(intakeId, { [PRODUCT_NAME_PROFILE_KEY]: trimmed });
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status))
+      return {
+        ok: false,
+        status: err.status as 403 | 404 | 409 | 422,
+        missingFids: null,
+      };
+    return { ok: false, status: "unknown" };
+  }
+}
+
+// B3/Q122：客户在段1 录入详情页保存产品目标语言（空数组 = 未声明）。
+export async function setTargetLanguagesAction(
+  intakeId: string,
+  languages: string[],
+): Promise<IntakeActionResult> {
+  if (!CURRENT_ACTOR_ID) return { ok: false, status: "unconfigured" };
+  if (!intakeId.trim() || languages.some((code) => !code.trim()))
+    return { ok: false, status: 422, missingFids: null };
+
+  try {
+    await setIntakeTargetLanguages(intakeId, languages);
     return { ok: true };
   } catch (err) {
     if (err instanceof ApiError && KNOWN_STATUSES.has(err.status))

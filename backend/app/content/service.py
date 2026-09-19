@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.content import generation
 from app.content import languages as l10n
 from app.content import quality as qc
+from app.content import semantic as sem
 from app.content import statemachine as sm
 from app.content.models import (
     CONTENT_DRAFT,
@@ -16,7 +17,12 @@ from app.content.models import (
     KIND_VIDEO,
     ContentProduct,
 )
-from app.content.schemas import ContentGenerateRequest, ContentProductView
+from app.content.schemas import (
+    ContentGenerateRequest,
+    ContentProductListItem,
+    ContentProductView,
+)
+from app.core.audit import append_audit
 from app.core.compliance_wordlist import service as wl_service
 from app.core.config_center.knobs import knob
 from app.core.rbac import OPERATIONS, require_any_role
@@ -53,6 +59,14 @@ class ContentDuplicateLanguage(Exception):
     """Q119/Q58：同 final_id + language + kind 成品已存在（每语言独立唯一成品）。"""
 
 
+class ContentBodyRequired(Exception):
+    """Q56-a/Q122：人工编辑提交的正文为空白。"""
+
+
+class ContentNotEditable(Exception):
+    """Q56-a/Q122：仅 revising 态允许客户人工编辑正文。"""
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -84,6 +98,13 @@ def content_view(content: ContentProduct) -> ContentProductView:
     )
 
 
+def content_list_item(content: ContentProduct) -> ContentProductListItem:
+    """Q122 列表项：详情视图去掉 body（正文仅在详情返回）。"""
+    return ContentProductListItem(
+        **content_view(content).model_dump(exclude={"body"})
+    )
+
+
 async def _get_content(session: AsyncSession, content_id: str) -> ContentProduct:
     content = await session.get(ContentProduct, content_id)
     if content is None:
@@ -91,11 +112,33 @@ async def _get_content(session: AsyncSession, content_id: str) -> ContentProduct
     return content
 
 
-async def run_content_review(session: AsyncSession, content: ContentProduct) -> dict:
-    """段12 复检第 1 项：词库扫描（复用 Q48 词库 + ccr_rules 三层裁决）。
+async def list_content(
+    session: AsyncSession, tenant_id: str
+) -> list[ContentProduct]:
+    """Q122 客户内容列表：按租户倒序返回全部成品（每语言一条，前端按 final_id 并列）。"""
+    stmt = (
+        select(ContentProduct)
+        .where(ContentProduct.tenant_id == tenant_id)
+        .order_by(ContentProduct.created_at.desc(), ContentProduct.content_id.desc())
+    )
+    return list((await session.scalars(stmt)).all())
 
-    其余三项（语义级检测 / 施工指令核对 / 国家规则核对）原文未给实现口径，
-    P4 第一片占位【待补】。
+
+async def get_content(session: AsyncSession, content_id: str) -> ContentProduct:
+    """Q122 客户内容详情（无角色闸，与 approve/reject/revise 同口径）。"""
+    return await _get_content(session, content_id)
+
+
+async def run_content_review(session: AsyncSession, content: ContentProduct) -> dict:
+    """段12 CONTENT-COMPLIANCE 复检（Q59 四项）。
+
+    - 第 1 项词库扫描：复用 Q48 词库 + ccr_rules 三层裁决，ban 命中
+      ``block_required=true`` 为确定性硬阻断；
+    - 第 2 项语义级检测（Q121）：模型网关 ARTICLE-SEMANTIC-CHECK 只读检测，
+      结果落 ``review_hits["semantic"]``，**纯 advisory**（不阻断 approve、
+      不改 block_required）；检测不可用记 checked=false + error，不阻断生成。
+
+    施工指令核对 / 国家规则核对两项原文未给实现口径，仍占位【待补】。
     """
     ps = await session.get(ProductSpace, content.product_space_id)
     industry = ps.industry_tag if ps is not None else None
@@ -105,11 +148,13 @@ async def run_content_review(session: AsyncSession, content: ContentProduct) -> 
         if ccr_rules.applicable_to_market(e, content.country)
     ]
     result = ccr_rules.evaluate(entries, content.body or "")
-    return {
+    review_hits = {
         "bans": result["bans"],
         "downgrades": result["downgrades"],
         "block_required": result["block_required"],
     }
+    review_hits["semantic"] = await sem.run_semantic_check(session, content)
+    return review_hits
 
 
 async def _run_generation(
@@ -229,3 +274,43 @@ async def regenerate_content(
     content.regenerate_count += 1
     content.status = sm.target_status(content.status, sm.EVENT_GENERATE)
     return await _run_generation(session, content, actor)
+
+
+async def edit_content_body(
+    session: AsyncSession, content_id: str, new_body: str, actor
+) -> ContentProduct:
+    """Q56-a/Q122 客户人工编辑（revising → review）。
+
+    与 operations regenerate 的区别：不调 ARTICLE-GEN、不增 regenerate_count；
+    替换正文后强制重过复检（词库 + 语义，Q59）与 ARTICLE-QC 质量分，再回 review。
+    """
+    content = await _get_content(session, content_id)
+    if content.status != sm.CONTENT_REVISING:
+        raise ContentNotEditable(
+            f"manual edit only allowed in {sm.CONTENT_REVISING}, "
+            f"current {content.status}"
+        )
+    if not new_body or not new_body.strip():
+        raise ContentBodyRequired("edited body must not be empty")
+    content.body = new_body
+    content.review_hits = await run_content_review(session, content)
+    await qc.invoke_article_qc(session, content)
+    content.status = sm.target_status(
+        content.status, sm.EVENT_MANUAL_RESUBMIT
+    )
+    content.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=content.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="content.body_edited",
+        entity_type="content_product",
+        entity_id=content.content_id,
+        detail={
+            "final_id": content.final_id,
+            "language": content.language,
+            "kind": content.kind,
+        },
+    )
+    return content

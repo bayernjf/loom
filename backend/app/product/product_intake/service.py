@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -109,6 +111,14 @@ class ProfileNotEditable(Exception):
     pass
 
 
+class ProductSpaceNotCreated(Exception):
+    """B3：产品空间尚未生成（start_modeling 之前无 target-languages 可设）。"""
+
+
+class TargetLanguagesInvalid(Exception):
+    """B3：目标语言含重复码或不在 active content_languages 清单内。"""
+
+
 _EDITABLE_STATES = frozenset({sm.DRAFT, sm.PENDING_PARAMS, sm.NEED_MORE_INFO})
 
 
@@ -184,3 +194,51 @@ async def apply_event(
     )
     await session.commit()
     return intake
+
+
+async def set_target_languages(
+    session: AsyncSession,
+    *,
+    intake_id: str,
+    languages: list[str],
+    actor,
+) -> ProductSpace:
+    """B3/Q122：客户在段1 录入页设置产品目标语言（客户口径，无 OPERATIONS 闸）。
+
+    与 Q119 operations ``PUT /api/product-spaces/{id}/target-languages`` 写同一列，
+    但按 intake 维度定位产品空间，并额外校验语言码必须在 active content_languages
+    清单内（运营代设入口维持原校验口径不变）；空列表 = 未声明 / 不收窄。
+    """
+    # 惰性 import：content.languages 反向依赖 product_intake.models，避开模块加载环。
+    from app.content.languages import list_languages
+
+    ps = await session.scalar(
+        select(ProductSpace).where(ProductSpace.intake_id == intake_id)
+    )
+    if ps is None:
+        raise ProductSpaceNotCreated(intake_id)
+
+    codes = [c.strip() for c in (languages or []) if isinstance(c, str) and c.strip()]
+    if len(set(codes)) != len(codes):
+        raise TargetLanguagesInvalid("target languages must be unique")
+    active_codes = {lang.code for lang in await list_languages(session)}
+    unknown = sorted(set(codes) - active_codes)
+    if unknown:
+        raise TargetLanguagesInvalid(
+            f"unknown/inactive language codes: {', '.join(unknown)}"
+        )
+
+    ps.target_languages = codes or None
+    ps.updated_at = datetime.now(UTC)
+    await append_audit(
+        session,
+        tenant_id=ps.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="product_space.target_languages.set",
+        entity_type="product_space",
+        entity_id=ps.product_space_id,
+        detail={"target_languages": ps.target_languages, "channel": "customer_intake"},
+    )
+    await session.commit()
+    return ps

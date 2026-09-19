@@ -39,7 +39,7 @@
 
 ---
 
-## 2. 逐表 Schema（35 设计实体；截至 2026-09-18 物理表 55 张，迁移 0001–0030；0027 纯加外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030 纯场景种子均不新增表）
+## 2. 逐表 Schema（35 设计实体；截至 2026-09-19 物理表 55 张，迁移 0001–0031；0027 纯加外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030/0031 纯场景种子均不新增表）
 
 > 字段明细以 04 为唯一来源（本文不重复罗列全部字段，只补建表级要素）；【类型】为建议列。
 
@@ -370,7 +370,8 @@
 > - **0028_content_languages**（建表+加列+约束，Q119，新增 1 表）：建 `content_languages`（含 zh-CN 全市场种子）、`product_spaces` 加 `target_languages` JSONB nullable、`content_products` 加唯一约束 `uq_content_final_language_kind(final_id,language,kind)`；downgrade 对称（drop 约束/列/表）。PG16 一次性容器全新库 up / downgrade-1 / 再 up 实测往返对称（02 C1.63）。
 > - **0029_content_quality**（加列，Q120，不新增表）：`content_products` 加 nullable `quality_score` Float、`quality_issues` JSONB；downgrade 对称 drop 两列。
 > - **0030_article_qc_seed**（纯种子，Q120，不新增表）：bulk_insert 第 8 场景 ARTICLE-QC→synthetic 路由及 SkillPrompt/SkillPromptVersion v0.1 三件套；downgrade 三 DELETE。PG16 一次性容器全新库 up / 逐档 downgrade / 再 up 实测往返对称（02 C1.64）。
-> - **当前 head = 0030_article_qc_seed**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0030 各切片的迁移实测记录以 02 对应 C1 条目为准**（0027/0028/0029/0030 已实测 PG16 全链 up/down/up；0021–0026 条目不逐条复记，勿据此推断已验证）。
+> - **0031_article_semantic_seed**（纯种子，Q121，不新增表）：bulk_insert 第 9 场景 ARTICLE-SEMANTIC-CHECK→synthetic 路由及 SkillPrompt/SkillPromptVersion v0.1 三件套（复检第②项语义级检测，只读不改写，输出 {findings}）；downgrade 三 DELETE。PG16 一次性容器全新库 up（三件套就位）/ downgrade -1 回 0030（语义三件套全清、ARTICLE-QC 三件套保留）/ 再 up 恢复实测往返对称（02 C1.65）。
+> - **当前 head = 0031_article_semantic_seed**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0031 各切片的迁移实测记录以 02 对应 C1 条目为准**（0027/0028/0029/0030/0031 已实测 PG16 全链 up/down/up；0021–0026 条目不逐条复记，勿据此推断已验证）。
 
 ---
 
