@@ -81,6 +81,13 @@ class ContentProduct(Base):
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Q124/Q56-b：运营作废回池记录的难产原因（区别于客户驳回原因 reject_reason）。
     discard_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Q125/Q60c：运营用托管账号发布后回填的平台链接/ID 与首次回填时间；
+    # 三列非空组合即"已发布"信号（状态机不新增 published 态，仍停 ready_for_publish）。
+    published_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    platform_post_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     regenerate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -13,6 +13,7 @@ from app.content import statemachine as sm
 from app.content.models import (
     CONTENT_DISCARDED,
     CONTENT_DRAFT,
+    CONTENT_READY,
     DEFAULT_LANGUAGE,
     KIND_ARTICLE,
     KIND_VIDEO,
@@ -76,6 +77,14 @@ class ContentNotDiscardable(Exception):
     """Q56-b/Q124：当前状态不允许作废（仅 review/revising/rejected 可作废）。"""
 
 
+class ContentPublishUrlRequired(Exception):
+    """Q60c/Q125：发布回填必须提供非空白平台链接。"""
+
+
+class ContentNotPublishable(Exception):
+    """Q60c/Q125：仅 ready_for_publish 态可回填发布信息。"""
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -99,6 +108,9 @@ def content_view(content: ContentProduct) -> ContentProductView:
         regenerate_count=content.regenerate_count,
         created_at=content.created_at,
         discard_reason=content.discard_reason,
+        published_url=content.published_url,
+        platform_post_id=content.platform_post_id,
+        published_at=content.published_at,
         quality_score=content.quality_score,
         quality_issues=content.quality_issues,
         quality_threshold=float(knob(qc.QUALITY_THRESHOLD_KEY)),
@@ -362,6 +374,71 @@ async def discard_content(
             "language": content.language,
             "kind": content.kind,
             "reason": reason,
+        },
+    )
+    return content
+
+
+async def list_ready_to_publish(
+    session: AsyncSession, actor
+) -> list[ContentProduct]:
+    """Q60c/Q125 运营待发布队列：跨租户、仅 ready_for_publish 且未回填发布信息，
+    按 created_at 升序（先到先发）。行正文不在队列返回（列表项序列化排除 body）。
+    """
+    require_any_role(actor, OPERATIONS)
+    stmt = (
+        select(ContentProduct)
+        .where(
+            ContentProduct.status == CONTENT_READY,
+            ContentProduct.published_at.is_(None),
+        )
+        .order_by(ContentProduct.created_at.asc(), ContentProduct.content_id.asc())
+    )
+    return list((await session.scalars(stmt)).all())
+
+
+async def set_publish_info(
+    session: AsyncSession,
+    content_id: str,
+    url: str,
+    platform_post_id: str | None,
+    actor,
+) -> ContentProduct:
+    """Q60c/Q125 运营用托管账号发布后回填平台链接/ID（仅 ready_for_publish）。
+
+    可重复回填以修正链接（url 必填）；published_at 仅首次回填时落时间，
+    platform_post_id 缺省（None）表示不动已有值，空串视为清空。
+    Agent 抓取 / effect-callback 回流随段 13（V2），本切片不涉及。
+    """
+    require_any_role(actor, OPERATIONS)
+    content = await _get_content(session, content_id)
+    if content.status != CONTENT_READY:
+        raise ContentNotPublishable(
+            f"publish info only accepted in {CONTENT_READY}, "
+            f"current {content.status}"
+        )
+    if not url or not url.strip():
+        raise ContentPublishUrlRequired("published url must not be empty")
+    content.published_url = url.strip()
+    if platform_post_id is not None:
+        content.platform_post_id = platform_post_id.strip() or None
+    if content.published_at is None:
+        content.published_at = _now()
+    content.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=content.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="content.publish_info_set",
+        entity_type="content_product",
+        entity_id=content.content_id,
+        detail={
+            "final_id": content.final_id,
+            "language": content.language,
+            "kind": content.kind,
+            "url": content.published_url,
+            "platform_post_id": content.platform_post_id,
         },
     )
     return content

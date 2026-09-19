@@ -14,6 +14,7 @@ from app.content.schemas import (
     ContentLanguageView,
     ContentProductListItem,
     ContentProductView,
+    ContentPublishInfoRequest,
     LanguageArchiveRequest,
     LanguageUpsertRequest,
     TargetLanguagesRequest,
@@ -189,6 +190,53 @@ async def discard_content(
         await session.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except service.ContentDiscardReasonRequired as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await session.commit()
+    return service.content_view(content)
+
+
+# ---- Q125/Q60c：运营待发布队列 + 发布链接/ID 回填 ----
+# 静态 GET 路径注册在含 {content_id} 的参数路径之前（同前缀匹配顺序纪律）。
+
+
+@router.get(
+    "/api/admin/content/ready-to-publish",
+    response_model=list[ContentProductListItem],
+)
+async def list_ready_to_publish(
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_view),
+) -> list[ContentProductListItem]:
+    """运营待发布队列：跨租户仅 ready_for_publish 且未回填，先到先发。"""
+    rows = await service.list_ready_to_publish(session, actor)
+    return [service.content_list_item(row) for row in rows]
+
+
+@router.put(
+    "/api/admin/content/{content_id}/publish-info",
+    response_model=ContentProductView,
+)
+async def set_publish_info(
+    content_id: str,
+    body: ContentPublishInfoRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ContentProductView:
+    """Q60c/Q125：运营用托管账号发布后回填平台链接/ID（operations 闸）。"""
+    try:
+        content = await service.set_publish_info(
+            session, content_id, body.url, body.platform_post_id, body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ContentNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except service.ContentNotPublishable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except service.ContentPublishUrlRequired as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await session.commit()
