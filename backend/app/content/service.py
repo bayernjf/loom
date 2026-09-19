@@ -385,17 +385,15 @@ async def discard_content(
 async def list_ready_to_publish(
     session: AsyncSession, actor
 ) -> list[ContentProduct]:
-    """Q60c/Q125 运营待发布队列：跨租户、仅 ready_for_publish 且未回填发布信息，
-    按 created_at 升序（先到先发）。行正文不在队列返回（列表项序列化排除 body）。
+    """Q60c/Q125 运营发布队列：跨租户、全部 ready_for_publish 成品（published_at
+    为空=待回填，非空=已回填，前端分区并显链接），按 created_at 升序（先到先发）。
+    行正文不在队列返回（列表项序列化排除 body）。
     读口同 Q107 ops-queue 对 operations | platform_admin 开放。
     """
     require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
     stmt = (
         select(ContentProduct)
-        .where(
-            ContentProduct.status == CONTENT_READY,
-            ContentProduct.published_at.is_(None),
-        )
+        .where(ContentProduct.status == CONTENT_READY)
         .order_by(ContentProduct.created_at.asc(), ContentProduct.content_id.asc())
     )
     return list((await session.scalars(stmt)).all())

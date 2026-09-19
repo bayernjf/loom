@@ -300,15 +300,21 @@ async def test_ready_queue_cross_tenant_order_and_exclusions(client):
     assert {it["tenant_id"] for it in items} == {"t1", "t2"}
     assert all("body" not in it for it in items)
     assert all(it["status"] == CONTENT_READY for it in items)
+    assert all(it["published_at"] is None for it in items)
 
-    # 回填 c1 后离队，队列仅剩 c2。
+    # 回填 c1 后仍在队列（已回填分区显链接），顺序不变且带回链接。
     r = await client.put(
         f"/api/admin/content/{c1}/publish-info",
         json={"url": "https://x/1", "actor": OPS},
     )
     assert r.status_code == 200
     r = await client.get("/api/admin/content/ready-to-publish", params=OPS_Q)
-    assert [it["content_id"] for it in r.json()] == [c2]
+    items = r.json()
+    assert [it["content_id"] for it in items] == [c1, c2]
+    by_id = {it["content_id"]: it for it in items}
+    assert by_id[c1]["published_url"] == "https://x/1"
+    assert by_id[c1]["published_at"]
+    assert by_id[c2]["published_at"] is None
 
 
 async def test_ready_queue_role_gate(client):
