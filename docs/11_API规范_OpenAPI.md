@@ -11,11 +11,11 @@
 
 | 接口 | 方法/路径 | 来源决策 | 契约状态 |
 |---|---|---|---|
-| 效果回调 | POST /api/effect-callback | Q60 | 🟢 契约定稿（见 §2.1）；**端点本体随段13 P3/V2 未实现**，Q88 鉴权前置（Bearer 验签 401 依赖）已落地 |
+| 效果回调 | POST /api/effect-callback | Q60 | 🟢 契约定稿（见 §2.1）；**入站第一片已落地（Q126，2026-09-19）**：Bearer 验签 + effect_records 时序 + matched/orphan 分流 + 运营只读队列；孤儿人工认领（Q60a）/反哺校准随下一片 |
 | 白名单消费 | POST /api/product-spaces/{product_space_id}/pwc/consume（业务方参考路径 /api/whitelist/consume 不采用） | Q71 | 🟢 已落地（M5，见 §2.2） |
 | 白名单查询 | GET /api/product-spaces/{product_space_id}/pwcs（租户内池查询，M5）；D9.5 系统后台页面级清单另计 | D9.5 | 🟡 池内组合查询已落地（M5）；中台页面级清单【待补】 |
 | 使用记录上报 | V1 无独立上报端点：consume 取用即写 usage_record 并回带 usage_record_id（M5） | D9.5 / Q71 | 🟡 V1 随消费内联落地；独立上报接口【待补】 |
-| Key 管理 | 入站 POST/GET /api/admin/agent-keys、POST /api/admin/agent-keys/{id}/revoke（Q88）；出站 POST /api/admin/ai-models/{id}/keys（录入/轮换）、GET /api/admin/ai-models/{id}/keys（清单）、POST /api/admin/ai-model-keys/{key_id}/revoke（Q82） | Q60b/Q67/Q82/Q88 | 🟢 治理端点已落地（见 §2.4）；受 Key 保护的 effect-callback 本体 V2 |
+| Key 管理 | 入站 POST/GET /api/admin/agent-keys、POST /api/admin/agent-keys/{id}/revoke（Q88）；出站 POST /api/admin/ai-models/{id}/keys（录入/轮换）、GET /api/admin/ai-models/{id}/keys（清单）、POST /api/admin/ai-model-keys/{key_id}/revoke（Q82） | Q60b/Q67/Q82/Q88 | 🟢 治理端点已落地（见 §2.4）；受 Key 保护的 effect-callback 已随 Q126 接入（§2.1，孤儿认领/反哺校准随下一片） |
 | DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部；其中 **2 个驾驶舱只读聚合已落地**：GET /api/admin/dashboards/token-cost、GET /api/admin/dashboards/review-workload（Q92） | D9.5 / Q92 | 🟡 驾驶舱两读口已落地（platform_admin，见 05 §1.4）；DB 浏览 / AI 调试台 / 配额【待补】 |
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
@@ -25,7 +25,7 @@
 
 ## 2. 已定稿接口规格
 
-### 2.1 POST /api/effect-callback（效果回流 · Q60，契约完整）
+### 2.1 POST /api/effect-callback（效果回流 · Q60，契约完整；入站第一片 Q126 已落地）
 
 **用途**：全链唯一反向边的数据入口——外部 Agent 系统推送效果数据（本系统不做抓取、不做定时拉取调度，Q62）。
 
@@ -52,6 +52,16 @@
 **孤儿数据处理**：对不上 content_id 的推送进"孤儿数据"队列人工认领（Q60a）
 
 **发布链路（业务澄清 Q60c）**：客户确认（仅审批信号）→ **运营用托管账号发布** → **运营回填平台链接/ID** → Agent 抓取 → 本 API 推送。前端客户不填写平台链接。
+
+**实现补登（Q126 入站第一片，2026-09-19，02 C1.70）**：`app/core/effects/` + 表 `effect_records`（迁移 0034）。
+- 鉴权＝Q88 `require_agent_key`（Authorization: Bearer；缺失/错误/吊销统一 401），首个受 Agent Key 保护的业务端点，命中盖 last_used_at。
+- 成功 200 回执 `{received, matched, orphan, upserted}`；逐字段校验失败回 422（detail 含 `{index, field, message}`）。
+- metrics 类型（实现补规格，原文未给类型）：plays/likes/comments/shares/inquiries/conversions 为非负整数、read_rate 为 0..1 数值；bool 拒绝、未知键拒绝、缺席键与显式 null 不落（绝不当 0）。
+- captured_at 必须带时区（naive 422），服务端归一 UTC；幂等键 (content_id, captured_at) 重推覆盖、新采集点追加。
+- 自动匹配仅按 content_id 命中**非 discarded** 成品（命中回填 matched_content_id/tenant_id，否则 orphan）；platform_post_id 不参与自动绑定。
+- 整批 all-or-nothing；批内重复幂等键 422；每批审计 `effect.batch_received`（tenant `_platform`）。
+- 运营只读：`GET /api/admin/effects/orphans`、`GET /api/admin/effects?content_id=`（operations | platform_admin query actor 闸，limit/offset 同既有队列）。
+- **未含（随下一片/V2）**：Q60a 孤儿人工认领动作、customer-backfill 客户专用通道（source 值已透传接受）、效果反哺/Q54·Q57 校准算法（口径【待补】）、Agent 抓取与发布自动化（Q62 不抓取）。
 
 ### 2.2 白名单消费接口（Q71，规则完整）
 
@@ -109,7 +119,7 @@
 | GET /api/admin/agent-keys?include_revoked=false | 列表：仅 key_id/name/key_prefix（前 12 字符）/status/created_at/last_used_at，不回明文与哈希 |
 | POST /api/admin/agent-keys/{key_id}/revoke | 吊销：append-only 状态位（不物理删除），未知 key 404、越权 403 |
 
-DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 Key）；审计 `agent_api_key.issue/revoke`（tenant=`_platform`）；Key 为平台级凭证、不绑租户（单租户绑定口径【原文未给出，待补】，未来由 content_id→FCW.tenant_id 解析）。验签依赖（Bearer 缺失/未知/已吊销统一 401）已备，但受保护业务端点 POST /api/effect-callback 随段13/P3（V2）。
+DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 Key）；审计 `agent_api_key.issue/revoke`（tenant=`_platform`）；Key 为平台级凭证、不绑租户（单租户绑定口径【原文未给出，待补】，未来由 content_id→FCW.tenant_id 解析）。验签依赖（Bearer 缺失/未知/已吊销统一 401）已备，**已随 Q126 接入受保护业务端点 POST /api/effect-callback（§2.1）**；Q60a 孤儿人工认领动作与效果反哺校准随段13 下一片/V2。
 
 **出站模型商 Key**（Q82 模型网关，`app/core/model_registry/`）：Fernet 可逆加密入库 + env 主密钥（与入站单向哈希刻意区分——出站需代持调用）；端点 **POST /api/admin/ai-models/{model_id}/keys**（录入/轮换，body=secret/actor，原子把旧 active 行置 revoked 并插新密文行）、**GET /api/admin/ai-models/{model_id}/keys**（清单，仅 key_id/fingerprint/status/时间元数据）、POST /api/admin/ai-model-keys/{key_id}/revoke（吊销，幂等），platform_admin 治理。
 
@@ -153,5 +163,6 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 - [x] 白名单消费实现端点与 M5/Q71 代码一致（路径/请求体/响应/错误码，2026-09-17 补登 §2.2）
 - [x] CSV 导出与 Q100 实现一致（§2.3）
 - [x] 入站/出站 Key 治理端点与 Q88/Q82 实现一致（§2.4）
-- [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、effect-callback 本体（段13/P3）、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、JSON/异步导出——均【待补】，随对应版本补齐后回填 §1
+- [x] effect-callback 入站第一片与 Q60/Q88/Q126 实现一致（鉴权/幂等键/metrics 缺“—”不当 0/matched·orphan 分流/只读队列，2026-09-19 补登 §2.1）
+- [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、effect-callback 续片（Q60a 孤儿人工认领、customer-backfill 客户通道、效果反哺/Q54·Q57 校准）、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、JSON/异步导出——均【待补】，随对应版本补齐后回填 §1
 - [x] 段内业务端点不在本表登记范围：段12 内容成品五端点（POST /api/content/generate、/{id}/approve|reject|revise|regenerate）契约见 05 §1.4 Q116 补登与 13 §1.13（V2 P4 首片，2026-09-17 落地）

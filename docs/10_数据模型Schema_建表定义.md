@@ -17,7 +17,7 @@
 | 审计 | 所有人工操作 + AI 调用写 writeAudit（append-only，不可篡改）；配置中心每次修改写审计 | D3.11 / C2 |
 | 软删除 | 不物理删除：状态字段（archived/deprecated/superseded）承载生命周期；"已废弃恢复视同新原子重走审核"（Q20） | Q20 / 各状态机 |
 | 不可变对象 | PWS 快照、SkillRunLog、审计：**只追加不可 mutate**（PT-COMPLIANCE-V2.0；即便回滚） | 06 §2.5 |
-| 幂等键 | 外部推送/重试场景必须有幂等键：effect-callback 用 `content_id + captured_at` | Q60 / 05 §1.1.1 |
+| 幂等键 | 外部推送/重试场景必须有幂等键：effect-callback 用 `content_id + captured_at`（**Q126 已实现**，captured_at 归一 UTC，重推覆盖/新点追加） | Q60 / 05 §1.1.1 / 02 C1.70 |
 
 ### 1.2 枚举字典
 | 枚举域 | 取值 | 来源 |
@@ -39,7 +39,7 @@
 
 ---
 
-## 2. 逐表 Schema（35 设计实体；截至 2026-09-19 物理表 55 张，迁移 0001–0033；0027 纯加外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030/0031 纯场景种子、0032 加列并把 content_products 唯一约束换为 partial unique index、0033 加三发布回填列，均不新增表）
+## 2. 逐表 Schema（35 设计实体；截至 2026-09-19 物理表 56 张，迁移 0001–0034；0027 纯加外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030/0031 纯场景种子、0032 加列并把 content_products 唯一约束换为 partial unique index、0033 加三发布回填列，均不新增表；**0034 新增 effect_records 1 表（段13 效果回流时序，Q126）**）
 
 > 字段明细以 04 为唯一来源（本文不重复罗列全部字段，只补建表级要素）；【类型】为建议列。
 
@@ -373,7 +373,8 @@
 > - **0031_article_semantic_seed**（纯种子，Q121，不新增表）：bulk_insert 第 9 场景 ARTICLE-SEMANTIC-CHECK→synthetic 路由及 SkillPrompt/SkillPromptVersion v0.1 三件套（复检第②项语义级检测，只读不改写，输出 {findings}）；downgrade 三 DELETE。PG16 一次性容器全新库 up（三件套就位）/ downgrade -1 回 0030（语义三件套全清、ARTICLE-QC 三件套保留）/ 再 up 恢复实测往返对称（02 C1.65）。
 > - **0032_content_discard**（加列+换索引，Q124，不新增表）：`content_products` 加 nullable `discard_reason` Text；drop 普通唯一约束 uq_content_final_language_kind 并建同名 **partial unique index `WHERE status <> 'discarded'`**（第七态 discarded 终态、作废后同键可重新生成=回池）；downgrade drop 列并重建普通唯一索引（不处理已存在同键冲突，V1 无生产数据）。PG16 一次性容器全新库 up / discarded+live 同键共存而第三条 live 同键 duplicate key 拒写 / downgrade -1 回 0031（列消失、索引还原普通）/ 再 up 恢复实测往返对称（02 C1.68）。
 > - **0033_content_publish**（加列，Q125，不新增表）：`content_products` 加 nullable `published_url` Text、`platform_post_id` String(128)、`published_at` timestamptz（published_at 非空即已发布，不新增 published 态）；downgrade drop 三列。PG16 一次性容器全新库 up / downgrade -1 回 0032（三列消失、discard_reason 保留）/ 再 up 恢复实测往返对称（02 C1.69）。
-> - **当前 head = 0033_content_publish**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0031 各切片的迁移实测记录以 02 对应 C1 条目为准**（0027/0028/0029/0030/0031 已实测 PG16 全链 up/down/up；0021–0026 条目不逐条复记，勿据此推断已验证）。
+> - **0034_effect_records**（**新表**，Q126 段13 反馈回流入站第一片，`app/core/effects/`）：`effect_records`——record_id String36 PK(uuid1) / source String64 NOT NULL（Agent 标识，customer-backfill 为特例）/ external_content_id String36 NOT NULL（推送方自报 content_id 原值，幂等键组成）/ matched_content_id String36 可空（FK `fk_effect_records_content`→content_products.content_id）/ tenant_id String36 可空（matched 时由 content.tenant_id 回填；Q88 Key 不绑租户，孤儿留空）/ platform_post_id Text NOT NULL（留存核对、不参与自动匹配）/ captured_at timestamptz NOT NULL（须带时区、归一 UTC）/ metrics JSONB 可空（七键稀疏：plays/likes/comments/shares/inquiries/conversions 非负整数 + read_rate 0..1，缺席键与显式 null 不落、绝不写 0）/ status String16 NOT NULL server_default orphan（matched|orphan；查无或命中 discarded 即 orphan）/ received_by String64 可空(=agent key_id) / created_at now NOT NULL / updated_at 可空。索引：唯一 `uq_effect_content_captured(external_content_id,captured_at)`（同 content+采集点幂等覆盖、新点追加时序）、`ix_effect_records_status`、复合 `ix_effect_records_matched_series(matched_content_id,captured_at)`（前缀覆盖成品时序读）、`ix_effect_records_tenant_id`；downgrade drop 四索引 + drop 表。PG16 一次性容器全新库 up（12 列 / metrics=jsonb / captured_at=timestamptz / 4 业务索引+主键 / FK 就位，业务物理表 55→56）/ downgrade -1 回 0033（表、四索引、FK 全清，回 55）/ 再 up 恢复（56）实测往返对称（02 C1.70）。
+> - **当前 head = 0034_effect_records**（单链线性，down_revision 逐级相扣；0001 为 root）。**0021–0031 各切片的迁移实测记录以 02 对应 C1 条目为准**（0027/0028/0029/0030/0031 已实测 PG16 全链 up/down/up；0021–0026 条目不逐条复记，勿据此推断已验证）。
 
 ---
 
@@ -401,7 +402,7 @@
 - [x] Q 编号约束已映射（Q2/Q3/Q5/Q7/Q8/Q12/Q13/Q15/Q17/Q18/Q20/Q21/Q24/Q25/Q27/Q28-Q33/Q34-Q38/Q39-Q43/Q44-Q47/Q48-Q51/Q52-Q55/Q56-Q59/Q60-Q65/Q66-Q72；**Q73–Q116 的新增表/列/种子见各节实现补登**）
 - [x] 配置化清单数值不硬编码进表定义（全部指向配置中心）
 - [x] 存储引擎已定稿并补入 §1.3（2026-09-13，14 选型）
-- [x] 迁移登记完整性（2026-09-17 补登、2026-09-18/19 续登）：迁移 **0001–0033** 均在本文登记（0001–0020 分散于各节，**0021–0033 见 §2.8 汇总补登**）；**当前 head = 0033_content_publish**；物理表 55 张（0027 纯加两外键不新增表，0028 新增 content_languages 1 表，0029/0032/0033 纯加列、0032 另换 partial 索引、0030/0031 纯场景种子均不新增表）。
+- [x] 迁移登记完整性（2026-09-17 补登、2026-09-18/19 续登）：迁移 **0001–0034** 均在本文登记（0001–0020 分散于各节，**0021–0034 见 §2.8 汇总补登**）；**当前 head = 0034_effect_records**；物理表 56 张（0027 纯加两外键不新增表，0028 新增 content_languages 1 表，0029/0032/0033 纯加列、0032 另换 partial 索引、0030/0031 纯场景种子均不新增表，**0034 新增 effect_records 1 表**）。
 - [ ] 字段全定义仍【待补】的实体（memory_layers / 动态信号事件 / 爆款判定记录 / 校准报表 / SLA 待办）——属段 7/13 与横切，随对应阶段任务包补（段 1-6 的 ProductSpace / g2_field_candidates 已于 M0 补齐；~~content_products~~ Q116 已补、~~skill_run_logs~~ Q76 已补、~~audit_logs~~ 迁移 0001 已建、~~api_keys~~ Q88 已补）
 - [ ] 文档列为建表、代码尚未建表的**设计稿实体**（layer_spaces/layer_space_items §2.5、countries §2.5、agent_registry §2.8、cat_feedback·field_impact_items·kup_proposals·knowledge_update_logs §2.7）——属段 9/13 与展示口径，实现随 V2/V3；**读作设计稿，勿当已建表**
 - [ ] 索引【建议】项未落地者（condition_packages 复合索引、product_atom_instances 复合索引等）——实现为单列索引，是否补复合索引随性能实测定

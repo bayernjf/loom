@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q125（持续追加，C1.17–C1.69）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q126（持续追加，C1.17–C1.70）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -20,7 +20,7 @@
 | [08_迭代计划与任务包.md](./08_迭代计划与任务包.md) | Part A7 + Part D9 | 路线图（两套已裁决合并，Q73）+ V1/V2/V3 任务包 | 核心 |
 | [09_全景体系_展示口径.md](./09_全景体系_展示口径.md) | Part D 全量 + HTML 核对 | 展示口径全景：4 端/6 层/13 菜单/权限矩阵/中台/前端/反馈 | 参考 |
 | [10_数据模型Schema_建表定义.md](./10_数据模型Schema_建表定义.md) | 04 字段清单 → 建表级 | 🟢 已补：35 实体建表要素（类型建议/约束/索引/关系） | 待 DBA 复核 |
-| [11_API规范_OpenAPI.md](./11_API规范_OpenAPI.md) | 05 契约 → OpenAPI | 🟢 已补：effect-callback/白名单消费规格 + 通用规范；已落地接口（消费/CSV/Key 治理）Q112 回填 | effect-callback 本体随段13 P3、中台接口随 V2/V3【待补】 |
+| [11_API规范_OpenAPI.md](./11_API规范_OpenAPI.md) | 05 契约 → OpenAPI | 🟢 已补：effect-callback/白名单消费规格 + 通用规范；已落地接口（消费/CSV/Key 治理）Q112 回填 | effect-callback 入站第一片已随 Q126 落地（Q60a 孤儿认领/customer-backfill/反哺校准随续片）、中台接口随 V2/V3【待补】 |
 | [12_PT协议补齐清单.md](./12_PT协议补齐清单.md) | 06 协议 → 补齐工程 | 🟢 已补：7 定稿 + 35 推断候选（**Q115 收口：即为最终名单**）+ 补齐模板 | 名单已定稿，不再待 HTML 核对 |
 | [13_状态机迁移表.md](./13_状态机迁移表.md) | 05 状态机 → 迁移矩阵 | 🟢 已补：**13 组**状态机迁移表（含 §1.12 字段池 Gate、§1.13 content_products/Q116）；productIntake15 迁移行 Q112 据实现补登 | G1 审核流随 V3、PWC 复核/待入库两行【待补】；§1.8 平台适配（段7）为设计规格、实现随 V2 P1；§1.9 发布位 gate 默认值与实现差异待拍板 |
 | [14_技术选型决策.md](./14_技术选型决策.md) | 07 §7 工程建议 → 决策 | ✅ **已定稿**：6 项 2026-09-13 拍板（全采纳建议） | 已拍板，下游已同步 |
@@ -64,6 +64,7 @@
 | Q123 段1 客户目标语言控件 | 2026-09-19 | Q58 产品侧客户自助落地（接缝按甲，02 C1.67）：新开客户无闸 PATCH /api/intakes/{id}/target-languages（按 intake 定位 PS，码须 active/去重，空间未生成 404，空数组清 NULL）与 GET /api/content/languages（仅 active，注册先于 {content_id}）；Q119 operations PUT 代设入口与 OPERATIONS 闸原样保留（回归锁 403），ProductSpaceView 回显；前端 TargetLanguagesForm 多选岛+check-products/check-content 守卫；零迁移头仍 0031/物理表 55；基线 534 passed（+6）/eval 101·golden 21/token 86 |
 | Q124 难产骨架作废回池 Q56-b | 2026-09-19 | 负责人「按你推荐的来」拍板（02 C1.68）：内容状态机六态→七态，新增终态 discarded（只读；区别于 rejected=客户驳回可继续改）；事件 discard（operations、reason 必填 1–500）仅 review/revising/rejected→discarded；POST /api/content/{id}/discard + GET /api/admin/content/needs-attention（operations｜platform_admin）；唯一约束换 partial unique index WHERE status<>'discarded' 实现作废后同键回池（双方言），迁移 0032（pg16 往返实测）；基线 545 passed（+11）/head 0032/eval 101·golden 21 |
 | Q125 运营发布回填 Q60c | 2026-09-19 | 负责人「按你推荐的来」拍板（02 C1.69）：不新增 published 态，published_at 非空即已发布；迁移 0033 加 published_url/platform_post_id/published_at 三 nullable 列（pg16 往返实测）；PUT /api/admin/content/{id}/publish-info（operations、仅 ready 409、url 必填、published_at 仅首次落）+ GET ready-to-publish（双角色、返全部 ready 行分待回填/已回填两分区）；前端管理端 /admin/content 内容运营台与 Q124 共用一页（sidebar 6→7，check-admin/check-content 扩守卫、无新 checker 文件）；Agent 抓取/effect-callback/孤儿队列/Q60a 随段13 P3/V2；基线 554 passed（+9）/head 0033/物理表 55/eval 101·golden 21/token 86 |
+| Q126 段13 effect-callback 入站第一片 | 2026-09-19 | 13 段链最后一段「段13 反馈回流」入站（接缝按甲，02 C1.70）：新横切包 app/core/effects + 单表 effect_records（status matched/orphan 一列分流，迁移 0034 新建，pg16 往返实测物理表 55→56）；POST /api/effect-callback 复用 Q88 require_agent_key（首个受 Agent Key 保护业务端点，失败统一 401，命中盖 last_used_at），仅按 content_id 精确匹配非 discarded 成品，命中回填 matched_content_id/tenant_id（由 content.tenant_id 反解），查无或命中 discarded→orphan，platform_post_id 只留存不自动绑（Q60a）；metrics 六计数非负整数+read_rate 0..1，bool/未知键拒、缺席/null 省略不落绝不补 0、整组可空；captured_at 须带时区归一 UTC，同(content_id,captured_at)幂等覆盖刷 updated_at、异点追加；整批 all-or-nothing 200 回执 {received,matched,orphan,upserted}；运营只读 GET /api/admin/effects/orphans 与 /api/admin/effects?content_id= 两口 query actor 闸（limit/offset）；每批 effect.batch_received 审计；基线 554→591（+24 单+13 集）/ruff 净/eval 101·golden 21/head 0034/前端零变化 checker 仍八 token 86；明确不落随续片：Q60a 孤儿认领、customer-backfill 客户端点、自助映射、反哺 Q54·Q57·Q61·Q65 校准（口径【待补】不臆造）、Agent 抓取（Q62 不抓） |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---

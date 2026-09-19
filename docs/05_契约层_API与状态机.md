@@ -10,7 +10,7 @@
 
 ### 1.1 已定稿契约（原文给出完整定义）
 
-#### 1.1.1 POST /api/effect-callback（段13 · Q60，**契约完整**）
+#### 1.1.1 POST /api/effect-callback（段13 · Q60，**契约完整**；入站第一片 Q126 已落地，见本节末 Q126 补登）
 - **用途**：效果数据回流（全链唯一反向边的数据入口）。
 - **调用方**：外部 Agent 系统（本系统不做抓取、不做定时拉取调度，Q62）。
 - **鉴权**：API Key（一 Agent 一 Key，可吊销，复用 API Key 管理模块）。
@@ -31,7 +31,9 @@
 - **数据纪律**：缺席字段=未采集记"—"，**绝不当 0 / 不许估算**。
 - **幂等/时序**：同 content_id 多次推送按 captured_at 追加为时间序列；同 content_id+captured_at 幂等覆盖。
 - **孤儿数据处理**：对不上 content_id 的推送进"孤儿数据"队列人工认领（Q60a）。
-- **发布链路（业务澄清 Q60c）**：客户确认（仅审批信号）→ **运营用托管账号发布** → **运营回填平台链接/ID** → Agent 抓取 → 本 API 推送。前端客户不填写平台链接。**Q125（C1.69）已落「运营回填」一环**：`PUT /api/admin/content/{id}/publish-info` + 待发布队列 `GET /api/admin/content/ready-to-publish`，published_at 非空即已发布（不新增 published 态）；Agent 抓取 / 本 API 推送（effect-callback）仍随段13 P3/V2。
+- **发布链路（业务澄清 Q60c）**：客户确认（仅审批信号）→ **运营用托管账号发布** → **运营回填平台链接/ID** → Agent 抓取 → 本 API 推送。前端客户不填写平台链接。**Q125（C1.69）已落「运营回填」一环**：`PUT /api/admin/content/{id}/publish-info` + 待发布队列 `GET /api/admin/content/ready-to-publish`，published_at 非空即已发布（不新增 published 态）；Agent 抓取仍随段13 P3/V2；**本 API 推送（effect-callback 入站）已随 Q126 落地第一片**（见下 Q126 补登）。
+>
+> **Q126 实现补登（2026-09-19，段13 入站第一片，迁移 0034，02 C1.70）**：新建横切包 `app/core/effects/`（models/schemas/service/router）+ 物理表 `effect_records`，复用 Q88 `require_agent_key` Bearer 验签（缺失/错误/吊销统一 401，首个受 Agent Key 保护的业务消费端点）。请求 `{source, records[]}`，record=`content_id/platform_post_id/captured_at/metrics?`；**整批 all-or-nothing**（任一记录非法 422 回 index/field/message，不落部分；source 必填非空白、records≥1、批内重复 (content_id,captured_at) 422）。metrics 七键：六计数（plays/likes/comments/shares/inquiries/conversions）为非负整数、read_rate 为 0..1 数值，bool/未知键拒绝，缺席键与显式 null 不落库（绝不写 0、不估算）。captured_at 须带时区（naive 422）并归一 UTC；同 (content_id,captured_at) 重推幂等覆盖（不新增行）、不同 captured_at 追加时序。按 content_id 精确匹配**非 discarded** 成品：命中 status=matched 并回填 matched_content_id(nullable FK)/tenant_id（由 content.tenant_id 解析，Key 不绑租户），查无或命中 discarded 为 status=orphan；platform_post_id 只留存、不自动绑定。200 回执 `{received,matched,orphan,upserted}`，批级审计 `effect.batch_received`（tenant `_platform`、actor=key_id、roles=[]）。运营只读 `GET /api/admin/effects/orphans`（跨租户孤儿、captured_at 升序）与 `GET /api/admin/effects?content_id=`（成品时序），operations|platform_admin 的 query actor 闸（缺 actor 422、越权 403，limit 1..100 默认 20 / offset 默认 0）。测试 554→591（+37），迁移 0034 经 pg16 往返实测（业务物理表 55→56、FK/索引就位）。**仍随续片/V2 不落**：Q60a 孤儿**人工认领动作**、customer-backfill 客户专用通道（source 值已接受并透传，但不另建客户通道）、content_id↔platform_post_id 运营回填映射的自助化、**效果反哺知识与 Q54/Q57 评分阈值的相关性校准算法（口径原文未给【待补】，不臆造公式）**、Agent 抓取与发布自动化（Q62 本系统不抓取）。
 
 > **Q88 实现补登（2026-09-15，鉴权前置半套）**：本行的“API Key（一 Agent 一 Key，可吊销）”半套已落地——`app/core/api_keys/` + 迁移 0019 新表 `agent_api_keys`（SHA-256 单向哈希存储，明文仅签发响应返回一次，吊销=active/revoked 状态位 append-only），platform_admin 治理端点 `POST/GET /api/admin/agent-keys`、`POST /api/admin/agent-keys/{id}/revoke`，Bearer 验签依赖 `require_agent_key`（失败 401）已备。**本端点 POST /api/effect-callback 本身、records 时序落库（content_id+captured_at 幂等、缺席指标记“—”不当 0）、孤儿队列人工认领、Q60a 运营回填映射、customer-backfill 均仍随段13/P3（V2），本切片不提前落**；Key 在 V1 无受保护业务消费端点为显式记录的已知挂账（同 Q82“底座先行”）。详见 02 C1.32。
 
