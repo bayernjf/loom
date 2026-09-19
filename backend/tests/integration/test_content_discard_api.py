@@ -57,7 +57,10 @@ from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
+OPS_Q = {"actor_id": "ops-1", "roles": ["operations"]}
+ADMIN_Q = {"actor_id": "admin-1", "roles": ["platform_admin"]}
 CUSTOMER = {"id": "cust-1", "roles": []}
+CUSTOMER_Q = {"actor_id": "cust-1", "roles": []}
 REASON = "连续三版复检不过，骨架方向错误，作废回池重生成。"
 
 
@@ -139,6 +142,7 @@ async def client(session_factory):
         )
         session.add_all([
             ContentLanguage(code="zh-CN", name="简体中文", markets=[], status="active"),
+            ContentLanguage(code="en-US", name="English", markets=[], status="active"),
             _fcw(),
         ])
         await session.commit()
@@ -147,10 +151,10 @@ async def client(session_factory):
         yield ac
 
 
-async def _generate(client) -> str:
+async def _generate(client, language: str = "zh-CN") -> str:
     r = await client.post(
         "/api/content/generate",
-        json={"final_id": "fcw-1", "language": "zh-CN", "actor": OPS},
+        json={"final_id": "fcw-1", "language": language, "actor": OPS},
     )
     assert r.status_code == 201, r.text
     return r.json()["content_id"]
@@ -305,6 +309,60 @@ async def test_discarded_slot_released_for_regeneration(client, session_factory)
         json={"final_id": "fcw-1", "language": "zh-CN", "actor": OPS},
     )
     assert r.status_code == 409, r.text
+
+
+def _raw_product(final_id: str, tenant_id: str, status: str, **kw) -> ContentProduct:
+    return ContentProduct(
+        tenant_id=tenant_id,
+        product_space_id="ps-1",
+        final_id=final_id,
+        goal="种草",
+        platform="douyin",
+        kind="article",
+        language="zh-CN",
+        status=status,
+        **kw,
+    )
+
+
+async def test_needs_attention_queue_filters_order_and_role_gate(
+    client, session_factory
+):
+    # c1 生成后停 review（t1）；c2 approve 后 ready，不进待处置。
+    c1 = await _generate(client)
+    c2 = await _generate(client, "en-US")
+    r = await client.post(f"/api/content/{c2}/approve", json={"actor": CUSTOMER})
+    assert r.status_code == 200
+
+    async with session_factory() as session:
+        session.add_all([
+            _raw_product("fcw-x", "t2", CONTENT_REJECTED, reject_reason="客户驳回"),
+            _raw_product("fcw-y", "t1", CONTENT_DISCARDED, discard_reason="已作废"),
+            _raw_product("fcw-z", "t1", CONTENT_DRAFT),
+        ])
+        await session.commit()
+
+    # 缺 actor 422、客户 403、platform_admin/operations 可读。
+    r = await client.get("/api/admin/content/needs-attention")
+    assert r.status_code == 422, r.text
+    r = await client.get("/api/admin/content/needs-attention", params=CUSTOMER_Q)
+    assert r.status_code == 403, r.text
+    r = await client.get("/api/admin/content/needs-attention", params=ADMIN_Q)
+    assert r.status_code == 200, r.text
+
+    r = await client.get("/api/admin/content/needs-attention", params=OPS_Q)
+    assert r.status_code == 200, r.text
+    items = r.json()
+    statuses = {(it["content_id"], it["status"]) for it in items}
+    assert (c1, "review") in statuses
+    assert any(it["tenant_id"] == "t2" and it["status"] == "rejected" for it in items)
+    assert c2 not in {it["content_id"] for it in items}  # ready 不在
+    assert all(
+        it["status"] in {"review", "revising", "rejected"} for it in items
+    )
+    assert all("body" not in it for it in items)
+    # created_at 升序：API 先造的 c1 排首位。
+    assert items[0]["content_id"] == c1
 
 
 async def test_discarded_is_terminal(client):
