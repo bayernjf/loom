@@ -27,7 +27,7 @@ from app.content.schemas import (
 from app.core.audit import append_audit
 from app.core.compliance_wordlist import service as wl_service
 from app.core.config_center.knobs import knob
-from app.core.rbac import OPERATIONS, require_any_role
+from app.core.rbac import OPERATIONS, PLATFORM_ADMIN, require_any_role
 from app.decision.compliance_center import ccr_rules
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.product.product_intake.models import ProductSpace
@@ -384,8 +384,9 @@ async def list_ready_to_publish(
 ) -> list[ContentProduct]:
     """Q60c/Q125 运营待发布队列：跨租户、仅 ready_for_publish 且未回填发布信息，
     按 created_at 升序（先到先发）。行正文不在队列返回（列表项序列化排除 body）。
+    读口同 Q107 ops-queue 对 operations | platform_admin 开放。
     """
-    require_any_role(actor, OPERATIONS)
+    require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
     stmt = (
         select(ContentProduct)
         .where(

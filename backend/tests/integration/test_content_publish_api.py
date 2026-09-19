@@ -52,6 +52,7 @@ from app.main import app
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 OPS_Q = {"actor_id": "ops-1", "roles": ["operations"]}
+ADMIN_Q = {"actor_id": "admin-1", "roles": ["platform_admin"]}
 CUSTOMER = {"id": "cust-1", "roles": []}
 CUSTOMER_Q = {"actor_id": "cust-1", "roles": []}
 
@@ -322,3 +323,20 @@ async def test_ready_queue_role_gate(client):
     r = await client.get("/api/admin/content/ready-to-publish", params=OPS_Q)
     assert r.status_code == 200
     assert len(r.json()) == 1
+
+
+async def test_ready_queue_readable_by_platform_admin_but_write_denied(client):
+    # Q107 同构：读口 operations | platform_admin 双角色；写口 operations 硬闸。
+    cid = await _ready(client)
+    r = await client.get("/api/admin/content/ready-to-publish", params=ADMIN_Q)
+    assert r.status_code == 200, r.text
+    assert [it["content_id"] for it in r.json()] == [cid]
+
+    r = await client.put(
+        f"/api/admin/content/{cid}/publish-info",
+        json={
+            "url": "https://x/1",
+            "actor": {"id": "admin-1", "roles": ["platform_admin"]},
+        },
+    )
+    assert r.status_code == 403, r.text

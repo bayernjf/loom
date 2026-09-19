@@ -24,6 +24,7 @@ from app.core.db import get_session
 from app.core.rbac import (
     DICTIONARY_ADMIN,
     OPERATIONS,
+    PLATFORM_ADMIN,
     PermissionDenied,
     require_any_role,
 )
@@ -33,16 +34,19 @@ from app.product.product_intake.models import ProductSpace
 router = APIRouter(tags=["content"])
 
 
-def _query_actor(role: str):
-    """管理面/业务读口 query actor 闸（Q109/Q118 同构：缺 actor_id 422、越权 403）。"""
+def _query_actor(*roles: str):
+    """管理面/业务读口 query actor 闸（Q109/Q118 同构：缺 actor_id 422、越权 403）。
+
+    传多个角色时为"任一即可"（同 Q107 ops-queue：operations | platform_admin）。
+    """
 
     def dependency(
         actor_id: str = Query(...),
-        roles: list[str] = Query(default_factory=list),
+        roles_param: list[str] = Query(default_factory=list, alias="roles"),
     ) -> Actor:
-        actor = Actor(id=actor_id, roles=roles)
+        actor = Actor(id=actor_id, roles=roles_param)
         try:
-            require_any_role(actor, role)
+            require_any_role(actor, *roles)
         except PermissionDenied as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         return actor
@@ -52,6 +56,8 @@ def _query_actor(role: str):
 
 require_dict_view = _query_actor(DICTIONARY_ADMIN)
 require_ops_view = _query_actor(OPERATIONS)
+# Q125/Q107：运营队列读口对 operations 与 platform_admin 同时开放。
+require_ops_admin_view = _query_actor(OPERATIONS, PLATFORM_ADMIN)
 
 
 def _language_view(lang: ContentLanguage) -> ContentLanguageView:
@@ -206,7 +212,7 @@ async def discard_content(
 )
 async def list_ready_to_publish(
     session: AsyncSession = Depends(get_session),
-    actor: Actor = Depends(require_ops_view),
+    actor: Actor = Depends(require_ops_admin_view),
 ) -> list[ContentProductListItem]:
     """运营待发布队列：跨租户仅 ready_for_publish 且未回填，先到先发。"""
     rows = await service.list_ready_to_publish(session, actor)
