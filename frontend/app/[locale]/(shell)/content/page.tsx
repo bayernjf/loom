@@ -20,6 +20,7 @@ const STATUS_TONE: Record<string, string> = {
   revising: styles.toneRevising,
   generating: styles.toneGenerating,
   draft: styles.toneReview,
+  discarded: styles.toneDiscarded,
 };
 
 function formatScore(score: number | null): string {

@@ -279,6 +279,12 @@ export interface ContentProductListItem {
   reject_reason: string | null;
   regenerate_count: number;
   created_at: string | null;
+  // Q124/Q56-b：运营作废回池的难产原因（仅 discarded 态非空）。
+  discard_reason: string | null;
+  // Q125/Q60c：运营发布回填（published_at 非空即已发布）。
+  published_url: string | null;
+  platform_post_id: string | null;
+  published_at: string | null;
   quality_score: number | null;
   quality_issues: ContentQualityIssue[] | null;
   quality_threshold: number | null;
@@ -710,4 +716,53 @@ export async function getSlaTodos(status: string): Promise<SlaTodoView[]> {
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   params.set("status", status);
   return request<SlaTodoView[]>(`/api/admin/sla/todos?${params}`);
+}
+
+// Q124/Q125：管理端内容运营台（发布队列回填 + 难产作废回池）。
+// 读口 operations | platform_admin（adminPath）；写口 operations 硬闸，
+// Server Action 在 ADMIN_ROLE_LIST 不含 operations 时直接拒发（同 Q107）。
+export async function getReadyToPublishQueue(): Promise<ContentProductListItem[]> {
+  return request<ContentProductListItem[]>(
+    adminPath("/api/admin/content/ready-to-publish"),
+  );
+}
+
+export async function getNeedsAttentionQueue(): Promise<ContentProductListItem[]> {
+  return request<ContentProductListItem[]>(
+    adminPath("/api/admin/content/needs-attention"),
+  );
+}
+
+export async function setPublishInfo(
+  contentId: string,
+  url: string,
+  platformPostId?: string,
+): Promise<ContentProductView> {
+  return request<ContentProductView>(
+    `/api/admin/content/${encodeURIComponent(contentId)}/publish-info`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        url,
+        platform_post_id: platformPostId ?? null,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
+export async function adminDiscardContent(
+  contentId: string,
+  reason: string,
+): Promise<ContentProductView> {
+  return request<ContentProductView>(
+    `/api/content/${encodeURIComponent(contentId)}/discard`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reason,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
 }

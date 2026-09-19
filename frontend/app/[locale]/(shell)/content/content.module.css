@@ -97,6 +97,13 @@
   border-color: var(--color-brand);
 }
 
+/* Q124：作废终态，弱化只读 */
+.toneDiscarded {
+  color: var(--color-text-tertiary);
+  border-color: var(--color-text-tertiary);
+  text-decoration: line-through;
+}
+
 .flagList {
   display: flex;
   flex-wrap: wrap;

@@ -186,7 +186,23 @@ export default async function ContentDetailPage({
       ) : null}
 
       {content.status === "ready_for_publish" ? (
-        <p className={styles.notice}>{t("readyNote")}</p>
+        <div className={styles.island}>
+          <h2 className={styles.subtitle}>{t("publishedLinkTitle")}</h2>
+          {content.published_url ? (
+            <a href={content.published_url} target="_blank" rel="noreferrer">
+              {content.published_url}
+            </a>
+          ) : (
+            <p className={styles.notice}>{t("publishedLinkMissing")}</p>
+          )}
+        </div>
+      ) : null}
+
+      {content.status === "discarded" && content.discard_reason ? (
+        <div className={styles.island}>
+          <h2 className={styles.subtitle}>{t("discardedReasonTitle")}</h2>
+          <p>{content.discard_reason}</p>
+        </div>
       ) : null}
 
       <Link href="/content" className={styles.backLink}>
