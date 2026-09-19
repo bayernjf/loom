@@ -3,6 +3,7 @@
 import pytest
 
 from app.content.models import (
+    CONTENT_DISCARDED,
     CONTENT_DRAFT,
     CONTENT_GENERATING,
     CONTENT_READY,
@@ -41,9 +42,29 @@ def test_illegal_transition_raises():
 
 
 def test_allowed_events_expose_customer_actions():
-    assert set(allowed_events(CONTENT_REVIEW)) == {"approve", "reject", "revise"}
+    # Q124：review 态同时外放运营作废（discard）。
+    assert set(allowed_events(CONTENT_REVIEW)) == {
+        "approve", "reject", "revise", "discard"
+    }
     assert set(allowed_events(CONTENT_DRAFT)) == {"generate"}
     assert allowed_events(CONTENT_READY) == []
+    # discarded 为终态，无外放事件。
+    assert allowed_events(CONTENT_DISCARDED) == []
+
+
+def test_discard_from_review_revising_rejected():
+    # Q124/Q56-b：三种在制/驳回态可作废回池。
+    assert target_status(CONTENT_REVIEW, "discard") == CONTENT_DISCARDED
+    assert target_status(CONTENT_REVISING, "discard") == CONTENT_DISCARDED
+    assert target_status(CONTENT_REJECTED, "discard") == CONTENT_DISCARDED
+
+
+def test_discard_illegal_from_other_states():
+    # draft/generating 无骨架或在制瞬态、ready 已进发布，均不可作废。
+    for status in (CONTENT_DRAFT, CONTENT_GENERATING, CONTENT_READY, CONTENT_DISCARDED):
+        assert can_transition(status, "discard") is False
+        with pytest.raises(ValueError):
+            target_status(status, "discard")
 
 
 def test_revise_limited_by_regenerate_cap():
