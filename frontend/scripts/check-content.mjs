@@ -74,6 +74,9 @@ const requiredKeys = [
   "content.submitEdit",
   "content.editSuccess",
   "content.readyNote",
+  "content.publishedLinkTitle",
+  "content.publishedLinkMissing",
+  "content.discardedReasonTitle",
   "content.backToList",
   "content.actorUnconfigured",
   "content.status.draft",
@@ -82,6 +85,7 @@ const requiredKeys = [
   "content.status.ready_for_publish",
   "content.status.rejected",
   "content.status.revising",
+  "content.status.discarded",
   "error.403",
   "error.404",
   "error.409",
@@ -173,6 +177,11 @@ if (!detailPageText.includes('getTranslations("content.status")'))
 const actionsText = readFileSync(join(shell, "content", "actions.ts"), "utf8");
 if (!actionsText.startsWith('"use server"'))
   problems.push('content/actions.ts must start with "use server"');
+// Q124/Q125：作废与发布回填是 operations 写口，客户侧一律不得引用。
+for (const banned of ["adminDiscardContent", "setPublishInfo", "/discard", "/publish-info"]) {
+  if (actionsText.includes(banned))
+    problems.push(`customer content actions must not expose operations endpoint token: ${banned}`);
+}
 for (const token of [
   "decideContentAction",
   "saveContentBodyAction",
@@ -214,11 +223,27 @@ const languagesAt = routerText.indexOf('"/api/content/languages"');
 const contentIdAt = routerText.indexOf('"/api/content/{content_id}"');
 if (languagesAt === -1 || contentIdAt === -1 || languagesAt > contentIdAt)
   problems.push("GET /api/content/languages must be registered before /api/content/{content_id}");
+// Q124/Q125：运营作废与发布回填路由必须存在。
+for (const route of [
+  '"/api/content/{content_id}/discard"',
+  '"/api/admin/content/{content_id}/publish-info"',
+  '"/api/admin/content/ready-to-publish"',
+  '"/api/admin/content/needs-attention"',
+]) {
+  if (!routerText.includes(route))
+    problems.push(`backend content router must keep ${route}`);
+}
 const smText = readFileSync(join(backend, "app", "content", "statemachine.py"), "utf8");
-for (const token of ["manual_resubmit", "CONTENT_REVISING", "CONTENT_REVIEW"]) {
+for (const token of ["manual_resubmit", "CONTENT_REVISING", "CONTENT_REVIEW", "EVENT_DISCARD", "CONTENT_DISCARDED"]) {
   if (!smText.includes(token))
     problems.push(`content statemachine must keep ${token}`);
 }
+// Q124：客户列表必须能渲染 discarded 终态 chip。
+const contentCss = readFileSync(join(shell, "content", "content.module.css"), "utf8");
+if (!contentCss.includes(".toneDiscarded"))
+  problems.push("content.module.css must define toneDiscarded for the discarded terminal state");
+if (!listPageText.includes("toneDiscarded"))
+  problems.push("content list page must map discarded status to toneDiscarded");
 // 生成 / 重生成 operations 闸不得被移除。
 const serviceText = readFileSync(join(backend, "app", "content", "service.py"), "utf8");
 if (!serviceText.includes("require_any_role(body.actor, OPERATIONS)"))
