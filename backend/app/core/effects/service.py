@@ -1,4 +1,4 @@
-"""段13 效果回流接收/时序/孤儿分流/人工认领/客户回填服务（Q126/Q127/Q128）。
+"""段13 效果回流接收/时序/孤儿分流/人工认领/客户回填/认领解绑服务（Q126–Q129）。
 
 契约：05 §1.1.1 / 11 §2.1（Q60/Q60a）。
 
@@ -75,6 +75,10 @@ class ClaimTargetNotFound(ClaimError):
 
 class ClaimTargetDiscarded(ClaimError):
     """绑定目标成品已 discarded（终态，不可绑定）。"""
+
+
+class ClaimMappingNotFound(ClaimError):
+    """解绑（Q129）时认领映射不存在。"""
 
 
 def _is_real_number(value: object) -> bool:
@@ -393,23 +397,14 @@ async def ingest_customer_backfill(
     return receipt
 
 
-async def claim_orphan(
+async def _claim_one(
     session: AsyncSession,
     *,
     record_id: str,
     content_id: str,
     actor: Actor,
 ) -> dict[str, object]:
-    """Q127/Q60a：运营把一条孤儿记录人工绑定到本系统成品。
-
-    - 入口记录须存在且当前为 orphan（404/409）；目标成品须存在且非 discarded（404/409）。
-    - upsert external_content_id→content_id 持久映射（重复认领=改绑）；该 ID
-      之后的推送（覆盖/新采集点）按映射自动 matched，不回落孤儿。
-    - 回填该 external_content_id 下全部 orphan 行与历史人工认领行（改绑重指）；
-      自动 matched 行不动。
-    """
-
-    require_any_role(actor, OPERATIONS)
+    """单条认领落库（不做角色闸，由调用方统一闸）：校验 + upsert 映射 + 回填行 + 审计。"""
 
     record = await session.get(EffectRecord, record_id)
     if record is None:
@@ -487,6 +482,126 @@ async def claim_orphan(
         "claimed_by": actor.id,
         "claimed_at": now,
         "updated_rows": updated_rows,
+    }
+
+
+async def claim_orphan(
+    session: AsyncSession,
+    *,
+    record_id: str,
+    content_id: str,
+    actor: Actor,
+) -> dict[str, object]:
+    """Q127/Q60a：运营把一条孤儿记录人工绑定到本系统成品。
+
+    - 入口记录须存在且当前为 orphan（404/409）；目标成品须存在且非 discarded（404/409）。
+    - upsert external_content_id→content_id 持久映射（重复认领=改绑）；该 ID
+      之后的推送（覆盖/新采集点）按映射自动 matched，不回落孤儿。
+    - 回填该 external_content_id 下全部 orphan 行与历史人工认领行（改绑重指）；
+      自动 matched 行不动。
+    """
+
+    require_any_role(actor, OPERATIONS)
+    return await _claim_one(
+        session, record_id=record_id, content_id=content_id, actor=actor
+    )
+
+
+async def claim_orphan_batch(
+    session: AsyncSession,
+    *,
+    items: list,
+    actor: Actor,
+) -> dict[str, int]:
+    """Q129：批量人工认领，整批 all-or-nothing（同 Q93/Q126 口径）。
+
+    任一条 404/409 或批内 record_id 重复，整批拒（router 回滚，不落半批）；
+    逐条 effect.claimed 审计随事务一起提交或回滚。
+    """
+
+    require_any_role(actor, OPERATIONS)
+    seen: set[str] = set()
+    for index, item in enumerate(items):
+        if item.record_id in seen:
+            raise EffectValidationError(
+                index, "record_id", "duplicate record_id within batch"
+            )
+        seen.add(item.record_id)
+
+    total_updated = 0
+    for item in items:
+        result = await _claim_one(
+            session,
+            record_id=item.record_id,
+            content_id=item.content_id,
+            actor=actor,
+        )
+        total_updated += int(result["updated_rows"])
+    return {"claimed": len(items), "updated_rows": total_updated}
+
+
+async def unclaim_orphan(
+    session: AsyncSession,
+    *,
+    external_content_id: str,
+    actor: Actor,
+) -> dict[str, object]:
+    """Q129：取消认领/解绑（Q127 挂账）。
+
+    - 删除 external_content_id→content_id 持久映射（映射不存在 404）；
+    - 该 ID 下因该映射而 matched 到旧目标的行一律回滚为 orphan
+      （清空 matched_content_id/tenant_id/claimed_by/claimed_at）——含人工认领
+      回填行与认领后经兜底匹配的新推送行；external_id 自匹配的真自动 matched 行
+      （matched_content_id==external_content_id）不可能指向映射目标，天然不受影响；
+    - 解绑后同 ID 的后续推送不再走认领兜底，重新按自动匹配分流；
+    - 审计 effect.claim_revoked（tenant _platform、entity_id=external_content_id）。
+    """
+
+    require_any_role(actor, OPERATIONS)
+
+    claim = await session.get(EffectClaim, external_content_id)
+    if claim is None:
+        raise ClaimMappingNotFound(f"effect claim {external_content_id} not found")
+    old_content_id = claim.content_id
+    await session.delete(claim)
+
+    rows = (
+        await session.scalars(
+            select(EffectRecord).where(
+                EffectRecord.external_content_id == external_content_id,
+                EffectRecord.matched_content_id == old_content_id,
+            )
+        )
+    ).all()
+    now = datetime.now(UTC)
+    reverted_rows = 0
+    for row in rows:
+        row.matched_content_id = None
+        row.tenant_id = None
+        row.status = STATUS_ORPHAN
+        row.claimed_by = None
+        row.claimed_at = None
+        row.updated_at = now
+        reverted_rows += 1
+
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=list(actor.roles),
+        action="effect.claim_revoked",
+        entity_type="effect_claim",
+        entity_id=external_content_id,
+        detail={
+            "external_content_id": external_content_id,
+            "content_id": old_content_id,
+            "reverted_rows": reverted_rows,
+        },
+    )
+
+    return {
+        "external_content_id": external_content_id,
+        "reverted_rows": reverted_rows,
     }
 
 
