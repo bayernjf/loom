@@ -14,24 +14,53 @@ from app.core.queue import StreamBackendError
 router = APIRouter(prefix="/api/exports", tags=["middleground-export"])
 
 
+def _validate_page(limit: int | None, offset: int) -> None:
+    # Q142：页大小不得超过硬上限；不传 limit 时由 service 回落到硬上限。
+    max_rows = get_settings().export_max_rows
+    if limit is not None and limit > max_rows:
+        raise HTTPException(
+            status_code=422,
+            detail=f"limit must be <= {max_rows} (export_max_rows)",
+        )
+
+
+def _page_headers(page: dict, filename: str) -> dict:
+    # Q142：CSV 正文严格单列，分页/截断信息走 X-* 响应头。
+    return {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Export-Total": str(page["total"]),
+        "X-Export-Limit": str(page["limit"]),
+        "X-Export-Offset": str(page["offset"]),
+        "X-Export-Has-More": "true" if page["has_more"] else "false",
+        "X-Export-Truncated": "true" if page["truncated"] else "false",
+    }
+
+
 @router.get("/fcw.csv")
 async def export_fcw_csv(
     tenant_id: str = Query(min_length=1),
     product_space_id: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     # Q100：中台手动拉取白名单 final_id 单列。读路径不触发 Q95 准入门
     # （未知租户=仅表头空文件 200）；只导 published（draft 排除，Q32
-    # revoked 落地后同过滤自然生效）。
-    final_ids = await service.exported_final_ids(
-        session, tenant_id=tenant_id, product_space_id=product_space_id
+    # revoked 落地后同过滤自然生效）。Q142：支持 limit/offset 分页与硬上限。
+    _validate_page(limit, offset)
+    page = await service.fetch_export_page(
+        session,
+        tenant_id=tenant_id,
+        product_space_id=product_space_id,
+        limit=limit,
+        offset=offset,
     )
-    body = service.render_csv(final_ids)
+    body = service.render_csv(page["final_ids"])
     filename = f"fcw-{tenant_id}.csv"
     return Response(
         content=body,
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=_page_headers(page, filename),
     )
 
 
@@ -39,17 +68,32 @@ async def export_fcw_csv(
 async def export_fcw_json(
     tenant_id: str = Query(min_length=1),
     product_space_id: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
     # Q132：JSON 形态与 CSV 同口径（只 final_id、只 published、未知租户空 200）。
-    final_ids = await service.exported_final_ids(
-        session, tenant_id=tenant_id, product_space_id=product_space_id
+    # Q142：envelope 追加 total/limit/offset/has_more 分页元数据。
+    _validate_page(limit, offset)
+    page = await service.fetch_export_page(
+        session,
+        tenant_id=tenant_id,
+        product_space_id=product_space_id,
+        limit=limit,
+        offset=offset,
     )
-    payload = service.render_json(tenant_id, product_space_id, final_ids)
+    payload = service.render_json(
+        tenant_id,
+        product_space_id,
+        page["final_ids"],
+        total=page["total"],
+        limit=page["limit"],
+        offset=page["offset"],
+    )
     filename = f"fcw-{tenant_id}.json"
     return JSONResponse(
         content=payload,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=_page_headers(page, filename),
     )
 
 
@@ -145,11 +189,9 @@ async def download_export_job(
         raise HTTPException(
             status_code=409, detail=f"export job not ready (status={job.status})"
         )
-    media_type, body = await service.render_job(session, job)
+    media_type, body, page = await service.render_job(session, job)
     return Response(
         content=body,
         media_type=media_type,
-        headers={
-            "Content-Disposition": f'attachment; filename="{job.file_name}"'
-        },
+        headers=_page_headers(page, job.file_name),
     )

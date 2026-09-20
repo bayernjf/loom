@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     export_worker_enabled: bool = False
     export_stream_block_seconds: float = 5.0
 
+    # Q142 中台导出行数硬上限（运维防护参数，非 Q9 业务旋钮）：fcw.csv/fcw.json
+    # 与导出任务在未显式分页时最多导出的 final_id 行数，防大结果集 OOM/超大响应；
+    # GET 直读端点的 limit 不得超过该值（422）。默认 10 万行。
+    export_max_rows: int = 100000
+
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。
     orch_max_concurrency: int = 4
