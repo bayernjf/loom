@@ -12,8 +12,9 @@ from app.core.db import get_session, settings
 from app.core.locking import (
     RESTOCK_LOCK,
     LockBackendError,
+    LockLost,
     LockUnavailable,
-    leader_lock,
+    leader_lease,
 )
 from app.core.rbac import PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.core.restock.worker import run_restock
@@ -45,15 +46,21 @@ async def run_restock_once(
         yield session
 
     try:
-        async with leader_lock(RESTOCK_LOCK):
+        async with leader_lease(RESTOCK_LOCK) as lease:
+            # Q139：每条信号处理前协作中止，锁中途易主则不再继续花钱。
             return await run_restock(
                 factory,
                 limit=settings.restock_batch_size,
                 honor_backoff=False,
+                checkpoint=lease.raise_if_lost,
             )
     except LockUnavailable as exc:
         raise HTTPException(
             status_code=409, detail="restock sweep already running"
+        ) from exc
+    except LockLost as exc:
+        raise HTTPException(
+            status_code=409, detail="restock aborted: leader lock lost mid-run"
         ) from exc
     except LockBackendError as exc:
         raise HTTPException(status_code=503, detail="lock backend unavailable") from exc

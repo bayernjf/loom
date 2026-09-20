@@ -22,6 +22,7 @@
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -32,8 +33,9 @@ from app.core.db import settings
 from app.core.locking import (
     RESTOCK_LOCK,
     LockBackendError,
+    LockLost,
     LockUnavailable,
-    leader_lock,
+    leader_lease,
 )
 from app.core.model_registry import gateway, pwc_build
 from app.core.model_registry.pwc_build import SYSTEM_ACTOR
@@ -255,12 +257,19 @@ async def _process_one(session_factory, requested: SkillRun) -> dict:
 
 
 async def run_restock(
-    session_factory, *, limit: int = 20, honor_backoff: bool = True
+    session_factory,
+    *,
+    limit: int = 20,
+    honor_backoff: bool = True,
+    checkpoint: Callable[[], None] | None = None,
 ) -> dict:
     """跑一轮补货。每条信号行独立会话/提交，互不污染（同 SLA runner 口径）。
 
     honor_backoff=False 用于手工 /run：绕过退避窗口立即尝试；尝试仍为瞬态时
     照常累加 attempts 并重排下次窗口（Q90 接缝④）。
+
+    Q139：``checkpoint``（持锁方 lease.raise_if_lost）在每条信号处理前调用，
+    锁中途易主即抛 LockLost 协作中止，剩余信号本轮不再补货（防旧持有者继续花钱）。
     """
     now = datetime.now(UTC)
     async with session_factory() as session:
@@ -269,6 +278,8 @@ async def run_restock(
         )
     report: dict[str, dict] = {}
     for requested in pending:
+        if checkpoint is not None:
+            checkpoint()
         report[str(requested.run_id)] = await _process_one(session_factory, requested)
     return {
         "claimed": len(pending),
@@ -301,15 +312,26 @@ class RestockWorker:
         self._task = asyncio.create_task(self._loop(), name="loom-restock-worker")
 
     async def _tick(self) -> None:
-        """跑一轮补货；多副本下非持锁副本/Redis 故障均跳过（Q89，防双花）。"""
+        """跑一轮补货；多副本下非持锁副本/Redis 故障均跳过（Q89，防双花）。
+
+        Q139：改用 leader_lease，每条信号处理前 raise_if_lost——锁在一轮中途易主
+        即协作中止，旧持有者不再继续调用模型花钱（fencing）。
+        """
         try:
-            async with leader_lock(RESTOCK_LOCK):
-                report = await run_restock(self._factory, limit=self._batch_size)
+            async with leader_lease(RESTOCK_LOCK) as lease:
+                report = await run_restock(
+                    self._factory,
+                    limit=self._batch_size,
+                    checkpoint=lease.raise_if_lost,
+                )
         except LockUnavailable:
             logger.info("restock tick skipped: leader lock held by another replica")
             return
         except LockBackendError:
             logger.exception("restock tick skipped: lock backend unavailable")
+            return
+        except LockLost:
+            logger.warning("restock tick aborted: leader lock lost mid-tick")
             return
         if report["claimed"]:
             logger.info("restock sweep: %s", report)

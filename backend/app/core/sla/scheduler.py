@@ -11,8 +11,9 @@ import logging
 from app.core.locking import (
     SWEEP_LOCK,
     LockBackendError,
+    LockLost,
     LockUnavailable,
-    leader_lock,
+    leader_lease,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,15 +38,24 @@ class SweepScheduler:
         self._task = asyncio.create_task(self._loop(), name="loom-sweep-scheduler")
 
     async def _tick(self) -> None:
-        """跑一轮 sweep；多副本下非持锁副本/Redis 故障均跳过（Q89）。"""
+        """跑一轮 sweep；多副本下非持锁副本/Redis 故障均跳过（Q89）。
+
+        Q139：改用 leader_lease，作业间以 raise_if_lost 协作中止——锁在一轮中途
+        过期易主时，剩余作业本轮不再执行（fencing，旧持有者不再写下游）。
+        """
         try:
-            async with leader_lock(SWEEP_LOCK):
-                report = await self._run_jobs(self._factory)
+            async with leader_lease(SWEEP_LOCK) as lease:
+                report = await self._run_jobs(
+                    self._factory, checkpoint=lease.raise_if_lost
+                )
         except LockUnavailable:
             logger.info("sweep tick skipped: leader lock held by another replica")
             return
         except LockBackendError:
             logger.exception("sweep tick skipped: lock backend unavailable")
+            return
+        except LockLost:
+            logger.warning("sweep tick aborted: leader lock lost mid-tick")
             return
         if any("error" in r for r in report.values()):
             logger.warning("scheduled sweep reported errors: %s", report)

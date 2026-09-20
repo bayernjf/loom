@@ -2,9 +2,10 @@
 
 GET /api/exports/fcw.csv（Q100）只提供同步 CSV；Q132 补：
 - GET /api/exports/fcw.json 同步 JSON 形态（与 CSV 同口径，只导 published）；
-- POST /api/exports/jobs 导出任务记录——V1 在请求内同步生成并置 completed，
-  下载按任务参数重新查询渲染（不存文件大字段、幂等反映当前 published 集合）；
-  queued/running 后台 worker 形态留给 V2（Redis Streams，见 V2 基建挂账）。
+- POST /api/exports/jobs 导出任务记录——门控关闭时在请求内同步生成并置 completed；
+  Q137 起门控开启（LOOM_EXPORT_WORKER_ENABLED）走 queued→running→completed/failed
+  真后台 worker（Redis Streams 消费组）。下载按任务参数重新查询渲染（不存文件大
+  字段、幂等反映当前 published 集合）。
 """
 
 import uuid
@@ -19,9 +20,16 @@ FORMAT_CSV = "csv"
 FORMAT_JSON = "json"
 EXPORT_FORMATS = (FORMAT_CSV, FORMAT_JSON)
 
-# V1 同步执行：创建即 completed/failed；queued/running 预留给 V2 后台 worker。
+# V1 同步执行：门控关闭时创建即 completed/failed。
+# Q137：门控开启（LOOM_EXPORT_WORKER_ENABLED）走 queued→running→completed/failed
+# 真后台 worker（Redis Streams 消费组）。status 为 String(16) 无 DB 枚举，零迁移。
+JOB_QUEUED = "queued"
+JOB_RUNNING = "running"
 JOB_COMPLETED = "completed"
 JOB_FAILED = "failed"
+
+# 异步生命周期终态集合（用于重复投递幂等判断）。
+JOB_TERMINAL_STATES = frozenset({JOB_COMPLETED, JOB_FAILED})
 
 
 def _uuid_pk() -> str:

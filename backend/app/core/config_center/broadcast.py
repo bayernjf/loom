@@ -7,8 +7,10 @@ V1（M10 切片 a/c）配置发布只在提交后原子切换**本进程**快照
   一条失效消息（payload 为变更 key，全量失效为 ``*``）。广播是 **best-effort**——
   事务既已提交，发布失败只能告警（对端最坏短暂陈旧），绝不让已成功的发布报错；
 - 订阅侧：``ConfigBroadcastSubscriber`` 后台任务订阅该频道，收到消息后用独立
-  会话 ``config_cache.reload()`` 全量重载（配置项规模小，全量重载最简单可靠；
-  单 key 热更的一致性优化随 V2）。订阅/轮询/重载异常只告警并继续，任务不自毁。
+  会话重载本进程快照——``*`` 全量 ``reload()``，具体 key 走 Q140 的
+  ``reload_keys()`` 单 key 增量失效（DB 已删的 key 同步从快照移除）。
+  订阅/轮询/重载异常只告警并继续，任务不自毁；Q140 起断线/故障按指数退避
+  （1s 起、封顶 30s）重试，成功一次即重置，避免重连忙等打满 CPU/连接。
 
 门控 ``LOOM_CONFIG_CACHE_BROADCAST_ENABLED`` 默认 false：单副本/本地不接触
 Redis，行为与 V1 完全一致。无 PG 迁移。
@@ -31,6 +33,9 @@ INVALIDATE_ALL = "*"
 
 # 订阅轮询取不到消息时的等待/故障退避节拍（秒）。
 DEFAULT_POLL_TIMEOUT_SECONDS = 1.0
+# Q140 连续故障的指数退避：从 1s 起倍增，封顶 30s；成功一次即重置。
+DEFAULT_BACKOFF_BASE_SECONDS = 1.0
+DEFAULT_BACKOFF_CAP_SECONDS = 30.0
 
 
 _client: aioredis.Redis | None = None
@@ -98,14 +103,25 @@ class ConfigBroadcastSubscriber:
         session_factory,
         *,
         poll_timeout_seconds: float = DEFAULT_POLL_TIMEOUT_SECONDS,
+        backoff_base_seconds: float = DEFAULT_BACKOFF_BASE_SECONDS,
+        backoff_cap_seconds: float = DEFAULT_BACKOFF_CAP_SECONDS,
     ):
         self._factory = session_factory
         self._poll_timeout = poll_timeout_seconds
+        self._backoff_base = backoff_base_seconds
+        self._backoff_cap = backoff_cap_seconds
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
         self._pubsub = None
-        # 可观测/测试：成功 reload 次数。
+        # 可观测/测试：成功 reload 次数、连续故障计数（驱动指数退避）。
         self.reloads = 0
+        self.consecutive_failures = 0
+
+    def _backoff_delay(self) -> float:
+        return min(
+            self._backoff_cap,
+            self._backoff_base * (2 ** max(0, self.consecutive_failures - 1)),
+        )
 
     @property
     def running(self) -> bool:
@@ -136,30 +152,61 @@ class ConfigBroadcastSubscriber:
                 ignore_subscribe_messages=True, timeout=self._poll_timeout
             )
             if message is None:
+                # 连接健康、只是暂无消息：重置退避。
+                self.consecutive_failures = 0
                 return False
-            # payload 为变更 key 或 '*'；V1 统一全量 reload（配置项少、避免单键
-            # 热更与版本错位），消息本身只作为"配置已变更"的触发信号。
+            # payload 为变更 key 或 '*'：'*'/缺失全量 reload，具体 key 增量失效。
+            raw = message.get("data")
+            key = (
+                raw.decode() if isinstance(raw, bytes) else (None if raw is None else str(raw))
+            )
             async with self._factory() as session:
-                await config_cache.reload(session)
+                if not key or key == INVALIDATE_ALL:
+                    await config_cache.reload(session)
+                else:
+                    await config_cache.reload_keys(session, [key])
             self.reloads += 1
-            logger.info("config cache reloaded from invalidation broadcast")
+            self.consecutive_failures = 0
+            logger.info(
+                "config cache %s from invalidation broadcast",
+                "reloaded" if not key or key == INVALIDATE_ALL else f"reloaded key {key}",
+            )
             return True
         except asyncio.CancelledError:
             raise
         except redis.RedisError:
-            # 订阅连接故障：丢弃 pubsub，下一轮懒重建连，任务不自毁。
-            logger.exception("config broadcast poll failed; will resubscribe")
+            # 订阅连接故障：丢弃 pubsub，下一轮懒重建连，任务不自毁；计入退避。
+            self.consecutive_failures += 1
+            logger.exception(
+                "config broadcast poll failed (streak=%s); will resubscribe",
+                self.consecutive_failures,
+            )
             await self._close_pubsub()
             return False
         except Exception:
-            logger.exception("config invalidation reload failed; will retry")
+            self.consecutive_failures += 1
+            logger.exception(
+                "config invalidation reload failed (streak=%s); will retry",
+                self.consecutive_failures,
+            )
             return False
 
     async def _loop(self) -> None:
         while not self._stop.is_set():
-            handled = await self.poll_once()
-            if not handled and self._pubsub is not None:
-                # get_message(timeout=) 自身已等待；仅在重建连接等无等待路径补节拍。
+            await self.poll_once()
+            if self._stop.is_set():
+                break
+            if self.consecutive_failures:
+                # Q140：连续故障指数退避，避免重连忙等；stop 可立即唤醒退出。
+                try:
+                    await asyncio.wait_for(
+                        self._stop.wait(), timeout=self._backoff_delay()
+                    )
+                except TimeoutError:
+                    pass
+            else:
+                # 零拍让出：真 Redis 的 get_message(timeout=) 自身会阻塞 poll_timeout，
+                # 但替身/立即返回路径不阻塞，必须每轮让出一次以免忙转饿死定时器。
                 await asyncio.sleep(0)
 
     async def _close_pubsub(self) -> None:

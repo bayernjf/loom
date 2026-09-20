@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     restock_interval_seconds: float = 60.0
     restock_batch_size: int = 20
 
+    # Q138 restock requested 信号 Redis Streams 生产接线：默认关。开启后跌破
+    # critical 的补货请求在提交后 best-effort XADD 到 restock 流（DB 行仍是事实
+    # 源、DB 轮询兜底）；消费组水平并行消费留 V2（花钱单实例裁决见 Q87/Q89）。
+    restock_stream_enabled: bool = False
+
     # Q90 restock 瞬态失败指数退避（env 运维参数，非 Q9 业务旋钮）：
     # base×2^(attempts-1)，封顶 max；上游传输错累计 max_attempts 次转终态，
     # 日预算硬停（UTC 次日恢复）永不转终态。
@@ -43,6 +48,12 @@ class Settings(BaseSettings):
     # after_commit 进程内热更新；多副本开启后，发布方广播失效、其余副本订阅后
     # reload。广播为 best-effort（失败只告警，不影响已提交事务）。
     config_cache_broadcast_enabled: bool = False
+
+    # Q137 导出任务真后台 worker（Redis Streams 消费组）：默认关，关闭时 POST
+    # /api/exports/jobs 维持 Q132 请求内同步 completed；开启后建 queued 入流，
+    # 进程内 ExportWorker 消费置 running→completed/failed（只读幂等，可多副本并行）。
+    export_worker_enabled: bool = False
+    export_stream_block_seconds: float = 5.0
 
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。

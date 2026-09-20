@@ -19,7 +19,7 @@
 | DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部；其中 **2 个驾驶舱只读聚合已落地**：GET /api/admin/dashboards/token-cost、GET /api/admin/dashboards/review-workload（Q92） | D9.5 / Q92 | 🟡 驾驶舱两读口已落地（platform_admin，见 05 §1.4）；DB 浏览 / AI 调试台 / 配额【待补】 |
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
-| CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132） | D4 | 🟢 CSV/JSON 同步导出 + V1 同步任务记录均已落地（见 §2.3/§2.4）；真后台 worker 随 V2 |
+| CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132） | D4 | 🟢 CSV/JSON 同步导出 + 导出任务记录已落地（见 §2.3/§2.4）；queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（env 默认关，门控关走同步） |
 
 ---
 
