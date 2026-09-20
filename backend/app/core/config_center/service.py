@@ -31,10 +31,11 @@ def _require_admin(actor) -> None:
         raise RoleNotAllowed("requires platform_admin role")
 
 
-def _schedule_cache_apply(session, key: str, value) -> None:
+def _schedule_cache_apply(session, key: str, value, version: int) -> None:
     # 仅在事务真正提交后切换进程内快照；回滚则缓存不动。
     def _after_commit(*_) -> None:
-        config_cache.apply({key: value})
+        # Q141：本进程发布携带权威版本号，供增量失效版本门控。
+        config_cache.apply({key: value}, {key: version})
         # Q135：多副本下广播失效（门控关闭时为空操作，不接触 Redis；best-effort）。
         spawn_invalidation(key)
 
@@ -93,7 +94,7 @@ async def _publish(session, item: ConfigItem, value, actor, note: str | None, ac
         entity_id=item.key,
         detail={"version": item.version, "value": coerced, "note": note},
     )
-    _schedule_cache_apply(session, item.key, coerced)
+    _schedule_cache_apply(session, item.key, coerced, item.version)
     return item
 
 

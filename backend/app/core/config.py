@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # reload。广播为 best-effort（失败只告警，不影响已提交事务）。
     config_cache_broadcast_enabled: bool = False
 
+    # Q141 配置缓存 TTL 兜底（秒）：广播 best-effort 可能丢消息，订阅器在最近
+    # 一次成功装载超过该时长后，即使没收到失效消息也回源全量 reload 一次，给
+    # 陈旧时长设上限。仅在 config_cache_broadcast_enabled 开启时由订阅器使用；
+    # 单副本 after_commit 即时 apply，不依赖 TTL。运维参数，非 Q9 业务旋钮。
+    config_cache_ttl_seconds: float = 300.0
+
     # Q137 导出任务真后台 worker（Redis Streams 消费组）：默认关，关闭时 POST
     # /api/exports/jobs 维持 Q132 请求内同步 completed；开启后建 queued 入流，
     # 进程内 ExportWorker 消费置 running→completed/failed（只读幂等，可多副本并行）。

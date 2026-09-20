@@ -19,6 +19,7 @@ Redis，行为与 V1 完全一致。无 PG 迁移。
 import asyncio
 import contextlib
 import logging
+import time
 
 import redis
 import redis.asyncio as aioredis
@@ -105,16 +106,23 @@ class ConfigBroadcastSubscriber:
         poll_timeout_seconds: float = DEFAULT_POLL_TIMEOUT_SECONDS,
         backoff_base_seconds: float = DEFAULT_BACKOFF_BASE_SECONDS,
         backoff_cap_seconds: float = DEFAULT_BACKOFF_CAP_SECONDS,
+        ttl_seconds: float | None = None,
     ):
         self._factory = session_factory
         self._poll_timeout = poll_timeout_seconds
         self._backoff_base = backoff_base_seconds
         self._backoff_cap = backoff_cap_seconds
+        # Q141：None 表示取 settings.config_cache_ttl_seconds（默认 300s）。
+        self._ttl = ttl_seconds
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
         self._pubsub = None
-        # 可观测/测试：成功 reload 次数、连续故障计数（驱动指数退避）。
+        # 最近一次成功装载的 monotonic 时间戳（消息 reload 与 TTL 兜底都刷新）。
+        self._last_reload_at: float | None = None
+        # 可观测/测试：广播触发的 reload 次数、TTL 兜底 reload 次数、
+        # 连续故障计数（驱动指数退避）。
         self.reloads = 0
+        self.ttl_reloads = 0
         self.consecutive_failures = 0
 
     def _backoff_delay(self) -> float:
@@ -131,7 +139,30 @@ class ConfigBroadcastSubscriber:
         if self.running:
             return
         self._stop.clear()
+        # Q141：继承启动前的装载时刻作为 TTL 计时起点（应用启动通常已全量
+        # reload 一次）；为 None 时等首次成功 reload 后才开始周期兜底。
+        self._last_reload_at = config_cache.loaded_at
         self._task = asyncio.create_task(self._loop(), name="loom-config-subscriber")
+
+    def _ttl_seconds(self) -> float:
+        return self._ttl if self._ttl is not None else get_settings().config_cache_ttl_seconds
+
+    async def _ttl_reload_if_due(self) -> bool:
+        """Q141 TTL 兜底：广播丢消息时，超过 TTL 未成功装载则回源全量 reload。
+
+        仅在曾成功装载（``_last_reload_at`` 非 None）后周期触发，给对端最坏
+        陈旧时长设上限；从未装载时不主动触发（启动已有全量 reload，也避免无
+        factory 的轮询误触）。回源异常由 ``poll_once`` 的统一 except 捕获退避。
+        """
+        last = self._last_reload_at
+        if last is None or time.monotonic() - last < self._ttl_seconds():
+            return False
+        async with self._factory() as session:
+            await config_cache.reload(session)
+        self._last_reload_at = time.monotonic()
+        self.ttl_reloads += 1
+        logger.info("config cache reloaded by TTL safety net")
+        return True
 
     async def _ensure_pubsub(self):
         if self._pubsub is None:
@@ -152,9 +183,9 @@ class ConfigBroadcastSubscriber:
                 ignore_subscribe_messages=True, timeout=self._poll_timeout
             )
             if message is None:
-                # 连接健康、只是暂无消息：重置退避。
+                # 连接健康、只是暂无消息：重置退避；Q141 再做 TTL 兜底回源。
                 self.consecutive_failures = 0
-                return False
+                return await self._ttl_reload_if_due()
             # payload 为变更 key 或 '*'：'*'/缺失全量 reload，具体 key 增量失效。
             raw = message.get("data")
             key = (
@@ -167,6 +198,7 @@ class ConfigBroadcastSubscriber:
                     await config_cache.reload_keys(session, [key])
             self.reloads += 1
             self.consecutive_failures = 0
+            self._last_reload_at = time.monotonic()
             logger.info(
                 "config cache %s from invalidation broadcast",
                 "reloaded" if not key or key == INVALIDATE_ALL else f"reloaded key {key}",
