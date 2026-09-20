@@ -1,18 +1,24 @@
 from collections.abc import AsyncGenerator
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.config import get_settings
 from app.core.db import Base, get_session
+from app.core.exports import service as export_service
+from app.core.exports.models import ExportJob
 from app.core.models import AuditLog
+from app.core.queue import override_stream_client
 from app.core.tenants.models import Tenant
 from app.final.final_whitelist.models import (
     PUBLISH_DRAFT,
     FinalContentWhitelist,
 )
 from app.main import app
+from tests.integration.stream_fakes import FakeStreamsRedis
 
 
 @pytest_asyncio.fixture
@@ -334,3 +340,93 @@ async def test_job_creation_writes_audit(client, session_factory):
     assert logs[0].entity_id == job_id
     assert logs[0].detail["format"] == "json"
     assert logs[0].detail["row_count"] == 1
+
+
+# ---------- Q137：真后台 worker（queued/running + Streams + 列表口） ----------
+
+
+@pytest_asyncio.fixture
+def async_exports(monkeypatch: pytest.MonkeyPatch):
+    fake = FakeStreamsRedis()
+    override_stream_client(fake)
+    monkeypatch.setattr(get_settings(), "export_worker_enabled", True)
+    yield fake
+    override_stream_client(None)
+
+
+async def test_async_post_enqueues_queued_job_and_blocks_early_download(
+    client, session_factory, async_exports
+):
+    async with session_factory() as session:
+        session.add(_fcw("t1", "ps-1", 31))
+        await session.commit()
+
+    r = await client.post(
+        "/api/exports/jobs",
+        json={"tenant_id": "t1", "format": "csv", "actor": {"id": "mg-1"}},
+    )
+    assert r.status_code == 201
+    job = r.json()
+    job_id = job["job_id"]
+    assert job["status"] == "queued"
+    assert job["row_count"] == 0
+    assert job["completed_at"] is None
+
+    # 任务已 XADD 进导出流，消费组已幂等创建。
+    entries = async_exports.streams[export_service.EXPORT_STREAM]
+    assert any(fields["job_id"] == job_id for _, fields in entries)
+    assert (export_service.EXPORT_STREAM, export_service.EXPORT_GROUP) in (
+        async_exports.groups
+    )
+
+    # 列表口按租户倒序返回 queued 任务。
+    lr = await client.get("/api/exports/jobs", params={"tenant_id": "t1"})
+    assert lr.status_code == 200
+    payload = lr.json()
+    assert payload["count"] == 1
+    assert payload["jobs"][0]["job_id"] == job_id
+    assert payload["jobs"][0]["status"] == "queued"
+
+    # queued/running 未就绪：下载 409，状态口仍可查。
+    d = await client.get(f"/api/exports/jobs/{job_id}/download")
+    assert d.status_code == 409
+    g = await client.get(f"/api/exports/jobs/{job_id}")
+    assert g.json()["status"] == "queued"
+
+
+async def test_async_list_scoped_to_tenant(client, session_factory, async_exports):
+    async with session_factory() as session:
+        session.add(Tenant(tenant_id="t2", name="第二客户", plan="basic", status="active"))
+        await session.commit()
+    for tenant in ("t1", "t1", "t2"):
+        r = await client.post(
+            "/api/exports/jobs",
+            json={"tenant_id": tenant, "actor": {"id": "mg-1"}},
+        )
+        assert r.status_code == 201
+    lr = await client.get("/api/exports/jobs", params={"tenant_id": "t1"})
+    assert lr.json()["count"] == 2
+    assert all(j["tenant_id"] == "t1" for j in lr.json()["jobs"])
+
+
+async def test_async_enqueue_failure_marks_job_failed_503(
+    client, session_factory, monkeypatch: pytest.MonkeyPatch
+):
+    failing = FakeStreamsRedis(fail=True)
+    override_stream_client(failing)
+    monkeypatch.setattr(get_settings(), "export_worker_enabled", True)
+    try:
+        r = await client.post(
+            "/api/exports/jobs",
+            json={"tenant_id": "t1", "actor": {"id": "mg-1"}},
+        )
+        assert r.status_code == 503
+    finally:
+        override_stream_client(None)
+
+    # fail-closed：入流失败不留卡死 queued，任务置 failed。
+    async with session_factory() as session:
+        jobs = list((await session.scalars(select(ExportJob))).all())
+    assert len(jobs) == 1
+    assert jobs[0].status == "failed"
+    assert "stream backend unavailable" in (jobs[0].error or "")
