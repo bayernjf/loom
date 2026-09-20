@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q132（持续追加，C1.17–C1.76）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q135（持续追加，C1.17–C1.79）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -72,6 +72,9 @@
 | Q130 管理端效果运营台 | 2026-09-20 | 接缝按甲（02 C1.74）：新建管理端 /admin/effects（sidebar 第 8 项、check-admin 锁 8 项）：孤儿队列单条/勾选批量认领岛 + 成品时序查询与解绑岛；读 operations\|platform_admin、写 operations、指标缺席显 "—" 绝不显 0；纯前端零迁移；tsc 净、八 checker、next build 通过 |
 | Q131 客户效果回填 UI | 2026-09-20 | 接缝按甲（02 C1.75）：客户内容详情页对非 discarded 成品挂回填岛（V1 单条手工表单、datetime-local 转 UTC、指标留空即缺席、消费 Q128 客户通道、批量/CSV 随 V2、客户 nav 仍 8 项）；纯前端零迁移；tsc 净、八 checker、next build 通过 |
 | Q132 中台导出 JSON+异步任务 | 2026-09-20 | 接缝按甲（02 C1.76）：GET fcw.json envelope 与 CSV 同口径、POST /api/exports/jobs V1 同步落 completed + 状态/下载口、export_jobs 不存 payload 下载重渲染、审计 export.job_created；迁移 0036（物理表 57→58，pg16 往返实测）；后端 618→633、eval 101，前端零改动；真后台 worker 随 V2 |
+| Q133 fencing token | 2026-09-20 | 接缝按甲（02 C1.77）：`leader_lease` 抢锁后 INCR 取跨易主单调令牌、看门狗易主/续约故障置 lost、INCR 失败 fail-closed，`leader_lock` 保 Q89 布尔语义；纯代码零迁移；后端 633→641、eval 101，前端零改动；下游 DB fence/tick 协作中止随 V2 |
+| Q134 Redis Streams 认领原语 | 2026-09-20 | 接缝按甲（02 C1.78）：新包 app/core/queue 落 XADD/XGROUP/XREADGROUP/XACK/XPENDING+XCLAIM/死信原语，StreamBackendError fail-closed，**只落原语不接 worker、不落 env、无占位端点**；零迁移；后端 641→649、eval 101，前端零改动；XADD 生产接线/worker 循环随 V2 |
+| Q135 配置缓存失效广播 | 2026-09-20 | 接缝按甲（02 C1.79）：after_commit fire-and-forget PUBLISH（best-effort）+ ConfigBroadcastSubscriber 收消息全量 reload、故障懒重连，env LOOM_CONFIG_CACHE_BROADCAST_ENABLED 默认关；零迁移无新配置键；后端 649→656、eval 101，前端零改动；单 key 增量/真多副本验证随 V2 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---
