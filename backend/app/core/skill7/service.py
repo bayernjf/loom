@@ -466,4 +466,16 @@ async def maybe_request_restock(
         entity_id=run.run_id,
         detail={"ready_count": ready_count, "critical": critical},
     )
+    # Q138：事务提交后 best-effort XADD 到 restock 流（门控默认关；DB requested
+    # 行是事实源、DB 轮询兜底，消费组水平并行消费留 V2）。
+    from sqlalchemy import event
+
+    from app.core.restock.notify import spawn_restock_notification
+
+    request_id = str(run.run_id)
+
+    def _after_commit(*_) -> None:
+        spawn_restock_notification(request_id)
+
+    event.listen(session.sync_session, "after_commit", _after_commit, once=True)
     return run

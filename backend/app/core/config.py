@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     restock_interval_seconds: float = 60.0
     restock_batch_size: int = 20
 
+    # Q138 restock requested 信号 Redis Streams 生产接线：默认关。开启后跌破
+    # critical 的补货请求在提交后 best-effort XADD 到 restock 流（DB 行仍是事实
+    # 源、DB 轮询兜底）；消费组水平并行消费留 V2（花钱单实例裁决见 Q87/Q89）。
+    restock_stream_enabled: bool = False
+
     # Q90 restock 瞬态失败指数退避（env 运维参数，非 Q9 业务旋钮）：
     # base×2^(attempts-1)，封顶 max；上游传输错累计 max_attempts 次转终态，
     # 日预算硬停（UTC 次日恢复）永不转终态。
