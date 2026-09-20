@@ -5,6 +5,8 @@ V1 为模块化单体单进程：发布后在同事务 after_commit 钩子内原
 多副本部署的跨进程广播（Redis Streams/pub-sub）随部署形态落地，挂账见 08 M10。
 """
 
+from collections.abc import Iterable
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,33 @@ class ConfigCache:
     async def reload(self, session: AsyncSession) -> None:
         rows = (await session.scalars(select(ConfigItem))).all()
         self._snapshot = {row.key: row.value for row in rows}
+        self.loaded = True
+
+    async def reload_keys(
+        self, session: AsyncSession, keys: Iterable[str]
+    ) -> None:
+        """Q140 单 key 增量失效：只重查给定 key 并原子合并进快照。
+
+        DB 中仍存在的 key 用最新值覆盖；DB 中已删除/不存在的 key 从快照移除
+        （配置项被删也要失效，不能残留旧值）。空集合直接返回。相比全量 reload
+        显著减少多副本下高频单 key 热更的读放⼤。
+        """
+        key_list = list(keys)
+        if not key_list:
+            return
+        rows = (
+            await session.scalars(
+                select(ConfigItem).where(ConfigItem.key.in_(key_list))
+            )
+        ).all()
+        fresh = {row.key: row.value for row in rows}
+        snapshot = dict(self._snapshot)
+        for key in key_list:
+            if key in fresh:
+                snapshot[key] = fresh[key]
+            else:
+                snapshot.pop(key, None)
+        self._snapshot = snapshot
         self.loaded = True
 
     def apply(self, updates: dict[str, object]) -> None:
