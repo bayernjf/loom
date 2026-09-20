@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q136（持续追加，C1.17–C1.80）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q140（持续追加，C1.17–C1.84）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -20,7 +20,7 @@
 | [08_迭代计划与任务包.md](./08_迭代计划与任务包.md) | Part A7 + Part D9 | 路线图（两套已裁决合并，Q73）+ V1/V2/V3 任务包 | 核心 |
 | [09_全景体系_展示口径.md](./09_全景体系_展示口径.md) | Part D 全量 + HTML 核对 | 展示口径全景：4 端/6 层/13 菜单/权限矩阵/中台/前端/反馈 | 参考 |
 | [10_数据模型Schema_建表定义.md](./10_数据模型Schema_建表定义.md) | 04 字段清单 → 建表级 | 🟢 已补：35 实体建表要素（类型建议/约束/索引/关系） | 🟢 首轮 DBA 复核已完成（2026-09-20，head 0036/58 表零漂移，见 docs/10 §4） |
-| [11_API规范_OpenAPI.md](./11_API规范_OpenAPI.md) | 05 契约 → OpenAPI | 🟢 已补：effect-callback/白名单消费规格 + 通用规范；已落地接口（消费/CSV/Key 治理）Q112 回填 | 段13 效果回流全链已随 Q126–Q131 落地（effect-callback 入站/孤儿认领/批量解绑/customer-backfill/管理端运营台/客户回填 UI，11 号含四端点规格）；反哺校准与回填批量表格/CSV 随 V2；中台 CSV/JSON 导出与 V1 同步导出任务已随 Q132 落地（11 号 §2.3/§2.4），真后台 worker 随 V2；中台对接 API/SDK 随 V2/V3【待补】 |
+| [11_API规范_OpenAPI.md](./11_API规范_OpenAPI.md) | 05 契约 → OpenAPI | 🟢 已补：effect-callback/白名单消费规格 + 通用规范；已落地接口（消费/CSV/Key 治理）Q112 回填 | 段13 效果回流全链已随 Q126–Q131 落地（effect-callback 入站/孤儿认领/批量解绑/customer-backfill/管理端运营台/客户回填 UI，11 号含四端点规格）；反哺校准与回填批量表格/CSV 随 V2；中台 CSV/JSON 导出与导出任务已随 Q132 落地、queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（11 号 §2.3/§2.4，env 默认关）；中台对接 API/SDK 随 V2/V3【待补】 |
 | [12_PT协议补齐清单.md](./12_PT协议补齐清单.md) | 06 协议 → 补齐工程 | 🟢 已补：7 定稿 + 35 推断候选（**Q115 收口：即为最终名单**）+ 补齐模板 | 名单已定稿，不再待 HTML 核对 |
 | [13_状态机迁移表.md](./13_状态机迁移表.md) | 05 状态机 → 迁移矩阵 | 🟢 已补：**14 组**状态机迁移表（含 §1.12 字段池 Gate、§1.13 content_products/Q116、§1.14 段13 效果回流/Q126–Q131）；productIntake15 迁移行 Q112 据实现补登 | G1 审核流随 V3、PWC 复核/待入库两行【待补】；§1.8 平台适配（段7）为设计规格、实现随 V2 P1；§1.9 发布位 gate 默认值与实现差异待拍板 |
 | [14_技术选型决策.md](./14_技术选型决策.md) | 07 §7 工程建议 → 决策 | ✅ **已定稿**：6 项 2026-09-13 拍板（全采纳建议） | 已拍板，下游已同步 |
@@ -71,11 +71,15 @@
 | Q129 段13 认领批量/解绑 | 2026-09-20 | 接缝按甲（02 C1.73）：POST /api/admin/effects/claims/unclaim（删映射+旧目标行全部回滚 orphan 含兜底新 matched 行、映射不存在 404 ClaimMappingNotFound、审计 effect.claim_revoked）+ claims/batch（items≥1、批内重复 422、整批 all-or-nothing 回滚、逐条 effect.claimed）；service 抽 _claim_one；零迁移；基线 607→618（+11）/eval 101·golden 21 |
 | Q130 管理端效果运营台 | 2026-09-20 | 接缝按甲（02 C1.74）：新建管理端 /admin/effects（sidebar 第 8 项、check-admin 锁 8 项）：孤儿队列单条/勾选批量认领岛 + 成品时序查询与解绑岛；读 operations\|platform_admin、写 operations、指标缺席显 "—" 绝不显 0；纯前端零迁移；tsc 净、八 checker、next build 通过 |
 | Q131 客户效果回填 UI | 2026-09-20 | 接缝按甲（02 C1.75）：客户内容详情页对非 discarded 成品挂回填岛（V1 单条手工表单、datetime-local 转 UTC、指标留空即缺席、消费 Q128 客户通道、批量/CSV 随 V2、客户 nav 仍 8 项）；纯前端零迁移；tsc 净、八 checker、next build 通过 |
-| Q132 中台导出 JSON+异步任务 | 2026-09-20 | 接缝按甲（02 C1.76）：GET fcw.json envelope 与 CSV 同口径、POST /api/exports/jobs V1 同步落 completed + 状态/下载口、export_jobs 不存 payload 下载重渲染、审计 export.job_created；迁移 0036（物理表 57→58，pg16 往返实测）；后端 618→633、eval 101，前端零改动；真后台 worker 随 V2 |
+| Q132 中台导出 JSON+异步任务 | 2026-09-20 | 接缝按甲（02 C1.76）：GET fcw.json envelope 与 CSV 同口径、POST /api/exports/jobs V1 同步落 completed + 状态/下载口、export_jobs 不存 payload 下载重渲染、审计 export.job_created；迁移 0036（物理表 57→58，pg16 往返实测）；后端 618→633、eval 101，前端零改动；queued/running 真后台 worker + 任务列表口后由 Q137 落地（env 默认关） |
 | Q133 fencing token | 2026-09-20 | 接缝按甲（02 C1.77）：`leader_lease` 抢锁后 INCR 取跨易主单调令牌、看门狗易主/续约故障置 lost、INCR 失败 fail-closed，`leader_lock` 保 Q89 布尔语义；纯代码零迁移；后端 633→641、eval 101，前端零改动；下游 DB fence/tick 协作中止随 V2 |
-| Q134 Redis Streams 认领原语 | 2026-09-20 | 接缝按甲（02 C1.78）：新包 app/core/queue 落 XADD/XGROUP/XREADGROUP/XACK/XPENDING+XCLAIM/死信原语，StreamBackendError fail-closed，**只落原语不接 worker、不落 env、无占位端点**；零迁移；后端 641→649、eval 101，前端零改动；XADD 生产接线/worker 循环随 V2 |
+| Q134 Redis Streams 认领原语 | 2026-09-20 | 接缝按甲（02 C1.78）：新包 app/core/queue 落 XADD/XGROUP/XREADGROUP/XACK/XPENDING+XCLAIM/死信原语，StreamBackendError fail-closed，**只落原语不接 worker、不落 env、无占位端点**；零迁移；后端 641→649、eval 101，前端零改动；导出消费组 worker 已由 Q137 接、restock 生产侧 XADD 已由 Q138 接（restock 消费组水平并行因花钱隔离仍 V2） |
 | Q135 配置缓存失效广播 | 2026-09-20 | 接缝按甲（02 C1.79）：after_commit fire-and-forget PUBLISH（best-effort）+ ConfigBroadcastSubscriber 收消息全量 reload、故障懒重连，env LOOM_CONFIG_CACHE_BROADCAST_ENABLED 默认关；零迁移无新配置键；后端 649→656、eval 101，前端零改动；单 key 增量/真多副本验证随 V2 |
 | Q136 客户批量 CSV 回填 | 2026-09-20 | 接缝按甲（02 C1.80）：纯前端批量岛（固定 9 列表头 CSV 解析+行级校验+预览、文件/粘贴双入口、软上限 500 行、captured_at 转 UTC、空指标缺席），整批走 Q128 records[] 客户通道 all-or-nothing；**不建后端端点/无迁移/无新依赖**；后端 656·eval 101 不变，tsc/八 checker（token 86）/next build 过；服务端上传/Excel/异步导入/逐行回执随 V2 |
+| Q137 中台导出真后台 worker | 2026-09-20 | 接缝按甲（02 C1.81）：导出只读幂等可安全并行，queued/running 经 Redis Streams 消费组 ExportWorker 异步处理（read_new+reclaim_pending 崩溃接管、ACK/PEL/超限死信、终态重复幂等）+ GET /jobs 列表口；状态用 String(16) 无 PG enum **零迁移**；env LOOM_EXPORT_WORKER_ENABLED 默认关；FakeStreamsRedis 抽共享 stream_fakes；后端 656→666、eval 101；大结果集分页/行数上限随 V2 |
+| Q138 restock 信号 XADD 生产接线 | 2026-09-20 | 范围收敛（02 C1.82）：restock 自动花真 token 须 leader 单实例防双花，与消费组水平并行语义冲突，故**只接生产侧入流**（restock/notify.py after_commit best-effort XADD、DB requested 行为唯一事实源/DB 轮询兜底、失败只告警），worker 主认领不切消费组；env LOOM_RESTOCK_STREAM_ENABLED 默认关、零迁移；后端 666→669、eval 101；消费组并行（花钱隔离）随 V2 |
+| Q139 两循环 leader_lease 协作中止 | 2026-09-20 | 接缝按甲（02 C1.83）：四持锁点（sla/restock 两 _tick + 两手工 /run）leader_lock→leader_lease，run_jobs/run_restock 加零参 checkpoint=raise_if_lost（作业会话外/每信号前），锁中途易主抛 LockLost 协作中止；两 _tick 静默返回、两手工口 409；门控关行为同 Q89、leader_lock 保留；复用 LOOM_DISTRIBUTED_LOCK_ENABLED 无新 env、零迁移；后端 669→674、eval 101；下游 PG 行级 fence 随 V2 |
+| Q140 配置缓存单 key 增量失效 + 广播退避 | 2026-09-20 | 接缝按甲（02 C1.84）：cache.reload_keys 按 key 合并（DB 删除同步出快照），poll_once `*` 全量/具体 key 增量分流，断线 consecutive_failures 指数退避 1s→封顶 30s、wait_for(stop) 可唤醒、成功重置，健康路径每轮 sleep(0) 零拍让出防替身忙转饿死定时器；复用 LOOM_CONFIG_CACHE_BROADCAST_ENABLED 无新 env、零迁移；后端 674→678、eval 101；配置版本号/TTL、真多副本验证随 V2 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---
