@@ -115,3 +115,40 @@ export async function backfillEffectAction(
     return { ok: false, status: "unknown", detail: null };
   }
 }
+
+// Q136：客户效果批量回填（甲案：纯前端 CSV 解析后整批走 Q128 客户通道，无独立上传端点）。
+// 行级校验已在 client 岛完成；此处仍整批提交，后端 all-or-nothing（422 detail 带行 index）。
+export type BatchBackfillRowInput = {
+  platform_post_id: string;
+  captured_at: string;
+  metrics: Record<string, number>;
+};
+
+export async function batchBackfillEffectsAction(
+  contentId: string,
+  rows: BatchBackfillRowInput[],
+): Promise<BackfillActionResult> {
+  if (!CURRENT_TENANT_ID) return { ok: false, status: "unconfigured", detail: null };
+  if (!contentId.trim() || rows.length === 0)
+    return { ok: false, status: 422, detail: null };
+  try {
+    const receipt = await customerBackfillEffects(
+      CURRENT_TENANT_ID,
+      rows.map((row) => ({
+        content_id: contentId,
+        platform_post_id: row.platform_post_id,
+        captured_at: row.captured_at,
+        metrics: row.metrics,
+      })),
+    );
+    return { ok: true, receipt };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status))
+      return {
+        ok: false,
+        status: err.status as 403 | 404 | 409 | 422,
+        detail: errorDetail(err),
+      };
+    return { ok: false, status: "unknown", detail: null };
+  }
+}

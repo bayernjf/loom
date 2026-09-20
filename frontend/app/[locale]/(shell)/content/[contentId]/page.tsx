@@ -9,6 +9,7 @@ import {
   type ContentSemanticFinding,
 } from "@/lib/api";
 import { BackfillIsland } from "../backfill-island";
+import { BatchBackfillIsland } from "../backfill-batch-island";
 import { BodyEditIsland } from "../body-edit-island";
 import { DecisionIsland } from "../decision-island";
 import styles from "../content.module.css";
@@ -207,7 +208,10 @@ export default async function ContentDetailPage({
       ) : null}
 
       {content.status !== "discarded" ? (
-        <BackfillIsland contentId={content.content_id} />
+        <>
+          <BackfillIsland contentId={content.content_id} />
+          <BatchBackfillIsland contentId={content.content_id} />
+        </>
       ) : null}
 
       <Link href="/content" className={styles.backLink}>

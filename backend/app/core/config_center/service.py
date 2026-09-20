@@ -3,6 +3,7 @@
 from sqlalchemy import event, select
 
 from app.core.audit import append_audit
+from app.core.config_center.broadcast import spawn_invalidation
 from app.core.config_center.cache import config_cache
 from app.core.config_center.config_rules import coerce
 from app.core.config_center.models import ConfigItem, ConfigItemVersion
@@ -32,12 +33,12 @@ def _require_admin(actor) -> None:
 
 def _schedule_cache_apply(session, key: str, value) -> None:
     # 仅在事务真正提交后切换进程内快照；回滚则缓存不动。
-    event.listen(
-        session.sync_session,
-        "after_commit",
-        lambda *_: config_cache.apply({key: value}),
-        once=True,
-    )
+    def _after_commit(*_) -> None:
+        config_cache.apply({key: value})
+        # Q135：多副本下广播失效（门控关闭时为空操作，不接触 Redis；best-effort）。
+        spawn_invalidation(key)
+
+    event.listen(session.sync_session, "after_commit", _after_commit, once=True)
 
 
 async def list_items(session, *, category: str | None = None) -> list[ConfigItem]:

@@ -19,7 +19,7 @@
 | DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部；其中 **2 个驾驶舱只读聚合已落地**：GET /api/admin/dashboards/token-cost、GET /api/admin/dashboards/review-workload（Q92） | D9.5 / Q92 | 🟡 驾驶舱两读口已落地（platform_admin，见 05 §1.4）；DB 浏览 / AI 调试台 / 配额【待补】 |
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
-| CSV / JSON 导出 | GET /api/exports/fcw.csv（Q100） | D4 | 🟢 CSV 已落地（见 §2.3）；JSON 形态/异步导出挂后续/V2【待补】 |
+| CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132） | D4 | 🟢 CSV/JSON 同步导出 + V1 同步任务记录均已落地（见 §2.3/§2.4）；真后台 worker 随 V2 |
 
 ---
 
@@ -112,7 +112,24 @@
 
 **口径**：只导 published（draft 通道 V1 未开；Q32 revoked 过滤随其落地自然生效）；读路径不触发 Q95 租户准入门——未知租户返回仅表头空文件 200，不 404。
 
-**未含**：JSON 形态、异步导出/导出任务记录均挂后续/V2【待补】。
+**未含（已销账）**：~~JSON 形态、异步导出/导出任务记录均挂后续/V2【待补】~~ ✅ 已随 Q132（2026-09-20，02 C1.76）落地，见 §2.4；仅真后台 worker 仍随 V2。
+
+### 2.4 中台 JSON 导出与异步导出任务（Q132，已落地）
+
+**JSON 同步口 `GET /api/exports/fcw.json`**：query 同 §2.3（tenant_id 必填、product_space_id 可选），口径完全一致（只导 published、created_at DESC、未知租户 200 空 envelope、不触发 Q95 准入门）；响应 `application/json` + `Content-Disposition: attachment; filename="fcw-<tenant>.json"`，body 与 CSV 同构只含 final_id，不拼 6 层原料包：
+
+```json
+{ "tenant_id": "t1", "product_space_id": null, "count": 2, "final_ids": ["...", "..."] }
+```
+
+**异步导出任务（V1 同步执行落表）**：
+- `POST /api/exports/jobs`：body `{tenant_id（必填）, product_space_id?（可选）, format: "csv"|"json"=csv, actor}`（中台面同 Q100 无 RBAC 闸，actor 仅留痕）；V1 在请求内同步导出并置 `completed`（同 Q55 FcwAssemblyTask 同步先例），201 返回任务视图；真后台 worker（queued/running）随 V2 Redis Streams。
+- `GET /api/exports/jobs/{job_id}`：任务状态视图（未知 404；V2 真异步后供中台轮询）。
+- `GET /api/exports/jobs/{job_id}/download`：按任务参数**重新查询渲染**下载（不存文件 payload，幂等反映当前 published 集合；未知 404、status=failed 409 detail=error），媒体类型与文件名按 job.format/file_name。
+- 任务视图 ExportJobView：`{job_id, tenant_id, product_space_id, format, status, row_count, file_name, requested_by, error, created_at, completed_at, download_url}`；row_count 为创建时留痕，不随后续数据变化。
+- 审计 `export.job_created`（tenant=客户租户、actor_id=requested_by、actor_roles=[]、entity_type=export_job、entity_id=job_id、detail {format,row_count,product_space_id}）；同步 CSV/JSON 两口沿用 Q100 不写审计。
+- 新表 export_jobs（迁移 0036，业务物理表 57→58，pg16 up/downgrade-1/up 实测）；错误：tenant_id 空 422、format 非 csv|json 422、缺 actor 422、未知 job 404、failed 任务下载 409。
+- **未含（V2）**：queued/running 后台 worker 与 Redis Streams 队列、任务列表/筛选口、大结果集分页/上限/失败重试、6 层原料包全量 JSON（台内详情/复制另议）。
 
 ### 2.4 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
 
@@ -170,5 +187,5 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 - [x] 入站/出站 Key 治理端点与 Q88/Q82 实现一致（§2.4）
 - [x] effect-callback 入站第一片与 Q60/Q88/Q126 实现一致（鉴权/幂等键/metrics 缺“—”不当 0/matched·orphan 分流/只读队列，2026-09-19 补登 §2.1）
 - [x] effect-callback 续片：Q126 入站推送、Q127 孤儿人工认领、Q128 customer-backfill 客户通道、Q129 批量认领/解绑、Q130 管理端认领台、Q131 客户回填 UI 均已落地（见 §2.1，02 C1.70–C1.75）
-- [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、效果反哺/Q54·Q57 校准（口径【待补】）、~~认领/回填前端 UI~~（已随 Q130/Q131 落地）、回填批量表格/CSV（V2）、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、JSON/异步导出——其余均【待补】，随对应版本补齐后回填 §1
+- [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、效果反哺/Q54·Q57 校准（口径【待补】）、~~认领/回填前端 UI~~（已随 Q130/Q131 落地）、回填批量表格/CSV（V2）、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、~~JSON/异步导出~~（✅ 已随 Q132 落地，见 §2.4）——其余均【待补】，随对应版本补齐后回填 §1
 - [x] 段内业务端点不在本表登记范围：段12 内容成品五端点（POST /api/content/generate、/{id}/approve|reject|revise|regenerate）契约见 05 §1.4 Q116 补登与 13 §1.13（V2 P4 首片，2026-09-17 落地）

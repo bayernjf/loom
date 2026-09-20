@@ -39,6 +39,7 @@ class FakeRedis:
 
     def __init__(self, *, fail: bool = False):
         self.store: dict[str, str] = {}
+        self.counters: dict[str, int] = {}
         self.renewals = 0
         self.fail = fail
 
@@ -49,6 +50,15 @@ class FakeRedis:
             return None
         self.store[key] = value
         return True
+
+    async def incr(self, key):
+        # Q133 fencing token：按锁名单调递增（失败替身同样抛错走 fail-closed）。
+        if self.fail:
+            raise redis.RedisError("boom")
+        value = self.counters.get(key, 0) + 1
+        self.counters[key] = value
+        self.store[key] = str(value)
+        return value
 
     async def eval(self, script, numkeys, key, token, *args):
         if self.fail:

@@ -92,6 +92,19 @@ const requiredKeys = [
   "content.backfillReadRateRange",
   "content.backfillSubmit",
   "content.backfillSuccess",
+  "content.backfillBatchTitle",
+  "content.backfillBatchNote",
+  "content.backfillBatchFormat",
+  "content.backfillBatchFile",
+  "content.backfillBatchPlaceholder",
+  "content.backfillBatchParsed",
+  "content.backfillBatchErrors",
+  "content.backfillBatchLine",
+  "content.backfillBatchHeaderMissing",
+  "content.backfillBatchTooMany",
+  "content.backfillBatchSubmit",
+  "content.backfillBatchSuccess",
+  "content.backfillBatchPreviewMore",
   "content.backfillMetric.plays",
   "content.backfillMetric.likes",
   "content.backfillMetric.comments",
@@ -121,6 +134,7 @@ const requiredFiles = [
   "app/[locale]/(shell)/content/decision-island.tsx",
   "app/[locale]/(shell)/content/body-edit-island.tsx",
   "app/[locale]/(shell)/content/backfill-island.tsx",
+  "app/[locale]/(shell)/content/backfill-batch-island.tsx",
   "app/[locale]/(shell)/content/content.module.css",
 ];
 
@@ -145,6 +159,15 @@ for (const [key, token] of [
   ["content.downgradesTitle", "{count}"],
   ["content.qualityScore", "{score}"],
   ["content.backfillSuccess", "{count}"],
+  ["content.backfillBatchFormat", "{max}"],
+  ["content.backfillBatchParsed", "{count}"],
+  ["content.backfillBatchErrors", "{count}"],
+  ["content.backfillBatchLine", "{line}"],
+  ["content.backfillBatchLine", "{message}"],
+  ["content.backfillBatchTooMany", "{max}"],
+  ["content.backfillBatchTooMany", "{count}"],
+  ["content.backfillBatchSuccess", "{count}"],
+  ["content.backfillBatchPreviewMore", "{count}"],
 ]) {
   if (!getKey(messages, key)?.includes(token))
     problems.push(`${key} must contain the ${token} placeholder`);
@@ -197,6 +220,8 @@ if (!detailPageText.includes("BodyEditIsland"))
   problems.push("detail page must mount BodyEditIsland");
 if (!detailPageText.includes("BackfillIsland"))
   problems.push("detail page must mount BackfillIsland (Q131 customer backfill)");
+if (!detailPageText.includes("BatchBackfillIsland"))
+  problems.push("detail page must mount BatchBackfillIsland (Q136 CSV batch backfill)");
 if (!detailPageText.includes('getTranslations("content.status")'))
   problems.push("detail page must load the content.status namespace");
 
@@ -212,6 +237,7 @@ for (const token of [
   "decideContentAction",
   "saveContentBodyAction",
   "backfillEffectAction",
+  "batchBackfillEffectsAction",
   "approveContent",
   "rejectContent",
   "reviseContent",
@@ -224,7 +250,7 @@ for (const token of [
 }
 
 // client 岛纪律：禁直连服务端层 / 裸 URL，必须经 Server Action 并 router.refresh。
-for (const rel of ["content/decision-island.tsx", "content/body-edit-island.tsx", "content/backfill-island.tsx"]) {
+for (const rel of ["content/decision-island.tsx", "content/body-edit-island.tsx", "content/backfill-island.tsx", "content/backfill-batch-island.tsx"]) {
   const text = readFileSync(join(shell, rel), "utf8");
   if (!text.startsWith('"use client"')) problems.push(`${rel} must start with "use client"`);
   if (text.includes("@/lib/api")) problems.push(`${rel} must not import @/lib/api (server-only)`);
@@ -288,6 +314,23 @@ for (const token of ["datetime-local", "toISOString", "backfillEffectAction"]) {
   if (!backfillIsland.includes(token))
     problems.push(`backfill island must contain ${token} (tz-aware capture time)`);
 }
+// Q136：批量岛纯前端 CSV 解析（文件载入 + 行级校验），整批仍走客户通道、转 UTC、刷新页面。
+const batchIsland = readFileSync(
+  join(shell, "content", "backfill-batch-island.tsx"), "utf8",
+);
+for (const token of [
+  "batchBackfillEffectsAction",
+  "toISOString",
+  "FileReader",
+  "readAsText",
+  "router.refresh",
+  "all-or-nothing",
+]) {
+  if (!batchIsland.includes(token))
+    problems.push(`batch backfill island must contain ${token} (Q136 CSV import)`);
+}
+if (/\bfetch\s*\(/.test(batchIsland) || /https?:\/\//.test(batchIsland) || batchIsland.includes("@/lib/api"))
+  problems.push("batch backfill island must use server actions, not direct fetch/api imports");
 const effectsRouterText = readFileSync(
   join(backend, "app", "core", "effects", "router.py"), "utf8",
 );

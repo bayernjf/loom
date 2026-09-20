@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from app.content.router import router as content_router
 from app.core.api_keys.router import router as agent_keys_router
 from app.core.compliance_wordlist.router import router as wordlist_router
+from app.core.config_center.broadcast import ConfigBroadcastSubscriber
 from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
 from app.core.dashboards.router import router as dashboards_router
@@ -37,11 +38,12 @@ logger = logging.getLogger("loom.startup")
 
 _scheduler: SweepScheduler | None = None
 _restock_worker: RestockWorker | None = None
+_config_subscriber: ConfigBroadcastSubscriber | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _scheduler, _restock_worker
+    global _scheduler, _restock_worker, _config_subscriber
     # M10c：启动引导配置缓存。失败不阻断启动——knob() 回落种子默认值，
     # 进程仍可健康启动，配置中心在下次发布或重启后恢复（单进程 V1）。
     try:
@@ -59,9 +61,21 @@ async def lifespan(app: FastAPI):
             settings.restock_batch_size,
         )
         await _restock_worker.start()
+    if settings.config_cache_broadcast_enabled:
+        # Q135：多副本配置失效广播订阅者；启动失败不阻断应用（本进程 after_commit
+        # 热更新仍生效，对端副本最坏重启后恢复一致）。
+        try:
+            _config_subscriber = ConfigBroadcastSubscriber(SessionLocal)
+            await _config_subscriber.start()
+        except Exception:
+            logger.warning("config broadcast subscriber failed to start", exc_info=True)
+            _config_subscriber = None
     try:
         yield
     finally:
+        if _config_subscriber is not None:
+            await _config_subscriber.stop()
+            _config_subscriber = None
         if _restock_worker is not None:
             await _restock_worker.stop()
             _restock_worker = None
