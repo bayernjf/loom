@@ -39,6 +39,11 @@ from app.core.locking import (
 )
 from app.core.model_registry import gateway, pwc_build
 from app.core.model_registry.pwc_build import SYSTEM_ACTOR
+from app.core.restock.fencing import (
+    CLAIM_LOST,
+    claim_request,
+    fence_current,
+)
 from app.core.restock.models import RestockRetryState
 from app.core.skill7.models import SkillRun
 from app.core.skill7.service import PWC_BUILDER, WF04
@@ -158,8 +163,26 @@ async def _record_terminal_failure(
     )
 
 
-async def _process_one(session_factory, requested: SkillRun) -> dict:
+async def _process_one(
+    session_factory,
+    requested: SkillRun,
+    *,
+    fence: int | None = None,
+    owner: str | None = None,
+) -> dict:
     request_id = str(requested.run_id)
+    # Q143：花钱前以独立短事务认领（先提交，让易主后的新 leader 可见）。若已被
+    # 更大 fence 的 leader 认领，本副本是旧持有者，直接放弃、不再调模型。
+    if fence is not None:
+        async with session_factory() as claim_session:
+            outcome = await claim_request(claim_session, request_id, fence, owner)
+            await claim_session.commit()
+        if outcome == CLAIM_LOST:
+            logger.warning(
+                "restock %s skipped before spend: claim held by a newer fence",
+                request_id,
+            )
+            return {"status": "skipped_lost"}
     async with session_factory() as session:
         try:
             _run, candidates = await pwc_build.invoke_pwc_build_for_restock(
@@ -179,6 +202,15 @@ async def _process_one(session_factory, requested: SkillRun) -> dict:
                 entity_id=request_id,
                 detail={"candidates": len(candidates)},
             )
+            # Q143：提交前门。一次模型调用期间锁易主、新 leader 以更大 fence 认领
+            # 后，条件更新命中 0 行 → 回滚本轮，重复候选/子 run 不落库（已花的模型
+            # 费用不可撤销，fence 只保下游 DB 一致性）。
+            if not await fence_current(session, request_id, fence):
+                await session.rollback()
+                logger.warning(
+                    "restock %s delivered result rejected by fence gate", request_id
+                )
+                return {"status": "skipped_lost"}
             await session.commit()
             return {"status": "succeeded", "candidates": len(candidates)}
         except TRANSIENT_EXCEPTIONS as exc:
@@ -262,6 +294,8 @@ async def run_restock(
     limit: int = 20,
     honor_backoff: bool = True,
     checkpoint: Callable[[], None] | None = None,
+    fence: int | None = None,
+    owner: str | None = None,
 ) -> dict:
     """跑一轮补货。每条信号行独立会话/提交，互不污染（同 SLA runner 口径）。
 
@@ -270,6 +304,9 @@ async def run_restock(
 
     Q139：``checkpoint``（持锁方 lease.raise_if_lost）在每条信号处理前调用，
     锁中途易主即抛 LockLost 协作中止，剩余信号本轮不再补货（防旧持有者继续花钱）。
+
+    Q143：``fence``/``owner``（持锁方 lease.fence/owner_token）透传给每条处理，
+    做 PG 行级 fencing 认领与提交前门；fence=None（锁关闭）时整段不生效。
     """
     now = datetime.now(UTC)
     async with session_factory() as session:
@@ -280,13 +317,18 @@ async def run_restock(
     for requested in pending:
         if checkpoint is not None:
             checkpoint()
-        report[str(requested.run_id)] = await _process_one(session_factory, requested)
+        report[str(requested.run_id)] = await _process_one(
+            session_factory, requested, fence=fence, owner=owner
+        )
     return {
         "claimed": len(pending),
         "honor_backoff": honor_backoff,
         "succeeded": sum(1 for r in report.values() if r["status"] == "succeeded"),
         "failed": sum(1 for r in report.values() if r["status"] == "failed"),
         "deferred": sum(1 for r in report.values() if r["status"] == "deferred"),
+        "skipped_lost": sum(
+            1 for r in report.values() if r["status"] == "skipped_lost"
+        ),
         "runs": report,
     }
 
@@ -323,6 +365,8 @@ class RestockWorker:
                     self._factory,
                     limit=self._batch_size,
                     checkpoint=lease.raise_if_lost,
+                    fence=lease.fence,
+                    owner=lease.owner_token,
                 )
         except LockUnavailable:
             logger.info("restock tick skipped: leader lock held by another replica")
