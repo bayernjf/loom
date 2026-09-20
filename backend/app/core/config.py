@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # （单副本/本地零依赖）；开启后 Redis 不可用 fail-closed 跳过本轮。
     distributed_lock_enabled: bool = False
 
+    # Q135 配置缓存多副本失效广播（Redis pub/sub）：默认关，V1 单进程仅在
+    # after_commit 进程内热更新；多副本开启后，发布方广播失效、其余副本订阅后
+    # reload。广播为 best-effort（失败只告警，不影响已提交事务）。
+    config_cache_broadcast_enabled: bool = False
+
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。
     orch_max_concurrency: int = 4
