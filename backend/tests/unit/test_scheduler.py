@@ -15,7 +15,7 @@ class _FakeFactory:
 async def test_scheduler_runs_jobs_until_stopped():
     calls = 0
 
-    async def fake_run_jobs(factory):
+    async def fake_run_jobs(factory, **_kwargs):
         nonlocal calls
         calls += 1
         return {}

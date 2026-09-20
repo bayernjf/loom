@@ -172,7 +172,7 @@ async def test_backend_failure_on_acquire_is_fail_closed(locks_failing):
 async def test_scheduler_tick_runs_when_lock_free(locks_enabled):
     calls = 0
 
-    async def run_jobs(factory):
+    async def run_jobs(factory, **_kwargs):
         nonlocal calls
         calls += 1
         return {}
@@ -186,7 +186,7 @@ async def test_scheduler_tick_runs_when_lock_free(locks_enabled):
 async def test_scheduler_tick_skips_when_lock_held(locks_enabled):
     calls = 0
 
-    async def run_jobs(factory):
+    async def run_jobs(factory, **_kwargs):
         nonlocal calls
         calls += 1
         return {}
@@ -200,7 +200,7 @@ async def test_scheduler_tick_skips_when_lock_held(locks_enabled):
 async def test_scheduler_tick_skips_when_backend_down(locks_failing):
     calls = 0
 
-    async def run_jobs(factory):
+    async def run_jobs(factory, **_kwargs):
         nonlocal calls
         calls += 1
         return {}
@@ -213,7 +213,7 @@ async def test_scheduler_tick_skips_when_backend_down(locks_failing):
 async def test_restock_tick_skip_and_run(locks_enabled, monkeypatch):
     calls = 0
 
-    async def fake_run_restock(factory, limit):
+    async def fake_run_restock(factory, limit, **_kwargs):
         nonlocal calls
         calls += 1
         return {"claimed": 0, "succeeded": 0, "failed": 0, "deferred": 0, "runs": {}}
