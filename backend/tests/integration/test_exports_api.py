@@ -161,6 +161,10 @@ async def test_json_export_empty_for_unknown_tenant(client):
         "tenant_id": "ghost",
         "product_space_id": None,
         "count": 0,
+        "total": 0,
+        "limit": get_settings().export_max_rows,
+        "offset": 0,
+        "has_more": False,
         "final_ids": [],
     }
 
@@ -340,6 +344,115 @@ async def test_job_creation_writes_audit(client, session_factory):
     assert logs[0].entity_id == job_id
     assert logs[0].detail["format"] == "json"
     assert logs[0].detail["row_count"] == 1
+
+
+# ---------- Q142：分页与行数硬上限 ----------
+
+
+async def _seed_published(session_factory, n: int, tenant: str = "t1", psid: str = "ps-1"):
+    async with session_factory() as session:
+        session.add_all(
+            [_fcw(tenant, psid, 100 + i) for i in range(n)]
+        )
+        await session.commit()
+
+
+async def test_json_pagination_limit_offset(client, session_factory):
+    await _seed_published(session_factory, 5)
+    first = await client.get(
+        "/api/exports/fcw.json",
+        params={"tenant_id": "t1", "limit": 2, "offset": 0},
+    )
+    assert first.status_code == 200
+    data = first.json()
+    assert data["count"] == 2
+    assert data["total"] == 5
+    assert data["limit"] == 2
+    assert data["offset"] == 0
+    assert data["has_more"] is True
+
+    last = await client.get(
+        "/api/exports/fcw.json",
+        params={"tenant_id": "t1", "limit": 2, "offset": 4},
+    )
+    tail = last.json()
+    assert tail["count"] == 1
+    assert tail["has_more"] is False
+
+
+async def test_csv_pagination_headers(client, session_factory):
+    await _seed_published(session_factory, 5)
+    r = await client.get(
+        "/api/exports/fcw.csv", params={"tenant_id": "t1", "limit": 2}
+    )
+    assert r.status_code == 200
+    assert len(r.text.splitlines()) == 3  # 表头 + 2 行
+    assert r.headers["x-export-total"] == "5"
+    assert r.headers["x-export-limit"] == "2"
+    assert r.headers["x-export-offset"] == "0"
+    assert r.headers["x-export-has-more"] == "true"
+    assert r.headers["x-export-truncated"] == "false"
+
+
+async def test_limit_over_hard_cap_is_422(client, session_factory, monkeypatch):
+    monkeypatch.setattr(get_settings(), "export_max_rows", 3)
+    r = await client.get(
+        "/api/exports/fcw.json", params={"tenant_id": "t1", "limit": 10}
+    )
+    assert r.status_code == 422
+    assert "export_max_rows" in r.json()["detail"]
+
+
+async def test_hard_cap_truncates_without_explicit_limit(
+    client, session_factory, monkeypatch
+):
+    monkeypatch.setattr(get_settings(), "export_max_rows", 3)
+    await _seed_published(session_factory, 5)
+    r = await client.get("/api/exports/fcw.json", params={"tenant_id": "t1"})
+    data = r.json()
+    assert data["count"] == 3  # 被硬上限截断
+    assert data["total"] == 5
+    assert data["limit"] == 3
+    assert data["has_more"] is True
+
+    c = await client.get("/api/exports/fcw.csv", params={"tenant_id": "t1"})
+    assert len(c.text.splitlines()) == 4  # 表头 + 3 行
+    assert c.headers["x-export-truncated"] == "true"
+    assert c.headers["x-export-has-more"] == "true"
+
+
+async def test_invalid_paging_params_are_422(client):
+    r = await client.get(
+        "/api/exports/fcw.json", params={"tenant_id": "t1", "limit": 0}
+    )
+    assert r.status_code == 422
+    r = await client.get(
+        "/api/exports/fcw.json", params={"tenant_id": "t1", "offset": -1}
+    )
+    assert r.status_code == 422
+
+
+async def test_sync_job_truncation_recorded_in_audit(
+    client, session_factory, monkeypatch
+):
+    monkeypatch.setattr(get_settings(), "export_max_rows", 3)
+    await _seed_published(session_factory, 4)
+    r = await client.post(
+        "/api/exports/jobs",
+        json={"tenant_id": "t1", "format": "json", "actor": {"id": "mg-1"}},
+    )
+    assert r.status_code == 201
+    assert r.json()["row_count"] == 3  # 任务路径同样受硬上限截断
+
+    async with session_factory() as session:
+        log = (
+            await session.scalars(
+                select(AuditLog).where(AuditLog.action == "export.job_created")
+            )
+        ).first()
+    assert log.detail["total"] == 4
+    assert log.detail["truncated"] is True
+    assert log.detail["limit"] == 3
 
 
 # ---------- Q137：真后台 worker（queued/running + Streams + 列表口） ----------
