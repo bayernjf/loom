@@ -7,14 +7,21 @@
 revoked 急停操作 V1 尚未落地，其态一旦实现亦自然被 published 过滤排除——
 前向兼容）。
 
-Q132：JSON 形态与 CSV 同口径；导出任务（export_jobs）V1 在请求内同步执行
-并置 completed，下载按任务参数重新查询渲染（不存文件大字段、幂等反映当前
-published 集合），queued/running 后台 worker 随 V2（Redis Streams）。
+Q132：JSON 形态与 CSV 同口径；导出任务（export_jobs）门控关闭时在请求内同步
+执行并置 completed，下载按任务参数重新查询渲染（不存文件大字段、幂等反映当前
+published 集合）。
+
+Q137：门控开启（LOOM_EXPORT_WORKER_ENABLED）走真后台 worker——POST 只建
+queued 任务并 XADD 到导出流（Redis Streams 消费组 export-workers），进程内
+ExportWorker 消费组认领后置 running→completed/failed；崩溃行进 PEL 由 XCLAIM
+接管重试，超 MAX_DELIVERIES 进死信流并置 failed。导出只读且下载按参数重渲染，
+消费组水平并行天然幂等，无需 leader 锁。
 """
 
 import csv
 import io
 import json
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -26,14 +33,34 @@ from app.core.exports.models import (
     EXPORT_FORMATS,
     FORMAT_JSON,
     JOB_COMPLETED,
+    JOB_FAILED,
+    JOB_QUEUED,
+    JOB_RUNNING,
+    JOB_TERMINAL_STATES,
     ExportJob,
 )
+from app.core.queue import (
+    DEFAULT_MAXLEN,
+    add_event,
+    ensure_group,
+)
+from app.core.queue import streams as streams_mod
 from app.final.final_whitelist.models import (
     PUBLISH_PUBLISHED,
     FinalContentWhitelist,
 )
 
+logger = logging.getLogger(__name__)
+
 CSV_HEADER = ("final_id",)
+
+# Q137 导出任务流 / 消费组 / 超限死信流（与 restock 流隔离，复用 queue 通用原语）。
+EXPORT_STREAM = "loom:stream:exports"
+EXPORT_GROUP = "export-workers"
+EXPORT_DEAD_STREAM = "loom:stream:exports:dead"
+
+# 后台 worker 的系统 Actor（roles=[]，不经 HTTP/RBAC，同 Q87 内部入口口径）。
+WORKER_ACTOR = "system:export-worker"
 
 
 async def exported_final_ids(
@@ -162,6 +189,136 @@ async def create_export_job(
         },
     )
     return job
+
+
+async def create_queued_export_job(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    product_space_id: str | None,
+    fmt: str,
+    actor_id: str,
+) -> ExportJob:
+    """Q137：建 queued 任务（不渲染、row_count=0），由 POST 提交后 XADD 入流。"""
+
+    if fmt not in EXPORT_FORMATS:
+        # 路由层 pydantic Literal 已挡，此闸为服务层防御。
+        raise ValueError(f"unsupported export format: {fmt}")
+    job = ExportJob(
+        job_id=str(uuid.uuid1()),
+        tenant_id=tenant_id,
+        product_space_id=product_space_id,
+        format=fmt,
+        status=JOB_QUEUED,
+        row_count=0,
+        file_name=file_name_for(tenant_id, fmt),
+        requested_by=actor_id,
+    )
+    session.add(job)
+    await session.flush()
+    await append_audit(
+        session,
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_roles=[],
+        action="export.job_created",
+        entity_type="export_job",
+        entity_id=job.job_id,
+        detail={
+            "format": fmt,
+            "product_space_id": product_space_id,
+            "mode": "async",
+        },
+    )
+    return job
+
+
+async def enqueue_export_job(job_id: str) -> None:
+    """Q137：queued 任务提交后 XADD 到导出流（消费组 mkstream 幂等建组）。
+
+    Redis 故障抛 StreamBackendError（fail-closed）：调用方据此把任务置 failed，
+    绝不留一条永远无人消费的 queued 任务。
+    """
+
+    client = streams_mod._get_client()
+    await ensure_group(client, EXPORT_STREAM, EXPORT_GROUP)
+    await add_event(
+        client,
+        EXPORT_STREAM,
+        {"job_id": job_id},
+        maxlen=DEFAULT_MAXLEN,
+    )
+
+
+async def process_export_job(
+    session: AsyncSession, job: ExportJob
+) -> ExportJob:
+    """Q137 worker：置 running → 重查渲染计数 → completed（幂等，反映当前集合）。"""
+
+    job.status = JOB_RUNNING
+    job.error = None
+    await session.flush()
+    final_ids = await exported_final_ids(
+        session,
+        tenant_id=job.tenant_id,
+        product_space_id=job.product_space_id,
+    )
+    job.row_count = len(final_ids)
+    job.status = JOB_COMPLETED
+    job.completed_at = datetime.now(UTC)
+    await append_audit(
+        session,
+        tenant_id=job.tenant_id,
+        actor_id=WORKER_ACTOR,
+        actor_roles=[],
+        action="export.job_completed",
+        entity_type="export_job",
+        entity_id=job.job_id,
+        detail={"row_count": len(final_ids)},
+    )
+    return job
+
+
+async def fail_export_job(
+    session: AsyncSession, job: ExportJob, error: str
+) -> ExportJob:
+    """Q137 worker：置 failed（超限死信/渲染持续失败），留痕可查。"""
+
+    job.status = JOB_FAILED
+    job.error = error[:2000]
+    job.completed_at = datetime.now(UTC)
+    await append_audit(
+        session,
+        tenant_id=job.tenant_id,
+        actor_id=WORKER_ACTOR,
+        actor_roles=[],
+        action="export.job_failed",
+        entity_type="export_job",
+        entity_id=job.job_id,
+        detail={"error": error[:500]},
+    )
+    return job
+
+
+def is_terminal(job: ExportJob) -> bool:
+    return job.status in JOB_TERMINAL_STATES
+
+
+async def list_jobs(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    limit: int = 50,
+) -> list[ExportJob]:
+    """Q137 任务列表口：按租户倒序返回（中台轮询/核对），不含文件体。"""
+
+    stmt = (
+        select(ExportJob)
+        .where(ExportJob.tenant_id == tenant_id)
+        .order_by(ExportJob.created_at.desc())
+        .limit(limit)
+    )
+    return list((await session.scalars(stmt)).all())
 
 
 async def get_job(session: AsyncSession, job_id: str) -> ExportJob | None:

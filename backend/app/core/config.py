@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # reload。广播为 best-effort（失败只告警，不影响已提交事务）。
     config_cache_broadcast_enabled: bool = False
 
+    # Q137 导出任务真后台 worker（Redis Streams 消费组）：默认关，关闭时 POST
+    # /api/exports/jobs 维持 Q132 请求内同步 completed；开启后建 queued 入流，
+    # 进程内 ExportWorker 消费置 running→completed/failed（只读幂等，可多副本并行）。
+    export_worker_enabled: bool = False
+    export_stream_block_seconds: float = 5.0
+
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。
     orch_max_concurrency: int = 4
