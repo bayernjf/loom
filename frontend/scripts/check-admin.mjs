@@ -33,6 +33,7 @@ const requiredKeys = [
   "admin.opsIntakesNav",
   "admin.slaTodosNav",
   "admin.contentOpsNav",
+  "admin.effectsNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -265,6 +266,48 @@ const requiredKeys = [
     "colEscalated",
     "empty",
   ].map((k) => `admin.slaTodos.${k}`),
+  ...[
+    "title",
+    "intro",
+    "orphanTitle",
+    "orphanIntro",
+    "orphanEmpty",
+    "seriesTitle",
+    "seriesIntro",
+    "colSelect",
+    "colExternal",
+    "colSource",
+    "colPost",
+    "colCaptured",
+    "colMetrics",
+    "colTarget",
+    "colAction",
+    "colStatus",
+    "colClaim",
+    "targetPlaceholder",
+    "claimSubmit",
+    "claimSuccess",
+    "batchSubmit",
+    "seriesInputLabel",
+    "seriesInputPlaceholder",
+    "seriesQuery",
+    "seriesEmpty",
+    "claimedBy",
+    "unclaimSubmit",
+    "unclaimConfirm",
+    "unclaimSuccess",
+    "status.matched",
+    "status.orphan",
+    "metric.plays",
+    "metric.likes",
+    "metric.comments",
+    "metric.shares",
+    "metric.inquiries",
+    "metric.conversions",
+    "metric.read_rate",
+    "actorUnconfigured",
+    "actorMissingRole",
+  ].map((k) => `admin.effects.${k}`),
 ];
 
 const requiredFiles = [
@@ -294,6 +337,11 @@ const requiredFiles = [
   join("content", "actions.ts"),
   join("content", "publish-info-island.tsx"),
   join("content", "discard-island.tsx"),
+  join("effects", "page.tsx"),
+  join("effects", "actions.ts"),
+  join("effects", "orphan-table-island.tsx"),
+  join("effects", "series-island.tsx"),
+  join("effects", "effect-fields.ts"),
 ];
 
 const problems = [];
@@ -387,10 +435,12 @@ if (!sidebarText.includes("/admin/sla-todos"))
   problems.push("admin sidebar must link the SLA todo board (Q108)");
 if (!sidebarText.includes("/admin/content"))
   problems.push("admin sidebar must link the content ops page (Q124/Q125)");
+if (!sidebarText.includes("/admin/effects"))
+  problems.push("admin sidebar must link the effects ops page (Q130)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 7)
-    problems.push(`admin sidebar must keep exactly 7 admin entries, got ${navCount}`);
+  if (navCount !== 8)
+    problems.push(`admin sidebar must keep exactly 8 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -940,6 +990,93 @@ const needsAttentionAt = contentRouter.indexOf("/api/admin/content/needs-attenti
 const publishInfoAt = contentRouter.indexOf("/api/admin/content/{content_id}/publish-info");
 if (needsAttentionAt === -1 || publishInfoAt === -1 || needsAttentionAt > publishInfoAt)
   problems.push("GET needs-attention must be registered before the publish-info parameter route");
+
+// Q129/Q130：管理端效果回流运营台（孤儿认领/批量/解绑 + 成品时序查询）。
+const effectsDir = join(adminDir, "effects");
+const effectsPage = readAdmin(join("effects", "page.tsx"));
+const effectsActions = readAdmin(join("effects", "actions.ts"));
+const orphanIsland = readAdmin(join("effects", "orphan-table-island.tsx"));
+const seriesIsland = readAdmin(join("effects", "series-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(effectsPage))
+  problems.push("admin/effects/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(effectsPage) || /https?:\/\//.test(effectsPage))
+  problems.push("admin/effects/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (effectsPage.includes(forbidden))
+    problems.push(`admin/effects/page.tsx is read-only; must not contain ${forbidden}`);
+}
+for (const token of ["getEffectOrphans", "OrphanTableIsland", "SeriesQueryIsland"]) {
+  if (!effectsPage.includes(token))
+    problems.push(`admin/effects/page.tsx must use ${token}`);
+}
+if (!/^"use server"/m.test(effectsActions))
+  problems.push("admin/effects/actions.ts must be a Server Action module");
+for (const token of [
+  "claimEffectAction",
+  "batchClaimEffectsAction",
+  "unclaimEffectAction",
+  "queryEffectSeriesAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "missing_role",
+  "unconfigured",
+  "ADMIN_ROLE_LIST",
+  "claimEffect",
+  "batchClaimEffects",
+  "unclaimEffect",
+  "getEffectSeries",
+]) {
+  if (!effectsActions.includes(token))
+    problems.push(`admin/effects/actions.ts must contain ${token}`);
+}
+for (const status of [403, 404, 409, 422]) {
+  if (!effectsActions.includes(String(status)))
+    problems.push(`effects actions must map failure status ${status}`);
+}
+for (const [name, text] of [
+  ["orphan-table-island", orphanIsland],
+  ["series-island", seriesIsland],
+]) {
+  if (!/^"use client"/m.test(text)) problems.push(`${name} must be a client island`);
+  if (text.includes("@/lib/api") || /\bfetch\s*\(/.test(text) || /https?:\/\//.test(text))
+    problems.push(`${name} must call only the Server Action, never the API directly`);
+  if (!text.includes("router.refresh"))
+    problems.push(`${name} must refresh the RSC view after success`);
+}
+if (!orphanIsland.includes("batchClaimEffectsAction"))
+  problems.push("orphan island must expose batch claim via batchClaimEffectsAction");
+if (!seriesIsland.includes("window.confirm"))
+  problems.push("series island must confirm the unclaim (revoke) action");
+for (const token of [
+  "getEffectOrphans",
+  "getEffectSeries",
+  "claimEffect",
+  "batchClaimEffects",
+  "unclaimEffect",
+  "customerBackfillEffects",
+  "/api/admin/effects/orphans",
+  "/api/admin/effects/claims/batch",
+  "/api/admin/effects/claims/unclaim",
+  "/api/effects/backfill",
+]) {
+  if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
+}
+
+const effectsRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "effects", "router.py"),
+  "utf8",
+);
+for (const route of [
+  '"/api/effect-callback"',
+  '"/api/effects/backfill"',
+  '"/api/admin/effects/claims"',
+  '"/api/admin/effects/claims/batch"',
+  '"/api/admin/effects/claims/unclaim"',
+  '"/api/admin/effects/orphans"',
+]) {
+  if (!effectsRouter.includes(route))
+    problems.push(`backend effects router must register ${route}`);
+}
 
 if (problems.length > 0) {
   console.error(`check-admin: ${problems.length} problem(s)\n${problems.join("\n")}`);

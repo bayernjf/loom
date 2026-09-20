@@ -79,6 +79,26 @@ const requiredKeys = [
   "content.discardedReasonTitle",
   "content.backToList",
   "content.actorUnconfigured",
+  "content.backfillTitle",
+  "content.backfillNote",
+  "content.backfillPostLabel",
+  "content.backfillPostPlaceholder",
+  "content.backfillPostRequired",
+  "content.backfillCapturedLabel",
+  "content.backfillCapturedRequired",
+  "content.backfillMetricsLabel",
+  "content.backfillMetricAbsent",
+  "content.backfillMetricInteger",
+  "content.backfillReadRateRange",
+  "content.backfillSubmit",
+  "content.backfillSuccess",
+  "content.backfillMetric.plays",
+  "content.backfillMetric.likes",
+  "content.backfillMetric.comments",
+  "content.backfillMetric.shares",
+  "content.backfillMetric.inquiries",
+  "content.backfillMetric.conversions",
+  "content.backfillMetric.read_rate",
   "content.status.draft",
   "content.status.generating",
   "content.status.review",
@@ -100,6 +120,7 @@ const requiredFiles = [
   "app/[locale]/(shell)/content/actions.ts",
   "app/[locale]/(shell)/content/decision-island.tsx",
   "app/[locale]/(shell)/content/body-edit-island.tsx",
+  "app/[locale]/(shell)/content/backfill-island.tsx",
   "app/[locale]/(shell)/content/content.module.css",
 ];
 
@@ -123,6 +144,7 @@ for (const [key, token] of [
   ["content.bansTitle", "{count}"],
   ["content.downgradesTitle", "{count}"],
   ["content.qualityScore", "{score}"],
+  ["content.backfillSuccess", "{count}"],
 ]) {
   if (!getKey(messages, key)?.includes(token))
     problems.push(`${key} must contain the ${token} placeholder`);
@@ -142,7 +164,9 @@ for (const token of [
   "rejectContent",
   "reviseContent",
   "editContentBody",
+  "customerBackfillEffects",
   "/api/content",
+  "/api/effects/backfill",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must export/use ${token}`);
 }
@@ -171,6 +195,8 @@ if (!detailPageText.includes("DecisionIsland"))
   problems.push("detail page must mount DecisionIsland");
 if (!detailPageText.includes("BodyEditIsland"))
   problems.push("detail page must mount BodyEditIsland");
+if (!detailPageText.includes("BackfillIsland"))
+  problems.push("detail page must mount BackfillIsland (Q131 customer backfill)");
 if (!detailPageText.includes('getTranslations("content.status")'))
   problems.push("detail page must load the content.status namespace");
 
@@ -185,17 +211,20 @@ for (const banned of ["adminDiscardContent", "setPublishInfo", "/discard", "/pub
 for (const token of [
   "decideContentAction",
   "saveContentBodyAction",
+  "backfillEffectAction",
   "approveContent",
   "rejectContent",
   "reviseContent",
   "editContentBody",
+  "customerBackfillEffects",
+  "CURRENT_TENANT_ID",
 ]) {
   if (!actionsText.includes(token))
     problems.push(`content/actions.ts must use ${token}`);
 }
 
 // client 岛纪律：禁直连服务端层 / 裸 URL，必须经 Server Action 并 router.refresh。
-for (const rel of ["content/decision-island.tsx", "content/body-edit-island.tsx"]) {
+for (const rel of ["content/decision-island.tsx", "content/body-edit-island.tsx", "content/backfill-island.tsx"]) {
   const text = readFileSync(join(shell, rel), "utf8");
   if (!text.startsWith('"use client"')) problems.push(`${rel} must start with "use client"`);
   if (text.includes("@/lib/api")) problems.push(`${rel} must not import @/lib/api (server-only)`);
@@ -250,6 +279,20 @@ if (!serviceText.includes("require_any_role(body.actor, OPERATIONS)"))
   problems.push("generate_content must keep the OPERATIONS role gate");
 if (!serviceText.includes("require_any_role(actor, OPERATIONS)"))
   problems.push("regenerate_content must keep the OPERATIONS role gate");
+
+// Q128/Q131：客户效果回填走无 Agent Key 的客户专用通道，且绝不产生孤儿。
+const backfillIsland = readFileSync(
+  join(shell, "content", "backfill-island.tsx"), "utf8",
+);
+for (const token of ["datetime-local", "toISOString", "backfillEffectAction"]) {
+  if (!backfillIsland.includes(token))
+    problems.push(`backfill island must contain ${token} (tz-aware capture time)`);
+}
+const effectsRouterText = readFileSync(
+  join(backend, "app", "core", "effects", "router.py"), "utf8",
+);
+if (!effectsRouterText.includes('"/api/effects/backfill"'))
+  problems.push("backend effects router must keep POST /api/effects/backfill (customer channel)");
 
 if (problems.length > 0) {
   console.error(`check-content: ${problems.length} problem(s)\n${problems.join("\n")}`);

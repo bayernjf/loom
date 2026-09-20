@@ -13,6 +13,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/intakes", labelKey: "admin.opsIntakesNav" },
   { href: "/admin/sla-todos", labelKey: "admin.slaTodosNav" },
   { href: "/admin/content", labelKey: "admin.contentOpsNav" },
+  { href: "/admin/effects", labelKey: "admin.effectsNav" },
 ] as const;
 
 export function AdminSidebar() {
