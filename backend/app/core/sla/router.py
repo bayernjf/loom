@@ -14,8 +14,9 @@ from app.core.db import get_session
 from app.core.locking import (
     SWEEP_LOCK,
     LockBackendError,
+    LockLost,
     LockUnavailable,
-    leader_lock,
+    leader_lease,
 )
 from app.core.rbac import PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.core.sla.policies import sla_state
@@ -63,10 +64,15 @@ async def run_sweep(
         yield session
 
     try:
-        async with leader_lock(SWEEP_LOCK):
-            return await run_jobs(factory)
+        async with leader_lease(SWEEP_LOCK) as lease:
+            # Q139：作业间协作中止，锁中途易主则本轮剩余作业不再执行。
+            return await run_jobs(factory, checkpoint=lease.raise_if_lost)
     except LockUnavailable as exc:
         raise HTTPException(status_code=409, detail="sweep already running") from exc
+    except LockLost as exc:
+        raise HTTPException(
+            status_code=409, detail="sweep aborted: leader lock lost mid-run"
+        ) from exc
     except LockBackendError as exc:
         raise HTTPException(status_code=503, detail="lock backend unavailable") from exc
 
