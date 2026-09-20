@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q135（持续追加，C1.17–C1.79）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q136（持续追加，C1.17–C1.80）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -75,6 +75,7 @@
 | Q133 fencing token | 2026-09-20 | 接缝按甲（02 C1.77）：`leader_lease` 抢锁后 INCR 取跨易主单调令牌、看门狗易主/续约故障置 lost、INCR 失败 fail-closed，`leader_lock` 保 Q89 布尔语义；纯代码零迁移；后端 633→641、eval 101，前端零改动；下游 DB fence/tick 协作中止随 V2 |
 | Q134 Redis Streams 认领原语 | 2026-09-20 | 接缝按甲（02 C1.78）：新包 app/core/queue 落 XADD/XGROUP/XREADGROUP/XACK/XPENDING+XCLAIM/死信原语，StreamBackendError fail-closed，**只落原语不接 worker、不落 env、无占位端点**；零迁移；后端 641→649、eval 101，前端零改动；XADD 生产接线/worker 循环随 V2 |
 | Q135 配置缓存失效广播 | 2026-09-20 | 接缝按甲（02 C1.79）：after_commit fire-and-forget PUBLISH（best-effort）+ ConfigBroadcastSubscriber 收消息全量 reload、故障懒重连，env LOOM_CONFIG_CACHE_BROADCAST_ENABLED 默认关；零迁移无新配置键；后端 649→656、eval 101，前端零改动；单 key 增量/真多副本验证随 V2 |
+| Q136 客户批量 CSV 回填 | 2026-09-20 | 接缝按甲（02 C1.80）：纯前端批量岛（固定 9 列表头 CSV 解析+行级校验+预览、文件/粘贴双入口、软上限 500 行、captured_at 转 UTC、空指标缺席），整批走 Q128 records[] 客户通道 all-or-nothing；**不建后端端点/无迁移/无新依赖**；后端 656·eval 101 不变，tsc/八 checker（token 86）/next build 过；服务端上传/Excel/异步导入/逐行回执随 V2 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---
