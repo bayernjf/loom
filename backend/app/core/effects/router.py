@@ -1,4 +1,4 @@
-"""段13 效果回流端点（Q126/Q127/Q128）：入站推送、孤儿认领、客户回填 + 运营只读队列。"""
+"""段13 效果回流端点（Q126–Q129）：入站推送、孤儿认领/批量/解绑、客户回填 + 运营只读队列。"""
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +12,13 @@ from app.core.effects.schemas import (
     CustomerEffectBatchIn,
     EffectBatchIn,
     EffectBatchReceipt,
+    EffectClaimBatchRequest,
+    EffectClaimBatchView,
     EffectClaimRequest,
     EffectClaimView,
     EffectRecordView,
+    EffectUnclaimRequest,
+    EffectUnclaimView,
 )
 from app.core.rbac import (
     OPERATIONS,
@@ -137,6 +141,63 @@ async def claim_orphan_effect(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.commit()
     return EffectClaimView(**result)
+
+
+@router.post("/api/admin/effects/claims/batch", response_model=EffectClaimBatchView)
+async def claim_orphan_effects_batch(
+    body: EffectClaimBatchRequest,
+    session: AsyncSession = Depends(get_session),
+) -> EffectClaimBatchView:
+    """Q129：批量人工认领（整批 all-or-nothing；批内 record_id 重复 422）。"""
+
+    try:
+        result = await service.claim_orphan_batch(
+            session, items=body.items, actor=body.actor
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.EffectValidationError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "index": exc.index,
+                "field": exc.field,
+                "message": str(exc),
+            },
+        ) from exc
+    except (service.ClaimRecordNotFound, service.ClaimTargetNotFound) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (service.ClaimRecordNotOrphan, service.ClaimTargetDiscarded) as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await session.commit()
+    return EffectClaimBatchView(**result)
+
+
+@router.post("/api/admin/effects/claims/unclaim", response_model=EffectUnclaimView)
+async def unclaim_orphan_effect(
+    body: EffectUnclaimRequest,
+    session: AsyncSession = Depends(get_session),
+) -> EffectUnclaimView:
+    """Q129：取消认领/解绑——删映射，人工认领回填的行回滚 orphan（自动 matched 行不动）。"""
+
+    try:
+        result = await service.unclaim_orphan(
+            session,
+            external_content_id=body.external_content_id,
+            actor=body.actor,
+        )
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ClaimMappingNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await session.commit()
+    return EffectUnclaimView(**result)
 
 
 @router.get(

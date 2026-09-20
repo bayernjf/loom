@@ -11,7 +11,7 @@
 
 | 接口 | 方法/路径 | 来源决策 | 契约状态 |
 |---|---|---|---|
-| 效果回调 | POST /api/effect-callback | Q60 | 🟢 契约定稿（见 §2.1）；**入站第一片已落地（Q126，2026-09-19）**：Bearer 验签 + effect_records 时序 + matched/orphan 分流 + 运营只读队列；孤儿人工认领（Q60a）/反哺校准随下一片 |
+| 效果回调 | POST /api/effect-callback | Q60 | 🟢 契约定稿（见 §2.1）；**入站与操作面已落地（Q126–Q131，2026-09-19/20）**：Bearer 验签 + effect_records 时序 + matched/orphan 分流 + 运营只读队列 + 单条/批量认领/解绑（Q127/Q129）+ 客户专用回填通道（Q128）+ 管理端认领台与客户回填岛（Q130/Q131）；反哺校准算法口径【待补】随 V2 |
 | 白名单消费 | POST /api/product-spaces/{product_space_id}/pwc/consume（业务方参考路径 /api/whitelist/consume 不采用） | Q71 | 🟢 已落地（M5，见 §2.2） |
 | 白名单查询 | GET /api/product-spaces/{product_space_id}/pwcs（租户内池查询，M5）；D9.5 系统后台页面级清单另计 | D9.5 | 🟡 池内组合查询已落地（M5）；中台页面级清单【待补】 |
 | 使用记录上报 | V1 无独立上报端点：consume 取用即写 usage_record 并回带 usage_record_id（M5） | D9.5 / Q71 | 🟡 V1 随消费内联落地；独立上报接口【待补】 |
@@ -25,7 +25,7 @@
 
 ## 2. 已定稿接口规格
 
-### 2.1 效果回流（Q60，契约完整；Q126 入站推送 / Q127 孤儿认领 / Q128 客户回填均已落地）
+### 2.1 效果回流（Q60，契约完整；Q126 入站推送 / Q127 孤儿认领 / Q128 客户回填 / Q129 批量认领·解绑 / Q130 管理端认领台 / Q131 客户回填 UI 均已落地）
 
 **用途**：全链唯一反向边的数据入口——外部 Agent 系统推送效果数据（本系统不做抓取、不做定时拉取调度，Q62）。
 
@@ -49,7 +49,7 @@
 - 同 content_id 多次推送按 captured_at **追加**为时间序列
 - 同 content_id + captured_at **幂等覆盖**
 
-**孤儿数据处理**：对不上 content_id 的推送进"孤儿数据"队列人工认领（Q60a；认领端点 Q127 已落地，见下「实现补登 Q127」）
+**孤儿数据处理**：对不上 content_id 的推送进"孤儿数据"队列人工认领（Q60a；单条认领 Q127、批量认领/解绑 Q129、管理端认领台 Q130 均已落地，见下实现补登）
 
 **发布链路（业务澄清 Q60c）**：客户确认（仅审批信号）→ **运营用托管账号发布** → **运营回填平台链接/ID** → Agent 抓取 → 本 API 推送。前端客户不填写平台链接。
 
@@ -63,7 +63,10 @@
 - 运营只读：`GET /api/admin/effects/orphans`、`GET /api/admin/effects?content_id=`（operations | platform_admin query actor 闸，limit/offset 同既有队列）。
 - **Q127 孤儿人工认领（2026-09-19，02 C1.71，迁移 0035）**：`POST /api/admin/effects/claims`，body `{record_id, content_id, actor}`（operations 写口硬闸，actor 在体；客户/platform_admin 403）。入口记录须为当前 orphan（未知 404、非 orphan 409），目标成品须存在且非 discarded（未知 404、discarded 409）。新表 `effect_claims`（external_content_id PK→content_id FK、claimed_by/claimed_at）持久映射，`effect_records` 加 claimed_by/claimed_at 两溯源列（不新增第三状态，认领后转 matched）；认领＝upsert 映射＋回填该 external_content_id 下全部 orphan 与历史 claimed 行（响应回带 updated_rows，审计 `effect.claimed` tenant `_platform`）。此后同 ID 的推送（覆盖/新采集点）经认领兜底一律 matched，不回落孤儿；映射目标 discarded 则回落 orphan、映射保留。
 - **Q128 客户回填通道（2026-09-19，02 C1.72，零迁移）**：`POST /api/effects/backfill`，**无 Agent Key**，body `{tenant_id, records[], actor}`（客户 actor roles 恒空，同 Q122 客户写口）；source 服务端固定 `customer-backfill`；每条 content_id 必须命中本租户非 discarded 成品，否则该条 422（index/field/message）整批 all-or-nothing——**客户通道绝不产生孤儿**；幂等/时序/metrics 纪律与 Agent 通道一致，received_by=客户 actor.id，审计 `effect.customer_backfilled`（tenant=客户租户），回执 orphan 恒 0。
-- **未含（随下一片/V2）**：效果反哺/Q54·Q57 校准算法（口径【待补】）、认领取消/解绑与认领/回填前端 UI、content_id↔platform_post_id 映射自助化、Agent 抓取与发布自动化（Q62 不抓取）。
+- **Q129 批量认领与取消认领/解绑（2026-09-20，02 C1.73，零迁移）**：`POST /api/admin/effects/claims/batch`，body `{items:[{record_id,content_id}](≥1), actor}`，逐条复用单条认领校验，批内 record_id 重复/空 items 422（detail `{index,field,message}`），任一记录 404/409 整批 all-or-nothing 回滚，回 `{claimed, updated_rows}`，逐条 `effect.claimed` 审计随事务。`POST /api/admin/effects/claims/unclaim`，body `{external_content_id, actor}`（operations 硬闸，映射不存在 404 `ClaimMappingNotFound`）：删映射并把该 external_content_id 下 **matched_content_id 等于旧映射目标** 的全部行回滚 orphan（清四列；按旧目标 content_id 筛而非 claimed_by，兜底新 matched 行也回滚；external_id 自匹配的真自动行不动），回 `{external_content_id, reverted_rows}`，审计 `effect.claim_revoked`。
+- **Q130 管理端效果回流运营台（2026-09-20，02 C1.74，零迁移）**：`/admin/effects`（管理端 sidebar 第 8 项）。孤儿队列区：RSC `GET /api/admin/effects/orphans?limit=100` 首屏，岛支持单条认领与勾选批量认领（整批成功或整批拒绝）；成品时序区：`GET /api/admin/effects?content_id=` 查询，人工认领行可「取消认领」（confirm 后调 unclaim 并重查）。读 operations|platform_admin、写 operations（缺身份 unconfigured/缺 operations missing_role 本地拒发）；指标缺席显 "—" 绝不显 0。check-admin 扩守卫（sidebar 恰 8 项、effects 五文件、admin.effects.* 键、后端六路由齐备）。
+- **Q131 客户效果回填 UI（2026-09-20，02 C1.75，零迁移）**：客户内容详情页对非 discarded 成品挂回填岛（客户 nav 不增项，仍恰 8 项）；V1 单条手工表单（platform_post_id 必填、captured_at datetime-local 客户端转带 Z 的 UTC ISO、metrics 七键留空即缺席、六计数非负整数/read_rate 0..1 前端先挡），提交 Q128 `POST /api/effects/backfill`，422 `{index,field,message}` 回显，成功 router.refresh；批量表格/CSV 随 V2。check-content 扩守卫。
+- **未含（随下一片/V2）**：效果反哺/Q54·Q57 校准算法（口径【待补】）、回填批量表格/CSV 导入（V2）、content_id↔platform_post_id 映射自助化、Agent 抓取与发布自动化（Q62 不抓取）。~~认领取消/解绑与认领/回填前端 UI~~（已随 Q129–Q131 落地）。
 
 ### 2.2 白名单消费接口（Q71，规则完整）
 
@@ -166,6 +169,6 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 - [x] CSV 导出与 Q100 实现一致（§2.3）
 - [x] 入站/出站 Key 治理端点与 Q88/Q82 实现一致（§2.4）
 - [x] effect-callback 入站第一片与 Q60/Q88/Q126 实现一致（鉴权/幂等键/metrics 缺“—”不当 0/matched·orphan 分流/只读队列，2026-09-19 补登 §2.1）
-- [x] effect-callback 续片：Q126 入站推送、Q127 孤儿人工认领、Q128 customer-backfill 客户通道均已落地（见 §2.1，02 C1.70–C1.72）
-- [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、效果反哺/Q54·Q57 校准（口径【待补】）、认领/回填前端 UI、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、JSON/异步导出——均【待补】，随对应版本补齐后回填 §1
+- [x] effect-callback 续片：Q126 入站推送、Q127 孤儿人工认领、Q128 customer-backfill 客户通道、Q129 批量认领/解绑、Q130 管理端认领台、Q131 客户回填 UI 均已落地（见 §2.1，02 C1.70–C1.75）
+- [ ] 待补接口回填：中台对接 API+Webhook（V2）、中台 SDK（V3）、效果反哺/Q54·Q57 校准（口径【待补】）、~~认领/回填前端 UI~~（已随 Q130/Q131 落地）、回填批量表格/CSV（V2）、DB 浏览/AI 调试台/调用日志/配额、白名单页面级查询与独立使用上报、JSON/异步导出——其余均【待补】，随对应版本补齐后回填 §1
 - [x] 段内业务端点不在本表登记范围：段12 内容成品五端点（POST /api/content/generate、/{id}/approve|reject|revise|regenerate）契约见 05 §1.4 Q116 补登与 13 §1.13（V2 P4 首片，2026-09-17 落地）

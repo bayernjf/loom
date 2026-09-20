@@ -766,3 +766,137 @@ export async function adminDiscardContent(
     },
   );
 }
+
+// Q126–Q131：段13 效果回流。管理端孤儿认领台（读双角色、写 operations），
+// 客户回填走无 Agent Key 的客户通道（body actor、roles 恒空、租户隔离）。
+export interface EffectRecordView {
+  record_id: string;
+  source: string;
+  // 推送方自报的外部内容 ID（对不上本系统成品即为孤儿）。
+  content_id: string;
+  matched_content_id: string | null;
+  tenant_id: string | null;
+  platform_post_id: string;
+  captured_at: string;
+  // 七键稀疏子集；未采集的键缺席（界面显 "—"，绝不显 0）。
+  metrics: Record<string, number> | null;
+  status: "matched" | "orphan";
+  claimed_by: string | null;
+  claimed_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface EffectClaimView {
+  external_content_id: string;
+  content_id: string;
+  claimed_by: string;
+  claimed_at: string;
+  updated_rows: number;
+}
+
+export interface EffectClaimBatchView {
+  claimed: number;
+  updated_rows: number;
+}
+
+export interface EffectUnclaimView {
+  external_content_id: string;
+  reverted_rows: number;
+}
+
+export interface EffectBatchReceipt {
+  received: number;
+  matched: number;
+  orphan: number;
+  upserted: number;
+}
+
+export interface EffectRecordIn {
+  content_id: string;
+  platform_post_id: string;
+  captured_at: string;
+  metrics?: Record<string, number>;
+}
+
+function adminQuery(path: string, extra?: Record<string, string>): string {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (extra)
+    for (const [key, value] of Object.entries(extra)) params.set(key, value);
+  return `${path}?${params}`;
+}
+
+export async function getEffectOrphans(
+  opts: { limit?: number; offset?: number } = {},
+): Promise<EffectRecordView[]> {
+  const extra: Record<string, string> = {};
+  if (opts.limit !== undefined) extra.limit = String(opts.limit);
+  if (opts.offset !== undefined) extra.offset = String(opts.offset);
+  return request<EffectRecordView[]>(
+    adminQuery("/api/admin/effects/orphans", extra),
+  );
+}
+
+export async function getEffectSeries(
+  contentId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<EffectRecordView[]> {
+  const extra: Record<string, string> = { content_id: contentId };
+  if (opts.limit !== undefined) extra.limit = String(opts.limit);
+  if (opts.offset !== undefined) extra.offset = String(opts.offset);
+  return request<EffectRecordView[]>(adminQuery("/api/admin/effects", extra));
+}
+
+export async function claimEffect(
+  recordId: string,
+  contentId: string,
+): Promise<EffectClaimView> {
+  return request<EffectClaimView>("/api/admin/effects/claims", {
+    method: "POST",
+    body: JSON.stringify({
+      record_id: recordId,
+      content_id: contentId,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+export async function batchClaimEffects(
+  items: { record_id: string; content_id: string }[],
+): Promise<EffectClaimBatchView> {
+  return request<EffectClaimBatchView>("/api/admin/effects/claims/batch", {
+    method: "POST",
+    body: JSON.stringify({
+      items,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+export async function unclaimEffect(
+  externalContentId: string,
+): Promise<EffectUnclaimView> {
+  return request<EffectUnclaimView>("/api/admin/effects/claims/unclaim", {
+    method: "POST",
+    body: JSON.stringify({
+      external_content_id: externalContentId,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+// Q128/Q131：客户效果回填（source 服务端固定 customer-backfill，绝不产生孤儿）。
+export async function customerBackfillEffects(
+  tenantId: string,
+  records: EffectRecordIn[],
+): Promise<EffectBatchReceipt> {
+  return request<EffectBatchReceipt>("/api/effects/backfill", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      records,
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+    }),
+  });
+}

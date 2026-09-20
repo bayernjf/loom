@@ -8,6 +8,7 @@ import {
   type ContentQualityIssue,
   type ContentSemanticFinding,
 } from "@/lib/api";
+import { BackfillIsland } from "../backfill-island";
 import { BodyEditIsland } from "../body-edit-island";
 import { DecisionIsland } from "../decision-island";
 import styles from "../content.module.css";
@@ -203,6 +204,10 @@ export default async function ContentDetailPage({
           <h2 className={styles.subtitle}>{t("discardedReasonTitle")}</h2>
           <p>{content.discard_reason}</p>
         </div>
+      ) : null}
+
+      {content.status !== "discarded" ? (
+        <BackfillIsland contentId={content.content_id} />
       ) : null}
 
       <Link href="/content" className={styles.backLink}>

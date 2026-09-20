@@ -1,4 +1,4 @@
-"""段13 效果回流（effect-callback）Pydantic 契约（Q126/Q127/Q128，05 §1.1.1 / 11 §2.1）。"""
+"""段13 效果回流（effect-callback）Pydantic 契约（Q126–Q129，05 §1.1.1 / 11 §2.1）。"""
 
 from datetime import datetime
 
@@ -78,3 +78,38 @@ class EffectClaimView(BaseModel):
     claimed_by: str
     claimed_at: datetime
     updated_rows: int
+
+
+class EffectClaimItem(BaseModel):
+    """Q129 批量认领中的单条：孤儿记录 → 目标成品。"""
+
+    record_id: str = Field(min_length=1)
+    content_id: str = Field(min_length=1)
+
+
+class EffectClaimBatchRequest(BaseModel):
+    """Q129 批量认领请求体（整批 all-or-nothing；actor 在体，operations 闸）。"""
+
+    items: list[EffectClaimItem] = Field(min_length=1)
+    actor: Actor
+
+
+class EffectClaimBatchView(BaseModel):
+    """批量认领回执：条数与累计回填行数。"""
+
+    claimed: int
+    updated_rows: int
+
+
+class EffectUnclaimRequest(BaseModel):
+    """Q129 取消认领/解绑请求体（按推送方自报 ID 删映射；actor 在体）。"""
+
+    external_content_id: str = Field(min_length=1)
+    actor: Actor
+
+
+class EffectUnclaimView(BaseModel):
+    """解绑回执：被删映射的外部 ID 与回滚为 orphan 的历史行数。"""
+
+    external_content_id: str
+    reverted_rows: int

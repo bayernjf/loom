@@ -279,3 +279,234 @@ async def test_claim_role_guard_customer_and_admin_403(client, session_factory):
         **payload_tail, "actor": ADMIN_BODY,
     })).status_code == 403
     assert await _count(session_factory, EffectClaim) == 0
+
+
+# ---------- Q129：取消认领/解绑 ----------
+
+
+async def test_unclaim_deletes_mapping_and_reverts_all_matched_rows(
+    client, session_factory
+):
+    ac, key = client
+    await _push(ac, key, "ghost", TS1)  # 孤儿 → 认领到 c1
+    rid = await _orphan_record_id(session_factory)
+    await ac.post("/api/admin/effects/claims", json={
+        "record_id": rid, "content_id": "c1", "actor": OPS,
+    })
+    # 认领后新采集点经映射兜底 matched（该行 claimed_by 为空，同样须回滚）。
+    assert (await _push(ac, key, "ghost", TS2)).json()["matched"] == 1
+
+    r = await ac.post("/api/admin/effects/claims/unclaim", json={
+        "external_content_id": "ghost", "actor": OPS,
+    })
+    assert r.status_code == 200, r.text
+    # 两行（人工回填行 + 兜底新行）全部回滚 orphan。
+    assert r.json() == {"external_content_id": "ghost", "reverted_rows": 2}
+
+    assert await _count(session_factory, EffectClaim) == 0
+    assert await _count(
+        session_factory, EffectRecord, status=STATUS_ORPHAN
+    ) == 2
+    # c1 时序清空；孤儿队列重新出现两行，且溯源列清空。
+    r = await ac.get("/api/admin/effects", params={"content_id": "c1", **OPS_Q})
+    assert r.json() == []
+    orphans = (await ac.get("/api/admin/effects/orphans", params=OPS_Q)).json()
+    assert len(orphans) == 2
+    assert all(row["claimed_by"] is None for row in orphans)
+    assert all(row["matched_content_id"] is None for row in orphans)
+
+
+async def test_unclaim_does_not_touch_other_external_ids(client, session_factory):
+    ac, key = client
+    # ghost 认领到 c1；c3 走自动匹配（与映射无关）。
+    await _push(ac, key, "ghost", TS1)
+    rid = await _orphan_record_id(session_factory, "ghost")
+    await ac.post("/api/admin/effects/claims", json={
+        "record_id": rid, "content_id": "c1", "actor": OPS,
+    })
+    assert (await _push(ac, key, "c3", TS2)).json()["matched"] == 1
+
+    assert (await ac.post("/api/admin/effects/claims/unclaim", json={
+        "external_content_id": "ghost", "actor": OPS,
+    })).status_code == 200
+
+    # c3 的自动 matched 行不受影响。
+    series = (await ac.get(
+        "/api/admin/effects", params={"content_id": "c3", **OPS_Q}
+    )).json()
+    assert len(series) == 1
+    assert series[0]["status"] == STATUS_MATCHED
+
+
+async def test_unclaim_then_push_orphan_again_and_reclaim(client, session_factory):
+    ac, key = client
+    await _push(ac, key, "ghost", TS1)
+    rid = await _orphan_record_id(session_factory)
+    await ac.post("/api/admin/effects/claims", json={
+        "record_id": rid, "content_id": "c1", "actor": OPS,
+    })
+    assert (await ac.post("/api/admin/effects/claims/unclaim", json={
+        "external_content_id": "ghost", "actor": OPS,
+    })).status_code == 200
+
+    # 映射已删：同 ID 新推送不再兜底，重新进孤儿队列。
+    r = await _push(ac, key, "ghost", TS3)
+    assert r.json()["orphan"] == 1
+    # 可重新认领（映射重建）。
+    rid2 = await _orphan_record_id(session_factory)
+    r = await ac.post("/api/admin/effects/claims", json={
+        "record_id": rid2, "content_id": "c3", "actor": OPS,
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["content_id"] == "c3"
+    assert await _count(
+        session_factory, EffectClaim, external_content_id="ghost", content_id="c3"
+    ) == 1
+
+
+async def test_unclaim_unknown_mapping_404(client):
+    ac, _ = client
+    r = await ac.post("/api/admin/effects/claims/unclaim", json={
+        "external_content_id": "never", "actor": OPS,
+    })
+    assert r.status_code == 404
+
+
+async def test_unclaim_role_guard_customer_and_admin_403(client, session_factory):
+    ac, key = client
+    await _push(ac, key, "ghost", TS1)
+    rid = await _orphan_record_id(session_factory)
+    await ac.post("/api/admin/effects/claims", json={
+        "record_id": rid, "content_id": "c1", "actor": OPS,
+    })
+    assert (await ac.post("/api/admin/effects/claims/unclaim", json={
+        "external_content_id": "ghost", "actor": CUSTOMER_BODY,
+    })).status_code == 403
+    assert (await ac.post("/api/admin/effects/claims/unclaim", json={
+        "external_content_id": "ghost", "actor": ADMIN_BODY,
+    })).status_code == 403
+    # 被拒后映射仍在。
+    assert await _count(session_factory, EffectClaim) == 1
+
+
+# ---------- Q129：批量认领（整批 all-or-nothing） ----------
+
+
+async def _orphan_id_for(ac, session_factory, key, external_id, ts):
+    await _push(ac, key, external_id, ts)
+    async with session_factory() as session:
+        row = (await session.scalars(
+            select(EffectRecord).where(
+                EffectRecord.external_content_id == external_id,
+                EffectRecord.status == STATUS_ORPHAN,
+            )
+        )).first()
+        assert row is not None
+        return row.record_id
+
+
+async def test_batch_claim_binds_multiple_orphans(client, session_factory):
+    ac, key = client
+    rid1 = await _orphan_id_for(ac, session_factory, key, "ghost1", TS1)
+    rid2 = await _orphan_id_for(ac, session_factory, key, "ghost2", TS2)
+
+    r = await ac.post("/api/admin/effects/claims/batch", json={
+        "items": [
+            {"record_id": rid1, "content_id": "c1"},
+            {"record_id": rid2, "content_id": "c3"},
+        ],
+        "actor": OPS,
+    })
+    assert r.status_code == 200, r.text
+    assert r.json() == {"claimed": 2, "updated_rows": 2}
+
+    assert await _count(
+        session_factory, EffectClaim, content_id="c1"
+    ) == 1
+    assert await _count(
+        session_factory, EffectClaim, content_id="c3"
+    ) == 1
+    assert await _count(session_factory, EffectRecord, status=STATUS_ORPHAN) == 0
+
+
+async def test_batch_all_or_nothing_when_one_target_missing(
+    client, session_factory
+):
+    ac, key = client
+    rid1 = await _orphan_id_for(ac, session_factory, key, "ghost1", TS1)
+    rid2 = await _orphan_id_for(ac, session_factory, key, "ghost2", TS2)
+
+    r = await ac.post("/api/admin/effects/claims/batch", json={
+        "items": [
+            {"record_id": rid1, "content_id": "c1"},
+            {"record_id": rid2, "content_id": "nope"},
+        ],
+        "actor": OPS,
+    })
+    assert r.status_code == 404
+    # 整批不落：无映射、两条仍为孤儿。
+    assert await _count(session_factory, EffectClaim) == 0
+    assert await _count(session_factory, EffectRecord, status=STATUS_ORPHAN) == 2
+
+
+async def test_batch_all_or_nothing_when_one_not_orphan(
+    client, session_factory
+):
+    ac, key = client
+    # ghost1 孤儿；c1 自动 matched（非孤儿）。
+    rid_orphan = await _orphan_id_for(ac, session_factory, key, "ghost1", TS1)
+    await _push(ac, key, "c1", TS2)
+    async with session_factory() as session:
+        matched_row = (await session.scalars(
+            select(EffectRecord).where(EffectRecord.external_content_id == "c1")
+        )).one()
+        rid_matched = matched_row.record_id
+
+    r = await ac.post("/api/admin/effects/claims/batch", json={
+        "items": [
+            {"record_id": rid_orphan, "content_id": "c3"},
+            {"record_id": rid_matched, "content_id": "c3"},
+        ],
+        "actor": OPS,
+    })
+    assert r.status_code == 409
+    assert await _count(session_factory, EffectClaim) == 0
+    assert await _count(session_factory, EffectRecord, status=STATUS_ORPHAN) == 1
+
+
+async def test_batch_duplicate_record_id_422(client, session_factory):
+    ac, key = client
+    rid = await _orphan_id_for(ac, session_factory, key, "ghost1", TS1)
+    r = await ac.post("/api/admin/effects/claims/batch", json={
+        "items": [
+            {"record_id": rid, "content_id": "c1"},
+            {"record_id": rid, "content_id": "c3"},
+        ],
+        "actor": OPS,
+    })
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["index"] == 1
+    assert detail["field"] == "record_id"
+    assert await _count(session_factory, EffectClaim) == 0
+
+
+async def test_batch_empty_items_422(client):
+    ac, _ = client
+    r = await ac.post("/api/admin/effects/claims/batch", json={
+        "items": [], "actor": OPS,
+    })
+    assert r.status_code == 422
+
+
+async def test_batch_role_guard_customer_and_admin_403(client, session_factory):
+    ac, key = client
+    rid = await _orphan_id_for(ac, session_factory, key, "ghost1", TS1)
+    body_items = {"items": [{"record_id": rid, "content_id": "c1"}]}
+    assert (await ac.post("/api/admin/effects/claims/batch", json={
+        **body_items, "actor": CUSTOMER_BODY,
+    })).status_code == 403
+    assert (await ac.post("/api/admin/effects/claims/batch", json={
+        **body_items, "actor": ADMIN_BODY,
+    })).status_code == 403
+    assert await _count(session_factory, EffectClaim) == 0
