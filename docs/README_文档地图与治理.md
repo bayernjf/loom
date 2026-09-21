@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q143（持续追加，C1.17–C1.87）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q152（持续追加，C1.17–C1.96）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -28,6 +28,8 @@
 | [16_测试策略.md](./16_测试策略.md) | Guard/Q/契约 → 测试计划 | 🟢 已补：分层测试 + 规则级测试清单 | 与 12 联动；接 eval/ 两件套 |
 | [17_部署与运维.md](./17_部署与运维.md) | 07/09 §11 → 运维 | 🟢 已定稿：环境/CI-CD/多租户/监控 + 中间件版本 | 可作环境搭建依据 |
 | [18_前端i18n与设计Token方案.md](./18_前端i18n与设计Token方案.md) | 14/09 + Q58/Q73 + **Q96** → 前端工程 | ✅ **Q96（2026-09-16）拍板定稿**：next-intl + `[locale]`（V1 仅 zh-CN）+ 设计 Token 三层模型（CSS Modules/CSS 变量），色值借 AntD5 调色板（只借值不装依赖），§2.4/§3.6 可直接落码 | M12 前端按此逐片点工 |
+| [19_private_beta主数据录入模板.md](./19_private_beta主数据录入模板.md) | 08 §2.2 Checklist #2 + Q149 → 业务方/运营 | private beta 首批主数据录入模板：publish_slots/PCP/三包字段与调用示例，最小集合＝1 个 final_id | beta 验收 #6 前置；待业务方回填 |
+| [design-a2a-vassal.md](./design-a2a-vassal.md) | Q150 → Zeus 联邦 A2A 封臣接入 | loom 作为 Zeus 第二封臣的设计草案：Agent Card/x-zeus-fealty 契约、三 skills plan 模式、JSON-RPC 任务层、认证复用 Q88 Agent Key、审计租户 `_platform`；第一阶段已落地（02 C1.94） | ✅ 第一阶段已落地（plan 模式）；第二阶段（持久化/真 LLM/真机联调）待点工 |
 | [handoff-archive-2026-09-18.md](./handoff-archive-2026-09-18.md) | handoff 进度归档（2026-09-18 首次；09-13 ~ 09-17 进度条目 + 已销账待办详细过程，逐条原文） | 只读历史；权威台账 02/08/16 |
 | [handoff-archive-2026-09-19.md](./handoff-archive-2026-09-19.md) | handoff 进度归档（2026-09-19 首次并续写；Q118–Q126 滚出条目，逐条原文；2026-09-20 续写 Q124/Q125/Q126） | 只读历史；权威台账 02/08/16 |
 
@@ -83,6 +85,13 @@
 | Q141 配置缓存版本号门控 + TTL 兜底 | 2026-09-20 | 接缝按甲（02 C1.85）：cache 快照携 per-key ConfigItem.version 向量、reload_keys 单调门控拒旧快照回灌（accepted/skipped/removed），after_commit apply 携权威版本；订阅器无消息超 env LOOM_CONFIG_CACHE_TTL_SECONDS 默认 300 回源全量，仅曾装载且门控开启时触发；零迁移；后端 678→684、eval 101；真多副本订阅验证随 V2 |
 | Q142 中台导出分页 + 行数硬上限 | 2026-09-20 | 接缝按甲（02 C1.86）：fcw.csv/fcw.json 加 limit(1..cap)/offset，env LOOM_EXPORT_MAX_ROWS 默认 100000 超限 422；JSON envelope 加 total/limit/offset/has_more、CSV 走 X-Export-* 响应头（正文守单列）；同步/异步 worker/下载同一上限、job 不加分页列；零迁移；后端 684→692、eval 101；6 层原料包全量 JSON/多 worker 并发度随 V2 |
 | Q143 下游 PG 行级 fence 接 restock 花钱路径 | 2026-09-20 | 接缝按甲（02 C1.87）：新表 restock_claims + restock/fencing.py 两段式，花钱前 claim_request 独立短事务认领（acquired/held/lost）、成功提交前 fence_current 条件 UPDATE rowcount=0 回滚；锁在模型调用期间易主旧 leader skipped_lost 不调模型；fence=None 行为同 Q87/Q139；迁移 0037（pg16 往返实测）、物理表 58→59；后端 692→699、eval 101；SLA sweep 行级 fence、真 PG/Redis 多副本验证随 V2 |
+| Q144 MVP 评审与首发形态裁决 | 2026-09-21 | 02 C1.88：三判准——docs-V1 内核达标且超额、公网自助 NO-GO、受控试点有条件 GO；首发＝受控 private beta（平台代运营），P0-① 身份层压 V2 第一项；上线 Checklist 见 08 §2.2 |
+| Q145–Q147 private beta 部署/备份/staging | 2026-09-21 | 02 C1.89–C1.91：Q145 前后端 Dockerfile + entrypoint 迁移先行 + compose（backend 不发布端口、frontend 唯一口 3000，699→704）；Q146 db-backup 每日 pg_dump+7 天/日志轮转/watchdog+webhook（704→710）；Q147 staging overlay `-p loom-staging` 6 服务 healthy、真实 Chrome SSR 零 console 错误（710→711，#6 不销账） |
+| Q148 真实 LLM 接线 | 2026-09-21 | 02 C1.92：agnes OpenAI 兼容网关/agnes-2.5-flash/USD/日预算 50 USD/8 chat 场景真模型/Key Fernet；真实 CAT-RECOG 635/231 tokens；ATOM-AFFINITY 仍 synthetic、单价待供应商、图像/视频 V2；零迁移 |
+| Q149 beta 阈值确认 + 主数据模板 | 2026-09-21 | 02 C1.93：SLA 72h/黄 24h/红 48h、QC 0.85、cluster_line 0.9 沿用为 beta 口径；G2 12 字段基线；付费档额度划掉；新增 docs/19 录入模板；#6 唯一阻塞＝主数据业务回填 |
+| Q150 A2A 封臣 plan 模式任务层 | 2026-09-21 | 接缝全按草案（02 C1.94，design-a2a-vassal.md）：新包 app/core/a2a/（card/skills/rpc/router），三公开 Agent Card 发现端点 + POST /api/a2a/tasks（Q88 Bearer、JSON-RPC send/sendSubscribe(SSE)/get/cancel、进程内存 TTL 30min/上限 500、审计 a2a.task tenant=_platform）；三 skills 全 plan 模式不触链/不花 token/不越 Gate；零迁移零新 env；后端 711→733（单测 12+集成 10）；持久化/真 LLM/真机联调随第二阶段 |
+| Q151 SLA sweep 写路径 PG 行级 fence | 2026-09-21 | 接缝按甲（02 C1.95）：新表 sweep_tick_claims（迁移 0038，物理表 59→60，pg16 往返实测）+ sla/fencing.py 两段式 claim_tick/fence_current + run_jobs commit_guard（门闭 LockLost 中止本轮）；scheduler/手工 /run 先认领（lost 静默/409）；fence=None 不写表同 V1；后端 733→741（+8 集成）；真 PG/Redis 多副本验证随 V2（sqlite 替身边界同 Q143） |
+| Q152 导出 worker 多 consumer 并发度/批量 | 2026-09-21 | 接缝按甲（02 C1.96）：build_export_workers 工厂 N 个同消费组 ExportWorker（N>1 姊妹 consumer 共享前缀带序号、参数透传、非法值启动 ValueError）；env LOOM_EXPORT_WORKER_CONCURRENCY 默认 1/LOOM_EXPORT_STREAM_COUNT 默认 20 保 V1 行为、不入 .env.example；main 单例改列表；零迁移；后端 741→747（+6）；真 Redis 多 consumer 验证随 V2 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---

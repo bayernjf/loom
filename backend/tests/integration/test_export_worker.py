@@ -17,8 +17,9 @@ from app.core.exports.models import (
     JOB_FAILED,
     JOB_QUEUED,
 )
-from app.core.exports.worker import ExportWorker
+from app.core.exports.worker import ExportWorker, build_export_workers
 from app.core.queue import (
+    DEFAULT_COUNT,
     StreamBackendError,
     add_event,
     ensure_group,
@@ -221,3 +222,61 @@ async def test_stream_backend_failure_is_fail_closed(factory, fake):
     worker = ExportWorker(factory, block_ms=0)
     with pytest.raises(StreamBackendError):
         await worker._tick()
+
+
+# ---------- Q152 多 consumer 并发度/批量配置 ----------
+
+
+def test_build_workers_defaults_single_v1_behaviour():
+    workers = build_export_workers(object())
+    assert len(workers) == 1
+    assert workers[0]._consumer.startswith("export-")
+    assert workers[0]._count == DEFAULT_COUNT
+    assert workers[0]._block_ms == 5_000
+
+
+def test_build_workers_multiple_unique_consumers_pass_through_batch():
+    workers = build_export_workers(
+        object(), concurrency=3, block_ms=10, count=7, min_idle_ms=123
+    )
+    assert len(workers) == 3
+    names = [w._consumer for w in workers]
+    assert len(set(names)) == 3  # 组内 consumer 名唯一
+    # 姊妹 consumer 共享随机前缀、带 1..N 序号后缀。
+    prefixes = {name.rsplit("-", 1)[0] for name in names}
+    assert len(prefixes) == 1
+    assert [name.rsplit("-", 1)[1] for name in names] == ["1", "2", "3"]
+    assert all(w._count == 7 and w._block_ms == 10 for w in workers)
+    assert all(w._min_idle_ms == 123 for w in workers)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"concurrency": 0}, {"concurrency": -2}, {"count": 0}],
+)
+def test_build_workers_rejects_invalid_concurrency_or_count(kwargs):
+    with pytest.raises(ValueError):  # 启动期 fail-loud，不静默退化为单 worker
+        build_export_workers(object(), **kwargs)
+
+
+async def test_multiple_workers_shard_new_jobs_without_duplication(factory, fake):
+    await _seed(factory, fcw=1)
+    job_ids = []
+    for _ in range(6):
+        job_id = await _queued_job(factory)
+        await service.enqueue_export_job(job_id)
+        job_ids.append(job_id)
+
+    # 两个姊妹 consumer，每轮最多取 3 条：确定性各处理 3 条（fake 按 new_index 分片）。
+    worker_a, worker_b = build_export_workers(
+        factory, concurrency=2, block_ms=0, count=3
+    )
+    await worker_a._tick()
+    await worker_b._tick()
+
+    assert worker_a.completed == 3
+    assert worker_b.completed == 3
+    assert _pel(fake) == {}  # 全部 ACK，无残留/重复投递
+    async with factory() as session:
+        for job_id in job_ids:
+            assert (await service.get_job(session, job_id)).status == JOB_COMPLETED

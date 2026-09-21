@@ -28,6 +28,7 @@ from app.core.actor import Actor
 from app.core.api_keys.models import AgentApiKey
 from app.core.api_keys.service import PLATFORM_TENANT
 from app.core.audit import append_audit
+from app.core.effects.csv_io import parse_backfill_csv
 from app.core.effects.models import (
     METRIC_COUNTERS,
     METRIC_KEYS,
@@ -38,6 +39,7 @@ from app.core.effects.models import (
     EffectRecord,
 )
 from app.core.effects.schemas import (
+    CustomerBackfillUploadIn,
     CustomerEffectBatchIn,
     EffectBatchIn,
     EffectRecordIn,
@@ -395,6 +397,27 @@ async def ingest_customer_backfill(
         detail=receipt,
     )
     return receipt
+
+
+async def ingest_customer_backfill_upload(
+    session,
+    *,
+    body: CustomerBackfillUploadIn,
+    max_rows: int,
+) -> dict:
+    """Q156 客户批量 CSV 服务端上传：服务端解析 + 逐行回执，再走 Q128 通道。
+
+    整份 CSV 挂 body.content_id 一个成品；解析期任何结构/行错误由 csv_io 聚合
+    抛 CsvValidationError（路由回 422 逐行 errors，不入库）。结构全合法才构造
+    Q128 批次整批 all-or-nothing 落库（只命中本租户非 discarded 成品、绝不孤儿）。
+    """
+
+    parsed = parse_backfill_csv(body.content_id, body.csv, max_rows=max_rows)
+    batch = CustomerEffectBatchIn(
+        tenant_id=body.tenant_id, records=parsed.records, actor=body.actor
+    )
+    receipt = await ingest_customer_backfill(session, batch=batch)
+    return {**receipt, "filename": body.filename, "rows": parsed.rows}
 
 
 async def _claim_one(

@@ -7,6 +7,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 import pytest
 import pytest_asyncio
@@ -25,10 +26,25 @@ from app.core.locking import (
 )
 from app.core.locking import service as lock_service
 from app.core.restock.worker import RestockWorker
+from app.core.sla import scheduler as sla_scheduler
+from app.core.sla.fencing import TICK_HELD
 from app.core.sla.scheduler import SweepScheduler
 from app.main import app
 
 PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
+
+
+class _FakeSession:
+    async def commit(self) -> None:
+        pass
+
+    async def rollback(self) -> None:
+        pass
+
+
+@asynccontextmanager
+async def _null_factory():
+    yield _FakeSession()
 
 _RELEASE_LUA = lock_service._RELEASE_LUA
 _RENEW_LUA = lock_service._RENEW_LUA
@@ -169,7 +185,12 @@ async def test_backend_failure_on_acquire_is_fail_closed(locks_failing):
 
 # ---------- 循环 tick 抢锁 ----------
 
-async def test_scheduler_tick_runs_when_lock_free(locks_enabled):
+async def test_scheduler_tick_runs_when_lock_free(locks_enabled, monkeypatch):
+    # Q151：PG tick 认领语义由 test_sweep_fencing 专测；此处 factory=None，绕过认领。
+    async def _claim_held(*_args, **_kwargs):
+        return TICK_HELD
+
+    monkeypatch.setattr(sla_scheduler, "claim_tick", _claim_held)
     calls = 0
 
     async def run_jobs(factory, **_kwargs):
@@ -177,7 +198,7 @@ async def test_scheduler_tick_runs_when_lock_free(locks_enabled):
         calls += 1
         return {}
 
-    scheduler = SweepScheduler(None, run_jobs, 300.0)
+    scheduler = SweepScheduler(_null_factory, run_jobs, 300.0)
     await scheduler._tick()
     assert calls == 1
     assert SWEEP_LOCK not in locks_enabled.store  # 跑完即放

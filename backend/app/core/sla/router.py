@@ -19,6 +19,7 @@ from app.core.locking import (
     leader_lease,
 )
 from app.core.rbac import PLATFORM_ADMIN, PermissionDenied, require_any_role
+from app.core.sla.fencing import TICK_LOST, claim_tick, fence_current
 from app.core.sla.policies import sla_state
 from app.core.sla.runner import run_jobs
 from app.product.modeling.models import OpsTodo
@@ -65,8 +66,28 @@ async def run_sweep(
 
     try:
         async with leader_lease(SWEEP_LOCK) as lease:
+            # Q151：与定时调度同一套 PG 行级 fence：先短事务认领本 tick，再以
+            # 每作业提交前条件更新门，挡住手工触发与定时 tick 重叠时的迟到写入。
+            if lease.fence is not None:
+                outcome = await claim_tick(
+                    session, SWEEP_LOCK, lease.fence, lease.owner_token
+                )
+                if outcome == TICK_LOST:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="sweep aborted: tick claim held by a newer leader",
+                    )
+                await session.commit()
+
+            async def commit_guard(guard_session: AsyncSession) -> bool:
+                return await fence_current(guard_session, SWEEP_LOCK, lease.fence)
+
             # Q139：作业间协作中止，锁中途易主则本轮剩余作业不再执行。
-            return await run_jobs(factory, checkpoint=lease.raise_if_lost)
+            return await run_jobs(
+                factory,
+                checkpoint=lease.raise_if_lost,
+                commit_guard=commit_guard,
+            )
     except LockUnavailable as exc:
         raise HTTPException(status_code=409, detail="sweep already running") from exc
     except LockLost as exc:

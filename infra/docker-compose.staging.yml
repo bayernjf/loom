@@ -1,7 +1,9 @@
-# Staging rehearsal overlay (Q146 rehearsal; not part of the beta baseline).
-# Resets host port publishing on the infra services so the rehearsal stack
+# Staging overlay (Q147 rehearsal; Q148 real-LLM verification).
+# Resets host port publishing on the infra services so the staging stack
 # coexists with the local atlas-pg container; only the frontend is reachable
-# from the host. Use with:
+# from the host. The backend points at the agnes OpenAI-compatible endpoint
+# (endpoint only — the outbound key is provisioned at runtime via admin API
+# and stored encrypted). Use with:
 #   docker compose -f docker-compose.yml -f docker-compose.staging.yml up
 services:
   postgres:
@@ -12,3 +14,6 @@ services:
     ports: !reset []
     # No V1 service consumes S3; skip when the image cannot be pulled.
     profiles: [unused-in-rehearsal]
+  backend:
+    environment:
+      LOOM_LLM_BASE_URL_OPENAI: https://apihub.agnes-ai.com/v1

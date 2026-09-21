@@ -22,6 +22,7 @@ STAGING_OVERLAY = REPO_ROOT / "infra" / "docker-compose.staging.yml"
 def test_backend_image_installs_app_and_serves_with_healthcheck() -> None:
     content = BACKEND_DOCKERFILE.read_text()
     assert "pip install ." in content
+    assert "COPY runtime/ /runtime/" in content
     assert "/healthz" in content
     assert 'ENTRYPOINT ["docker-entrypoint.sh"]' in content
 
@@ -60,6 +61,7 @@ def test_compose_runs_app_services_with_backend_unpublished() -> None:
     backend_env = backend["environment"]
     assert "@postgres:5432/" in backend_env["LOOM_DATABASE_DSN"]
     assert "//redis:6379" in backend_env["LOOM_REDIS_DSN"]
+    assert backend_env["LOOM_LLM_BASE_URL_OPENAI"] == "${LOOM_LLM_BASE_URL_OPENAI:-}"
     assert backend["depends_on"]["postgres"]["condition"] == "service_healthy"
 
     frontend = services["frontend"]
@@ -84,3 +86,10 @@ def test_staging_overlay_unpublishes_infra_ports_and_excludes_minio() -> None:
     assert merged["minio"]["profiles"] == ["unused-in-rehearsal"]
     assert "3000:3000" in merged["frontend"]["ports"]
     assert "ports" not in merged["backend"]
+    assert (
+        overlay["backend"]["environment"]["LOOM_LLM_BASE_URL_OPENAI"]
+        == "https://apihub.agnes-ai.com/v1"
+    )
+    # Endpoints are not secrets, but outbound keys must never appear in compose files.
+    for path in (COMPOSE, STAGING_OVERLAY):
+        assert "sk-" not in path.read_text()

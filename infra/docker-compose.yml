@@ -33,6 +33,8 @@ services:
       LOOM_DATABASE_DSN: postgresql+asyncpg://loom:loom@postgres:5432/loom
       LOOM_REDIS_DSN: redis://redis:6379/0
       LOOM_MASTER_KEY: ${LOOM_MASTER_KEY:-}
+      # Endpoint only; the outbound key lives encrypted in the database, never in env/files.
+      LOOM_LLM_BASE_URL_OPENAI: ${LOOM_LLM_BASE_URL_OPENAI:-}
     expose: ["8000"]
     depends_on:
       postgres: {condition: service_healthy}

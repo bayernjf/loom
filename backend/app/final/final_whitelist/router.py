@@ -5,10 +5,12 @@ E1.1 publishFCW 是全系统 final_id 唯一出口（line 11036）：
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
-from app.final.final_whitelist import service
+from app.final.final_whitelist import material, service
 from app.final.final_whitelist.schemas import AssemblyManual, AssemblyTaskCreate
 
 router = APIRouter(tags=["final-whitelist"])
@@ -102,3 +104,26 @@ async def get_fcw(final_id: str, session: AsyncSession = Depends(get_session)) -
     if fcw is None:
         raise HTTPException(404, f"FCW not found: {final_id}")
     return service.fcw_view(fcw)
+
+
+@router.get("/api/fcw/{final_id}/material.json")
+async def export_fcw_material(
+    final_id: str, session: AsyncSession = Depends(get_session)
+) -> JSONResponse:
+    """Q155 台内卡片「导出 JSON」：该白名单完整 6 层提示词原料包（docs/09:87）。
+
+    与中台 /api/exports/fcw.json（final_id-only）是两个面：本口按单条 final_id
+    反解析产品 PWS/平台 PCP/策略 CSP/结构 CSTP/表达 CEP/合规 CCR 六层完整快照，
+    供台内卡片详情/复制；只读、不触发 Guard、不写审计，未知 final_id 404。
+    """
+
+    fcw = await service.get_fcw(session, final_id)
+    if fcw is None:
+        raise HTTPException(404, f"FCW not found: {final_id}")
+    pack = await material.build_material_pack(session, fcw)
+    return JSONResponse(
+        content=jsonable_encoder(pack),
+        headers={
+            "Content-Disposition": f'attachment; filename="fcw-material-{final_id}.json"'
+        },
+    )

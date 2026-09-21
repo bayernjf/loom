@@ -44,6 +44,36 @@ class EffectBatchReceipt(BaseModel):
     upserted: int
 
 
+class CustomerBackfillUploadIn(BaseModel):
+    """Q156 客户批量 CSV 服务端上传（整份挂同一成品，零 multipart 依赖）。
+
+    csv 为原始 CSV 文本，表头固定 9 列（同 Q136 前端岛）；服务端解析、逐行
+    校验，全合法才整批落库（守 Q128 all-or-nothing、绝不产生孤儿）。
+    """
+
+    tenant_id: str = Field(min_length=1)
+    content_id: str = Field(min_length=1)
+    csv: str = Field(min_length=1)
+    filename: str | None = None
+    actor: Actor
+
+
+class BackfillUploadRow(BaseModel):
+    """逐行回执中的一行（index＝数据行 0 基、line＝含表头物理行号）。"""
+
+    index: int
+    line: int
+    platform_post_id: str
+    captured_at: datetime
+
+
+class CustomerBackfillUploadReceipt(EffectBatchReceipt):
+    """Q156 上传回执：整批计数 + 逐行 accepted 明细（orphan 恒 0）。"""
+
+    filename: str | None = None
+    rows: list[BackfillUploadRow] = []
+
+
 class EffectRecordView(BaseModel):
     """效果记录只读视图（孤儿队列 / 成品时序）。"""
 

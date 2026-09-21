@@ -75,6 +75,7 @@ class ExportWorker:
         if self.running:
             return
         self._stop.clear()
+        logger.info("export worker starting consumer=%s", self._consumer)
         self._task = asyncio.create_task(self._loop(), name="loom-export-worker")
 
     async def _loop(self) -> None:
@@ -161,7 +162,10 @@ class ExportWorker:
         # 提交成功后再 ACK（ACK 失败则靠 reclaim 幂等重处理，终态判断会丢弃）。
         await ack_event(client, service.EXPORT_STREAM, service.EXPORT_GROUP, entry_id)
         self.completed += 1
-        logger.info("export job %s completed after %s delivery(ies)", job_id, deliveries)
+        logger.info(
+            "export consumer=%s completed job %s after %s delivery(ies)",
+            self._consumer, job_id, deliveries,
+        )
 
     async def _dead_letter(
         self, client, entry_id: str, fields: dict[str, str], reason: str
@@ -184,3 +188,42 @@ class ExportWorker:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
+
+
+def build_export_workers(
+    session_factory,
+    *,
+    concurrency: int = 1,
+    block_ms: int = 5_000,
+    count: int = DEFAULT_COUNT,
+    min_idle_ms: int = DEFAULT_MIN_IDLE_MS,
+    max_deliveries: int = DEFAULT_MAX_DELIVERIES,
+) -> list[ExportWorker]:
+    """Q152：按并发度构造同一消费组内的 N 个 consumer（单进程多 consumer 分片）。
+
+    消费组语义保证每个 consumer 以 ``XREADGROUP >`` 各取不重叠的新消息，故 N>1
+    即在单进程内水平扩展导出处理能力（崩溃接管仍按 consumer 各自的 PEL 进行）；
+    默认 concurrency=1 与 V1 单 worker 完全一致。N>1 时姊妹 consumer 共享同一
+    随机前缀并带序号后缀，便于 PEL/日志按 consumer 溯源。非法并发度/批量在启动
+    期 fail-loud，不静默退化。
+    """
+    if concurrency < 1:
+        raise ValueError("export worker concurrency must be >= 1")
+    if count < 1:
+        raise ValueError("export stream count must be >= 1")
+    suffix = uuid.uuid4().hex[:8]
+    workers: list[ExportWorker] = []
+    for index in range(concurrency):
+        # concurrency=1 时传 None 沿用构造器默认命名 export-{hex8}（既有行为）。
+        name = None if concurrency == 1 else f"export-{suffix}-{index + 1}"
+        workers.append(
+            ExportWorker(
+                session_factory,
+                consumer_name=name,
+                block_ms=block_ms,
+                count=count,
+                min_idle_ms=min_idle_ms,
+                max_deliveries=max_deliveries,
+            )
+        )
+    return workers

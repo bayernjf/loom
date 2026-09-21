@@ -1,0 +1,36 @@
+# Q157 多副本/多 worker 持续负载端到端演练 overlay（docs/17 §7，02 C1.101）。
+#
+# 在 base compose 之上把 backend 水平扩到 2 副本，打开真 Redis/PG 的多副本协作
+# 开关，验证：导出 worker 同消费组分片（只读幂等，可并行）、SLA/restock leader
+# 锁互斥（花钱作业不双花）、锁易主协作中止、配置缓存 pub/sub 失效广播，以及
+# entrypoint 多副本并发迁移由 PG 咨询锁串行化（alembic env.py）。
+#
+# 不注入任何 LLM key：模型走 synthetic，演练绝不花真钱；restock 无 requested
+# 数据时空转，只验单 leader，不改造其消费语义（水平并行留 V2，见 Q138）。
+#
+# 用法（独立 project，与本地 atlas-pg 共存；infra 服务不发布宿主端口）：
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#     -f docker-compose.ha.yml -p loom-ha up -d --build
+# 压测/观测见 infra/ha-rehearsal.sh。
+services:
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  minio:
+    ports: !reset []
+    profiles: [unused-in-rehearsal]
+  backend:
+    deploy:
+      replicas: 2
+    environment:
+      # 多副本协作开关（默认关，见 app/core/config.py）；scheduler 默认已开。
+      LOOM_DISTRIBUTED_LOCK_ENABLED: "true"
+      LOOM_RESTOCK_WORKER_ENABLED: "true"
+      LOOM_RESTOCK_STREAM_ENABLED: "true"
+      LOOM_EXPORT_WORKER_ENABLED: "true"
+      # 每副本 1 个 consumer：两副本共 2 个同组 consumer，验证 XREADGROUP 分片。
+      LOOM_EXPORT_WORKER_CONCURRENCY: "1"
+      LOOM_CONFIG_CACHE_BROADCAST_ENABLED: "true"
+      # 显式不注入 LLM key：保持 synthetic，演练不花真钱。
+      LOOM_LLM_BASE_URL_OPENAI: ""

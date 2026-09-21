@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.content.router import router as content_router
+from app.core.a2a.router import router as a2a_router
 from app.core.api_keys.router import router as agent_keys_router
 from app.core.compliance_wordlist.router import router as wordlist_router
 from app.core.config_center.broadcast import ConfigBroadcastSubscriber
@@ -13,7 +14,7 @@ from app.core.dashboards.router import router as dashboards_router
 from app.core.db import SessionLocal, settings
 from app.core.effects.router import router as effects_router
 from app.core.exports.router import router as exports_router
-from app.core.exports.worker import ExportWorker
+from app.core.exports.worker import ExportWorker, build_export_workers
 from app.core.model_registry.router import router as model_registry_router
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
@@ -40,12 +41,13 @@ logger = logging.getLogger("loom.startup")
 _scheduler: SweepScheduler | None = None
 _restock_worker: RestockWorker | None = None
 _config_subscriber: ConfigBroadcastSubscriber | None = None
-_export_worker: ExportWorker | None = None
+# Q152：导出消费组可在单进程内起多个 consumer（默认 1，V1 行为）。
+_export_workers: list[ExportWorker] = []
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _scheduler, _restock_worker, _config_subscriber, _export_worker
+    global _scheduler, _restock_worker, _config_subscriber, _export_workers
     # M10c：启动引导配置缓存。失败不阻断启动——knob() 回落种子默认值，
     # 进程仍可健康启动，配置中心在下次发布或重启后恢复（单进程 V1）。
     try:
@@ -65,11 +67,15 @@ async def lifespan(app: FastAPI):
         await _restock_worker.start()
     if settings.export_worker_enabled:
         # Q137：导出任务消费组 worker（只读幂等，可多副本水平并行，无需 leader 锁）。
-        _export_worker = ExportWorker(
+        # Q152：单进程内按 LOOM_EXPORT_WORKER_CONCURRENCY 起多个 consumer 同组分片。
+        _export_workers = build_export_workers(
             SessionLocal,
+            concurrency=settings.export_worker_concurrency,
             block_ms=int(settings.export_stream_block_seconds * 1000),
+            count=settings.export_stream_count,
         )
-        await _export_worker.start()
+        for worker in _export_workers:
+            await worker.start()
     if settings.config_cache_broadcast_enabled:
         # Q135：多副本配置失效广播订阅者；启动失败不阻断应用（本进程 after_commit
         # 热更新仍生效，对端副本最坏重启后恢复一致）。
@@ -85,9 +91,9 @@ async def lifespan(app: FastAPI):
         if _config_subscriber is not None:
             await _config_subscriber.stop()
             _config_subscriber = None
-        if _export_worker is not None:
-            await _export_worker.stop()
-            _export_worker = None
+        for worker in reversed(_export_workers):
+            await worker.stop()
+        _export_workers = []
         if _restock_worker is not None:
             await _restock_worker.stop()
             _restock_worker = None
@@ -103,6 +109,7 @@ app.include_router(modeling_router)
 app.include_router(fieldpool_router)
 app.include_router(wordlist_router)
 app.include_router(config_router)
+app.include_router(a2a_router)
 app.include_router(dashboards_router)
 app.include_router(model_registry_router)
 app.include_router(skill7_router)

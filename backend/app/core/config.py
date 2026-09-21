@@ -60,11 +60,20 @@ class Settings(BaseSettings):
     # 进程内 ExportWorker 消费置 running→completed/failed（只读幂等，可多副本并行）。
     export_worker_enabled: bool = False
     export_stream_block_seconds: float = 5.0
+    # Q152 单进程内导出消费组 consumer 数（并发度）与每轮拉取批量：默认 1/20，
+    # 保持 V1 单 worker 行为；消费组内多 consumer 原生分片（XREADGROUP 各取不
+    # 重叠消息），调高并发度即水平扩展导出处理能力。运维参数，非 Q9 业务旋钮。
+    export_worker_concurrency: int = 1
+    export_stream_count: int = 20
 
     # Q142 中台导出行数硬上限（运维防护参数，非 Q9 业务旋钮）：fcw.csv/fcw.json
     # 与导出任务在未显式分页时最多导出的 final_id 行数，防大结果集 OOM/超大响应；
     # GET 直读端点的 limit 不得超过该值（422）。默认 10 万行。
     export_max_rows: int = 100000
+
+    # Q156 客户效果批量 CSV 服务端上传的数据行硬上限（运维防护参数，非 Q9 业务
+    # 旋钮）：解除 Q136 前端 500 行软上限后防单次超大请求；超限整批 422。
+    backfill_upload_max_rows: int = 10000
 
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。
