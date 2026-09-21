@@ -8,6 +8,7 @@ PEL、XACK 移出、XPENDING+XCLAIM 崩溃接管与投递计数、idle 过滤、
 
 import pytest
 import pytest_asyncio
+import redis
 
 from app.core.queue import (
     RESTOCK_DEAD_STREAM,
@@ -174,3 +175,48 @@ async def test_backend_failures_are_wrapped(failing):
         await add_event(client, RESTOCK_STREAM, {"x": "1"})
     with pytest.raises(StreamBackendError):
         await ensure_group(client, RESTOCK_STREAM, RESTOCK_GROUP)
+
+
+# ---------- Q157：XREAD BLOCK 到期无消息（真 redis-py 行为，替身测不到） ----------
+
+class _XReadTimeoutClient:
+    """xreadgroup 固定抛指定异常的最小 client。"""
+
+    def __init__(self, exc):
+        self._exc = exc
+
+    async def xreadgroup(self, *args, **kwargs):
+        raise self._exc
+
+
+async def test_read_new_block_timeout_returns_empty():
+    # redis-py 用 asyncio.timeout() 实现 XREAD BLOCK：到期无消息抛内置
+    # TimeoutError（非 redis.RedisError 子类），语义即"本轮无新消息"。
+    client = _XReadTimeoutClient(TimeoutError())
+    assert await read_new(
+        client, RESTOCK_STREAM, RESTOCK_GROUP, "c", block_ms=5_000
+    ) == []
+
+
+async def test_read_new_nonblock_timeout_is_backend_error():
+    # 非 block 读取不应超时，内置 TimeoutError 按后端故障 fail-closed。
+    client = _XReadTimeoutClient(TimeoutError())
+    with pytest.raises(StreamBackendError):
+        await read_new(client, RESTOCK_STREAM, RESTOCK_GROUP, "c", block_ms=None)
+
+
+async def test_read_new_redis_block_timeout_returns_empty():
+    # redis 8.1.0 实测：XREAD BLOCK 到期被包装成 redis.exceptions.TimeoutError
+    # （"Timeout reading from redis"，RedisError 子类、非内置 TimeoutError 子类）。
+    # block 模式同样是"无消息"而非后端故障，必须返回空而不是 tick skipped。
+    client = _XReadTimeoutClient(redis.exceptions.TimeoutError())
+    assert await read_new(
+        client, RESTOCK_STREAM, RESTOCK_GROUP, "c", block_ms=5_000
+    ) == []
+
+
+async def test_read_new_redis_nonblock_timeout_is_backend_error():
+    # 非 block 读取遇到 redis.exceptions.TimeoutError 仍按后端故障 fail-closed。
+    client = _XReadTimeoutClient(redis.exceptions.TimeoutError())
+    with pytest.raises(StreamBackendError):
+        await read_new(client, RESTOCK_STREAM, RESTOCK_GROUP, "c", block_ms=None)

@@ -126,6 +126,22 @@ async def read_new(
             count=count,
             block=block_ms,
         )
+    except (redis.exceptions.TimeoutError, TimeoutError) as exc:
+        # XREAD BLOCK 阻塞到期仍无消息时，redis-py（asyncio）按版本可能抛
+        # redis.exceptions.TimeoutError（"Timeout reading from redis"，RedisError
+        # 子类但非内置 TimeoutError 子类）或内置 asyncio.TimeoutError。BLOCK 到期
+        # 的协议语义就是"本轮无新消息"（同步客户端此时返回 None），归一返回空，让
+        # worker 正常进入 reclaim/下一轮。Q157 真容器演练（redis 8.1.0）抓到：此前
+        # redis.exceptions.TimeoutError 落入 RedisError 分支被当成后端故障，worker
+        # 每个 block 周期 tick skipped 退避，空转不消费也不接管 pending，多副本下
+        # 还造成只有未踩退避窗口的 consumer 通吃。非 block 读取无预期超时，按后端
+        # 故障 fail-closed；真连接故障抛 ConnectionError（非 TimeoutError）仍走下方
+        # RedisError 分支，不被吞掉。
+        if block_ms is None:
+            raise StreamBackendError(
+                f"xreadgroup {stream}/{group} timed out without a BLOCK window"
+            ) from exc
+        return []
     except redis.RedisError as exc:
         raise StreamBackendError(f"xreadgroup {stream}/{group} failed: {exc}") from exc
     return _flatten(resp)
