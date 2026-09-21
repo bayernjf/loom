@@ -11,7 +11,7 @@
 
 | 接口 | 方法/路径 | 来源决策 | 契约状态 |
 |---|---|---|---|
-| 效果回调 | POST /api/effect-callback | Q60 | 🟢 契约定稿（见 §2.1）；**入站与操作面已落地（Q126–Q131，2026-09-19/20）**：Bearer 验签 + effect_records 时序 + matched/orphan 分流 + 运营只读队列 + 单条/批量认领/解绑（Q127/Q129）+ 客户专用回填通道（Q128）+ 管理端认领台与客户回填岛（Q130/Q131）；反哺校准算法口径【待补】随 V2 |
+| 效果回调 | POST /api/effect-callback | Q60 | 🟢 契约定稿（见 §2.1）；**入站与操作面已落地（Q126–Q131，2026-09-19/20）**：Bearer 验签 + effect_records 时序 + matched/orphan 分流 + 运营只读队列 + 单条/批量认领/解绑（Q127/Q129）+ 客户专用回填通道（Q128）+ 管理端认领台与客户回填岛（Q130/Q131）+ 服务端 CSV 批量上传逐行回执（Q156）；反哺校准算法口径【待补】随 V2 |
 | 白名单消费 | POST /api/product-spaces/{product_space_id}/pwc/consume（业务方参考路径 /api/whitelist/consume 不采用） | Q71 | 🟢 已落地（M5，见 §2.2） |
 | 白名单查询 | GET /api/product-spaces/{product_space_id}/pwcs（租户内池查询，M5）；D9.5 系统后台页面级清单另计 | D9.5 | 🟡 池内组合查询已落地（M5）；中台页面级清单【待补】 |
 | 使用记录上报 | V1 无独立上报端点：consume 取用即写 usage_record 并回带 usage_record_id（M5） | D9.5 / Q71 | 🟡 V1 随消费内联落地；独立上报接口【待补】 |
@@ -20,6 +20,7 @@
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
 | CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132） | D4 | 🟢 CSV/JSON 同步导出 + 导出任务记录已落地（见 §2.3/§2.4）；queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（env 默认关，门控关走同步）；limit/offset 分页与行数硬上限已随 Q142 落地（env `LOOM_EXPORT_MAX_ROWS` 默认 10 万，超限 422） |
+| 台内白名单 6 层原料包 JSON | GET /api/fcw/{final_id}/material.json（Q155） | 09:87 / 01 line14 | 🟢 后端全量 JSON 已落地（见 §2.5，台内卡片口径、非中台 final_id-only 面）；台内卡片前端随 D3.5 点工 |
 
 ---
 
@@ -66,6 +67,8 @@
 - **Q129 批量认领与取消认领/解绑（2026-09-20，02 C1.73，零迁移）**：`POST /api/admin/effects/claims/batch`，body `{items:[{record_id,content_id}](≥1), actor}`，逐条复用单条认领校验，批内 record_id 重复/空 items 422（detail `{index,field,message}`），任一记录 404/409 整批 all-or-nothing 回滚，回 `{claimed, updated_rows}`，逐条 `effect.claimed` 审计随事务。`POST /api/admin/effects/claims/unclaim`，body `{external_content_id, actor}`（operations 硬闸，映射不存在 404 `ClaimMappingNotFound`）：删映射并把该 external_content_id 下 **matched_content_id 等于旧映射目标** 的全部行回滚 orphan（清四列；按旧目标 content_id 筛而非 claimed_by，兜底新 matched 行也回滚；external_id 自匹配的真自动行不动），回 `{external_content_id, reverted_rows}`，审计 `effect.claim_revoked`。
 - **Q130 管理端效果回流运营台（2026-09-20，02 C1.74，零迁移）**：`/admin/effects`（管理端 sidebar 第 8 项）。孤儿队列区：RSC `GET /api/admin/effects/orphans?limit=100` 首屏，岛支持单条认领与勾选批量认领（整批成功或整批拒绝）；成品时序区：`GET /api/admin/effects?content_id=` 查询，人工认领行可「取消认领」（confirm 后调 unclaim 并重查）。读 operations|platform_admin、写 operations（缺身份 unconfigured/缺 operations missing_role 本地拒发）；指标缺席显 "—" 绝不显 0。check-admin 扩守卫（sidebar 恰 8 项、effects 五文件、admin.effects.* 键、后端六路由齐备）。
 - **Q131 客户效果回填 UI（2026-09-20，02 C1.75，零迁移）**：客户内容详情页对非 discarded 成品挂回填岛（客户 nav 不增项，仍恰 8 项）；V1 单条手工表单（platform_post_id 必填、captured_at datetime-local 客户端转带 Z 的 UTC ISO、metrics 七键留空即缺席、六计数非负整数/read_rate 0..1 前端先挡），提交 Q128 `POST /api/effects/backfill`，422 `{index,field,message}` 回显，成功 router.refresh；批量表格/CSV 随 V2。check-content 扩守卫。
+
+- **Q156 服务端 CSV 批量上传（2026-09-21，02 C1.100，零迁移/零新依赖，甲案接缝待追认）**：`POST /api/effects/backfill/upload`，**无 Agent Key**（客户通道，同 Q128），JSON body `{tenant_id, content_id, csv, filename?, actor}`（不引 multipart，CSV 为文本字段；整份挂单一 content_id，九列同 Q136：platform_post_id,captured_at,plays,likes,comments,shares,inquiries,conversions,read_rate）。服务端标准库 csv 解析：去 BOM、表头按名定位（重复/未知/缺列聚合报错）、跳纯空行、回执物理行号（首数据行 line=2）、captured_at **强制带时区**（naive/纯日期逐行 422，守 Q128 tz-aware 铁律）、计数 `^\d+$`、read_rate 0..1、空指标缺席不落 0；**逐行收集全部坏行一次回 422**（detail `{message:"CSV validation failed", errors:[{index,line,field,message}]}`）；行数硬上限 env `LOOM_BACKFILL_UPLOAD_MAX_ROWS` 默认 10000（0 数据行/超限 422）。通过后复用 Q128 客户通道（只命中本租户非 discarded 成品否则整批 422、绝不孤儿、all-or-nothing、审计 effect.customer_backfilled），200 回执在 `{received,matched,orphan,upserted}` 上追加 `filename` 与 `rows[]{index,line,platform_post_id,captured_at}`。仍挂 V2：Excel（openpyxl）解析、异步导入任务、Q131 前端岛切换到本端点。
 - **未含（随下一片/V2）**：效果反哺/Q54·Q57 校准算法（口径【待补】）、回填批量表格/CSV 导入（V2）、content_id↔platform_post_id 映射自助化、Agent 抓取与发布自动化（Q62 不抓取）。~~认领取消/解绑与认领/回填前端 UI~~（已随 Q129–Q131 落地）。
 
 ### 2.2 白名单消费接口（Q71，规则完整）
@@ -135,7 +138,16 @@
 - 任务视图 ExportJobView：`{job_id, tenant_id, product_space_id, format, status, row_count, file_name, requested_by, error, created_at, completed_at, download_url}`；row_count 为创建时留痕，不随后续数据变化。
 - 审计 `export.job_created`（tenant=客户租户、actor_id=requested_by、actor_roles=[]、entity_type=export_job、entity_id=job_id、detail {format,row_count,product_space_id}）；同步 CSV/JSON 两口沿用 Q100 不写审计。
 - 新表 export_jobs（迁移 0036，业务物理表 57→58，pg16 up/downgrade-1/up 实测）；错误：tenant_id 空 422、format 非 csv|json 422、缺 actor 422、未知 job 404、failed 任务下载 409。
-- **未含（V2）**：失败重试策略细化、6 层原料包全量 JSON（中台导出契约为 final_id-only，6 层包属台内详情/复制口径，另议）、多 ExportWorker 副本并发度/批量配置。（queued/running 后台 worker 与任务列表口已随 Q137、分页与行数硬上限已随 Q142 落地。）
+- **未含（V2）**：失败重试策略细化。（queued/running 后台 worker 与任务列表口已随 Q137、分页与行数硬上限已随 Q142、多 ExportWorker 副本并发度/批量配置已随 Q152〔env `LOOM_EXPORT_WORKER_CONCURRENCY` 默认 1/`LOOM_EXPORT_STREAM_COUNT` 默认 20〕落地；中台导出契约仍为 final_id-only，**6 层原料包全量 JSON 不属本面、已随 Q155 落台内卡片口径见 §2.5**。）
+
+### 2.5 台内白名单 6 层原料包 JSON（Q155，已落地）
+
+**用途**：docs/09:87「每条白名单 = 完整 6 层提示词原料包（产品+平台+策略+结构+表达+合规）」、01 line 14「final_id = 6 层快照相加」的台内 FCW 卡片详情/复制口径；与中台 §2.3/§2.4 的 final_id-only 导出**分属两个面**（Q100/Q132/Q142 定论），故端点落 final FCW 域而非 `/api/exports`。
+
+- `GET /api/fcw/{final_id}/material.json`：只读、无 RBAC 闸、不触发 Guard、不写审计、未知 final_id 404（读纪律同 `GET /api/fcw/{final_id}`）；响应 `application/json` + `Content-Disposition: attachment; filename="fcw-material-{final_id}.json"`。
+- 包体 schema `loom.fcw.material-pack.v1`：`{schema, final_id, issued:{tenant_id,product_space_id,platform,slot_id,goal,country,score,score_incomplete,score_detail,publish_status,issued_by,created_at,published_at}, layers:{product,platform,strategy,structure,expression,compliance}, guards, warnings:[]}`。product=PwsSnapshot 冻结快照（池原子/PWC combo）、platform=PcpWeightTable 权重 + PublishSlot、strategy/structure/expression=三包 Package（csp/cstp/cep 定键 payload）、compliance=CcrReport + 关联 LawReview 列表。
+- 引用行物理缺失不 500，该层引用回 `{"_ref":<id>,"available":false}` 并在 `warnings` 收一条。
+- **边界**：本片只销后端 JSON 能力，台内卡片前端（D3.5 白名单组装引擎菜单）整片未建、随菜单点工，复制 ID/多选/列表卡片不扩张；零迁移。
 
 ### 2.4 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
 
