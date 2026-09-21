@@ -972,10 +972,12 @@ for (const token of [
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
 }
 
+// Windows 检出（core.autocrlf=true）下后端源码可能为 CRLF，统一归一为 LF，
+// 使下方跨行字面量匹配与平台无关（LF 检出时此 replace 为空操作）。
 const contentRouter = readFileSync(
   join(repoRoot, "backend", "app", "content", "router.py"),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 for (const route of [
   '@router.get(\n    "/api/admin/content/ready-to-publish"',
   '@router.get(\n    "/api/admin/content/needs-attention"',
