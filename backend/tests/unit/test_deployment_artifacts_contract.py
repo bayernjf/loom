@@ -22,6 +22,7 @@ STAGING_OVERLAY = REPO_ROOT / "infra" / "docker-compose.staging.yml"
 def test_backend_image_installs_app_and_serves_with_healthcheck() -> None:
     content = BACKEND_DOCKERFILE.read_text()
     assert "pip install ." in content
+    assert "COPY runtime/ /runtime/" in content
     assert "/healthz" in content
     assert 'ENTRYPOINT ["docker-entrypoint.sh"]' in content
 
