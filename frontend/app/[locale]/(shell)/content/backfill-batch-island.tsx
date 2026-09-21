@@ -1,10 +1,11 @@
 "use client";
 
-// Q159：客户效果批量回填岛（内容详情页，非 discarded 成品均显示）。
-// Q136 甲案为纯前端解析后走 Q128 records[]；Q156 落地服务端上传端点后，本岛切换为
-// 提交 CSV 原文到 POST /api/effects/backfill/upload——服务端固定 9 列解析、逐行校验
-// （权威），全合法才整批 all-or-nothing 落库（绝不产生孤儿），422 回逐行错误。
-// 浏览器侧仍做一次同构即时解析，仅用于上传前预览/前置反馈；服务端校验为最终权威。
+// Q159/Q160：客户效果批量回填岛（内容详情页，非 discarded 成品均显示）。
+// 两种载体，同一服务端契约（固定 9 列、逐行校验、整批 all-or-nothing、绝不孤儿）：
+// - CSV（Q156/Q159）：提交 CSV 原文到 /api/effects/backfill/upload；浏览器保留同构
+//   即时解析仅作上传前预览，服务端校验为最终权威。
+// - Excel .xlsx（Q160）：浏览器不解析工作簿，读成 base64 直传
+//   /api/effects/backfill/upload-excel，由服务端 openpyxl 解析（唯一权威）。
 // 指标列留空即缺席（绝不补 0）；captured_at 必须带时区（Z 或 ±HH:MM），不臆造时区。
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
@@ -12,6 +13,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 
 import {
   batchBackfillEffectsAction,
+  batchBackfillExcelAction,
   type BatchBackfillActionResult,
   type BackfillServerError,
 } from "./actions";
@@ -214,15 +216,19 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
   const [pending, startTransition] = useTransition();
   const [text, setText] = useState("");
   const [filename, setFilename] = useState<string | null>(null);
+  // csv＝本地即时预览后提交 CSV 原文；excel＝.xlsx 读 base64 直传，服务端唯一解析。
+  const [excelBase64, setExcelBase64] = useState<string | null>(null);
   const [result, setResult] = useState<BatchBackfillActionResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isExcel = excelBase64 !== null;
   const parsed = useMemo(() => parseCsv(text, t), [text, t]);
-  const blocked =
+  const csvBlocked =
     parsed.headerError !== null ||
     parsed.tooMany ||
     parsed.errors.length > 0 ||
     parsed.rows.length === 0;
+  const blocked = isExcel ? excelBase64 === null : csvBlocked;
 
   function failureText(failure: Extract<BatchBackfillActionResult, { ok: false }>): string {
     if (failure.status === "unconfigured") return t("actorUnconfigured");
@@ -242,14 +248,32 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
     });
   }
 
+  function resetResultAndInput() {
+    setResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function loadFile(file: File | undefined) {
     if (!file) return;
     const reader = new FileReader();
+    if (file.name.toLowerCase().endsWith(".xlsx")) {
+      // Excel：浏览器不解析，读 data URL 取 base64，交服务端 openpyxl 权威解析。
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+        const comma = dataUrl.indexOf(",");
+        setExcelBase64(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+        setText("");
+        setFilename(file.name);
+        resetResultAndInput();
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
     reader.onload = () => {
       setText(typeof reader.result === "string" ? reader.result : "");
+      setExcelBase64(null);
       setFilename(file.name);
-      setResult(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetResultAndInput();
     };
     reader.readAsText(file);
   }
@@ -258,15 +282,14 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
     if (blocked) return;
     setResult(null);
     startTransition(async () => {
-      // 提交 CSV 原文与文件名；服务端解析校验，浏览器解析仅用于上方即时预览。
-      const actionResult = await batchBackfillEffectsAction(
-        contentId,
-        text,
-        filename,
-      );
+      // Excel 直传 base64；CSV 提交原文（浏览器解析仅用于上方即时预览）。
+      const actionResult = isExcel
+        ? await batchBackfillExcelAction(contentId, excelBase64 as string, filename)
+        : await batchBackfillEffectsAction(contentId, text, filename);
       setResult(actionResult);
       if (actionResult.ok) {
         setText("");
+        setExcelBase64(null);
         setFilename(null);
         router.refresh();
       }
@@ -282,7 +305,7 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
       <p className={styles.blockNote}>
         {t("backfillBatchFormat", { max: MAX_ROWS })}
       </p>
-      <p className={styles.mono}>{HEADER_COLUMNS.join(",")}</p>
+      {!isExcel ? <p className={styles.mono}>{HEADER_COLUMNS.join(",")}</p> : null}
       <label className={styles.fieldLabel} htmlFor="backfill-batch-file">
         {t("backfillBatchFile")}
       </label>
@@ -290,86 +313,97 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
         id="backfill-batch-file"
         ref={fileInputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         onChange={(event) => loadFile(event.target.files?.[0])}
       />
-      <textarea
-        className={styles.textArea}
-        rows={8}
-        value={text}
-        placeholder={t("backfillBatchPlaceholder")}
-        onChange={(event) => {
-          setText(event.target.value);
-          setFilename(null);
-          setResult(null);
-        }}
-      />
-      {parsed.headerError ? (
-        <p className={styles.errorText} role="status">
-          {parsed.headerError}
-        </p>
-      ) : null}
-      {parsed.tooMany ? (
-        <p className={styles.errorText} role="status">
-          {t("backfillBatchTooMany", {
-            max: MAX_ROWS,
-            count: parsed.rows.length,
+      {isExcel ? (
+        <p className={styles.blockNote} role="status">
+          {t("backfillBatchExcelSelected", {
+            filename: filename ?? t("backfillBatchFile"),
           })}
         </p>
-      ) : null}
-      {parsed.errors.length > 0 ? (
-        <div className={styles.errorText} role="status">
-          <p>{t("backfillBatchErrors", { count: parsed.errors.length })}</p>
-          <ul>
-            {parsed.errors.slice(0, 20).map((error) => (
-              <li key={error.line}>
-                {t("backfillBatchLine", {
-                  line: error.line,
-                  message: error.message,
-                })}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {!parsed.headerError && parsed.rows.length > 0 && !parsed.tooMany ? (
+      ) : (
         <>
-          <p className={styles.successText}>
-            {t("backfillBatchParsed", { count: parsed.rows.length })}
-          </p>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>{t("backfillPostLabel")}</th>
-                <th>{t("backfillCapturedLabel")}</th>
-                {METRIC_KEYS.map((key) => (
-                  <th key={key}>{t(`backfillMetric.${key}`)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {previewRows.map((row) => (
-                <tr key={`${row.line}-${row.platformPostId}`}>
-                  <td>{row.platformPostId}</td>
-                  <td>{row.capturedAt}</td>
-                  {METRIC_KEYS.map((key) => (
-                    <td key={key}>
-                      {row.metrics[key] === undefined ? "—" : row.metrics[key]}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {parsed.rows.length > PREVIEW_ROWS ? (
-            <p className={styles.blockNote}>
-              {t("backfillBatchPreviewMore", {
-                count: parsed.rows.length - PREVIEW_ROWS,
+          <textarea
+            className={styles.textArea}
+            rows={8}
+            value={text}
+            placeholder={t("backfillBatchPlaceholder")}
+            onChange={(event) => {
+              setText(event.target.value);
+              setExcelBase64(null);
+              setFilename(null);
+              setResult(null);
+            }}
+          />
+          {parsed.headerError ? (
+            <p className={styles.errorText} role="status">
+              {parsed.headerError}
+            </p>
+          ) : null}
+          {parsed.tooMany ? (
+            <p className={styles.errorText} role="status">
+              {t("backfillBatchTooMany", {
+                max: MAX_ROWS,
+                count: parsed.rows.length,
               })}
             </p>
           ) : null}
+          {parsed.errors.length > 0 ? (
+            <div className={styles.errorText} role="status">
+              <p>{t("backfillBatchErrors", { count: parsed.errors.length })}</p>
+              <ul>
+                {parsed.errors.slice(0, 20).map((error) => (
+                  <li key={error.line}>
+                    {t("backfillBatchLine", {
+                      line: error.line,
+                      message: error.message,
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {!parsed.headerError && parsed.rows.length > 0 && !parsed.tooMany ? (
+            <>
+              <p className={styles.successText}>
+                {t("backfillBatchParsed", { count: parsed.rows.length })}
+              </p>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>{t("backfillPostLabel")}</th>
+                    <th>{t("backfillCapturedLabel")}</th>
+                    {METRIC_KEYS.map((key) => (
+                      <th key={key}>{t(`backfillMetric.${key}`)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((row) => (
+                    <tr key={`${row.line}-${row.platformPostId}`}>
+                      <td>{row.platformPostId}</td>
+                      <td>{row.capturedAt}</td>
+                      {METRIC_KEYS.map((key) => (
+                        <td key={key}>
+                          {row.metrics[key] === undefined ? "—" : row.metrics[key]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {parsed.rows.length > PREVIEW_ROWS ? (
+                <p className={styles.blockNote}>
+                  {t("backfillBatchPreviewMore", {
+                    count: parsed.rows.length - PREVIEW_ROWS,
+                  })}
+                </p>
+              ) : null}
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
       <div className={styles.actionButtons}>
         <button
           type="button"

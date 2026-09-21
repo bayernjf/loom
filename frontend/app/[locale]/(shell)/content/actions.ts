@@ -11,6 +11,7 @@ import {
   rejectContent,
   reviseContent,
   uploadBackfillCsv,
+  uploadBackfillExcel,
   type BackfillUploadReceipt,
   type EffectBatchReceipt,
 } from "@/lib/api";
@@ -190,6 +191,38 @@ export async function batchBackfillEffectsAction(
       CURRENT_TENANT_ID,
       contentId,
       csvText,
+      filename ?? undefined,
+    );
+    return { ok: true, receipt };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      const parsed = parseUploadFailure(err);
+      return {
+        ok: false,
+        status: err.status as 403 | 404 | 409 | 422,
+        ...parsed,
+      };
+    }
+    return { ok: false, status: "unknown", detail: null, serverErrors: [] };
+  }
+}
+
+// Q160：Excel（.xlsx）批量回填。浏览器不解析工作簿，直接把 base64 交服务端
+// openpyxl 解析校验（唯一权威）；逐行/文件级回执结构与 CSV 上传完全一致。
+export async function batchBackfillExcelAction(
+  contentId: string,
+  contentBase64: string,
+  filename: string | null,
+): Promise<BatchBackfillActionResult> {
+  if (!CURRENT_TENANT_ID)
+    return { ok: false, status: "unconfigured", detail: null, serverErrors: [] };
+  if (!contentId.trim() || !contentBase64)
+    return { ok: false, status: 422, detail: null, serverErrors: [] };
+  try {
+    const receipt = await uploadBackfillExcel(
+      CURRENT_TENANT_ID,
+      contentId,
+      contentBase64,
       filename ?? undefined,
     );
     return { ok: true, receipt };

@@ -933,3 +933,24 @@ export async function uploadBackfillCsv(
     }),
   });
 }
+
+// Q160：批量 Excel（.xlsx）回填，与 CSV 上传同契约。contentBase64 为 .xlsx 字节的
+// 标准 base64（JSON body 携文本，零 multipart）；服务端 openpyxl 解析、逐行校验，
+// 全合法才整批 all-or-nothing 落库。浏览器不本地解析 xlsx，服务端为唯一权威。
+export async function uploadBackfillExcel(
+  tenantId: string,
+  contentId: string,
+  contentBase64: string,
+  filename?: string,
+): Promise<BackfillUploadReceipt> {
+  return request<BackfillUploadReceipt>("/api/effects/backfill/upload-excel", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      content_id: contentId,
+      content_base64: contentBase64,
+      ...(filename ? { filename } : {}),
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+    }),
+  });
+}
