@@ -73,16 +73,41 @@ def do_run_migrations(connection) -> None:
         context.run_migrations()
 
 
+# Q157：多副本（>=2 backend）同时启动会并发跑 `alembic upgrade head`，在全新库
+# 上竞争 DDL 与 alembic_version 写入。用一个固定的 PG session 级咨询锁把迁移
+# 串行化：第一个副本拿锁跑完升级并释放，其余副本阻塞获锁后跑到 head 即 no-op。
+# 仅 PostgreSQL 生效；其他方言（本地 sqlite 不经此入口）保持原行为。key 为
+# "LOOM" 四字符 ASCII（0x4C4F4F4D）。NullPool 下持锁连接是独立物理连接，
+# session 级锁随该连接关闭释放，这里仍显式 unlock 以求确定。
+MIGRATION_ADVISORY_LOCK_KEY = 0x4C4F4F4D
+
+
 async def run_migrations_online() -> None:
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=NullPool,
     )
-    async with connectable.begin() as connection:
-        await connection.run_sync(_ensure_version_table)
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+    async with connectable.connect() as lock_connection:
+        use_advisory_lock = lock_connection.dialect.name == "postgresql"
+        if use_advisory_lock:
+            await lock_connection.execute(
+                sa.text("SELECT pg_advisory_lock(:key)"),
+                {"key": MIGRATION_ADVISORY_LOCK_KEY},
+            )
+            await lock_connection.commit()  # 提交取锁事务；session 级锁继续持有
+        try:
+            async with connectable.begin() as connection:
+                await connection.run_sync(_ensure_version_table)
+            async with connectable.connect() as connection:
+                await connection.run_sync(do_run_migrations)
+        finally:
+            if use_advisory_lock:
+                await lock_connection.execute(
+                    sa.text("SELECT pg_advisory_unlock(:key)"),
+                    {"key": MIGRATION_ADVISORY_LOCK_KEY},
+                )
+                await lock_connection.commit()
     await connectable.dispose()
 
 

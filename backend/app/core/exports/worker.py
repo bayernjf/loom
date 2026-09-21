@@ -75,6 +75,7 @@ class ExportWorker:
         if self.running:
             return
         self._stop.clear()
+        logger.info("export worker starting consumer=%s", self._consumer)
         self._task = asyncio.create_task(self._loop(), name="loom-export-worker")
 
     async def _loop(self) -> None:
@@ -161,7 +162,10 @@ class ExportWorker:
         # 提交成功后再 ACK（ACK 失败则靠 reclaim 幂等重处理，终态判断会丢弃）。
         await ack_event(client, service.EXPORT_STREAM, service.EXPORT_GROUP, entry_id)
         self.completed += 1
-        logger.info("export job %s completed after %s delivery(ies)", job_id, deliveries)
+        logger.info(
+            "export consumer=%s completed job %s after %s delivery(ies)",
+            self._consumer, job_id, deliveries,
+        )
 
     async def _dead_letter(
         self, client, entry_id: str, fields: dict[str, str], reason: str
