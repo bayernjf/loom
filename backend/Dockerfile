@@ -6,6 +6,8 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY backend/ /app/
+# Skill/WF registry lives at repo root; the app resolves it at /runtime in the image.
+COPY runtime/ /runtime/
 RUN pip install .
 
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
