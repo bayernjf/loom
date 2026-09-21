@@ -19,3 +19,8 @@
 ## 续写（2026-09-21 滚出·Q147）
 
 - **Q147 Checklist #6 staging 彩排（零迁移；feat 4e01912/test ef25c74，本地 dev 未 push；头仍 0037/59 表，后端 710→711 测试〔overlay 契约 +1〕，ruff 净，前端零变化）**：负责人 2026-09-21「跑吧」批准彩排。新增 staging overlay（`!reset []` 清 infra 端口避 atlas、minio profile 排除），真实 compose 栈 6 服务 healthy，迁移/备份/探活/前端 SSR（真实 Chrome 零 console 错误）/段1 API 冒烟全通过，`down -v` 清理。**#6 不销账**：彩排库 publish_slots=0、packages=0、仅合成模型，真实 final_id 全链仍待 B（LLM 供应商/出站密钥/日预算/币种）与 C（平台主数据 + 阈值）。
+
+## 续写（2026-09-21 滚出·Q148）
+
+- **Q148 Checklist #1 真实 LLM 接线（零迁移；feat 1279e21/fix bafc529/test ef975cb·c117755，本地 dev 未 push；头仍 0037/59 表，后端 711 测试、ruff 净，前端零变化）**：负责人 2026-09-21 提供 agnes 供应商信息并完成裁决 B（USD、50 USD/天、全部场景）。staging 实测真实 CAT-RECOG：635/231 tokens、候选 pending_review。**#6 现仅卡裁决 C**。缺口挂账：模型单价（先 0，记 token/调用数）、ATOM-AFFINITY 用 synthetic（agnes 无 embedding）、图像/视频 V2。
+
