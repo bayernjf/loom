@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     # GET 直读端点的 limit 不得超过该值（422）。默认 10 万行。
     export_max_rows: int = 100000
 
+    # Q156 客户效果批量 CSV 服务端上传的数据行硬上限（运维防护参数，非 Q9 业务
+    # 旋钮）：解除 Q136 前端 500 行软上限后防单次超大请求；超限整批 422。
+    backfill_upload_max_rows: int = 10000
+
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。
     orch_max_concurrency: int = 4

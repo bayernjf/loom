@@ -6,9 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.api_keys.models import AgentApiKey
 from app.core.api_keys.service import require_agent_key
-from app.core.db import get_session
+from app.core.db import get_session, settings
 from app.core.effects import service
+from app.core.effects.csv_io import CsvValidationError
 from app.core.effects.schemas import (
+    CustomerBackfillUploadIn,
+    CustomerBackfillUploadReceipt,
     CustomerEffectBatchIn,
     EffectBatchIn,
     EffectBatchReceipt,
@@ -111,6 +114,48 @@ async def customer_backfill_effects(
         ) from exc
     await session.commit()
     return EffectBatchReceipt(**receipt)
+
+
+@router.post(
+    "/api/effects/backfill/upload",
+    response_model=CustomerBackfillUploadReceipt,
+)
+async def customer_backfill_upload(
+    body: CustomerBackfillUploadIn,
+    session: AsyncSession = Depends(get_session),
+) -> CustomerBackfillUploadReceipt:
+    """Q156 客户批量 CSV 服务端上传（销 Q136 服务端上传/逐行回执挂账）。
+
+    整份 CSV 挂一个成品；服务端解析固定 9 列表头、逐行校验，任一结构/行错误
+    整批 422 回全部坏行明细（index 数据行 0 基 / line 含表头物理行号），不入库；
+    全合法才走 Q128 整批 all-or-nothing（只命中本租户非 discarded 成品、绝不孤儿）。
+    时间戳必须带时区（服务端无客户时区，naive 逐行报错）；Excel/异步导入随 V2。
+    """
+
+    try:
+        receipt = await service.ingest_customer_backfill_upload(
+            session,
+            body=body,
+            max_rows=settings.backfill_upload_max_rows,
+        )
+    except CsvValidationError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "CSV validation failed", "errors": exc.errors},
+        ) from exc
+    except service.EffectValidationError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "index": exc.index,
+                "field": exc.field,
+                "message": str(exc),
+            },
+        ) from exc
+    await session.commit()
+    return CustomerBackfillUploadReceipt(**receipt)
 
 
 # ---------- Q127/Q60a：运营人工认领孤儿（管理面写口，actor 在体，operations 闸） ----------
