@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.content.router import router as content_router
+from app.core.a2a.router import router as a2a_router
 from app.core.api_keys.router import router as agent_keys_router
 from app.core.compliance_wordlist.router import router as wordlist_router
 from app.core.config_center.broadcast import ConfigBroadcastSubscriber
@@ -103,6 +104,7 @@ app.include_router(modeling_router)
 app.include_router(fieldpool_router)
 app.include_router(wordlist_router)
 app.include_router(config_router)
+app.include_router(a2a_router)
 app.include_router(dashboards_router)
 app.include_router(model_registry_router)
 app.include_router(skill7_router)
