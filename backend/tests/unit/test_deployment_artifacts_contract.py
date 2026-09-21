@@ -16,6 +16,7 @@ BACKEND_ENTRYPOINT = REPO_ROOT / "backend" / "docker-entrypoint.sh"
 FRONTEND_DOCKERFILE = REPO_ROOT / "frontend" / "Dockerfile"
 NEXT_CONFIG = REPO_ROOT / "frontend" / "next.config.mjs"
 COMPOSE = REPO_ROOT / "infra" / "docker-compose.yml"
+STAGING_OVERLAY = REPO_ROOT / "infra" / "docker-compose.staging.yml"
 
 
 def test_backend_image_installs_app_and_serves_with_healthcheck() -> None:
@@ -65,3 +66,21 @@ def test_compose_runs_app_services_with_backend_unpublished() -> None:
     assert "3000:3000" in frontend["ports"]
     assert frontend["environment"]["LOOM_API_BASE_URL"] == "http://backend:8000"
     assert frontend["depends_on"]["backend"]["condition"] == "service_healthy"
+
+
+def test_staging_overlay_unpublishes_infra_ports_and_excludes_minio() -> None:
+    loader = yaml.SafeLoader
+    loader.add_constructor("!reset", lambda l, n: l.construct_sequence(n))
+    base = yaml.safe_load(COMPOSE.read_text())["services"]
+    overlay = yaml.load(STAGING_OVERLAY.read_text(), Loader=loader)["services"]
+
+    merged = {
+        name: {**base[name], **overlay.get(name, {})}
+        for name in base
+    }
+    for name in ("postgres", "redis", "minio"):
+        assert merged[name].get("ports") == []
+
+    assert merged["minio"]["profiles"] == ["unused-in-rehearsal"]
+    assert "3000:3000" in merged["frontend"]["ports"]
+    assert "ports" not in merged["backend"]
