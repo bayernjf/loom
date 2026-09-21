@@ -25,10 +25,11 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
+from app.core.config import get_settings
 from app.core.exports.models import (
     EXPORT_FORMATS,
     FORMAT_JSON,
@@ -63,26 +64,96 @@ EXPORT_DEAD_STREAM = "loom:stream:exports:dead"
 WORKER_ACTOR = "system:export-worker"
 
 
-async def exported_final_ids(
-    session: AsyncSession,
-    *,
-    tenant_id: str,
-    product_space_id: str | None = None,
-) -> list[str]:
-    stmt = (
-        select(FinalContentWhitelist.final_id)
-        .where(
-            FinalContentWhitelist.tenant_id == tenant_id,
-            FinalContentWhitelist.publish_status == PUBLISH_PUBLISHED,
-        )
-        .order_by(FinalContentWhitelist.created_at.desc())
+def _published_stmt(tenant_id: str, product_space_id: str | None, column):
+    stmt = select(column).where(
+        FinalContentWhitelist.tenant_id == tenant_id,
+        FinalContentWhitelist.publish_status == PUBLISH_PUBLISHED,
     )
     if product_space_id:
         stmt = stmt.where(
             FinalContentWhitelist.product_space_id == product_space_id
         )
+    return stmt
+
+
+async def exported_final_ids(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    product_space_id: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[str]:
+    """Q142：支持 limit/offset 分页（created_at DESC）。
+
+    limit 为 None 时不加 LIMIT 子句；调用方负责在需要体量治理时传入硬上限
+    （见 ``fetch_export_page``）。
+    """
+
+    stmt = _published_stmt(
+        tenant_id, product_space_id, FinalContentWhitelist.final_id
+    ).order_by(FinalContentWhitelist.created_at.desc())
+    if offset:
+        stmt = stmt.offset(offset)
+    if limit is not None:
+        stmt = stmt.limit(limit)
     rows = await session.scalars(stmt)
     return list(rows.all())
+
+
+async def count_exported_final_ids(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    product_space_id: str | None = None,
+) -> int:
+    """Q142：匹配过滤条件的 published 总数（分页 total，不受 limit/offset 影响）。"""
+
+    stmt = _published_stmt(
+        tenant_id, product_space_id, func.count(FinalContentWhitelist.final_id)
+    )
+    return int(await session.scalar(stmt))
+
+
+async def fetch_export_page(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    product_space_id: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> dict:
+    """Q142：统一取一页导出数据 + 分页元数据。
+
+    - 显式 ``limit`` 为页大小（路由层已保证 <= ``export_max_rows``）；
+    - ``limit=None`` 时回落到 settings.export_max_rows 硬上限（体量治理）；
+    - 返回 final_ids/total/limit/offset/has_more/truncated。``truncated`` 表示
+      未显式分页但结果被硬上限截断（offset=0 且仍有更多）。
+    """
+
+    max_rows = get_settings().export_max_rows
+    explicit = limit is not None
+    effective_limit = limit if explicit else max_rows
+    total = await count_exported_final_ids(
+        session, tenant_id=tenant_id, product_space_id=product_space_id
+    )
+    final_ids = await exported_final_ids(
+        session,
+        tenant_id=tenant_id,
+        product_space_id=product_space_id,
+        limit=effective_limit,
+        offset=offset,
+    )
+    has_more = offset + len(final_ids) < total
+    return {
+        "final_ids": final_ids,
+        "total": total,
+        "limit": effective_limit,
+        "offset": offset,
+        "has_more": has_more,
+        # 未显式分页（全量导出/任务路径）却仍有更多行，即被硬上限截断。
+        "truncated": has_more and not explicit and offset == 0,
+    }
 
 
 def render_csv(final_ids: list[str]) -> str:
@@ -94,14 +165,32 @@ def render_csv(final_ids: list[str]) -> str:
 
 
 def render_json(
-    tenant_id: str, product_space_id: str | None, final_ids: list[str]
+    tenant_id: str,
+    product_space_id: str | None,
+    final_ids: list[str],
+    *,
+    total: int | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> dict:
-    """Q132 JSON 形态：与 CSV 同口径（只 final_id），envelope 便于中台核对。"""
+    """Q132 JSON 形态：与 CSV 同口径（只 final_id），envelope 便于中台核对。
 
+    Q142：追加分页元数据 ``total``（匹配条件总数）/``limit``/``offset``/
+    ``has_more``；``count`` 仍为本页实际行数。未提供分页信息（纯函数直接调用）
+    时按"本页即全部"退化，has_more 恒 False，保持向后兼容。
+    """
+
+    page_total = len(final_ids) if total is None else total
+    page_limit = len(final_ids) if limit is None else limit
+    has_more = offset + len(final_ids) < page_total
     return {
         "tenant_id": tenant_id,
         "product_space_id": product_space_id,
         "count": len(final_ids),
+        "total": page_total,
+        "limit": page_limit,
+        "offset": offset,
+        "has_more": has_more,
         "final_ids": final_ids,
     }
 
@@ -115,12 +204,25 @@ def render_payload(
     product_space_id: str | None,
     fmt: str,
     final_ids: list[str],
+    *,
+    page: dict | None = None,
 ) -> tuple[str, str]:
-    """按格式渲染下载体，返回 (media_type, body)。"""
+    """按格式渲染下载体，返回 (media_type, body)。
+
+    Q142：``page`` 携带 total/limit/offset 供 JSON envelope 输出分页元数据；
+    CSV 严格单列正文不变（分页信息走响应头，见路由层）。
+    """
 
     if fmt == FORMAT_JSON:
+        kwargs = {}
+        if page is not None:
+            kwargs = {
+                "total": page["total"],
+                "limit": page["limit"],
+                "offset": page["offset"],
+            }
         body = json.dumps(
-            render_json(tenant_id, product_space_id, final_ids),
+            render_json(tenant_id, product_space_id, final_ids, **kwargs),
             ensure_ascii=False,
             indent=2,
         )
@@ -158,9 +260,11 @@ async def create_export_job(
     if fmt not in EXPORT_FORMATS:
         # 路由层 pydantic Literal 已挡，此闸为服务层防御。
         raise ValueError(f"unsupported export format: {fmt}")
-    final_ids = await exported_final_ids(
+    # Q142：任务路径不接受分页参数，受 export_max_rows 硬上限保护（截断留痕）。
+    page = await fetch_export_page(
         session, tenant_id=tenant_id, product_space_id=product_space_id
     )
+    final_ids = page["final_ids"]
     job = ExportJob(
         job_id=str(uuid.uuid1()),
         tenant_id=tenant_id,
@@ -186,6 +290,9 @@ async def create_export_job(
             "format": fmt,
             "row_count": len(final_ids),
             "product_space_id": product_space_id,
+            "total": page["total"],
+            "limit": page["limit"],
+            "truncated": page["truncated"],
         },
     )
     return job
@@ -258,11 +365,13 @@ async def process_export_job(
     job.status = JOB_RUNNING
     job.error = None
     await session.flush()
-    final_ids = await exported_final_ids(
+    # Q142：worker 渲染同样受 export_max_rows 硬上限保护（截断留痕）。
+    page = await fetch_export_page(
         session,
         tenant_id=job.tenant_id,
         product_space_id=job.product_space_id,
     )
+    final_ids = page["final_ids"]
     job.row_count = len(final_ids)
     job.status = JOB_COMPLETED
     job.completed_at = datetime.now(UTC)
@@ -274,7 +383,11 @@ async def process_export_job(
         action="export.job_completed",
         entity_type="export_job",
         entity_id=job.job_id,
-        detail={"row_count": len(final_ids)},
+        detail={
+            "row_count": len(final_ids),
+            "total": page["total"],
+            "truncated": page["truncated"],
+        },
     )
     return job
 
@@ -327,14 +440,23 @@ async def get_job(session: AsyncSession, job_id: str) -> ExportJob | None:
 
 async def render_job(
     session: AsyncSession, job: ExportJob
-) -> tuple[str, str]:
-    """下载时按任务参数重新查询渲染（幂等，反映当前 published 集合）。"""
+) -> tuple[str, str, dict]:
+    """下载时按任务参数重新查询渲染（幂等，反映当前 published 集合）。
 
-    final_ids = await exported_final_ids(
+    Q142：返回 (media_type, body, page)，page 携带硬上限下的分页元数据
+    （JSON 入 envelope；CSV 由路由层写 X-* 响应头）。
+    """
+
+    page = await fetch_export_page(
         session,
         tenant_id=job.tenant_id,
         product_space_id=job.product_space_id,
     )
-    return render_payload(
-        job.tenant_id, job.product_space_id, job.format, final_ids
+    media_type, body = render_payload(
+        job.tenant_id,
+        job.product_space_id,
+        job.format,
+        page["final_ids"],
+        page=page,
     )
+    return media_type, body, page

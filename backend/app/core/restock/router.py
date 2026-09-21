@@ -48,11 +48,14 @@ async def run_restock_once(
     try:
         async with leader_lease(RESTOCK_LOCK) as lease:
             # Q139：每条信号处理前协作中止，锁中途易主则不再继续花钱。
+            # Q143：透传 fence 做 PG 行级认领/提交前门（锁关闭时 fence=None）。
             return await run_restock(
                 factory,
                 limit=settings.restock_batch_size,
                 honor_backoff=False,
                 checkpoint=lease.raise_if_lost,
+                fence=lease.fence,
+                owner=lease.owner_token,
             )
     except LockUnavailable as exc:
         raise HTTPException(

@@ -49,11 +49,22 @@ class Settings(BaseSettings):
     # reload。广播为 best-effort（失败只告警，不影响已提交事务）。
     config_cache_broadcast_enabled: bool = False
 
+    # Q141 配置缓存 TTL 兜底（秒）：广播 best-effort 可能丢消息，订阅器在最近
+    # 一次成功装载超过该时长后，即使没收到失效消息也回源全量 reload 一次，给
+    # 陈旧时长设上限。仅在 config_cache_broadcast_enabled 开启时由订阅器使用；
+    # 单副本 after_commit 即时 apply，不依赖 TTL。运维参数，非 Q9 业务旋钮。
+    config_cache_ttl_seconds: float = 300.0
+
     # Q137 导出任务真后台 worker（Redis Streams 消费组）：默认关，关闭时 POST
     # /api/exports/jobs 维持 Q132 请求内同步 completed；开启后建 queued 入流，
     # 进程内 ExportWorker 消费置 running→completed/failed（只读幂等，可多副本并行）。
     export_worker_enabled: bool = False
     export_stream_block_seconds: float = 5.0
+
+    # Q142 中台导出行数硬上限（运维防护参数，非 Q9 业务旋钮）：fcw.csv/fcw.json
+    # 与导出任务在未显式分页时最多导出的 final_id 行数，防大结果集 OOM/超大响应；
+    # GET 直读端点的 limit 不得超过该值（422）。默认 10 万行。
+    export_max_rows: int = 100000
 
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。

@@ -11,7 +11,7 @@
 | 文档 | 信息源（v3.md） | 用途 / AI 消费场景 | 优先级 |
 |---|---|---|---|
 | [01_PRD_产品需求规格.md](./01_PRD_产品需求规格.md) | Part A 全量（A1–A7） | 产品需求规格：13 段链、各段功能/实体/规则、硬闸、数值约束、实现范围 | 核心 |
-| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q140（持续追加，C1.17–C1.84）+ 配置化清单 | 核心 |
+| [02_决策记录_ADR_Q1-Q72.md](./02_决策记录_ADR_Q1-Q72.md) | Part C 全量（C1 + C2） | 决策日志：Q1–Q72（v3 原文）+ Q73–Q143（持续追加，C1.17–C1.87）+ 配置化清单 | 核心 |
 | [03_技术风险与红旗清单.md](./03_技术风险与红旗清单.md) | Part B 全量（B1 + B2） | 技术红旗（S/A/B 三级）与裁决状态、业务方参考映射 | 核心 |
 | [04_契约层_数据模型.md](./04_契约层_数据模型.md) | Part A/C/D 提取 | 实体与字段级数据模型（AI 落代码） | 最高优先 |
 | [05_契约层_API与状态机.md](./05_契约层_API与状态机.md) | Part A/C 提取 | API 契约 + 全部状态机定义（AI 落代码） | 最高优先 |
@@ -80,6 +80,9 @@
 | Q138 restock 信号 XADD 生产接线 | 2026-09-20 | 范围收敛（02 C1.82）：restock 自动花真 token 须 leader 单实例防双花，与消费组水平并行语义冲突，故**只接生产侧入流**（restock/notify.py after_commit best-effort XADD、DB requested 行为唯一事实源/DB 轮询兜底、失败只告警），worker 主认领不切消费组；env LOOM_RESTOCK_STREAM_ENABLED 默认关、零迁移；后端 666→669、eval 101；消费组并行（花钱隔离）随 V2 |
 | Q139 两循环 leader_lease 协作中止 | 2026-09-20 | 接缝按甲（02 C1.83）：四持锁点（sla/restock 两 _tick + 两手工 /run）leader_lock→leader_lease，run_jobs/run_restock 加零参 checkpoint=raise_if_lost（作业会话外/每信号前），锁中途易主抛 LockLost 协作中止；两 _tick 静默返回、两手工口 409；门控关行为同 Q89、leader_lock 保留；复用 LOOM_DISTRIBUTED_LOCK_ENABLED 无新 env、零迁移；后端 669→674、eval 101；下游 PG 行级 fence 随 V2 |
 | Q140 配置缓存单 key 增量失效 + 广播退避 | 2026-09-20 | 接缝按甲（02 C1.84）：cache.reload_keys 按 key 合并（DB 删除同步出快照），poll_once `*` 全量/具体 key 增量分流，断线 consecutive_failures 指数退避 1s→封顶 30s、wait_for(stop) 可唤醒、成功重置，健康路径每轮 sleep(0) 零拍让出防替身忙转饿死定时器；复用 LOOM_CONFIG_CACHE_BROADCAST_ENABLED 无新 env、零迁移；后端 674→678、eval 101；配置版本号/TTL、真多副本验证随 V2 |
+| Q141 配置缓存版本号门控 + TTL 兜底 | 2026-09-20 | 接缝按甲（02 C1.85）：cache 快照携 per-key ConfigItem.version 向量、reload_keys 单调门控拒旧快照回灌（accepted/skipped/removed），after_commit apply 携权威版本；订阅器无消息超 env LOOM_CONFIG_CACHE_TTL_SECONDS 默认 300 回源全量，仅曾装载且门控开启时触发；零迁移；后端 678→684、eval 101；真多副本订阅验证随 V2 |
+| Q142 中台导出分页 + 行数硬上限 | 2026-09-20 | 接缝按甲（02 C1.86）：fcw.csv/fcw.json 加 limit(1..cap)/offset，env LOOM_EXPORT_MAX_ROWS 默认 100000 超限 422；JSON envelope 加 total/limit/offset/has_more、CSV 走 X-Export-* 响应头（正文守单列）；同步/异步 worker/下载同一上限、job 不加分页列；零迁移；后端 684→692、eval 101；6 层原料包全量 JSON/多 worker 并发度随 V2 |
+| Q143 下游 PG 行级 fence 接 restock 花钱路径 | 2026-09-20 | 接缝按甲（02 C1.87）：新表 restock_claims + restock/fencing.py 两段式，花钱前 claim_request 独立短事务认领（acquired/held/lost）、成功提交前 fence_current 条件 UPDATE rowcount=0 回滚；锁在模型调用期间易主旧 leader skipped_lost 不调模型；fence=None 行为同 Q87/Q139；迁移 0037（pg16 往返实测）、物理表 58→59；后端 692→699、eval 101；SLA sweep 行级 fence、真 PG/Redis 多副本验证随 V2 |
 | handoff 归档惯例 | 2026-09-18 | handoff.md 新增 `## Conventions`（主文件只保留当前状态 + 活跃待办 + 最近 5 条进度；完成项详细过程滚 `docs/handoff-archive-YYYY-MM-DD.md`，主文件留一行结论）；首次归档 09-13 ~ 09-17 进度条目与待办 5/6 原文至 `handoff-archive-2026-09-18.md` |
 
 ---

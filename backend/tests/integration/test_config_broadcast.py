@@ -132,7 +132,7 @@ async def test_after_commit_hook_broadcasts(fake, monkeypatch):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
-            config_service._schedule_cache_apply(session, "hook.key", 7)
+            config_service._schedule_cache_apply(session, "hook.key", 7, 1)
             await session.commit()  # 触发 after_commit → spawn → publish
             await asyncio.sleep(0.05)
         assert (CONFIG_INVALIDATION_CHANNEL, "hook.key") in fake.published
@@ -315,3 +315,157 @@ async def test_subscriber_poll_failure_is_self_healing(failing_subscriber):
     # get_message 抛 RedisError：poll_once 不抛、返回 False，下轮懒重建订阅。
     assert await subscriber.poll_once() is False
     assert await subscriber.poll_once() is False
+
+
+# ---------- Q141 版本号防陈旧（per-key version 单调门控） ----------
+
+async def test_reload_keys_version_gate_rejects_stale_snapshot():
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config_center.models import ConfigItem
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    config_cache.invalidate()
+    try:
+        async with factory() as session:
+            session.add(
+                ConfigItem(key="a", category="test", value=1, value_type="int", source_ref="t")
+            )
+            await session.commit()
+        async with factory() as session:
+            await config_cache.reload(session)
+        assert config_cache.get("a") == 1
+        assert config_cache.version_of("a") == 1
+
+        # 模拟本进程已通过发布/广播收到更新的 v5（DB 行此刻仍为 v1，
+        # 代表一个延迟到达、读到旧行的增量 reload 快照）。
+        config_cache.apply({"a": 500}, {"a": 5})
+        async with factory() as session:
+            result = await config_cache.reload_keys(session, ["a"])
+        assert result["skipped"] == 1
+        assert result["accepted"] == 0
+        assert config_cache.get("a") == 500  # 旧快照被拒绝，不回灌
+        assert config_cache.version_of("a") == 5
+
+        # DB 真正发布 v6 后，新版本被接受。
+        async with factory() as session:
+            row = await session.get(ConfigItem, "a")
+            row.value = 1000
+            row.version = 6
+            await session.commit()
+        async with factory() as session:
+            result = await config_cache.reload_keys(session, ["a"])
+        assert result["accepted"] == 1
+        assert config_cache.get("a") == 1000
+        assert config_cache.version_of("a") == 6
+    finally:
+        await engine.dispose()
+        config_cache.invalidate()
+
+
+async def test_apply_without_versions_leaves_version_vector_untouched():
+    config_cache.invalidate()
+    try:
+        # 兼容不带版本的 apply（本进程发布以外的旧调用/测试路径）。
+        config_cache.apply({"k": 1})
+        assert config_cache.get("k") == 1
+        assert config_cache.version_of("k") is None
+        config_cache.apply({"k": 2}, {"k": 3})
+        assert config_cache.get("k") == 2
+        assert config_cache.version_of("k") == 3
+    finally:
+        config_cache.invalidate()
+
+
+# ---------- Q141 TTL 兜底回源 ----------
+
+async def _sqlite_factory_with_item(initial_value: int):
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config_center.models import ConfigItem
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with factory() as session:
+        session.add(
+            ConfigItem(
+                key="a", category="test", value=initial_value,
+                value_type="int", source_ref="t",
+            )
+        )
+        await session.commit()
+    return engine, factory
+
+
+async def test_subscriber_ttl_reloads_without_invalidation_message(fake):
+    from app.core.config_center.models import ConfigItem
+
+    engine, factory = await _sqlite_factory_with_item(1)
+    config_cache.invalidate()
+    try:
+        async with factory() as session:
+            await config_cache.reload(session)  # 启动装载，loaded_at 非 None
+        # DB 被别的副本改动但广播消息丢失：不发任何 pub/sub 消息。
+        async with factory() as session:
+            row = await session.get(ConfigItem, "a")
+            row.value = 2
+            row.version = 2
+            await session.commit()
+        subscriber = ConfigBroadcastSubscriber(
+            session_factory=factory, poll_timeout_seconds=0.02, ttl_seconds=0.05
+        )
+        await subscriber.start()
+        try:
+            await asyncio.sleep(0.14)  # 超过 TTL，应触发兜底全量 reload
+            assert subscriber.ttl_reloads >= 1
+            assert config_cache.get("a") == 2
+        finally:
+            await subscriber.stop()
+    finally:
+        await engine.dispose()
+        config_cache.invalidate()
+
+
+async def test_subscriber_ttl_not_due_does_not_reload(fake):
+    engine, factory = await _sqlite_factory_with_item(1)
+    config_cache.invalidate()
+    try:
+        async with factory() as session:
+            await config_cache.reload(session)
+        subscriber = ConfigBroadcastSubscriber(
+            session_factory=factory, poll_timeout_seconds=0.02, ttl_seconds=300.0
+        )
+        await subscriber.start()
+        try:
+            await asyncio.sleep(0.1)
+            assert subscriber.ttl_reloads == 0
+        finally:
+            await subscriber.stop()
+    finally:
+        await engine.dispose()
+        config_cache.invalidate()
+
+
+async def test_ttl_not_triggered_before_first_load(fake):
+    # 从未装载（loaded_at/_last_reload_at 为 None）时，TTL 不主动触发，
+    # 也不会去调用缺失的 factory（无 factory 的轮询场景不得报错）。
+    config_cache.invalidate()
+    subscriber = ConfigBroadcastSubscriber(
+        session_factory=None, poll_timeout_seconds=0.01, ttl_seconds=0.0
+    )
+    await subscriber.start()
+    try:
+        await asyncio.sleep(0.05)
+        assert subscriber.ttl_reloads == 0
+    finally:
+        await subscriber.stop()
+
+
+async def test_default_ttl_setting_is_300_seconds():
+    assert settings.config_cache_ttl_seconds == 300.0

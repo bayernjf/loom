@@ -1,47 +1,92 @@
 # Loom V1 local infrastructure (docs/17 §1: docker-compose single host).
-# S3-compatible local storage via MinIO. No real secrets (docs/17 §3).
+# Infra services (postgres/redis/minio) plus app services for the controlled
+# private beta (Q144 checklist #4/#5): only the frontend publishes a host
+# port; the backend stays on the internal compose network.
+x-logging: &default-logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_USER: loom
-      POSTGRES_PASSWORD: loom
-      POSTGRES_DB: loom
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U loom"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
+    environment: {POSTGRES_USER: loom, POSTGRES_PASSWORD: loom, POSTGRES_DB: loom}
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U loom"], interval: 5s, timeout: 3s, retries: 10}
+    logging: *default-logging
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10}
+    logging: *default-logging
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
+    environment: {MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+    logging: *default-logging
+  backend:
+    build: {context: .., dockerfile: backend/Dockerfile}
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      LOOM_DATABASE_DSN: postgresql+asyncpg://loom:loom@postgres:5432/loom
+      LOOM_REDIS_DSN: redis://redis:6379/0
+      LOOM_MASTER_KEY: ${LOOM_MASTER_KEY:-}
+    expose: ["8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+    logging: *default-logging
+  frontend:
+    build: {context: .., dockerfile: frontend/Dockerfile}
+    environment:
+      LOOM_API_BASE_URL: http://backend:8000
+      LOOM_TENANT_ID: ${LOOM_TENANT_ID:-beta-tenant}
+      LOOM_ACTOR_ID: ${LOOM_ACTOR_ID:-ops-actor}
+      LOOM_ADMIN_ACTOR_ID: ${LOOM_ADMIN_ACTOR_ID:-admin-actor}
+      LOOM_ADMIN_ROLES: ${LOOM_ADMIN_ROLES:-platform_admin}
+    ports: ["3000:3000"]
+    depends_on:
+      backend: {condition: service_healthy}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
+  db-backup:
+    image: pgvector/pgvector:pg16
+    environment:
+      PGHOST: postgres
+      PGUSER: loom
+      PGPASSWORD: loom
+      PGDATABASE: loom
+      RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
     volumes:
-      - miniodata:/data
-
-volumes:
-  pgdata:
-  redisdata:
-  miniodata:
+      - ./backup:/scripts:ro
+      - pgbackups:/backups
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+    logging: *default-logging
+  watchdog:
+    image: python:3.12-slim
+    environment:
+      BACKEND_HEALTH_URL: http://backend:8000/healthz
+      FRONTEND_URL: http://frontend:3000/
+      LOOM_ALERT_WEBHOOK: ${LOOM_ALERT_WEBHOOK:-}
+      WATCHDOG_INTERVAL_SECONDS: ${WATCHDOG_INTERVAL_SECONDS:-30}
+    volumes:
+      - ./monitoring:/monitor:ro
+    command: ["python", "/monitor/watchdog.py"]
+    depends_on:
+      backend: {condition: service_healthy}
+      frontend: {condition: service_healthy}
+    restart: unless-stopped
+    logging: *default-logging
+volumes: {pgdata:, redisdata:, miniodata:, pgbackups:}

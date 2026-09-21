@@ -106,7 +106,7 @@ async def test_run_restock_checkpoint_aborts_between_signals(monkeypatch):
 
     processed: list[str] = []
 
-    async def fake_process(_factory, requested_row):
+    async def fake_process(_factory, requested_row, **_kwargs):
         processed.append(requested_row.run_id)
         return {"status": "succeeded"}
 

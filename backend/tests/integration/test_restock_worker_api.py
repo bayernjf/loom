@@ -32,7 +32,7 @@ from app.core.model_registry.seeds import (
     SYNTHETIC_MODEL_ID,
 )
 from app.core.models import AuditLog
-from app.core.restock.models import RestockRetryState
+from app.core.restock.models import RestockClaim, RestockRetryState
 from app.core.restock.worker import (
     RestockWorker,
     _backoff_delay_seconds,
@@ -546,3 +546,91 @@ async def test_terminal_failure_clears_existing_cursor(
     assert report["failed"] == 1
     async with session_factory() as session:
         assert await session.get(RestockRetryState, str(signal_id)) is None
+
+
+# ---------- Q143 PG 行级 fencing（fence 认领 + 提交前门） -----------------------------
+
+
+async def test_restock_with_fence_succeeds_and_records_claim(
+    client, session_factory
+):
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+    report = await run_restock(
+        session_factory, limit=20, fence=1, owner="owner-a"
+    )
+    assert report["succeeded"] == 1
+    assert report["skipped_lost"] == 0
+    async with session_factory() as session:
+        claim = await session.get(RestockClaim, str(signal_id))
+        assert claim is not None and claim.fence == 1
+        assert claim.claimed_by == "owner-a"
+
+
+async def test_restock_skips_when_claim_held_by_newer_fence(
+    client, session_factory
+):
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+    # 新 leader（fence=2）已认领：旧 leader fence=1 在花钱前直接放弃，不调模型。
+    async with session_factory() as session:
+        session.add(
+            RestockClaim(
+                request_id=str(signal_id), fence=2, claimed_by="owner-b"
+            )
+        )
+        await session.commit()
+    report = await run_restock(
+        session_factory, limit=20, fence=1, owner="owner-a"
+    )
+    assert report["claimed"] == 1
+    assert report["skipped_lost"] == 1
+    assert report["succeeded"] == 0
+    async with session_factory() as session:
+        children = list(
+            (
+                await session.scalars(
+                    select(SkillRun).where(SkillRun.source == "llm_auto")
+                )
+            ).all()
+        )
+        assert children == []  # 未花钱、未产子 run
+
+
+async def test_fence_gate_rejects_result_when_lock_lost_during_spend(
+    client, session_factory, monkeypatch
+):
+    from app.core.restock import worker as restock_worker
+
+    ps_id = await _ps_with_atoms(client, session_factory)
+    signal_id = await _request_restock(session_factory, ps_id)
+
+    # 模型已成功返回、成功结果在业务事务内 flush；此时锁在一次调用期间易主，
+    # 提交前门条件更新命中 0 行。门的真实 SQL 条件（fence 被更大值覆盖即 0 行）
+    # 由 test_restock_fencing.py 覆盖，这里把门关死以确定性验证 worker 的回滚路径
+    # （sqlite 内存库单连接无法在业务事务打开时并发提交另一事务，故不模拟跨连接）。
+    async def _gate_closed(session, request_id, fence):
+        return False
+
+    monkeypatch.setattr(restock_worker, "fence_current", _gate_closed)
+    report = await run_restock(
+        session_factory, limit=20, fence=1, owner="owner-a"
+    )
+    assert report["skipped_lost"] == 1
+    assert report["succeeded"] == 0
+    async with session_factory() as session:
+        # 旧 leader 的成功结果随回滚不落库：无 llm_auto 子 run、无候选。
+        assert (
+            list(
+                (
+                    await session.scalars(
+                        select(SkillRun).where(SkillRun.source == "llm_auto")
+                    )
+                ).all()
+            )
+            == []
+        )
+        assert list((await session.scalars(select(SkillCandidate))).all()) == []
+        # 花钱前的认领行仍在（fence=1，由本 leader 短事务提交，不受回滚影响）。
+        claim = await session.get(RestockClaim, str(signal_id))
+        assert claim is not None and claim.fence == 1
