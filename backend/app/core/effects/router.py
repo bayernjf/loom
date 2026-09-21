@@ -10,6 +10,7 @@ from app.core.db import get_session, settings
 from app.core.effects import service
 from app.core.effects.csv_io import CsvValidationError
 from app.core.effects.schemas import (
+    CustomerBackfillExcelUploadIn,
     CustomerBackfillUploadIn,
     CustomerBackfillUploadReceipt,
     CustomerEffectBatchIn,
@@ -129,7 +130,8 @@ async def customer_backfill_upload(
     整份 CSV 挂一个成品；服务端解析固定 9 列表头、逐行校验，任一结构/行错误
     整批 422 回全部坏行明细（index 数据行 0 基 / line 含表头物理行号），不入库；
     全合法才走 Q128 整批 all-or-nothing（只命中本租户非 discarded 成品、绝不孤儿）。
-    时间戳必须带时区（服务端无客户时区，naive 逐行报错）；Excel/异步导入随 V2。
+    时间戳必须带时区（服务端无客户时区，naive 逐行报错）。Excel（.xlsx）见 Q160
+    upload-excel；异步导入随 V2。
     """
 
     try:
@@ -143,6 +145,49 @@ async def customer_backfill_upload(
         raise HTTPException(
             status_code=422,
             detail={"message": "CSV validation failed", "errors": exc.errors},
+        ) from exc
+    except service.EffectValidationError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "index": exc.index,
+                "field": exc.field,
+                "message": str(exc),
+            },
+        ) from exc
+    await session.commit()
+    return CustomerBackfillUploadReceipt(**receipt)
+
+
+@router.post(
+    "/api/effects/backfill/upload-excel",
+    response_model=CustomerBackfillUploadReceipt,
+)
+async def customer_backfill_upload_excel(
+    body: CustomerBackfillExcelUploadIn,
+    session: AsyncSession = Depends(get_session),
+) -> CustomerBackfillUploadReceipt:
+    """Q160 客户批量 Excel（.xlsx）服务端上传（与 Q156 CSV 同契约、同回执）。
+
+    body.content_base64 为 .xlsx 字节的标准 base64（JSON body 携文本，零 multipart）；
+    服务端 openpyxl 读活动工作表、单元格归一化后走固定 9 列逐行校验。base64 非法、
+    工作簿无法解析或任一结构/行错误都整批 422（file/header/行级 errors），不入库；
+    全合法才走 Q128 整批 all-or-nothing（只命中本租户非 discarded 成品、绝不孤儿）。
+    captured_at 列须为带时区 ISO 文本——Excel 日期单元格不带时区，逐行报错不臆测。
+    """
+
+    try:
+        receipt = await service.ingest_customer_backfill_excel(
+            session,
+            body=body,
+            max_rows=settings.backfill_upload_max_rows,
+        )
+    except CsvValidationError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Excel validation failed", "errors": exc.errors},
         ) from exc
     except service.EffectValidationError as exc:
         await session.rollback()
