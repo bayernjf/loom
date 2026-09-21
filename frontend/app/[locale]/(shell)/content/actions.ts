@@ -10,6 +10,8 @@ import {
   editContentBody,
   rejectContent,
   reviseContent,
+  uploadBackfillCsv,
+  type BackfillUploadReceipt,
   type EffectBatchReceipt,
 } from "@/lib/api";
 
@@ -116,39 +118,90 @@ export async function backfillEffectAction(
   }
 }
 
-// Q136：客户效果批量回填（甲案：纯前端 CSV 解析后整批走 Q128 客户通道，无独立上传端点）。
-// 行级校验已在 client 岛完成；此处仍整批提交，后端 all-or-nothing（422 detail 带行 index）。
-export type BatchBackfillRowInput = {
-  platform_post_id: string;
-  captured_at: string;
-  metrics: Record<string, number>;
+// Q159：客户效果批量回填切 Q156 服务端上传端点——提交 CSV 原文（不再浏览器解析后发 records[]）。
+// 服务端固定 9 列表头解析、逐行校验（权威），全合法才整批 all-or-nothing（绝不产生孤儿）；
+// 422 回传结构化逐行错误（line＝含表头物理行号），表头/文件级错误 line=1。
+export type BackfillServerError = {
+  line: number;
+  field: string | null;
+  message: string;
 };
+
+export type BatchBackfillActionResult =
+  | { ok: true; receipt: BackfillUploadReceipt }
+  | {
+      ok: false;
+      status: 403 | 404 | 409 | 422 | "unconfigured" | "unknown";
+      detail: string | null;
+      serverErrors: BackfillServerError[];
+    };
+
+function parseUploadFailure(err: ApiError): {
+  detail: string | null;
+  serverErrors: BackfillServerError[];
+} {
+  let payload: unknown = null;
+  try {
+    payload = JSON.parse(err.message) as unknown;
+  } catch {
+    payload = null;
+  }
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const obj = payload as Record<string, unknown>;
+    if (Array.isArray(obj.errors)) {
+      const serverErrors: BackfillServerError[] = [];
+      for (const item of obj.errors) {
+        if (!item || typeof item !== "object") continue;
+        const e = item as Record<string, unknown>;
+        // 服务端优先给 line（含表头物理行号）；只有数据行 0 基 index 时换算为 index+2。
+        const line =
+          typeof e.line === "number"
+            ? e.line
+            : typeof e.index === "number"
+              ? e.index + 2
+              : 1;
+        serverErrors.push({
+          line,
+          field: typeof e.field === "string" ? e.field : null,
+          message: typeof e.message === "string" ? e.message : String(e.message ?? ""),
+        });
+      }
+      if (serverErrors.length) return { detail: null, serverErrors };
+    }
+    if (typeof obj.message === "string") {
+      const field = typeof obj.field === "string" ? `${obj.field}: ` : "";
+      return { detail: `${field}${obj.message}`, serverErrors: [] };
+    }
+  }
+  return { detail: errorDetail(err), serverErrors: [] };
+}
 
 export async function batchBackfillEffectsAction(
   contentId: string,
-  rows: BatchBackfillRowInput[],
-): Promise<BackfillActionResult> {
-  if (!CURRENT_TENANT_ID) return { ok: false, status: "unconfigured", detail: null };
-  if (!contentId.trim() || rows.length === 0)
-    return { ok: false, status: 422, detail: null };
+  csvText: string,
+  filename: string | null,
+): Promise<BatchBackfillActionResult> {
+  if (!CURRENT_TENANT_ID)
+    return { ok: false, status: "unconfigured", detail: null, serverErrors: [] };
+  if (!contentId.trim() || !csvText.trim())
+    return { ok: false, status: 422, detail: null, serverErrors: [] };
   try {
-    const receipt = await customerBackfillEffects(
+    const receipt = await uploadBackfillCsv(
       CURRENT_TENANT_ID,
-      rows.map((row) => ({
-        content_id: contentId,
-        platform_post_id: row.platform_post_id,
-        captured_at: row.captured_at,
-        metrics: row.metrics,
-      })),
+      contentId,
+      csvText,
+      filename ?? undefined,
     );
     return { ok: true, receipt };
   } catch (err) {
-    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status))
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      const parsed = parseUploadFailure(err);
       return {
         ok: false,
         status: err.status as 403 | 404 | 409 | 422,
-        detail: errorDetail(err),
+        ...parsed,
       };
-    return { ok: false, status: "unknown", detail: null };
+    }
+    return { ok: false, status: "unknown", detail: null, serverErrors: [] };
   }
 }
