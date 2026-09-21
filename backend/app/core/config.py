@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # 进程内 ExportWorker 消费置 running→completed/failed（只读幂等，可多副本并行）。
     export_worker_enabled: bool = False
     export_stream_block_seconds: float = 5.0
+    # Q152 单进程内导出消费组 consumer 数（并发度）与每轮拉取批量：默认 1/20，
+    # 保持 V1 单 worker 行为；消费组内多 consumer 原生分片（XREADGROUP 各取不
+    # 重叠消息），调高并发度即水平扩展导出处理能力。运维参数，非 Q9 业务旋钮。
+    export_worker_concurrency: int = 1
+    export_stream_count: int = 20
 
     # Q142 中台导出行数硬上限（运维防护参数，非 Q9 业务旋钮）：fcw.csv/fcw.json
     # 与导出任务在未显式分页时最多导出的 final_id 行数，防大结果集 OOM/超大响应；
