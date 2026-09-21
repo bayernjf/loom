@@ -24,6 +24,8 @@ from app.core.locking import (
 )
 from app.core.restock import worker as restock_worker
 from app.core.sla import runner as sla_runner
+from app.core.sla import scheduler as sla_scheduler
+from app.core.sla.fencing import TICK_HELD
 from app.core.sla.scheduler import SweepScheduler
 from tests.integration.test_fencing_lease import FencingRedis
 
@@ -128,11 +130,17 @@ async def test_run_restock_checkpoint_aborts_between_signals(monkeypatch):
 # ---------- 循环 _tick 捕获 LockLost 不冒泡 ----------
 
 
-async def test_sweep_tick_swallows_lock_lost(fencing):
+async def test_sweep_tick_swallows_lock_lost(fencing, monkeypatch):
+    # Q151：factory=object() 不支持 PG 认领，patch 绕过（认领语义见 test_sweep_fencing）。
+    async def _claim_held(*_args, **_kwargs):
+        return TICK_HELD
+
+    monkeypatch.setattr(sla_scheduler, "claim_tick", _claim_held)
+
     async def boom(_factory, **_kwargs):
         raise LockLost(SWEEP_LOCK)
 
-    scheduler = SweepScheduler(object(), boom, 300.0)
+    scheduler = SweepScheduler(_null_factory, boom, 300.0)
     await scheduler._tick()  # 不抛：协作中止本轮，循环继续
 
 
