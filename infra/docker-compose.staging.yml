@@ -1,0 +1,14 @@
+# Staging rehearsal overlay (Q146 rehearsal; not part of the beta baseline).
+# Resets host port publishing on the infra services so the rehearsal stack
+# coexists with the local atlas-pg container; only the frontend is reachable
+# from the host. Use with:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+services:
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  minio:
+    ports: !reset []
+    # No V1 service consumes S3; skip when the image cannot be pulled.
+    profiles: [unused-in-rehearsal]
