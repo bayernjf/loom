@@ -143,6 +143,8 @@ async def get_current_tenant(
 ) -> CustomerTenantView:
     try:
         row = await service.get_tenant(session, tenant_id)
+        # Q163：客户读口追加派生 Onboarding 进度（接缝甲案，待负责人追认）。
+        progress = await service.onboarding_progress(session, tenant_id)
     except service.TenantNotFound as exc:
         raise HTTPException(status_code=404, detail=f"tenant not found: {exc}") from exc
     return CustomerTenantView(
@@ -151,6 +153,7 @@ async def get_current_tenant(
         plan=row.plan,
         status=row.status,
         monthly_token_quota=row.monthly_token_quota,
+        onboarding=progress,
     )
 
 
