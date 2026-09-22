@@ -53,6 +53,7 @@ echo "${c_bold}== 跑 e2e 全链（真 PG）==${c_off}"
 ( cd "$BACKEND_DIR" && LOOM_E2E_PG_DSN="$DSN" \
   LOOM_E2E_REAL_LLM="${LOOM_E2E_REAL_LLM:-0}" \
   LOOM_E2E_AGNES_KEY="${LOOM_E2E_AGNES_KEY:-}" \
+  LOOM_LLM_HTTP_TIMEOUT_SECONDS="${LOOM_LLM_HTTP_TIMEOUT_SECONDS:-180}" \
   "$PY" -m pytest tests/e2e -q ) > /tmp/fullchain-pytest.log 2>&1
 rc=$?
 tail -5 /tmp/fullchain-pytest.log | sed 's/^/  /'

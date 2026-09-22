@@ -280,7 +280,7 @@ async def _drive(client: AsyncClient) -> dict:
     slot = await client.post(
         "/api/admin/publish-slots",
         json={"item": {
-            "platform": PLATFORM, "code": f"xs-{RUN_ID}", "name": "短视频位",
+            "platform": PLATFORM, "code": f"xs-{uuid.uuid4().hex[:10]}", "name": "短视频位",
             "slot_type": "short_video",
             "traffic": 70, "safe": 80, "conv": 60, "load": 50,
         }, "actor": OPS},
@@ -377,11 +377,14 @@ async def _drive(client: AsyncClient) -> dict:
 
 
 async def _enable_real_llm(client: AsyncClient):
+    from app.core.model_registry import drivers
+
     os.environ["LOOM_LLM_BASE_URL_AGNES"] = AGNES_BASE_URL
+    drivers._DRIVERS["agnes"] = drivers.OpenAICompatibleDriver()
     r = await client.post(
         "/api/admin/ai-models",
         json={
-            "model_code": "agnes-2.5-flash-e2e",
+            "model_code": "agnes-2.5-flash",
             "provider": "agnes",
             "capability": "chat",
             "currency_code": "USD",
@@ -396,7 +399,7 @@ async def _enable_real_llm(client: AsyncClient):
         f"/api/admin/ai-models/{model_id}/keys",
         json={"secret": AGNES_KEY, "actor": PLATFORM_ADMIN},
     )
-    assert k.status_code == 200, k.text
+    assert k.status_code == 201, k.text
 
     for scene in ("CAT-RECOG", "ARTICLE-GEN"):
         rt = await client.put(
