@@ -1074,3 +1074,34 @@ export async function uploadBackfillExcel(
     }),
   });
 }
+
+// Q166：客户效果数据分析只读聚合（GET /api/effects/analytics，无闸客户读口径）。
+export interface EffectAnalyticsContentRow {
+  content_id: string | null;
+  records: number;
+  metrics: Record<string, number>;
+}
+
+export interface EffectAnalytics {
+  tenant_id: string;
+  records_total: number;
+  contents_covered: number;
+  metrics_totals: Record<string, number>;
+  read_rate_avg: number | null;
+  read_rate_samples: number;
+  captured_from: string | null;
+  captured_to: string | null;
+  by_content: EffectAnalyticsContentRow[];
+  truncated: boolean;
+  scan_limit: number;
+}
+
+export async function getEffectAnalytics(
+  tenantId: string,
+  opts: { dateFrom?: string; dateTo?: string } = {},
+): Promise<EffectAnalytics> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  if (opts.dateFrom) params.set("date_from", opts.dateFrom);
+  if (opts.dateTo) params.set("date_to", opts.dateTo);
+  return request<EffectAnalytics>(`/api/effects/analytics?${params}`);
+}
