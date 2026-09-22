@@ -96,11 +96,16 @@ const requiredKeys = [
   "content.backfillBatchNote",
   "content.backfillBatchFormat",
   "content.backfillBatchFile",
+  "content.backfillBatchExcelSelected",
   "content.backfillBatchPlaceholder",
   "content.backfillBatchParsed",
   "content.backfillBatchErrors",
   "content.backfillBatchLine",
   "content.backfillBatchHeaderMissing",
+  "content.backfillBatchHeaderInvalid",
+  "content.backfillBatchColumnCount",
+  "content.backfillBatchTzRequired",
+  "content.backfillBatchServerErrors",
   "content.backfillBatchTooMany",
   "content.backfillBatchSubmit",
   "content.backfillBatchSuccess",
@@ -164,6 +169,10 @@ for (const [key, token] of [
   ["content.backfillBatchErrors", "{count}"],
   ["content.backfillBatchLine", "{line}"],
   ["content.backfillBatchLine", "{message}"],
+  ["content.backfillBatchExcelSelected", "{filename}"],
+  ["content.backfillBatchColumnCount", "{line}"],
+  ["content.backfillBatchColumnCount", "{n}"],
+  ["content.backfillBatchServerErrors", "{count}"],
   ["content.backfillBatchTooMany", "{max}"],
   ["content.backfillBatchTooMany", "{count}"],
   ["content.backfillBatchSuccess", "{count}"],
@@ -188,8 +197,12 @@ for (const token of [
   "reviseContent",
   "editContentBody",
   "customerBackfillEffects",
+  "uploadBackfillCsv",
+  "uploadBackfillExcel",
   "/api/content",
   "/api/effects/backfill",
+  "/api/effects/backfill/upload",
+  "/api/effects/backfill/upload-excel",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must export/use ${token}`);
 }
@@ -238,11 +251,14 @@ for (const token of [
   "saveContentBodyAction",
   "backfillEffectAction",
   "batchBackfillEffectsAction",
+  "batchBackfillExcelAction",
   "approveContent",
   "rejectContent",
   "reviseContent",
   "editContentBody",
   "customerBackfillEffects",
+  "uploadBackfillCsv",
+  "uploadBackfillExcel",
   "CURRENT_TENANT_ID",
 ]) {
   if (!actionsText.includes(token))
@@ -314,20 +330,25 @@ for (const token of ["datetime-local", "toISOString", "backfillEffectAction"]) {
   if (!backfillIsland.includes(token))
     problems.push(`backfill island must contain ${token} (tz-aware capture time)`);
 }
-// Q136：批量岛纯前端 CSV 解析（文件载入 + 行级校验），整批仍走客户通道、转 UTC、刷新页面。
+// Q159/Q160：批量岛 CSV 提交原文走 Q156 上传端点、Excel(.xlsx) 读 base64 走 Q160
+// upload-excel（浏览器不解析 xlsx，服务端 openpyxl 权威）；CSV 侧保留同构即时预览，
+// 整批 all-or-nothing、tz-aware 归一化、成功后刷新页面。
 const batchIsland = readFileSync(
   join(shell, "content", "backfill-batch-island.tsx"), "utf8",
 );
 for (const token of [
   "batchBackfillEffectsAction",
+  "batchBackfillExcelAction",
   "toISOString",
   "FileReader",
   "readAsText",
+  "readAsDataURL",
   "router.refresh",
   "all-or-nothing",
+  "filename",
 ]) {
   if (!batchIsland.includes(token))
-    problems.push(`batch backfill island must contain ${token} (Q136 CSV import)`);
+    problems.push(`batch backfill island must contain ${token} (Q159/Q160 CSV+Excel upload)`);
 }
 if (/\bfetch\s*\(/.test(batchIsland) || /https?:\/\//.test(batchIsland) || batchIsland.includes("@/lib/api"))
   problems.push("batch backfill island must use server actions, not direct fetch/api imports");
@@ -336,6 +357,10 @@ const effectsRouterText = readFileSync(
 );
 if (!effectsRouterText.includes('"/api/effects/backfill"'))
   problems.push("backend effects router must keep POST /api/effects/backfill (customer channel)");
+if (!effectsRouterText.includes('"/api/effects/backfill/upload"'))
+  problems.push("backend effects router must keep POST /api/effects/backfill/upload (Q156 server-side CSV)");
+if (!effectsRouterText.includes('"/api/effects/backfill/upload-excel"'))
+  problems.push("backend effects router must keep POST /api/effects/backfill/upload-excel (Q160 server-side Excel)");
 
 if (problems.length > 0) {
   console.error(`check-content: ${problems.length} problem(s)\n${problems.join("\n")}`);

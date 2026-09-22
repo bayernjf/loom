@@ -1,7 +1,8 @@
-"""Q156 客户效果批量回填 CSV 服务端解析（销 Q136「服务端上传端点」挂账）。
+"""Q156/Q160 客户效果批量回填表格服务端解析（销 Q136「服务端上传端点」挂账）。
 
-纯函数、不碰库：把上传的 CSV 文本解析成 Q128 通道的 ``EffectRecordIn`` 列表，
-整份文件挂同一个成品 ``content_id``（与 Q136 前端批量岛挂内容详情页一致）。
+纯函数、不碰库：把上传的 CSV 文本（Q156）或 Excel 工作簿（Q160，见
+``excel_io.py``）解析成 Q128 通道的 ``EffectRecordIn`` 列表，整份文件挂同一个
+成品 ``content_id``（与批量岛挂内容详情页一致）。
 
 表头固定 9 列、按**表头名**定位（与前端 backfill-batch-island 完全同构）：
 
@@ -14,11 +15,16 @@
   一律逐行报错（不臆造时区，守 Q128 tz-aware 铁律）。
 - 一次性收集全部坏行（不在首个错误即停），交路由回 422 逐行回执；结构全合法才
   交由 Q128 整批 all-or-nothing 持久化（客户通道绝不产生孤儿）。
+
+``parse_backfill_table`` 是与载体无关的核心：调用方把表头与每一数据行归一化成
+字符串（CSV 直接是文本；Excel 由 ``excel_io`` 把单元格值归一化），行号为含表头
+的物理行号（首条数据行＝2），由此 CSV/Excel 两入口共享同一套严格校验。
 """
 
 import csv
 import io
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -117,26 +123,21 @@ def _parse_captured_at(
     return dt
 
 
-def parse_backfill_csv(
-    content_id: str, text: str, *, max_rows: int
+def parse_backfill_table(
+    content_id: str,
+    header: list[str],
+    rows: Iterable[tuple[int, list[str]]],
+    *,
+    max_rows: int,
 ) -> ParsedUpload:
-    """解析整份回填 CSV；任何结构/行错误聚合抛 CsvValidationError。"""
+    """载体无关的固定 9 列表格校验核心（CSV/Excel 共用）。
 
-    if not text or not text.strip():
-        raise CsvValidationError(
-            [{"index": -1, "line": 1, "field": "csv", "message": "CSV is empty"}]
-        )
-    text = text.removeprefix("\ufeff")  # 容忍 Excel 导出的 UTF-8 BOM
+    ``header`` 为首行表头单元格（调用方已 strip/去尾空）；``rows`` 惰性产出
+    ``(line, cells)``，``line`` 为含表头的物理行号（首条数据行＝2），``cells``
+    为已归一化为字符串的一行。表头/任一行结构或取值错误都聚合进 errors，最后
+    一次性抛 :class:`CsvValidationError`；全合法才返回 records + 逐行 meta。
+    """
 
-    reader = csv.reader(io.StringIO(text))
-    try:
-        header = next(reader)
-    except StopIteration:
-        raise CsvValidationError(
-            [{"index": -1, "line": 1, "field": "header", "message": "missing header row"}]
-        ) from None
-
-    header = [cell.strip() for cell in header]
     errors: list[dict] = []
 
     # 表头按名定位：必须 9 列齐全、无重复、无未知列。
@@ -170,8 +171,7 @@ def parse_backfill_csv(
     records: list[EffectRecordIn] = []
     rows_meta: list[dict] = []
     data_index = -1
-    for raw_row in reader:
-        line = reader.line_num  # 物理行号（含空行/字段内换行，表头占第 1 行）
+    for line, raw_row in rows:
         if not any(cell.strip() for cell in raw_row):
             continue  # 跳过纯空行（不计数据行/不计上限）
         data_index += 1
@@ -238,3 +238,34 @@ def parse_backfill_csv(
     if errors:
         raise CsvValidationError(errors)
     return ParsedUpload(records=records, rows=rows_meta)
+
+
+def parse_backfill_csv(
+    content_id: str, text: str, *, max_rows: int
+) -> ParsedUpload:
+    """解析整份回填 CSV；任何结构/行错误聚合抛 CsvValidationError。"""
+
+    if not text or not text.strip():
+        raise CsvValidationError(
+            [{"index": -1, "line": 1, "field": "csv", "message": "CSV is empty"}]
+        )
+    text = text.removeprefix("\ufeff")  # 容忍 Excel 导出的 UTF-8 BOM
+
+    reader = csv.reader(io.StringIO(text))
+    try:
+        header = next(reader)
+    except StopIteration:
+        raise CsvValidationError(
+            [{"index": -1, "line": 1, "field": "header", "message": "missing header row"}]
+        ) from None
+
+    def _rows() -> Iterable[tuple[int, list[str]]]:
+        for raw_row in reader:
+            yield reader.line_num, raw_row  # reader.line_num 含表头（表头占第 1 行）
+
+    return parse_backfill_table(
+        content_id,
+        [cell.strip() for cell in header],
+        _rows(),
+        max_rows=max_rows,
+    )

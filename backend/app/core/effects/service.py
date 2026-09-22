@@ -17,6 +17,8 @@
 本切片不含：效果反哺/评分校准算法（口径原文未给，标【待补】），随段13 后续片/V2。
 """
 
+import base64
+import binascii
 import uuid
 from datetime import UTC, datetime
 
@@ -28,7 +30,8 @@ from app.core.actor import Actor
 from app.core.api_keys.models import AgentApiKey
 from app.core.api_keys.service import PLATFORM_TENANT
 from app.core.audit import append_audit
-from app.core.effects.csv_io import parse_backfill_csv
+from app.core.effects.csv_io import CsvValidationError, parse_backfill_csv
+from app.core.effects.excel_io import parse_backfill_excel
 from app.core.effects.models import (
     METRIC_COUNTERS,
     METRIC_KEYS,
@@ -39,6 +42,7 @@ from app.core.effects.models import (
     EffectRecord,
 )
 from app.core.effects.schemas import (
+    CustomerBackfillExcelUploadIn,
     CustomerBackfillUploadIn,
     CustomerEffectBatchIn,
     EffectBatchIn,
@@ -413,6 +417,35 @@ async def ingest_customer_backfill_upload(
     """
 
     parsed = parse_backfill_csv(body.content_id, body.csv, max_rows=max_rows)
+    batch = CustomerEffectBatchIn(
+        tenant_id=body.tenant_id, records=parsed.records, actor=body.actor
+    )
+    receipt = await ingest_customer_backfill(session, batch=batch)
+    return {**receipt, "filename": body.filename, "rows": parsed.rows}
+
+
+async def ingest_customer_backfill_excel(
+    session,
+    *,
+    body: CustomerBackfillExcelUploadIn,
+    max_rows: int,
+) -> dict:
+    """Q160 客户批量 Excel（.xlsx）服务端上传：base64 解码后走与 CSV 同构的校验。
+
+    base64 非法或工作簿无法解析由 excel_io 聚合抛 CsvValidationError（field 为
+    file，路由回 422，不入库）；结构/行全合法才构造 Q128 批次整批 all-or-nothing
+    落库（只命中本租户非 discarded 成品、绝不孤儿），回执与 CSV 上传同构。
+    """
+
+    try:
+        payload = base64.b64decode(body.content_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise CsvValidationError(
+            [{"index": -1, "line": 1, "field": "file",
+              "message": "content_base64 is not valid base64"}]
+        ) from exc
+
+    parsed = parse_backfill_excel(body.content_id, payload, max_rows=max_rows)
     batch = CustomerEffectBatchIn(
         tenant_id=body.tenant_id, records=parsed.records, actor=body.actor
     )

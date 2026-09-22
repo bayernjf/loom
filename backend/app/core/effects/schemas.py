@@ -58,6 +58,21 @@ class CustomerBackfillUploadIn(BaseModel):
     actor: Actor
 
 
+class CustomerBackfillExcelUploadIn(BaseModel):
+    """Q160 客户批量 Excel（.xlsx）服务端上传（零 multipart 依赖，与 CSV 同形态）。
+
+    content_base64 为 .xlsx 字节的标准 base64（JSON body 携文本，不引入
+    multipart）；服务端 openpyxl 读取活动工作表、归一化后走与 CSV 完全一致的
+    固定 9 列逐行校验，全合法才整批落库。captured_at 列须为带时区 ISO 文本。
+    """
+
+    tenant_id: str = Field(min_length=1)
+    content_id: str = Field(min_length=1)
+    content_base64: str = Field(min_length=1)
+    filename: str | None = None
+    actor: Actor
+
+
 class BackfillUploadRow(BaseModel):
     """逐行回执中的一行（index＝数据行 0 基、line＝含表头物理行号）。"""
 

@@ -900,3 +900,57 @@ export async function customerBackfillEffects(
     }),
   });
 }
+
+// Q156：批量回填服务端上传逐行回执中的一行（index＝数据行 0 基、line＝含表头物理行号）。
+export interface BackfillUploadRow {
+  index: number;
+  line: number;
+  platform_post_id: string;
+  captured_at: string;
+}
+
+export interface BackfillUploadReceipt extends EffectBatchReceipt {
+  filename: string | null;
+  rows: BackfillUploadRow[];
+}
+
+// Q156/Q159：批量 CSV 回填走服务端上传端点（JSON body 携 CSV 原文，零 multipart 依赖）。
+// 服务端解析固定 9 列表头、逐行校验（权威），全合法才整批 all-or-nothing 落库，绝不产生孤儿。
+export async function uploadBackfillCsv(
+  tenantId: string,
+  contentId: string,
+  csv: string,
+  filename?: string,
+): Promise<BackfillUploadReceipt> {
+  return request<BackfillUploadReceipt>("/api/effects/backfill/upload", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      content_id: contentId,
+      csv,
+      ...(filename ? { filename } : {}),
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+    }),
+  });
+}
+
+// Q160：批量 Excel（.xlsx）回填，与 CSV 上传同契约。contentBase64 为 .xlsx 字节的
+// 标准 base64（JSON body 携文本，零 multipart）；服务端 openpyxl 解析、逐行校验，
+// 全合法才整批 all-or-nothing 落库。浏览器不本地解析 xlsx，服务端为唯一权威。
+export async function uploadBackfillExcel(
+  tenantId: string,
+  contentId: string,
+  contentBase64: string,
+  filename?: string,
+): Promise<BackfillUploadReceipt> {
+  return request<BackfillUploadReceipt>("/api/effects/backfill/upload-excel", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      content_id: contentId,
+      content_base64: contentBase64,
+      ...(filename ? { filename } : {}),
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+    }),
+  });
+}

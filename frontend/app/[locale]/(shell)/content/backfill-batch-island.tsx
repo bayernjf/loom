@@ -1,16 +1,21 @@
 "use client";
 
-// Q136：客户效果批量回填岛（内容详情页，非 discarded 成品均显示）。
-// 甲案（02 C1.80）：纯前端 CSV/表格录入——不建后端上传端点、无迁移、无新依赖；
-// 解析与行级校验在浏览器完成，整批走 Q128 客户通道 records[]（all-or-nothing、绝不产生孤儿）。
-// 指标列留空即缺席（绝不补 0）；captured_at 统一转带 Z 的 UTC ISO（后端要求 tz-aware）。
+// Q159/Q160：客户效果批量回填岛（内容详情页，非 discarded 成品均显示）。
+// 两种载体，同一服务端契约（固定 9 列、逐行校验、整批 all-or-nothing、绝不孤儿）：
+// - CSV（Q156/Q159）：提交 CSV 原文到 /api/effects/backfill/upload；浏览器保留同构
+//   即时解析仅作上传前预览，服务端校验为最终权威。
+// - Excel .xlsx（Q160）：浏览器不解析工作簿，读成 base64 直传
+//   /api/effects/backfill/upload-excel，由服务端 openpyxl 解析（唯一权威）。
+// 指标列留空即缺席（绝不补 0）；captured_at 必须带时区（Z 或 ±HH:MM），不臆造时区。
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState, useTransition } from "react";
 
 import {
   batchBackfillEffectsAction,
-  type BackfillActionResult,
+  batchBackfillExcelAction,
+  type BatchBackfillActionResult,
+  type BackfillServerError,
 } from "./actions";
 import styles from "./content.module.css";
 
@@ -25,16 +30,20 @@ const COUNT_METRICS = [
 const RATE_METRICS = ["read_rate"] as const;
 const METRIC_KEYS = [...COUNT_METRICS, ...RATE_METRICS] as const;
 const HEADER_COLUMNS = ["platform_post_id", "captured_at", ...METRIC_KEYS];
-// V1 前端软上限（后端 records 仅要求 ≥1，无上限）；避免单次超大 JSON。
-const MAX_ROWS = 500;
+// 与后端 LOOM_BACKFILL_UPLOAD_MAX_ROWS 默认值对齐（服务端为权威，env 可调）。
+const MAX_ROWS = 10000;
 const PREVIEW_ROWS = 10;
 
 const KNOWN_STATUSES = new Set([403, 404, 409, 422]);
+// 服务端计数列只接受非负整数字面量（^\d+$），镜像该口径。
+const INT_RE = /^\d+$/;
+// 服务端要求 tz-aware：结尾必须是 Z/z 或 ±HH:MM（可带冒号）。
+const TZ_RE = /(Z|z|[+-]\d{2}:?\d{2})$/;
 
 type ParsedRow = {
   line: number; // 物理行号（含表头，首条数据行 = 2）
   platformPostId: string;
-  capturedAt: string; // 带 Z 的 UTC ISO
+  capturedAt: string; // 带时区的 ISO（归一化为 UTC）
   metrics: Record<string, number>;
 };
 
@@ -78,14 +87,13 @@ function splitCsvLine(line: string): string[] {
   return cells.map((cell) => cell.trim());
 }
 
-// 支持 ISO 串、`YYYY-MM-DD HH:MM`、datetime-local 形态；纯日期按本地 00:00（与单条岛一致）。
+// 服务端 csv_io 铁律：captured_at 必须带时区（Z 或 ±HH:MM）；naive/纯日期一律拒，
+// 前端不做浏览器本地时区猜测（与 Q156 服务端口径一致）。
 function parseCapturedAt(raw: string): string | null {
   const value = raw.trim();
-  if (!value) return null;
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? `${value}T00:00`
-    : value.replace(" ", "T");
-  const date = new Date(normalized);
+  if (!value || !TZ_RE.test(value)) return null;
+  const candidate = value.includes("T") ? value : value.replace(" ", "T");
+  const date = new Date(candidate);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
@@ -99,7 +107,7 @@ function parseCsv(
     headerError: null,
     tooMany: false,
   };
-  const physicalLines = text.split(/\r?\n/);
+  const physicalLines = text.replace(/^\ufeff/, "").split(/\r?\n/);
   const firstDataIndex = physicalLines.findIndex((line) => line.trim() !== "");
   if (firstDataIndex === -1) return result;
 
@@ -107,24 +115,51 @@ function parseCsv(
     cell.toLowerCase(),
   );
   const columnIndex: Record<string, number> = {};
-  for (const column of HEADER_COLUMNS) {
-    const index = headerCells.indexOf(column);
-    if (index === -1) {
-      result.headerError = t("backfillBatchHeaderMissing");
-      return result;
+  let headerInvalid = false;
+  for (let pos = 0; pos < headerCells.length; pos += 1) {
+    const name = headerCells[pos];
+    if (name in columnIndex || !HEADER_COLUMNS.includes(name)) {
+      headerInvalid = true;
+    } else {
+      columnIndex[name] = pos;
     }
-    columnIndex[column] = index;
   }
+  const missing = HEADER_COLUMNS.filter((c) => !(c in columnIndex));
+  if (headerInvalid || headerCells.length !== HEADER_COLUMNS.length) {
+    result.headerError = t("backfillBatchHeaderInvalid");
+    return result;
+  }
+  if (missing.length > 0) {
+    result.headerError = t("backfillBatchHeaderMissing");
+    return result;
+  }
+
+  const cell = (cells: string[], column: string) =>
+    (cells[columnIndex[column]] ?? "").trim();
+  let dataIndex = -1;
 
   for (let i = firstDataIndex + 1; i < physicalLines.length; i += 1) {
     const line = physicalLines[i];
     if (line.trim() === "") continue;
     const lineNumber = i + 1;
+    dataIndex += 1;
+    if (dataIndex >= MAX_ROWS) {
+      result.tooMany = true;
+      continue;
+    }
     const cells = splitCsvLine(line);
-    const cell = (column: string) =>
-      (cells[columnIndex[column]] ?? "").trim();
+    if (cells.length !== HEADER_COLUMNS.length) {
+      result.errors.push({
+        line: lineNumber,
+        message: t("backfillBatchColumnCount", {
+          line: lineNumber,
+          n: cells.length,
+        }),
+      });
+      continue;
+    }
 
-    const platformPostId = cell("platform_post_id");
+    const platformPostId = cell(cells, "platform_post_id");
     if (!platformPostId) {
       result.errors.push({
         line: lineNumber,
@@ -132,21 +167,20 @@ function parseCsv(
       });
       continue;
     }
-    const capturedAt = parseCapturedAt(cell("captured_at"));
+    const capturedAt = parseCapturedAt(cell(cells, "captured_at"));
     if (!capturedAt) {
       result.errors.push({
         line: lineNumber,
-        message: t("backfillCapturedRequired"),
+        message: t("backfillBatchTzRequired"),
       });
       continue;
     }
     const metrics: Record<string, number> = {};
     let badMetric = false;
     for (const key of COUNT_METRICS) {
-      const raw = cell(key);
+      const raw = cell(cells, key);
       if (!raw) continue;
-      const value = Number(raw);
-      if (!Number.isInteger(value) || value < 0) {
+      if (!INT_RE.test(raw)) {
         result.errors.push({
           line: lineNumber,
           message: t("backfillMetricInteger"),
@@ -154,10 +188,10 @@ function parseCsv(
         badMetric = true;
         break;
       }
-      metrics[key] = value;
+      metrics[key] = Number(raw);
     }
     if (badMetric) continue;
-    const rateRaw = cell("read_rate");
+    const rateRaw = cell(cells, "read_rate");
     if (rateRaw) {
       const rate = Number(rateRaw);
       if (Number.isNaN(rate) || rate < 0 || rate > 1) {
@@ -172,7 +206,6 @@ function parseCsv(
     result.rows.push({ line: lineNumber, platformPostId, capturedAt, metrics });
   }
 
-  if (result.rows.length > MAX_ROWS) result.tooMany = true;
   return result;
 }
 
@@ -182,17 +215,22 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [text, setText] = useState("");
-  const [result, setResult] = useState<BackfillActionResult | null>(null);
+  const [filename, setFilename] = useState<string | null>(null);
+  // csv＝本地即时预览后提交 CSV 原文；excel＝.xlsx 读 base64 直传，服务端唯一解析。
+  const [excelBase64, setExcelBase64] = useState<string | null>(null);
+  const [result, setResult] = useState<BatchBackfillActionResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isExcel = excelBase64 !== null;
   const parsed = useMemo(() => parseCsv(text, t), [text, t]);
-  const blocked =
+  const csvBlocked =
     parsed.headerError !== null ||
     parsed.tooMany ||
     parsed.errors.length > 0 ||
     parsed.rows.length === 0;
+  const blocked = isExcel ? excelBase64 === null : csvBlocked;
 
-  function failureText(failure: Extract<BackfillActionResult, { ok: false }>): string {
+  function failureText(failure: Extract<BatchBackfillActionResult, { ok: false }>): string {
     if (failure.status === "unconfigured") return t("actorUnconfigured");
     if (failure.status === "unknown") return tError("unknown");
     if (failure.status === 422 && failure.detail) return failure.detail;
@@ -201,13 +239,41 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
     );
   }
 
+  function serverErrorText(error: BackfillServerError): string {
+    // 服务端逐行回执（field 可空，如表头/文件级错误）；message 为后端权威文本。
+    const prefix = error.field ? `${error.field}: ` : "";
+    return t("backfillBatchLine", {
+      line: error.line,
+      message: `${prefix}${error.message}`,
+    });
+  }
+
+  function resetResultAndInput() {
+    setResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function loadFile(file: File | undefined) {
     if (!file) return;
     const reader = new FileReader();
+    if (file.name.toLowerCase().endsWith(".xlsx")) {
+      // Excel：浏览器不解析，读 data URL 取 base64，交服务端 openpyxl 权威解析。
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+        const comma = dataUrl.indexOf(",");
+        setExcelBase64(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+        setText("");
+        setFilename(file.name);
+        resetResultAndInput();
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
     reader.onload = () => {
       setText(typeof reader.result === "string" ? reader.result : "");
-      setResult(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setExcelBase64(null);
+      setFilename(file.name);
+      resetResultAndInput();
     };
     reader.readAsText(file);
   }
@@ -216,17 +282,15 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
     if (blocked) return;
     setResult(null);
     startTransition(async () => {
-      const actionResult = await batchBackfillEffectsAction(
-        contentId,
-        parsed.rows.map((row) => ({
-          platform_post_id: row.platformPostId,
-          captured_at: row.capturedAt,
-          metrics: row.metrics,
-        })),
-      );
+      // Excel 直传 base64；CSV 提交原文（浏览器解析仅用于上方即时预览）。
+      const actionResult = isExcel
+        ? await batchBackfillExcelAction(contentId, excelBase64 as string, filename)
+        : await batchBackfillEffectsAction(contentId, text, filename);
       setResult(actionResult);
       if (actionResult.ok) {
         setText("");
+        setExcelBase64(null);
+        setFilename(null);
         router.refresh();
       }
     });
@@ -241,7 +305,7 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
       <p className={styles.blockNote}>
         {t("backfillBatchFormat", { max: MAX_ROWS })}
       </p>
-      <p className={styles.mono}>{HEADER_COLUMNS.join(",")}</p>
+      {!isExcel ? <p className={styles.mono}>{HEADER_COLUMNS.join(",")}</p> : null}
       <label className={styles.fieldLabel} htmlFor="backfill-batch-file">
         {t("backfillBatchFile")}
       </label>
@@ -249,85 +313,97 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
         id="backfill-batch-file"
         ref={fileInputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         onChange={(event) => loadFile(event.target.files?.[0])}
       />
-      <textarea
-        className={styles.textArea}
-        rows={8}
-        value={text}
-        placeholder={t("backfillBatchPlaceholder")}
-        onChange={(event) => {
-          setText(event.target.value);
-          setResult(null);
-        }}
-      />
-      {parsed.headerError ? (
-        <p className={styles.errorText} role="status">
-          {parsed.headerError}
-        </p>
-      ) : null}
-      {parsed.tooMany ? (
-        <p className={styles.errorText} role="status">
-          {t("backfillBatchTooMany", {
-            max: MAX_ROWS,
-            count: parsed.rows.length,
+      {isExcel ? (
+        <p className={styles.blockNote} role="status">
+          {t("backfillBatchExcelSelected", {
+            filename: filename ?? t("backfillBatchFile"),
           })}
         </p>
-      ) : null}
-      {parsed.errors.length > 0 ? (
-        <div className={styles.errorText} role="status">
-          <p>{t("backfillBatchErrors", { count: parsed.errors.length })}</p>
-          <ul>
-            {parsed.errors.slice(0, 20).map((error) => (
-              <li key={error.line}>
-                {t("backfillBatchLine", {
-                  line: error.line,
-                  message: error.message,
-                })}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {!parsed.headerError && parsed.rows.length > 0 && !parsed.tooMany ? (
+      ) : (
         <>
-          <p className={styles.successText}>
-            {t("backfillBatchParsed", { count: parsed.rows.length })}
-          </p>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>{t("backfillPostLabel")}</th>
-                <th>{t("backfillCapturedLabel")}</th>
-                {METRIC_KEYS.map((key) => (
-                  <th key={key}>{t(`backfillMetric.${key}`)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {previewRows.map((row) => (
-                <tr key={`${row.line}-${row.platformPostId}`}>
-                  <td>{row.platformPostId}</td>
-                  <td>{row.capturedAt}</td>
-                  {METRIC_KEYS.map((key) => (
-                    <td key={key}>
-                      {row.metrics[key] === undefined ? "—" : row.metrics[key]}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {parsed.rows.length > PREVIEW_ROWS ? (
-            <p className={styles.blockNote}>
-              {t("backfillBatchPreviewMore", {
-                count: parsed.rows.length - PREVIEW_ROWS,
+          <textarea
+            className={styles.textArea}
+            rows={8}
+            value={text}
+            placeholder={t("backfillBatchPlaceholder")}
+            onChange={(event) => {
+              setText(event.target.value);
+              setExcelBase64(null);
+              setFilename(null);
+              setResult(null);
+            }}
+          />
+          {parsed.headerError ? (
+            <p className={styles.errorText} role="status">
+              {parsed.headerError}
+            </p>
+          ) : null}
+          {parsed.tooMany ? (
+            <p className={styles.errorText} role="status">
+              {t("backfillBatchTooMany", {
+                max: MAX_ROWS,
+                count: parsed.rows.length,
               })}
             </p>
           ) : null}
+          {parsed.errors.length > 0 ? (
+            <div className={styles.errorText} role="status">
+              <p>{t("backfillBatchErrors", { count: parsed.errors.length })}</p>
+              <ul>
+                {parsed.errors.slice(0, 20).map((error) => (
+                  <li key={error.line}>
+                    {t("backfillBatchLine", {
+                      line: error.line,
+                      message: error.message,
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {!parsed.headerError && parsed.rows.length > 0 && !parsed.tooMany ? (
+            <>
+              <p className={styles.successText}>
+                {t("backfillBatchParsed", { count: parsed.rows.length })}
+              </p>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>{t("backfillPostLabel")}</th>
+                    <th>{t("backfillCapturedLabel")}</th>
+                    {METRIC_KEYS.map((key) => (
+                      <th key={key}>{t(`backfillMetric.${key}`)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((row) => (
+                    <tr key={`${row.line}-${row.platformPostId}`}>
+                      <td>{row.platformPostId}</td>
+                      <td>{row.capturedAt}</td>
+                      {METRIC_KEYS.map((key) => (
+                        <td key={key}>
+                          {row.metrics[key] === undefined ? "—" : row.metrics[key]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {parsed.rows.length > PREVIEW_ROWS ? (
+                <p className={styles.blockNote}>
+                  {t("backfillBatchPreviewMore", {
+                    count: parsed.rows.length - PREVIEW_ROWS,
+                  })}
+                </p>
+              ) : null}
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
       <div className={styles.actionButtons}>
         <button
           type="button"
@@ -339,14 +415,30 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
         </button>
       </div>
       {result ? (
-        <p
-          className={result.ok ? styles.successText : styles.errorText}
-          role="status"
-        >
-          {result.ok
-            ? t("backfillBatchSuccess", { count: result.receipt.matched })
-            : failureText(result)}
-        </p>
+        result.ok ? (
+          <p className={styles.successText} role="status">
+            {t("backfillBatchSuccess", { count: result.receipt.matched })}
+          </p>
+        ) : (
+          <div className={styles.errorText} role="status">
+            {result.serverErrors.length > 0 ? (
+              <>
+                <p>
+                  {t("backfillBatchServerErrors", {
+                    count: result.serverErrors.length,
+                  })}
+                </p>
+                <ul>
+                  {result.serverErrors.slice(0, 20).map((error, idx) => (
+                    <li key={`${error.line}-${idx}`}>{serverErrorText(error)}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p>{failureText(result)}</p>
+            )}
+          </div>
+        )
       ) : null}
     </section>
   );
