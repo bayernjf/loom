@@ -422,6 +422,7 @@ async def list_jobs(
     *,
     tenant_id: str,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[ExportJob]:
     """Q137 任务列表口：按租户倒序返回（中台轮询/核对），不含文件体。"""
 
@@ -430,6 +431,7 @@ async def list_jobs(
         .where(ExportJob.tenant_id == tenant_id)
         .order_by(ExportJob.created_at.desc())
         .limit(limit)
+        .offset(offset)
     )
     return list((await session.scalars(stmt)).all())
 
