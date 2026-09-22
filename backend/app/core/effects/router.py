@@ -1,5 +1,7 @@
 """段13 效果回流端点（Q126–Q129）：入站推送、孤儿认领/批量/解绑、客户回填 + 运营只读队列。"""
 
+from datetime import UTC, date, datetime, time, timedelta
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -321,3 +323,38 @@ async def list_content_effects(
 
     rows = await service.list_series(session, content_id, limit=limit, offset=offset)
     return [service.effect_view(row) for row in rows]
+
+
+
+@router.get("/api/effects/analytics")
+async def customer_effect_analytics(
+    tenant_id: str = Query(min_length=1),
+    date_from: date | None = None,
+    date_to: date | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Q166 客户数据分析页：租户 matched 效果只读聚合。
+
+    无闸客户读口径（同 Q101/Q162）：tenant_id query 收窄、未知租户 200 空、
+    不 writeAudit；只统计 matched（孤儿属运营面），不新建表/调度。
+    """
+
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(
+            status_code=422, detail="date_from must be on or before date_to"
+        )
+    captured_from = (
+        datetime.combine(date_from, time.min, tzinfo=UTC) if date_from else None
+    )
+    # date_to 含当天：排他上界＝次日 00:00。
+    captured_to_exclusive = (
+        datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+        if date_to
+        else None
+    )
+    return await service.customer_analytics(
+        session,
+        tenant_id,
+        captured_from=captured_from,
+        captured_to_exclusive=captured_to_exclusive,
+    )

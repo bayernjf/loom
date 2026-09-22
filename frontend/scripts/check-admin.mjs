@@ -34,6 +34,8 @@ const requiredKeys = [
   "admin.slaTodosNav",
   "admin.contentOpsNav",
   "admin.effectsNav",
+  "admin.agentKeysNav",
+  "admin.exportsNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -308,6 +310,60 @@ const requiredKeys = [
     "actorUnconfigured",
     "actorMissingRole",
   ].map((k) => `admin.effects.${k}`),
+  ...[
+    "title",
+    "intro",
+    "issueTitle",
+    "nameLabel",
+    "namePlaceholder",
+    "issueSubmit",
+    "secretOnceWarning",
+    "copySecret",
+    "copied",
+    "listTitle",
+    "showRevoked",
+    "hideRevoked",
+    "empty",
+    "loadFailed",
+    "colName",
+    "colPrefix",
+    "colStatus",
+    "colCreated",
+    "colLastUsed",
+    "colAction",
+    "revokeSubmit",
+    "revokeConfirm",
+    "statusRevoked",
+    "actorUnconfigured",
+    "actorMissingRole",
+  ].map((k) => `admin.agentKeys.${k}`),
+  ...[
+    "title",
+    "intro",
+    "tenantLabel",
+    "tenantPlaceholder",
+    "querySubmit",
+    "needTenant",
+    "createTitle",
+    "formatLabel",
+    "productSpaceLabel",
+    "productSpacePlaceholder",
+    "createSubmit",
+    "listTitle",
+    "empty",
+    "loadFailed",
+    "colJob",
+    "colFormat",
+    "colStatus",
+    "colRows",
+    "colFile",
+    "colCreated",
+    "colCompleted",
+    "colAction",
+    "downloadSubmit",
+    "notReady",
+    "actorUnconfigured",
+  ].map((k) => `admin.exports.${k}`),
   ...["from", "to", "apply", "reset", "placeholderFrom", "placeholderTo", "invalidRange"].map(
     (k) => `admin.dateFilter.${k}`,
   ),
@@ -345,6 +401,14 @@ const requiredFiles = [
   join("effects", "orphan-table-island.tsx"),
   join("effects", "series-island.tsx"),
   join("effects", "effect-fields.ts"),
+  join("agent-keys", "page.tsx"),
+  join("agent-keys", "actions.ts"),
+  join("agent-keys", "issue-island.tsx"),
+  join("agent-keys", "revoke-island.tsx"),
+  join("exports", "page.tsx"),
+  join("exports", "actions.ts"),
+  join("exports", "create-island.tsx"),
+  join("exports", "download-island.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -441,10 +505,14 @@ if (!sidebarText.includes("/admin/content"))
   problems.push("admin sidebar must link the content ops page (Q124/Q125)");
 if (!sidebarText.includes("/admin/effects"))
   problems.push("admin sidebar must link the effects ops page (Q130)");
+if (!sidebarText.includes("/admin/agent-keys"))
+  problems.push("admin sidebar must link the agent key admin page (Q167)");
+if (!sidebarText.includes("/admin/exports"))
+  problems.push("admin sidebar must link the export jobs admin page (Q168)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 8)
-    problems.push(`admin sidebar must keep exactly 8 admin entries, got ${navCount}`);
+  if (navCount !== 10)
+    problems.push(`admin sidebar must keep exactly 10 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -477,6 +545,14 @@ for (const token of [
   "/api/review-workbench/batch-approve",
   "/api/skill-candidates/",
   "/api/admin/tenants",
+  "listAgentKeys",
+  "issueAgentKey",
+  "revokeAgentKey",
+  "/api/admin/agent-keys",
+  "listExportJobs",
+  "createExportJob",
+  "downloadExportJob",
+  "/api/exports/jobs",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -1114,6 +1190,137 @@ for (const [name, text] of [
 for (const token of ["date_from", "date_to", "DashboardWindowOpts"]) {
   if (!apiText.includes(token))
     problems.push(`lib/api.ts must pass dashboard date window param: ${token}`);
+}
+
+// Q167：入站 Agent Key 治理页（消费 Q88 三端点；platform_admin 写闸）。
+const akDir = join(adminDir, "agent-keys");
+const akPage = readAdmin(join("agent-keys", "page.tsx"));
+const akActions = readAdmin(join("agent-keys", "actions.ts"));
+const akIssue = readAdmin(join("agent-keys", "issue-island.tsx"));
+const akRevoke = readAdmin(join("agent-keys", "revoke-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(akPage))
+  problems.push("agent-keys/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(akPage) || /https?:\/\//.test(akPage))
+  problems.push("agent-keys/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (akPage.includes(forbidden))
+    problems.push(`agent-keys/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of ["listAgentKeys", "IssueKeyIsland", "RevokeKeyButton", "agent-keys"]) {
+  if (!akPage.includes(token))
+    problems.push(`agent-keys page must use ${token}`);
+}
+if (!/^"use server"/m.test(akActions))
+  problems.push("agent-keys/actions.ts must be a Server Action module");
+for (const token of [
+  "issueAgentKeyAction",
+  "revokeAgentKeyAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "platform_admin",
+  "unconfigured",
+  "missing_role",
+  "issueAgentKey",
+  "revokeAgentKey",
+]) {
+  if (!akActions.includes(token))
+    problems.push(`agent-keys actions must contain ${token}`);
+}
+for (const status of [403, 404, 409, 422]) {
+  if (!akActions.includes(String(status)))
+    problems.push(`agent-keys actions must map failure status ${status}`);
+}
+for (const [name, text] of [["issue-island", akIssue], ["revoke-island", akRevoke]]) {
+  if (!/^"use client"/m.test(text))
+    problems.push(`${name} must be a client island`);
+  if (text.includes("@/lib/api") || /\bfetch\s*\(/.test(text) || /https?:\/\//.test(text))
+    problems.push(`${name} must call only the Server Action, never the API directly`);
+  if (!text.includes("router.refresh"))
+    problems.push(`${name} must refresh the RSC view after success`);
+}
+if (!akIssue.includes('data-testid="issued-secret"'))
+  problems.push("issue island must show the one-time secret in a marked region");
+if (!akRevoke.includes("window.confirm"))
+  problems.push("revoke island must confirm the terminal revoke action");
+if (!getKey(messages, "admin.agentKeys.revokeConfirm")?.includes("{name}"))
+  problems.push("admin.agentKeys.revokeConfirm must contain the {name} placeholder");
+const apiKeysRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "api_keys", "router.py"), "utf8",
+);
+for (const route of [
+  '"/api/admin/agent-keys"',
+  '"/api/admin/agent-keys/{key_id}/revoke"',
+]) {
+  if (!apiKeysRouter.includes(route))
+    problems.push(`backend api_keys router must register ${route}`);
+}
+const apiKeysService = readFileSync(
+  join(repoRoot, "backend", "app", "core", "api_keys", "service.py"), "utf8",
+);
+for (const token of ["issue_key", "revoke_key", "PLATFORM_ADMIN"]) {
+  if (!apiKeysService.includes(token))
+    problems.push(`api_keys service must keep platform_admin gate on ${token}`);
+}
+
+// Q168：中台导出任务管理页（消费 Q132/Q137 jobs；创建/下载经 Server Action）。
+const exPage = readAdmin(join("exports", "page.tsx"));
+const exActions = readAdmin(join("exports", "actions.ts"));
+const exCreate = readAdmin(join("exports", "create-island.tsx"));
+const exDownload = readAdmin(join("exports", "download-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(exPage))
+  problems.push("exports/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(exPage) || /https?:\/\//.test(exPage))
+  problems.push("exports/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (exPage.includes(forbidden))
+    problems.push(`exports/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of [
+  "listExportJobs",
+  "CreateExportIsland",
+  "DownloadExportButton",
+  'name="tenant_id"',
+  'data-testid="exports-tenant-filter"',
+]) {
+  if (!exPage.includes(token))
+    problems.push(`exports page must contain ${token}`);
+}
+if (!/^"use server"/m.test(exActions))
+  problems.push("exports/actions.ts must be a Server Action module");
+for (const token of [
+  "createExportJobAction",
+  "downloadExportJobAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "unconfigured",
+  "createExportJob",
+  "downloadExportJob",
+]) {
+  if (!exActions.includes(token))
+    problems.push(`exports actions must contain ${token}`);
+}
+for (const status of [403, 404, 409, 422]) {
+  if (!exActions.includes(String(status)))
+    problems.push(`exports actions must map failure status ${status}`);
+}
+for (const [name, text] of [["create-island", exCreate], ["download-island", exDownload]]) {
+  if (!/^"use client"/m.test(text))
+    problems.push(`${name} must be a client island`);
+  if (text.includes("@/lib/api") || /\bfetch\s*\(/.test(text) || /https?:\/\//.test(text))
+    problems.push(`${name} must call only the Server Action, never the API directly`);
+  if (!text.includes("router.refresh"))
+    problems.push(`${name} must refresh the RSC view after success`);
+}
+if (!exDownload.includes("Blob") || !exDownload.includes("createObjectURL"))
+  problems.push("download island must save the text payload via a Blob object URL (no bare API URL)");
+const exportsRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "exports", "router.py"), "utf8",
+);
+if (!exportsRouter.includes('prefix="/api/exports"'))
+  problems.push("backend exports router must mount at /api/exports");
+for (const route of ['"/jobs"', '"/jobs/{job_id}"', '"/jobs/{job_id}/download"']) {
+  if (!exportsRouter.includes(route))
+    problems.push(`backend exports router must register ${route}`);
 }
 
 if (problems.length > 0) {

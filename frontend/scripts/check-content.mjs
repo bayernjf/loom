@@ -174,6 +174,32 @@ const requiredKeys = [
   "workbench.onboarding.active",
   "workbench.onboarding.todo",
   "workbench.onboarding.cta",
+  // Q166 客户效果数据分析页。
+  "analytics.title",
+  "analytics.intro",
+  "analytics.unconfigured",
+  "analytics.empty",
+  "analytics.loadFailed",
+  "analytics.invalidRange",
+  "analytics.dateFrom",
+  "analytics.dateTo",
+  "analytics.apply",
+  "analytics.reset",
+  "analytics.kpiRecords",
+  "analytics.kpiContents",
+  "analytics.kpiReadRate",
+  "analytics.kpiRange",
+  "analytics.readRateSamples",
+  "analytics.truncated",
+  "analytics.byContentTitle",
+  "analytics.colContent",
+  "analytics.colRecords",
+  "analytics.metric.plays",
+  "analytics.metric.likes",
+  "analytics.metric.comments",
+  "analytics.metric.shares",
+  "analytics.metric.inquiries",
+  "analytics.metric.conversions",
   "error.403",
   "error.404",
   "error.409",
@@ -191,6 +217,8 @@ const requiredFiles = [
   "app/[locale]/(shell)/content/backfill-island.tsx",
   "app/[locale]/(shell)/content/backfill-batch-island.tsx",
   "app/[locale]/(shell)/content/content.module.css",
+  "app/[locale]/(shell)/analytics/page.tsx",
+  "app/[locale]/(shell)/analytics/analytics.module.css",
 ];
 
 const problems = [];
@@ -489,6 +517,53 @@ for (const token of [
   if (!workbenchPageText.includes(token))
     problems.push(`workbench page must contain ${token} (Q163 onboarding guide)`);
 }
+
+// Q166：客户效果数据分析页（effect_records 只读聚合，无写口/client 岛）。
+const analyticsPage = readFileSync(
+  join(shell, "analytics", "page.tsx"), "utf8",
+);
+if (!/export const dynamic = "force-dynamic"/.test(analyticsPage))
+  problems.push("analytics/page.tsx must be force-dynamic (server-only env)");
+if (analyticsPage.includes("MenuPlaceholder"))
+  problems.push("analytics/page.tsx must no longer render the V2 MenuPlaceholder (Q166)");
+if (analyticsPage.includes('"use client"'))
+  problems.push("analytics/page.tsx must stay a read-only RSC (no client island)");
+if (/NEXT_PUBLIC/.test(analyticsPage) || /https?:\/\//.test(analyticsPage))
+  problems.push("analytics/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const token of [
+  'data-testid="analytics-overview"',
+  'getTranslations("analytics")',
+  "getEffectAnalytics",
+  "CURRENT_TENANT_ID",
+  'name="date_from"',
+  'name="date_to"',
+]) {
+  if (!analyticsPage.includes(token))
+    problems.push(`analytics page must contain ${token}`);
+}
+const analyticsCss = readFileSync(
+  join(shell, "analytics", "analytics.module.css"), "utf8",
+);
+if (/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(analyticsCss))
+  problems.push("analytics.module.css must use semantic tokens only (no hardcoded colors)");
+for (const token of ["getEffectAnalytics", "/api/effects/analytics"]) {
+  if (!apiText.includes(token))
+    problems.push(`lib/api.ts must export/use ${token} (Q166)`);
+}
+const navAnalyticsMatch = navText.match(
+  /\{\s*href:\s*"\/analytics"[^}]*phase:\s*"(v1|v2)"\s*\}/,
+);
+if (!navAnalyticsMatch || navAnalyticsMatch[1] !== "v1")
+  problems.push('nav.ts must register /analytics as phase "v1" (Q166)');
+const effectsAnalyticsRouter = readFileSync(
+  join(backend, "app", "core", "effects", "router.py"), "utf8",
+);
+if (!effectsAnalyticsRouter.includes('"/api/effects/analytics"'))
+  problems.push("backend effects router must register GET /api/effects/analytics (Q166)");
+if (!getKey(messages, "analytics.readRateSamples")?.includes("{count}"))
+  problems.push("analytics.readRateSamples must contain the {count} placeholder");
+if (!getKey(messages, "analytics.truncated")?.includes("{limit}"))
+  problems.push("analytics.truncated must contain the {limit} placeholder");
 
 if (problems.length > 0) {
   console.error(`check-content: ${problems.length} problem(s)\n${problems.join("\n")}`);
