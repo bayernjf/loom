@@ -223,13 +223,108 @@ export async function getComplianceOverview(tenantId: string): Promise<Complianc
   return request<ComplianceOverview>(`/api/compliance/overview?${params}`);
 }
 
+// Q162①：CCR 分市场清洗报告历史只读列表（分页甲案；区别于 overview 只取每市场最新）。
+export interface CcrHistoryItem {
+  ccr_id: string;
+  pws_id: string;
+  product_space_id: string;
+  country: string | null;
+  status: string;
+  block_required: boolean;
+  created_at: string | null;
+}
+
+export interface CcrHistoryPage {
+  items: CcrHistoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function getCcrHistory(
+  tenantId: string,
+  opts: { pwsId?: string; country?: string; limit?: number; offset?: number } = {},
+): Promise<CcrHistoryPage> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  if (opts.pwsId) params.set("pws_id", opts.pwsId);
+  if (opts.country) params.set("country", opts.country);
+  if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+  if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+  return request<CcrHistoryPage>(`/api/compliance/ccr-history?${params}`);
+}
+
+// Q162①：单条 CCR 报告详情（含 hits 完整 JSON）。
+export interface CcrDetail extends CcrHistoryItem {
+  hits: { bans: CcrBanHit[]; downgrades: CcrDowngradeHit[] };
+  wordlist_context: Record<string, unknown>;
+  decided_by: string | null;
+  decided_at: string | null;
+}
+
+export async function getCcrDetail(
+  ccrId: string,
+  tenantId: string,
+): Promise<CcrDetail> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<CcrDetail>(
+    `/api/compliance/ccr/${encodeURIComponent(ccrId)}?${params}`,
+  );
+}
+
+// Q162②：法审记录只读 + 服务端派生 SLA 倒计时（normal/overdue/resolved）。
+export interface LawReviewSlaItem {
+  law_review_id: string;
+  pws_id: string;
+  product_space_id: string;
+  domain: string;
+  status: string;
+  conclusion: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  created_at: string | null;
+  sla_remaining_seconds: number | null;
+  sla_state: "normal" | "overdue" | "resolved";
+}
+
+export async function getTenantLawReviews(
+  tenantId: string,
+): Promise<LawReviewSlaItem[]> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<LawReviewSlaItem[]>(`/api/compliance/law-reviews?${params}`);
+}
+
+// Q162③：客户侧只读合规词库（仅 active；写口归 internal_compliance 管理端）。
+export interface WordlistEntryView {
+  word: string;
+  level: string;
+  action: string;
+  country: string | null;
+  layer: string;
+  effective_from: string | null;
+  effective_until: string | null;
+}
+
+export async function getComplianceWordlist(
+  opts: { level?: string; layer?: string } = {},
+): Promise<WordlistEntryView[]> {
+  const params = new URLSearchParams();
+  if (opts.level) params.set("level", opts.level);
+  if (opts.layer) params.set("layer", opts.layer);
+  const qs = params.toString();
+  return request<WordlistEntryView[]>(
+    `/api/compliance/wordlist${qs ? `?${qs}` : ""}`,
+  );
+}
+
 // Q114：settings 只读账户面板——客户侧租户读口（无 admin 闸，复用 Q95 租户注册表）。
+// Q163：追加派生 onboarding 进度（接缝甲案，待负责人追认；复用既有 TenantOnboarding）。
 export interface CustomerTenantView {
   tenant_id: string;
   name: string | null;
   plan: string;
   status: string;
   monthly_token_quota: number | null;
+  onboarding: TenantOnboarding;
 }
 
 export async function getCurrentTenant(tenantId: string): Promise<CustomerTenantView> {
