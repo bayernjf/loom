@@ -265,14 +265,42 @@ async def test_customer_tenant_read(client):
     assert body["plan"] == "trial"
     assert body["status"] == "trial"
     assert body["monthly_token_quota"] == TRIAL_MONTHLY_TOKEN_QUOTA
-    # 客户视图不含管理面字段（detail/onboarding 不泄漏）。
+    # 客户视图不含管理面字段（detail 不泄漏）；Q163 起含派生 onboarding。
     assert "detail" not in body
-    assert "onboarding" not in body
     assert "created_at" not in body
+    assert body["onboarding"] == {
+        "intakes": 0,
+        "product_spaces": 0,
+        "first_modeling_started": False,
+    }
 
     # 未知租户 404（只读，不写审计）。
     r = await client.get("/api/tenants/ghost")
     assert r.status_code == 404
+
+
+async def test_customer_tenant_onboarding_reflects_intakes(client, session_factory):
+    # Q163：客户读口的 onboarding 随业务锚点派生（录入/产品空间计数）。
+    await client.post(
+        "/api/admin/tenants",
+        json={"tenant_id": "t1", "plan": "basic", "actor": ADMIN},
+    )
+    async with session_factory() as session:
+        intake = ProductIntakeApplication(tenant_id="t1", status="stored", profile={})
+        session.add(intake)
+        await session.flush()
+        session.add(ProductSpace(
+            tenant_id="t1", intake_id=intake.intake_id,
+            lifecycle="modeling", profile_snapshot={},
+        ))
+        await session.commit()
+
+    r = await client.get("/api/tenants/t1")
+    assert r.status_code == 200, r.text
+    onboarding = r.json()["onboarding"]
+    assert onboarding["intakes"] == 1
+    assert onboarding["product_spaces"] == 1
+    assert onboarding["first_modeling_started"] is True
 
 
 # ---------- 详情：派生 Onboarding 进度 ----------
