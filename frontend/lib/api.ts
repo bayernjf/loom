@@ -1105,3 +1105,132 @@ export async function getEffectAnalytics(
   if (opts.dateTo) params.set("date_to", opts.dateTo);
   return request<EffectAnalytics>(`/api/effects/analytics?${params}`);
 }
+
+// Q167：入站 Agent Key 治理（消费 Q88 后端三端点；列表 GET 免闸不返 secret，
+// 签发/吊销 POST 在后端 service 层硬闸 platform_admin，secret 仅签发时返回一次）。
+export interface AgentKeyView {
+  key_id: string;
+  name: string;
+  key_prefix: string;
+  status: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface AgentKeyIssued extends AgentKeyView {
+  secret: string;
+}
+
+export async function listAgentKeys(
+  opts: { includeRevoked?: boolean } = {},
+): Promise<AgentKeyView[]> {
+  const params = new URLSearchParams();
+  if (opts.includeRevoked) params.set("include_revoked", "true");
+  const qs = params.toString();
+  return request<AgentKeyView[]>(
+    `/api/admin/agent-keys${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function issueAgentKey(name: string): Promise<AgentKeyIssued> {
+  return request<AgentKeyIssued>("/api/admin/agent-keys", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+export async function revokeAgentKey(keyId: string): Promise<AgentKeyView> {
+  return request<AgentKeyView>(
+    `/api/admin/agent-keys/${encodeURIComponent(keyId)}/revoke`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
+// Q168：中台导出任务管理（消费 Q132/Q137 /api/exports/jobs；中台无 RBAC 闸，actor 留痕）。
+export interface ExportJobView {
+  job_id: string;
+  tenant_id: string;
+  product_space_id: string | null;
+  format: string;
+  status: string;
+  row_count: number;
+  file_name: string;
+  requested_by: string;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+  download_url: string;
+}
+
+export interface ExportJobsPage {
+  tenant_id: string;
+  count: number;
+  jobs: ExportJobView[];
+}
+
+export interface ExportDownload {
+  content: string;
+  fileName: string;
+  mediaType: string;
+}
+
+export async function listExportJobs(
+  tenantId: string,
+  limit = 50,
+): Promise<ExportJobsPage> {
+  const params = new URLSearchParams({
+    tenant_id: tenantId,
+    limit: String(limit),
+  });
+  return request<ExportJobsPage>(`/api/exports/jobs?${params}`);
+}
+
+export async function createExportJob(opts: {
+  tenantId: string;
+  productSpaceId?: string;
+  format: "csv" | "json";
+}): Promise<ExportJobView> {
+  return request<ExportJobView>("/api/exports/jobs", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: opts.tenantId,
+      ...(opts.productSpaceId ? { product_space_id: opts.productSpaceId } : {}),
+      format: opts.format,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+// 下载口返回 csv/json 文本（非 JSON）；文件名取 Content-Disposition，由 client 岛落盘。
+export async function downloadExportJob(jobId: string): Promise<ExportDownload> {
+  return requestText(`/api/exports/jobs/${encodeURIComponent(jobId)}/download`);
+}
+
+// 文本下载通道（与 request 同构，但解析文本体与 Content-Disposition；函数声明提升）。
+async function requestText(path: string): Promise<ExportDownload> {
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = JSON.stringify(await res.json());
+    } catch {
+      detail = await res.text().catch(() => "");
+    }
+    throw new ApiError(res.status, detail || res.statusText);
+  }
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  return {
+    content: await res.text(),
+    fileName: match?.[1] ?? "export.txt",
+    mediaType: res.headers.get("content-type") ?? "text/plain",
+  };
+}

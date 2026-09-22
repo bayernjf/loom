@@ -14,6 +14,8 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/sla-todos", labelKey: "admin.slaTodosNav" },
   { href: "/admin/content", labelKey: "admin.contentOpsNav" },
   { href: "/admin/effects", labelKey: "admin.effectsNav" },
+  { href: "/admin/agent-keys", labelKey: "admin.agentKeysNav" },
+  { href: "/admin/exports", labelKey: "admin.exportsNav" },
 ] as const;
 
 export function AdminSidebar() {
