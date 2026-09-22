@@ -286,6 +286,31 @@ async def test_create_job_rejects_bad_format_missing_actor_empty_tenant(client):
     assert r.status_code == 422
 
 
+async def test_list_jobs_paginates_with_limit_and_offset(client):
+    ids = []
+    for i in range(3):
+        r = await client.post(
+            "/api/exports/jobs",
+            json={"tenant_id": "pager", "actor": {"id": f"u{i}"}},
+        )
+        ids.append(r.json()["job_id"])
+    page1 = await client.get(
+        "/api/exports/jobs",
+        params={"tenant_id": "pager", "limit": 2, "offset": 0},
+    )
+    assert page1.json()["count"] == 2
+    assert page1.json()["offset"] == 0
+    first = [j["job_id"] for j in page1.json()["jobs"]]
+    page2 = await client.get(
+        "/api/exports/jobs",
+        params={"tenant_id": "pager", "limit": 2, "offset": 2},
+    )
+    second = [j["job_id"] for j in page2.json()["jobs"]]
+    assert len(second) == 1
+    assert set(first).isdisjoint(second)
+    assert set(first + second) == set(ids)
+
+
 async def test_unknown_job_404_for_status_and_download(client):
     r = await client.get("/api/exports/jobs/nope")
     assert r.status_code == 404
