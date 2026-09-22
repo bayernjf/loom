@@ -4,6 +4,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ## [Unreleased]
 
+- **Q173 持续高压负载演练 + jobs 列表 offset（2026-09-23，零迁移；02 C1.117；负责人「那你推进」）** — 2 副本 HA + 真 PG/Redis（synthetic 不花钱）5 分钟持续混合负载 9/9 PASS：562 export job 提交==completed、零 failed/5xx，SLA/restock `/run` 200=414/409=1842，副本零重启/OOM/Traceback。演练抓到 `GET /api/exports/jobs` 页大小硬顶 200 且无 offset（Q142 漏网），修 service/router 透传 offset。新增 `infra/load-rehearsal.sh`（隔离 `--rm` driver，不 exec 进 app 容器）。后端 809→810。
 - **Q172 真 LLM 全链演练 + 驱动超时配置（2026-09-22，零迁移；02 C1.116；负责人 B4 授权）** — agnes CAT-RECOG/ARTICLE-GEN 真模型沿 e2e 全链贯通（gated 默认 skip，46.3s 两测全过，日预算内）；远程驱动新增 env `LOOM_LLM_HTTP_TIMEOUT_SECONDS`（默认 60＝原硬编码，演练取 180）。
 - **Q171 DBA 第三轮全量列复核（2026-09-22，零迁移/零生产代码；docs/10 §4，02 C1.115）** — head=0039 实测 61 表/654 列/215 业务索引/PK61·FK32·UQ20，ORM 逐表逐列零漂移。
 - **Q170 运营 SOP 全链操作手册（2026-09-22，纯文档；docs/21，02 C1.114）** — 段1→13 逐步操作与 4xx/5xx 处置，步骤经 Q169 e2e 实测。
