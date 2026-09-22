@@ -308,6 +308,9 @@ const requiredKeys = [
     "actorUnconfigured",
     "actorMissingRole",
   ].map((k) => `admin.effects.${k}`),
+  ...["from", "to", "apply", "reset", "placeholderFrom", "placeholderTo", "invalidRange"].map(
+    (k) => `admin.dateFilter.${k}`,
+  ),
 ];
 
 const requiredFiles = [
@@ -342,6 +345,7 @@ const requiredFiles = [
   join("effects", "orphan-table-island.tsx"),
   join("effects", "series-island.tsx"),
   join("effects", "effect-fields.ts"),
+  join("_components", "DateRangeFilter.tsx"),
 ];
 
 const problems = [];
@@ -1078,6 +1082,38 @@ for (const route of [
 ]) {
   if (!effectsRouter.includes(route))
     problems.push(`backend effects router must register ${route}`);
+}
+
+// Q164：两驾驶舱日期范围筛选器（共享 RSC 组件 + URL searchParams 透传）。
+const dateFilterComp = readAdmin(join("_components", "DateRangeFilter.tsx"));
+for (const token of [
+  "data-date-range-filter",
+  'name="date_from"',
+  'name="date_to"',
+  'type="date"',
+  'getTranslations("admin.dateFilter")',
+  'defaultFromIso',
+  'defaultToIso',
+]) {
+  if (!dateFilterComp.includes(token))
+    problems.push(`_components/DateRangeFilter.tsx must contain ${token}`);
+}
+if (/^"use client"/m.test(dateFilterComp))
+  problems.push("DateRangeFilter must stay a server component (no client state)");
+for (const [name, text] of [
+  ["token-cost/page.tsx", tokenPage],
+  ["review-workload/page.tsx", workloadPage],
+]) {
+  if (!text.includes("<DateRangeFilter"))
+    problems.push(`${name} must render the shared <DateRangeFilter>`);
+  if (!/searchParams/.test(text))
+    problems.push(`${name} must read URL searchParams for date_from/date_to`);
+  if (!/sp\.date_from/.test(text) || !/sp\.date_to/.test(text))
+    problems.push(`${name} must read sp.date_from / sp.date_to`);
+}
+for (const token of ["date_from", "date_to", "DashboardWindowOpts"]) {
+  if (!apiText.includes(token))
+    problems.push(`lib/api.ts must pass dashboard date window param: ${token}`);
 }
 
 if (problems.length > 0) {

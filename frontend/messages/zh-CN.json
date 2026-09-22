@@ -293,6 +293,15 @@
     "window": "统计窗口：{from} ~ {to}",
     "empty": "当前窗口暂无数据。",
     "back": "返回客户前台",
+    "dateFilter": {
+      "from": "起始日期",
+      "to": "结束日期",
+      "apply": "应用",
+      "reset": "重置",
+      "placeholderFrom": "选择起始日期",
+      "placeholderTo": "选择结束日期",
+      "invalidRange": "起始日期不能晚于结束日期"
+    },
     "opsIntakes": {
       "title": "录入单运营队列",
       "intro": "跨租户只读队列：按 15 态筛选录入单，进入详情执行运营操作。操作仅外放状态机中 requires_role=operations 的 6 个事件，复用既有状态迁移写口；系统事件与客户事件不在此列。",

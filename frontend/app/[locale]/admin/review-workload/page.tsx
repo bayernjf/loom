@@ -10,10 +10,18 @@ import {
   type TodoBacklogRow,
 } from "@/lib/api";
 import styles from "../admin.module.css";
+import DateRangeFilter, {
+  asSearchParam,
+  defaultFromIso,
+  defaultToIso,
+  isIsoDate,
+} from "../_components/DateRangeFilter";
 
 export const dynamic = "force-dynamic";
 
 const KNOWN_ERROR_STATUSES = new Set([403, 404, 422]);
+
+type SearchParams = Record<string, string | string[] | undefined>;
 
 function day(iso: string): string {
   return iso.slice(0, 10);
@@ -164,10 +172,21 @@ function ResolvedTable({
   );
 }
 
-export default async function ReviewWorkloadPage() {
+export default async function ReviewWorkloadPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
   const t = await getTranslations("admin.workload");
   const tAdmin = await getTranslations("admin");
   const tError = await getTranslations("error");
+
+  const rawFrom = asSearchParam(sp.date_from);
+  const rawTo = asSearchParam(sp.date_to);
+  const from = isIsoDate(rawFrom) ? rawFrom : defaultFromIso();
+  const to = isIsoDate(rawTo) ? rawTo : defaultToIso();
+  const invalid = from > to;
 
   let body: ReactNode;
 
@@ -175,7 +194,7 @@ export default async function ReviewWorkloadPage() {
     body = <p className={styles.notice}>{tAdmin("unconfigured")}</p>;
   } else {
     try {
-      const dashboard = await getReviewWorkloadDashboard();
+      const dashboard = await getReviewWorkloadDashboard({ dateFrom: from, dateTo: to });
       const { backlog, window_output: output } = dashboard;
       body = (
         <>
@@ -239,6 +258,14 @@ export default async function ReviewWorkloadPage() {
         <h1 className={styles.title}>{t("title")}</h1>
         <p className={styles.intro}>{t("intro")}</p>
       </header>
+      <section className={styles.section}>
+        <DateRangeFilter
+          basePath="/admin/review-workload"
+          from={from}
+          to={to}
+          invalid={invalid}
+        />
+      </section>
       {body}
     </div>
   );

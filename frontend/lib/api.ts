@@ -454,12 +454,37 @@ function adminPath(path: string): string {
   return `${path}?${params}`;
 }
 
-export async function getTokenCostDashboard(): Promise<TokenCostDashboard> {
-  return request<TokenCostDashboard>(adminPath("/api/admin/dashboards/token-cost"));
+export interface DashboardWindowOpts {
+  /** ISO date (YYYY-MM-DD)，半开区间左端；缺省由后端取近 30 天。 */
+  dateFrom?: string;
+  /** ISO date (YYYY-MM-DD)，半开区间右端 [from, to)；缺省由后端取今天。 */
+  dateTo?: string;
 }
 
-export async function getReviewWorkloadDashboard(): Promise<ReviewWorkloadDashboard> {
-  return request<ReviewWorkloadDashboard>(adminPath("/api/admin/dashboards/review-workload"));
+function appendWindow(params: URLSearchParams, opts?: DashboardWindowOpts): void {
+  if (!opts) return;
+  if (opts.dateFrom) params.append("date_from", opts.dateFrom);
+  if (opts.dateTo) params.append("date_to", opts.dateTo);
+}
+
+export async function getTokenCostDashboard(
+  opts?: DashboardWindowOpts,
+): Promise<TokenCostDashboard> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  appendWindow(params, opts);
+  return request<TokenCostDashboard>(`/api/admin/dashboards/token-cost?${params}`);
+}
+
+export async function getReviewWorkloadDashboard(
+  opts?: DashboardWindowOpts,
+): Promise<ReviewWorkloadDashboard> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  appendWindow(params, opts);
+  return request<ReviewWorkloadDashboard>(
+    `/api/admin/dashboards/review-workload?${params}`,
+  );
 }
 
 // Q103：统一审核工作台（Q93 后端）。可见角色 = 注册表 WF skill7 Gate 角色并集
