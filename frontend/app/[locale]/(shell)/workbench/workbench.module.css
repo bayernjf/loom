@@ -180,3 +180,108 @@
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
 }
+
+/* Q163 客户首启 Onboarding 引导岛（工作台空态内嵌，客户 nav 不增项）。 */
+.onboardingCard {
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-brand);
+  border-radius: var(--radius-2);
+}
+
+.onboardingTitle {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.onboardingNote {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.stepList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.stepRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-md);
+}
+
+.stepBadge {
+  display: inline-block;
+  min-width: 3rem;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  text-align: center;
+  border: 1px solid;
+  border-radius: var(--radius-1);
+}
+
+.stepDone {
+  color: var(--color-state-success-text);
+  background: var(--color-success-bg);
+  border-color: var(--color-state-success);
+}
+
+.stepActive {
+  color: var(--color-state-warning-text);
+  background: var(--color-warning-bg);
+  border-color: var(--color-state-warning);
+}
+
+.stepTodo {
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border);
+}
+
+.stepNameDone {
+  color: var(--color-text-secondary);
+}
+
+.stepNameActive {
+  font-weight: 600;
+}
+
+.stepNameTodo {
+  color: var(--color-text-tertiary);
+}
+
+.onboardingCta {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-md);
+  background: var(--color-brand);
+  color: var(--color-text-on-brand);
+  border-radius: var(--radius-2);
+  text-decoration: none;
+}
+
+.onboardingCta:hover {
+  background: var(--color-brand-hover);
+}
+
+/* 紧凑进度条（intakes>0 时收起为一行）。 */
+.onboardingCompact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.onboardingCompactStep {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}

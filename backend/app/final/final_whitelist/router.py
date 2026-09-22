@@ -9,7 +9,9 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.db import get_session
+from app.core.queue import StreamBackendError
 from app.final.final_whitelist import material, service
 from app.final.final_whitelist.schemas import AssemblyManual, AssemblyTaskCreate
 
@@ -64,8 +66,21 @@ async def assemble_manual(
 async def create_assembly_task(
     body: AssemblyTaskCreate, session: AsyncSession = Depends(get_session)
 ) -> dict:
+    """Q55 任务驱动批量发证；Q165 门控开启时改异步入队。
+
+    门控关（V1 默认）：请求内同步跑完，status=running→completed，七 Guard 原子性
+    不变。门控开：建 queued 任务并 XADD 入流，由 FcwWorker 异步组装，前端经已有
+    GET 状态口轮询。入流失败 fail-closed：删除 queued 行并回 503，不留半完成任务。
+    """
+    enabled = get_settings().fcw_worker_enabled
     try:
-        task = await service.create_task(session, body)
+        task = await service.create_task_record(
+            session,
+            body,
+            status=service.TASK_STATUS_QUEUED
+            if enabled
+            else service.TASK_STATUS_RUNNING,
+        )
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PwsNotFound as exc:
@@ -76,7 +91,24 @@ async def create_assembly_task(
         raise HTTPException(404, f"unknown or inactive goal: {exc}") from exc
     except service.InvalidRequest as exc:
         raise HTTPException(422, str(exc)) from exc
+
+    if not enabled:
+        # V1 同步：同一 session 内逐条组装到 completed。
+        task = await service.process_task(session, task, body.actor)
+        await session.commit()
+        return service.task_view(task)
+
+    # Q165 异步：先提交 queued（worker 读到时任务必须已可见），再入流。
     await session.commit()
+    try:
+        await service.enqueue_fcw_task(task.task_id)
+    except StreamBackendError:
+        # 入流失败 fail-closed：删除 queued 行，绝不留无人消费的僵尸任务。
+        await session.delete(task)
+        await session.commit()
+        raise HTTPException(
+            status_code=503, detail="fcw assembly queue unavailable"
+        ) from None
     return service.task_view(task)
 
 

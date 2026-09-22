@@ -75,6 +75,17 @@ class Settings(BaseSettings):
     import_worker_concurrency: int = 1
     import_stream_count: int = 20
 
+    # Q165 段11 FCW 批量组装异步 worker（Redis Streams 消费组，镜像 Q137 导出 /
+    # Q161 导入）：默认关，关闭时 POST /api/fcw/assembly-tasks 维持 Q55 请求内
+    # 同步跑完（status=running→completed，七 Guard 原子性不变）；开启后建 queued
+    # 入流，进程内 FcwWorker 消费置 running→completed（per-slot Guard 失败仍隔离
+    # 记 results.failures，任务整体 completed）；基础设施异常留 PEL 由 XCLAIM
+    # 接管、超 MAX_DELIVERIES 进死信并置 failed。运维参数，非 Q9 业务旋钮。
+    fcw_worker_enabled: bool = False
+    fcw_stream_block_seconds: float = 5.0
+    fcw_worker_concurrency: int = 1
+    fcw_stream_count: int = 20
+
     # Q142 中台导出行数硬上限（运维防护参数，非 Q9 业务旋钮）：fcw.csv/fcw.json
     # 与导出任务在未显式分页时最多导出的 final_id 行数，防大结果集 OOM/超大响应；
     # GET 直读端点的 limit 不得超过该值（422）。默认 10 万行。

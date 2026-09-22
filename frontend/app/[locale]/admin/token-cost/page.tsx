@@ -9,10 +9,18 @@ import {
   type TokenCostSkillRow,
 } from "@/lib/api";
 import styles from "../admin.module.css";
+import DateRangeFilter, {
+  asSearchParam,
+  defaultFromIso,
+  defaultToIso,
+  isIsoDate,
+} from "../_components/DateRangeFilter";
 
 export const dynamic = "force-dynamic";
 
 const KNOWN_ERROR_STATUSES = new Set([403, 404, 422]);
+
+type SearchParams = Record<string, string | string[] | undefined>;
 
 function day(iso: string): string {
   return iso.slice(0, 10);
@@ -140,10 +148,21 @@ function FailedTable({
   );
 }
 
-export default async function TokenCostPage() {
+export default async function TokenCostPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
   const t = await getTranslations("admin.tokenCost");
   const tAdmin = await getTranslations("admin");
   const tError = await getTranslations("error");
+
+  const rawFrom = asSearchParam(sp.date_from);
+  const rawTo = asSearchParam(sp.date_to);
+  const from = isIsoDate(rawFrom) ? rawFrom : defaultFromIso();
+  const to = isIsoDate(rawTo) ? rawTo : defaultToIso();
+  const invalid = from > to;
 
   let body: ReactNode;
 
@@ -151,7 +170,7 @@ export default async function TokenCostPage() {
     body = <p className={styles.notice}>{tAdmin("unconfigured")}</p>;
   } else {
     try {
-      const dashboard = await getTokenCostDashboard();
+      const dashboard = await getTokenCostDashboard({ dateFrom: from, dateTo: to });
       body = (
         <>
           <p className={styles.windowLine}>
@@ -210,6 +229,14 @@ export default async function TokenCostPage() {
         <h1 className={styles.title}>{t("title")}</h1>
         <p className={styles.intro}>{t("intro")}</p>
       </header>
+      <section className={styles.section}>
+        <DateRangeFilter
+          basePath="/admin/token-cost"
+          from={from}
+          to={to}
+          invalid={invalid}
+        />
+      </section>
       {body}
     </div>
   );

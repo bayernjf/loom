@@ -39,12 +39,16 @@ async def list_entries(
     *,
     status: str = "active",
     level: str | None = None,
+    layer: str | None = None,
 ) -> Sequence[ComplianceWordlistEntry]:
     stmt = select(ComplianceWordlistEntry)
     if status is not None:
         stmt = stmt.where(ComplianceWordlistEntry.status == status)
     if level is not None:
         stmt = stmt.where(ComplianceWordlistEntry.level == level)
+    if layer is not None:
+        # Q162：客户侧词库只读视图按规则层级（country/platform/base）过滤。
+        stmt = stmt.where(ComplianceWordlistEntry.layer == layer)
     return (await session.scalars(stmt.order_by(ComplianceWordlistEntry.created_at))).all()
 
 

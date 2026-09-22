@@ -29,6 +29,7 @@ from app.core.tenants.router import router as tenants_router
 from app.core.workbench.router import router as workbench_router
 from app.decision.compliance_center.router import router as ccr_router
 from app.decision.layer_strategy.router import router as package_router
+from app.final.fcw_worker import FcwWorker, build_fcw_workers
 from app.final.final_whitelist.router import router as fcw_router
 from app.platform.platform_adaptation.router import router as platform_router
 from app.product.atom.router import router as atom_router
@@ -46,11 +47,12 @@ _config_subscriber: ConfigBroadcastSubscriber | None = None
 # Q152：导出消费组可在单进程内起多个 consumer（默认 1，V1 行为）。
 _export_workers: list[ExportWorker] = []
 _import_workers: list[ImportWorker] = []
+_fcw_workers: list[FcwWorker] = []
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _scheduler, _restock_worker, _config_subscriber, _export_workers, _import_workers
+    global _scheduler, _restock_worker, _config_subscriber, _export_workers, _import_workers, _fcw_workers
     # M10c：启动引导配置缓存。失败不阻断启动——knob() 回落种子默认值，
     # 进程仍可健康启动，配置中心在下次发布或重启后恢复（单进程 V1）。
     try:
@@ -90,6 +92,17 @@ async def lifespan(app: FastAPI):
         )
         for worker in _import_workers:
             await worker.start()
+    if settings.fcw_worker_enabled:
+        # Q165：段11 FCW 批量组装异步消费组 worker（七 Guard 逐条原子性不变，
+        # per-slot 失败隔离；消费组内多 consumer 原生分片）。
+        _fcw_workers = build_fcw_workers(
+            SessionLocal,
+            concurrency=settings.fcw_worker_concurrency,
+            block_ms=int(settings.fcw_stream_block_seconds * 1000),
+            count=settings.fcw_stream_count,
+        )
+        for worker in _fcw_workers:
+            await worker.start()
     if settings.config_cache_broadcast_enabled:
         # Q135：多副本配置失效广播订阅者；启动失败不阻断应用（本进程 after_commit
         # 热更新仍生效，对端副本最坏重启后恢复一致）。
@@ -111,6 +124,9 @@ async def lifespan(app: FastAPI):
         for worker in reversed(_import_workers):
             await worker.stop()
         _import_workers = []
+        for worker in reversed(_fcw_workers):
+            await worker.stop()
+        _fcw_workers = []
         if _restock_worker is not None:
             await _restock_worker.stop()
             _restock_worker = None

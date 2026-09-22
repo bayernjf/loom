@@ -9,7 +9,14 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from app.core.actor import Actor
 from app.core.audit import append_audit
+from app.core.queue import (
+    DEFAULT_MAXLEN,
+    add_event,
+    ensure_group,
+)
+from app.core.queue import streams as streams_mod
 from app.decision.compliance_center.service import gate_view
 from app.decision.layer_strategy.models import (
     KIND_CEP,
@@ -36,7 +43,21 @@ from app.product.whitelist_center.models import (
 )
 
 ROLE_OPERATIONS = "operations"
+TASK_STATUS_QUEUED = "queued"
+TASK_STATUS_RUNNING = "running"
 TASK_STATUS_COMPLETED = "completed"
+TASK_STATUS_FAILED = "failed"
+TASK_TERMINAL_STATES = frozenset({TASK_STATUS_COMPLETED, TASK_STATUS_FAILED})
+
+# Q165 FCW 批量组装异步任务流 / 消费组 / 超限死信流（复用 queue 通用原语）。
+FCW_STREAM = "loom:fcw-assembly"
+FCW_GROUP = "fcw-assembly-group"
+FCW_DEAD_STREAM = "loom:fcw-assembly:dead"
+
+# worker 重建 Actor：创建时已验 operations（create_task_record 内 _require_ops），
+# 后台消费按同一 operations 角色调 assemble_one（甲案，待负责人追认）。
+def _worker_actor(actor_id: str) -> Actor:
+    return Actor(id=actor_id, roles=[ROLE_OPERATIONS])
 
 
 class RoleNotAllowed(Exception):
@@ -342,13 +363,8 @@ async def assemble_one(
     return fcw
 
 
-async def create_task(session, body) -> FcwAssemblyTask:
-    """Q55 任务驱动：同步逐条组装；单项失败不阻断其余，结果全留痕。"""
-    _require_ops(body.actor)
-    await _validate_goal(session, body.goal)
-    # 早验参数：PS/active PWS/goal 不合法直接 4xx，不建空任务。
-    pws = await _resolve_pws(session, body.product_space_id, body.pws_id)
-
+async def _resolve_slot_ids(session, body, platform: str) -> list[str]:
+    """早验参数：PS/active PWS/goal 不合法直接 4xx，不建空任务。"""
     if body.slot_ids:
         if len(body.slot_ids) != body.count:
             raise InvalidRequest("slot_ids length must equal count")
@@ -356,17 +372,27 @@ async def create_task(session, body) -> FcwAssemblyTask:
         if len(slot_ids) != len(body.slot_ids):
             raise InvalidRequest("duplicate slot_ids")
         for sid in slot_ids:
-            await _resolve_slot(session, sid, body.platform)
+            await _resolve_slot(session, sid, platform)
     else:
         rows = (
             await session.scalars(
                 select(PublishSlot).where(
-                    PublishSlot.platform == body.platform,
+                    PublishSlot.platform == platform,
                     PublishSlot.status == "active",
                 )
             )
         ).all()
         slot_ids = [s.slot_id for s in rows[: body.count]]
+    return slot_ids
+
+
+async def create_task_record(session, body, *, status: str) -> FcwAssemblyTask:
+    """Q165：校验 + 建任务行（flush，不组装）。status 由门控决定（同步 running /
+    异步 queued）。per-slot 七 Guard 原子性在 assemble_one 内逐条条保持。"""
+    _require_ops(body.actor)
+    await _validate_goal(session, body.goal)
+    pws = await _resolve_pws(session, body.product_space_id, body.pws_id)
+    slot_ids = await _resolve_slot_ids(session, body, body.platform)
 
     task = FcwAssemblyTask(
         tenant_id=pws.tenant_id,
@@ -377,26 +403,32 @@ async def create_task(session, body) -> FcwAssemblyTask:
         country=body.country,
         requested_count=body.count,
         slot_ids=slot_ids,
-        status="running",
+        status=status,
         results={},
         created_by=body.actor.id,
     )
     session.add(task)
     await session.flush()
+    return task
 
+
+async def process_task(session, task: FcwAssemblyTask, actor) -> FcwAssemblyTask:
+    """Q165 worker / 同步路径：逐条 assemble_one，单项失败隔离记 results.failures，
+    任务整体 completed（Q55 口径不变）。七 Guard 审计（fcw.issued /
+    fcw.assembly_blocked）随本 session 在调用方 commit 时一并落库。"""
     issued: list[dict] = []
     failures: list[dict] = []
-    for sid in slot_ids:
+    for sid in task.slot_ids:
         try:
             fcw = await assemble_one(
                 session,
-                product_space_id=body.product_space_id,
-                platform=body.platform,
-                goal=body.goal,
+                product_space_id=task.product_space_id,
+                platform=task.platform,
+                goal=task.goal,
                 slot_id=sid,
-                actor=body.actor,
-                country=body.country,
-                pws_id=pws.pws_id,
+                actor=actor,
+                country=task.country,
+                pws_id=task.pws_id,
                 task_id=task.task_id,
             )
             issued.append({"slot_id": sid, "final_id": fcw.final_id})
@@ -409,8 +441,8 @@ async def create_task(session, body) -> FcwAssemblyTask:
             failures.append({"slot_id": sid, "detail": payload})
 
     task.results = {
-        "requested": body.count,
-        "resolved_slots": len(slot_ids),
+        "requested": task.requested_count,
+        "resolved_slots": len(task.slot_ids),
         "issued": issued,
         "failures": failures,
     }
@@ -418,19 +450,79 @@ async def create_task(session, body) -> FcwAssemblyTask:
     task.completed_at = datetime.now(tz=UTC)
     await append_audit(
         session,
-        tenant_id=pws.tenant_id,
-        actor_id=body.actor.id,
-        actor_roles=body.actor.roles,
+        tenant_id=task.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
         action="fcw.assembly_task",
         entity_type="fcw_assembly_task",
         entity_id=task.task_id,
         detail={
-            "requested": body.count,
+            "requested": task.requested_count,
             "issued_count": len(issued),
             "failure_count": len(failures),
         },
     )
     return task
+
+
+async def create_task(session, body) -> FcwAssemblyTask:
+    """Q55 同步路径（门控关，V1 默认行为不变）：建 running 任务 → 同 session 跑完。"""
+    task = await create_task_record(session, body, status=TASK_STATUS_RUNNING)
+    return await process_task(session, task, body.actor)
+
+
+async def create_queued_task(session, body) -> FcwAssemblyTask:
+    """Q165 异步路径（门控开）：建 queued 任务（不组装），由调用方提交后入流。"""
+    task = await create_task_record(session, body, status=TASK_STATUS_QUEUED)
+    await append_audit(
+        session,
+        tenant_id=task.tenant_id,
+        actor_id=body.actor.id,
+        actor_roles=body.actor.roles,
+        action="fcw.assembly_task",
+        entity_type="fcw_assembly_task",
+        entity_id=task.task_id,
+        detail={"mode": "queued"},
+    )
+    return task
+
+
+async def enqueue_fcw_task(task_id: str) -> None:
+    """queued 任务提交后 XADD 到 FCW 组装流（消费组 mkstream 幂等建组）。
+
+    Redis 故障抛 StreamBackendError（fail-closed）：调用方删除任务行并回 503，
+    绝不留一条永远无人消费的 queued 任务（Q161 入流 fail-closed 先例）。
+    """
+    client = streams_mod._get_client()
+    await ensure_group(client, FCW_STREAM, FCW_GROUP)
+    await add_event(
+        client,
+        FCW_STREAM,
+        {"task_id": task_id},
+        maxlen=DEFAULT_MAXLEN,
+    )
+
+
+async def fail_fcw_task(session, task: FcwAssemblyTask, error: str) -> FcwAssemblyTask:
+    """Q165 worker：超 MAX_DELIVERIES 死信 / 入流失败时置 failed，留痕可查。"""
+    task.status = TASK_STATUS_FAILED
+    task.results = {**(task.results or {}), "error": error[:500]}
+    task.completed_at = datetime.now(tz=UTC)
+    await append_audit(
+        session,
+        tenant_id=task.tenant_id,
+        actor_id=task.created_by,
+        actor_roles=[ROLE_OPERATIONS],
+        action="fcw.assembly_task_failed",
+        entity_type="fcw_assembly_task",
+        entity_id=task.task_id,
+        detail={"error": error[:500]},
+    )
+    return task
+
+
+def is_terminal(task: FcwAssemblyTask) -> bool:
+    return task.status in TASK_TERMINAL_STATES
 
 
 async def list_fcw(session, product_space_id: str) -> list[FinalContentWhitelist]:

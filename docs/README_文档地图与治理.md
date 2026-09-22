@@ -29,7 +29,7 @@
 | [17_部署与运维.md](./17_部署与运维.md) | 07/09 §11 → 运维 | 🟢 已定稿：环境/CI-CD/多租户/监控 + 中间件版本 | 可作环境搭建依据 |
 | [18_前端i18n与设计Token方案.md](./18_前端i18n与设计Token方案.md) | 14/09 + Q58/Q73 + **Q96** → 前端工程 | ✅ **Q96（2026-09-16）拍板定稿**：next-intl + `[locale]`（V1 仅 zh-CN）+ 设计 Token 三层模型（CSS Modules/CSS 变量），色值借 AntD5 调色板（只借值不装依赖），§2.4/§3.6 可直接落码 | M12 前端按此逐片点工 |
 | [19_private_beta主数据录入模板.md](./19_private_beta主数据录入模板.md) | 08 §2.2 Checklist #2 + Q149 → 业务方/运营 | private beta 首批主数据录入模板：publish_slots/PCP/三包字段与调用示例，最小集合＝1 个 final_id | beta 验收 #6 前置；待业务方回填 |
-| [20_MVP评审_2026-09-22.md](./20_MVP评审_2026-09-22.md) | 2026-09-22 项目级 MVP 评审 → 负责人/运营 | 功能性/完整度/可上线性评审：MVP 判定＝受控 private beta 有条件 GO（Q73 口径 + Q144 三判准）；门禁实测 786 passed+8 skip / eval 101 / 前端八 checker 全绿；上线 Checklist 5/6 ✅，唯一阻塞＝业务方主数据回填 | 评审快照；Q159–Q161 待补登记后回读 |
+| [20_MVP评审_2026-09-22.md](./20_MVP评审_2026-09-22.md) | 2026-09-22 项目级 MVP 评审 → 负责人/运营 | 功能性/完整度/可上线性评审：MVP 判定＝受控 private beta 有条件 GO（Q73 口径 + Q144 三判准）；门禁实测 786 passed+8 skip / eval 101 / 前端八 checker 全绿；上线 Checklist 5/6 ✅，唯一阻塞＝业务方主数据回填；§6 含 13 段链逐段完整度表 + 可一口气推进任务清单（A1–A4） | ✅ 已回读（2026-09-22 Q161 后）；结论不变，文档滞后已闭合 |
 | [design-a2a-vassal.md](./design-a2a-vassal.md) | Q150 → Zeus 联邦 A2A 封臣接入 | loom 作为 Zeus 第二封臣的设计草案：Agent Card/x-zeus-fealty 契约、三 skills plan 模式、JSON-RPC 任务层、认证复用 Q88 Agent Key、审计租户 `_platform`；第一阶段已落地（02 C1.94） | ✅ 第一阶段已落地（plan 模式）；第二阶段（持久化/真 LLM/真机联调）待点工 |
 | [handoff-archive-2026-09-18.md](./handoff-archive-2026-09-18.md) | handoff 进度归档（2026-09-18 首次；09-13 ~ 09-17 进度条目 + 已销账待办详细过程，逐条原文） | 只读历史；权威台账 02/08/16 |
 | [handoff-archive-2026-09-19.md](./handoff-archive-2026-09-19.md) | handoff 进度归档（2026-09-19 首次并续写；Q118–Q126 滚出条目，逐条原文；2026-09-20 续写 Q124/Q125/Q126） | 只读历史；权威台账 02/08/16 |

@@ -67,6 +67,48 @@ def _law_view(r) -> dict:
     }
 
 
+def _ccr_history_item(r) -> dict:
+    # Q162①：历史列表紧凑视图（不带 hits，详情口再返完整 JSON）。
+    return {
+        "ccr_id": r.ccr_id,
+        "pws_id": r.pws_id,
+        "product_space_id": r.product_space_id,
+        "country": r.country,
+        "status": r.status,
+        "block_required": r.block_required,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+def _ccr_detail(r) -> dict:
+    item = _ccr_history_item(r)
+    item["hits"] = r.hits
+    item["wordlist_context"] = r.wordlist_context
+    item["decided_by"] = r.decided_by
+    item["decided_at"] = r.decided_at.isoformat() if r.decided_at else None
+    return item
+
+
+def _law_sla_view(r) -> dict:
+    view = _law_view(r)
+    view["created_at"] = r.created_at.isoformat() if r.created_at else None
+    view.update(service.law_sla(r))
+    return view
+
+
+def _customer_wl_view(e) -> dict:
+    # Q162③：客户侧只读词库（不返内部 entry_id 之外的管理面字段）。
+    return {
+        "word": e.word,
+        "level": e.level,
+        "action": e.action,
+        "country": e.country,
+        "layer": e.layer,
+        "effective_from": e.effective_from.isoformat() if e.effective_from else None,
+        "effective_until": e.effective_until.isoformat() if e.effective_until else None,
+    }
+
+
 # ---------- CP-LAW 敏感领域清单 ----------
 
 @router.get("/api/admin/cp-law-domains")
@@ -138,6 +180,69 @@ async def compliance_overview(
     # 未知租户 200 空 items，不 writeAudit；写操作仍是 internal_compliance 台内。
     items = await service.overview_compliance(session, tenant_id=tenant_id)
     return {"items": items}
+
+
+# ---------- Q162 客户合规风控页只读扩展（无闸，同 Q101 读口径） ----------
+
+
+@router.get("/api/compliance/ccr-history")
+async def ccr_history(
+    tenant_id: str = Query(min_length=1),
+    pws_id: str | None = None,
+    country: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    # Q162①：该租户全部 CCR 历史（分页甲案），区别于 overview 只取每市场最新。
+    rows, total = await service.list_tenant_ccr_reports(
+        session,
+        tenant_id=tenant_id,
+        pws_id=pws_id,
+        country=country,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "items": [_ccr_history_item(r) for r in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/api/compliance/ccr/{ccr_id}")
+async def ccr_detail(
+    ccr_id: str,
+    tenant_id: str = Query(min_length=1),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    # Q162①：单条报告详情（含 hits 完整 JSON）；按 tenant_id 收窄，越权/不存在 404。
+    report = await service.get_ccr_report(session, ccr_id)
+    if report is None or report.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="ccr report not found")
+    return _ccr_detail(report)
+
+
+@router.get("/api/compliance/law-reviews")
+async def tenant_law_reviews(
+    tenant_id: str = Query(min_length=1),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    # Q162②：租户法审记录只读，服务端派生 SLA 倒计时（不新建调度）。
+    rows = await service.list_tenant_law_reviews(session, tenant_id=tenant_id)
+    return [_law_sla_view(r) for r in rows]
+
+
+@router.get("/api/compliance/wordlist")
+async def customer_wordlist(
+    level: str | None = None,
+    layer: str | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    # Q162③：客户侧只读词库（仅 active；写口仍归 internal_compliance 管理端）。
+    rows = await service.customer_wordlist(session, level=level, layer=layer)
+    return [_customer_wl_view(e) for e in rows]
 
 
 @router.post("/api/pws/{pws_id}/ccr/run")

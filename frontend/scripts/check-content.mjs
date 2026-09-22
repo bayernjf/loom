@@ -124,6 +124,56 @@ const requiredKeys = [
   "content.status.rejected",
   "content.status.revising",
   "content.status.discarded",
+  // Q162 客户合规风控页三子岛。
+  "compliance.history.title",
+  "compliance.history.note",
+  "compliance.history.empty",
+  "compliance.history.columnPws",
+  "compliance.history.columnCountry",
+  "compliance.history.columnStatus",
+  "compliance.history.columnBlock",
+  "compliance.history.columnTime",
+  "compliance.history.blockYes",
+  "compliance.history.baseMarket",
+  "compliance.history.hitsTitle",
+  "compliance.history.bansLabel",
+  "compliance.history.downgradesLabel",
+  "compliance.lawSla.title",
+  "compliance.lawSla.note",
+  "compliance.lawSla.empty",
+  "compliance.lawSla.columnDomain",
+  "compliance.lawSla.columnStatus",
+  "compliance.lawSla.remainingFormat",
+  "compliance.lawSla.overdueFormat",
+  "compliance.lawSla.resolved",
+  "compliance.lawSla.decidedAt",
+  "compliance.lawSla.conclusion",
+  "compliance.wordlist.title",
+  "compliance.wordlist.note",
+  "compliance.wordlist.empty",
+  "compliance.wordlist.columnWord",
+  "compliance.wordlist.columnLevel",
+  "compliance.wordlist.columnAction",
+  "compliance.wordlist.columnCountry",
+  "compliance.wordlist.columnLayer",
+  "compliance.wordlist.columnEffective",
+  "compliance.wordlist.actionBan",
+  "compliance.wordlist.actionDowngrade",
+  "compliance.wordlist.layerCountry",
+  "compliance.wordlist.layerPlatform",
+  "compliance.wordlist.layerBase",
+  "compliance.wordlist.allMarkets",
+  // Q163 客户首启 Onboarding 引导岛。
+  "workbench.onboarding.title",
+  "workbench.onboarding.note",
+  "workbench.onboarding.step1",
+  "workbench.onboarding.step2",
+  "workbench.onboarding.step3",
+  "workbench.onboarding.step4",
+  "workbench.onboarding.done",
+  "workbench.onboarding.active",
+  "workbench.onboarding.todo",
+  "workbench.onboarding.cta",
   "error.403",
   "error.404",
   "error.409",
@@ -361,6 +411,84 @@ if (!effectsRouterText.includes('"/api/effects/backfill/upload"'))
   problems.push("backend effects router must keep POST /api/effects/backfill/upload (Q156 server-side CSV)");
 if (!effectsRouterText.includes('"/api/effects/backfill/upload-excel"'))
   problems.push("backend effects router must keep POST /api/effects/backfill/upload-excel (Q160 server-side Excel)");
+
+// Q162：客户合规风控页三子岛后端读口必须存在（无闸客户读，同 Q101 口径）。
+const complianceRouterText = readFileSync(
+  join(backend, "app", "decision", "compliance_center", "router.py"), "utf8",
+);
+for (const route of [
+  '"/api/compliance/overview"',
+  '"/api/compliance/ccr-history"',
+  '"/api/compliance/ccr/{ccr_id}"',
+  '"/api/compliance/law-reviews"',
+  '"/api/compliance/wordlist"',
+]) {
+  if (!complianceRouterText.includes(route))
+    problems.push(`backend compliance router must keep ${route} (Q162)`);
+}
+// 客户侧只读词库端点不得带角色闸（写口仍归 internal_compliance 管理端）。
+if (complianceRouterText.includes("def customer_wordlist") && complianceRouterText.includes("require_any_role")) {
+  // 粗校验：customer_wordlist 函数体内不得出现 require_any_role（无闸口径）。
+  const fnStart = complianceRouterText.indexOf("def customer_wordlist");
+  const fnBody = complianceRouterText.slice(fnStart, complianceRouterText.indexOf("@router", fnStart));
+  if (fnBody.includes("require_any_role"))
+    problems.push("customer wordlist read endpoint must be unguarded (customer read, no role gate)");
+}
+// lib/api.ts 必须导出三子岛消费函数。
+for (const token of [
+  "getCcrHistory",
+  "getCcrDetail",
+  "getTenantLawReviews",
+  "getComplianceWordlist",
+  "/api/compliance/ccr-history",
+  "/api/compliance/law-reviews",
+  "/api/compliance/wordlist",
+]) {
+  if (!apiText.includes(token))
+    problems.push(`lib/api.ts must export/use ${token} (Q162)`);
+}
+// 合规页必须渲染三子岛标记并加载三个命名空间。
+const compliancePageText = readFileSync(
+  join(shell, "compliance", "page.tsx"), "utf8",
+);
+for (const token of [
+  'data-testid="ccr-history"',
+  'data-testid="law-sla"',
+  'data-testid="compliance-wordlist"',
+  'getTranslations("compliance.history")',
+  'getTranslations("compliance.lawSla")',
+  'getTranslations("compliance.wordlist")',
+  "getCcrHistory",
+  "getTenantLawReviews",
+  "getComplianceWordlist",
+]) {
+  if (!compliancePageText.includes(token))
+    problems.push(`compliance page must contain ${token} (Q162 three sub-islands)`);
+}
+// 法审倒计时句式必须带 {hours} 占位。
+if (!getKey(messages, "compliance.lawSla.remainingFormat")?.includes("{hours}"))
+  problems.push("compliance.lawSla.remainingFormat must contain the {hours} placeholder");
+if (!getKey(messages, "compliance.lawSla.overdueFormat")?.includes("{hours}"))
+  problems.push("compliance.lawSla.overdueFormat must contain the {hours} placeholder");
+
+// Q163：客户首启 Onboarding 引导岛（工作台空态内嵌，客户 nav 不增项）。
+const tenantsRouterText = readFileSync(
+  join(backend, "app", "core", "tenants", "router.py"), "utf8",
+);
+if (!tenantsRouterText.includes("onboarding"))
+  problems.push("customer tenant read endpoint must include derived onboarding (Q163)");
+const workbenchPageText = readFileSync(
+  join(shell, "workbench", "page.tsx"), "utf8",
+);
+for (const token of [
+  'data-testid="onboarding-guide"',
+  'getTranslations("workbench.onboarding")',
+  "getCurrentTenant",
+  "deriveSteps",
+]) {
+  if (!workbenchPageText.includes(token))
+    problems.push(`workbench page must contain ${token} (Q163 onboarding guide)`);
+}
 
 if (problems.length > 0) {
   console.error(`check-content: ${problems.length} problem(s)\n${problems.join("\n")}`);

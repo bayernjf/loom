@@ -110,6 +110,18 @@
       "interactions": "互动",
       "trends": "趋势",
       "health": "健康度"
+    },
+    "onboarding": {
+      "title": "开通引导",
+      "note": "按以下四步完成首次内容上线。",
+      "step1": "注册开通",
+      "step2": "第一产品建模",
+      "step3": "AI 拆解",
+      "step4": "内容上线",
+      "done": "已完成",
+      "active": "进行中",
+      "todo": "未开始",
+      "cta": "去录入产品"
     }
   },
   "error": {
@@ -256,6 +268,50 @@
       "pending": "待法审",
       "approved": "法审通过",
       "rejected": "法审驳回"
+    },
+    "history": {
+      "title": "清洗报告历史",
+      "note": "该租户全部历史清洗记录（时间倒序），点击展开查看命中明细。",
+      "empty": "暂无历史清洗报告。",
+      "columnPws": "产品空间",
+      "columnCountry": "市场",
+      "columnStatus": "状态",
+      "columnBlock": "阻断",
+      "columnTime": "时间",
+      "blockYes": "阻断发证",
+      "baseMarket": "通用",
+      "hitsTitle": "命中明细",
+      "bansLabel": "禁用命中",
+      "downgradesLabel": "降级建议"
+    },
+    "lawSla": {
+      "title": "法审进度",
+      "note": "敏感领域法审 48 小时待办；倒计时由服务端按裁决时间派生，页面刷新才更新。",
+      "empty": "暂无法审记录。",
+      "columnDomain": "敏感领域",
+      "columnStatus": "状态",
+      "remainingFormat": "剩余 {hours} 小时",
+      "overdueFormat": "已超 {hours} 小时",
+      "resolved": "已裁决",
+      "decidedAt": "裁决时间",
+      "conclusion": "结论"
+    },
+    "wordlist": {
+      "title": "合规规则库",
+      "note": "当前生效的统一词库（只读）；规则维护由平台合规团队在台内执行。",
+      "empty": "暂无生效词条。",
+      "columnWord": "词条",
+      "columnLevel": "等级",
+      "columnAction": "处置",
+      "columnCountry": "市场",
+      "columnLayer": "层级",
+      "columnEffective": "生效期",
+      "actionBan": "禁用",
+      "actionDowngrade": "降级",
+      "layerCountry": "国家法规",
+      "layerPlatform": "平台规则",
+      "layerBase": "底座默认",
+      "allMarkets": "通用"
     }
   },
   "settings": {
@@ -293,6 +349,15 @@
     "window": "统计窗口：{from} ~ {to}",
     "empty": "当前窗口暂无数据。",
     "back": "返回客户前台",
+    "dateFilter": {
+      "from": "起始日期",
+      "to": "结束日期",
+      "apply": "应用",
+      "reset": "重置",
+      "placeholderFrom": "选择起始日期",
+      "placeholderTo": "选择结束日期",
+      "invalidRange": "起始日期不能晚于结束日期"
+    },
     "opsIntakes": {
       "title": "录入单运营队列",
       "intro": "跨租户只读队列：按 15 态筛选录入单，进入详情执行运营操作。操作仅外放状态机中 requires_role=operations 的 6 个事件，复用既有状态迁移写口；系统事件与客户事件不在此列。",
