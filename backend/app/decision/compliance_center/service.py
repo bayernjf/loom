@@ -10,7 +10,7 @@ AI 通道（WF-08 三 Skill）随 M10；本切片为确定性机械判定。
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.audit import append_audit
 from app.core.compliance_wordlist import service as wl_service
@@ -518,6 +518,85 @@ async def list_reports(session, pws_id: str) -> list[CcrReport]:
                 .order_by(CcrReport.created_at.desc(), CcrReport.ccr_id.desc())
             )
         ).all()
+    )
+
+
+# ---------- Q162 客户合规风控页只读扩展（历史 CCR / 法审 SLA / 词库） ----------
+
+
+async def list_tenant_ccr_reports(
+    session,
+    *,
+    tenant_id: str,
+    pws_id: str | None = None,
+    country: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[CcrReport], int]:
+    """Q162①：该租户全部 CCR 清洗报告历史（按 pws×country 时间倒序，分页）。
+
+    区别于 Q101 overview 只取每市场最新一行；此处展示 append-only 历史全貌。
+    读路径纪律同 Q101：不 writeAudit、不触发准入门。country 为 None 时不按市场收窄。
+    """
+    stmt = select(CcrReport).where(CcrReport.tenant_id == tenant_id)
+    if pws_id is not None:
+        stmt = stmt.where(CcrReport.pws_id == pws_id)
+    if country is not None:
+        stmt = stmt.where(CcrReport.country == country)
+    total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = (
+        await session.scalars(
+            stmt.order_by(CcrReport.created_at.desc(), CcrReport.ccr_id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    return list(rows), int(total or 0)
+
+
+async def get_ccr_report(session, ccr_id: str) -> CcrReport | None:
+    """Q162①：按 ccr_id 取单条报告（含 hits 完整 JSON）；路由侧再按 tenant_id 收窄。"""
+    return await session.get(CcrReport, ccr_id)
+
+
+async def list_tenant_law_reviews(session, *, tenant_id: str) -> list[LawReview]:
+    """Q162②：该租户全部法审记录（时间倒序），路由侧派生 SLA 倒计时。"""
+    return list(
+        (
+            await session.scalars(
+                select(LawReview)
+                .where(LawReview.tenant_id == tenant_id)
+                .order_by(LawReview.created_at.desc(), LawReview.law_review_id.desc())
+            )
+        ).all()
+    )
+
+
+def law_sla(review: LawReview) -> dict:
+    """Q162②：服务端派生法审 SLA（不新建调度，复用 Q49 48h 待办口径）。
+
+    pending：remaining = 48h - (now - created_at)；未过期 normal、超 48h overdue。
+    approved/rejected：remaining=None、sla_state=resolved。
+    """
+    if review.status != ccr_rules.LAW_PENDING:
+        return {"sla_remaining_seconds": None, "sla_state": "resolved"}
+    due = _as_utc(review.created_at) + timedelta(
+        hours=ccr_rules.law_review_due_hours()
+    )
+    remaining = int((due - _now()).total_seconds())
+    if remaining <= 0:
+        return {"sla_remaining_seconds": 0, "sla_state": "overdue"}
+    return {"sla_remaining_seconds": remaining, "sla_state": "normal"}
+
+
+async def customer_wordlist(
+    session, *, level: str | None = None, layer: str | None = None
+) -> list[ComplianceWordlistEntry]:
+    """Q162③：客户侧只读词库视图（仅 active，写口仍归 internal_compliance 管理端）。"""
+    return list(
+        await wl_service.list_entries(
+            session, status="active", level=level, layer=layer
+        )
     )
 
 
