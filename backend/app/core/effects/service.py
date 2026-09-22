@@ -707,3 +707,106 @@ def effect_view(row: EffectRecord) -> dict:
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
+
+
+# ---------- Q166 客户侧效果数据分析（只读聚合，无闸客户读口径） ----------
+
+# 内存聚合扫描硬上限（与回填上传上限同量级；beta 单机数据量小，超出置 truncated）。
+ANALYTICS_SCAN_LIMIT = 10000
+# 按成品分组返回的上限（播放量降序）。
+ANALYTICS_TOP_CONTENTS = 50
+
+
+def _empty_counter_totals() -> dict:
+    return {key: 0 for key in METRIC_COUNTERS}
+
+
+async def customer_analytics(
+    session: AsyncSession,
+    tenant_id: str,
+    *,
+    captured_from: datetime | None = None,
+    captured_to_exclusive: datetime | None = None,
+) -> dict:
+    """租户 matched 效果记录的只读聚合（客户数据分析页，Q166）。
+
+    口径同 Q101/Q162 客户读：tenant_id 收窄、只统计 matched（孤儿是运营面数据，
+    不向客户暴露）、未知租户自然 200 空、不写审计。metrics 七键稀疏：六计数按
+    存在键累加（缺席不补 0）；read_rate 为比率不可求和，仅对含该键记录取平均。
+    """
+
+    stmt = select(EffectRecord).where(
+        EffectRecord.tenant_id == tenant_id,
+        EffectRecord.status == STATUS_MATCHED,
+    )
+    if captured_from is not None:
+        stmt = stmt.where(EffectRecord.captured_at >= captured_from)
+    if captured_to_exclusive is not None:
+        stmt = stmt.where(EffectRecord.captured_at < captured_to_exclusive)
+    stmt = stmt.order_by(EffectRecord.captured_at.asc()).limit(
+        ANALYTICS_SCAN_LIMIT + 1
+    )
+    rows = list(await session.scalars(stmt))
+    truncated = len(rows) > ANALYTICS_SCAN_LIMIT
+    rows = rows[:ANALYTICS_SCAN_LIMIT]
+
+    totals = _empty_counter_totals()
+    rate_sum = 0.0
+    rate_count = 0
+    per_content: dict[str | None, dict] = {}
+    captured_min: datetime | None = None
+    captured_max: datetime | None = None
+
+    for row in rows:
+        metrics = row.metrics or {}
+        for key in METRIC_COUNTERS:
+            value = metrics.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                totals[key] += value
+        read_rate = metrics.get("read_rate")
+        if isinstance(read_rate, (int, float)) and not isinstance(read_rate, bool):
+            rate_sum += float(read_rate)
+            rate_count += 1
+
+        content_id = row.matched_content_id
+        bucket = per_content.get(content_id)
+        if bucket is None:
+            bucket = {
+                "content_id": content_id,
+                "records": 0,
+                "metrics": _empty_counter_totals(),
+            }
+            per_content[content_id] = bucket
+        bucket["records"] += 1
+        for key in METRIC_COUNTERS:
+            value = metrics.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                bucket["metrics"][key] += value
+
+        if captured_min is None or row.captured_at < captured_min:
+            captured_min = row.captured_at
+        if captured_max is None or row.captured_at > captured_max:
+            captured_max = row.captured_at
+
+    by_content = sorted(
+        per_content.values(),
+        key=lambda item: (
+            -item["metrics"]["plays"],
+            -item["records"],
+            str(item["content_id"]),
+        ),
+    )[:ANALYTICS_TOP_CONTENTS]
+
+    return {
+        "tenant_id": tenant_id,
+        "records_total": len(rows),
+        "contents_covered": len(per_content),
+        "metrics_totals": totals,
+        "read_rate_avg": round(rate_sum / rate_count, 4) if rate_count else None,
+        "read_rate_samples": rate_count,
+        "captured_from": captured_min,
+        "captured_to": captured_max,
+        "by_content": by_content,
+        "truncated": truncated,
+        "scan_limit": ANALYTICS_SCAN_LIMIT,
+    }
