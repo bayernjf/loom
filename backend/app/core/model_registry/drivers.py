@@ -32,6 +32,10 @@ def _token_count(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def _http_timeout() -> float:
+    return float(os.environ.get("LOOM_LLM_HTTP_TIMEOUT_SECONDS", "60"))
+
+
 class DriverError(Exception):
     pass
 
@@ -83,7 +87,7 @@ class OpenAICompatibleDriver:
             raise ModelEndpointNotConfigured(
                 f"remote LLM base_url missing: set LOOM_LLM_BASE_URL_{provider.upper()}"
             )
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=_http_timeout()) as client:
             resp = await client.post(
                 f"{base_url.rstrip('/')}/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
@@ -120,7 +124,7 @@ class OpenAICompatibleDriver:
             raise ModelEndpointNotConfigured(
                 f"remote LLM base_url missing: set LOOM_LLM_BASE_URL_{provider.upper()}"
             )
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=_http_timeout()) as client:
             resp = await client.post(
                 f"{base_url.rstrip('/')}/embeddings",
                 headers={"Authorization": f"Bearer {api_key}"},
