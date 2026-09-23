@@ -147,14 +147,18 @@ async def create_export_job(
 async def list_export_jobs(
     tenant_id: str = Query(min_length=1),
     limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Q137 任务列表口：按租户倒序（中台轮询/核对），不含文件体。"""
 
-    jobs = await service.list_jobs(session, tenant_id=tenant_id, limit=limit)
+    jobs = await service.list_jobs(
+        session, tenant_id=tenant_id, limit=limit, offset=offset
+    )
     return {
         "tenant_id": tenant_id,
         "count": len(jobs),
+        "offset": offset,
         "jobs": [service.job_view(job) for job in jobs],
     }
 
