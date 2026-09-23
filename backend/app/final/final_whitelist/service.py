@@ -7,7 +7,7 @@ V1 纯机械：不做 AI 选料（WF-09 Skill 随 V2），六路材料按键解�
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.actor import Actor
 from app.core.audit import append_audit
@@ -541,6 +541,41 @@ async def list_fcw(session, product_space_id: str) -> list[FinalContentWhitelist
 
 async def get_fcw(session, final_id: str) -> FinalContentWhitelist | None:
     return await session.get(FinalContentWhitelist, final_id)
+
+
+async def list_fcw_admin(
+    session,
+    *,
+    tenant_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[FinalContentWhitelist], int]:
+    """Q177 管理端跨租户 FCW 列表（D3.5 白名单组装引擎运营只读首片）。
+
+    与 list_fcw（按产品空间、中台/客户口径）不同：本口供运营台跨租户分页
+    浏览已发证白名单，tenant_id 可选过滤；只返回 fcw_view 元信息，不含六层
+    大包（六层经 GET /api/admin/fcw/{final_id}/material 按需反解析）。
+    """
+
+    filters = []
+    if tenant_id:
+        filters.append(FinalContentWhitelist.tenant_id == tenant_id)
+    count_stmt = select(func.count()).select_from(FinalContentWhitelist)
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+    total = (await session.execute(count_stmt)).scalar_one()
+    rows_stmt = (
+        select(FinalContentWhitelist)
+        .where(*filters)
+        .order_by(
+            FinalContentWhitelist.created_at.desc(),
+            FinalContentWhitelist.final_id.desc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = list((await session.scalars(rows_stmt)).all())
+    return rows, total
 
 
 async def get_task(session, task_id: str) -> FcwAssemblyTask | None:
