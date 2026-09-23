@@ -8,13 +8,16 @@ import {
   approveContent,
   customerBackfillEffects,
   editContentBody,
+  getBackfillImportJob,
   rejectContent,
   reviseContent,
-  uploadBackfillCsv,
-  uploadBackfillExcel,
-  type BackfillUploadReceipt,
+  submitBackfillImportJob,
+  type BackfillImportJobView,
   type EffectBatchReceipt,
 } from "@/lib/api";
+
+// Q174：client 岛只能经本文件取类型，re-export 任务视图（不引 @/lib/api 实现）。
+export type { BackfillImportJobView };
 
 const KNOWN_STATUSES = new Set([403, 404, 409, 422]);
 
@@ -128,14 +131,6 @@ export type BackfillServerError = {
   message: string;
 };
 
-export type BatchBackfillActionResult =
-  | { ok: true; receipt: BackfillUploadReceipt }
-  | {
-      ok: false;
-      status: 403 | 404 | 409 | 422 | "unconfigured" | "unknown";
-      detail: string | null;
-      serverErrors: BackfillServerError[];
-    };
 
 function parseUploadFailure(err: ApiError): {
   detail: string | null;
@@ -177,64 +172,68 @@ function parseUploadFailure(err: ApiError): {
   return { detail: errorDetail(err), serverErrors: [] };
 }
 
-export async function batchBackfillEffectsAction(
+// A2/Q161：批量回填切异步导入任务——提交 job；客户端岛对 queued/running 经此口轮询。
+// 门控关时提交即终态（completed/failed 直接回），门控开时回 queued 由 worker 异步处理。
+export type ImportJobActionResult =
+  | { ok: true; job: BackfillImportJobView }
+  | {
+      ok: false;
+      status: 403 | 404 | 409 | 422 | "unconfigured" | "unknown";
+      detail: string | null;
+      serverErrors: BackfillServerError[];
+    };
+
+function importJobFailure(err: unknown): ImportJobActionResult {
+  if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+    const parsed = parseUploadFailure(err);
+    return {
+      ok: false,
+      status: err.status as 403 | 404 | 409 | 422,
+      ...parsed,
+    };
+  }
+  return { ok: false, status: "unknown", detail: null, serverErrors: [] };
+}
+
+export async function submitBackfillImportJobAction(
   contentId: string,
-  csvText: string,
+  format: "csv" | "xlsx",
+  payload: string,
   filename: string | null,
-): Promise<BatchBackfillActionResult> {
+): Promise<ImportJobActionResult> {
   if (!CURRENT_TENANT_ID)
     return { ok: false, status: "unconfigured", detail: null, serverErrors: [] };
-  if (!contentId.trim() || !csvText.trim())
+  if (!contentId.trim() || !payload.trim())
     return { ok: false, status: 422, detail: null, serverErrors: [] };
   try {
-    const receipt = await uploadBackfillCsv(
+    const job = await submitBackfillImportJob(
       CURRENT_TENANT_ID,
       contentId,
-      csvText,
-      filename ?? undefined,
+      format === "csv"
+        ? { format: "csv", csv: payload, ...(filename ? { filename } : {}) }
+        : {
+            format: "xlsx",
+            contentBase64: payload,
+            ...(filename ? { filename } : {}),
+          },
     );
-    return { ok: true, receipt };
+    return { ok: true, job };
   } catch (err) {
-    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
-      const parsed = parseUploadFailure(err);
-      return {
-        ok: false,
-        status: err.status as 403 | 404 | 409 | 422,
-        ...parsed,
-      };
-    }
-    return { ok: false, status: "unknown", detail: null, serverErrors: [] };
+    return importJobFailure(err);
   }
 }
 
-// Q160：Excel（.xlsx）批量回填。浏览器不解析工作簿，直接把 base64 交服务端
-// openpyxl 解析校验（唯一权威）；逐行/文件级回执结构与 CSV 上传完全一致。
-export async function batchBackfillExcelAction(
-  contentId: string,
-  contentBase64: string,
-  filename: string | null,
-): Promise<BatchBackfillActionResult> {
+export async function pollBackfillImportJobAction(
+  jobId: string,
+): Promise<ImportJobActionResult> {
   if (!CURRENT_TENANT_ID)
     return { ok: false, status: "unconfigured", detail: null, serverErrors: [] };
-  if (!contentId.trim() || !contentBase64)
+  if (!jobId.trim())
     return { ok: false, status: 422, detail: null, serverErrors: [] };
   try {
-    const receipt = await uploadBackfillExcel(
-      CURRENT_TENANT_ID,
-      contentId,
-      contentBase64,
-      filename ?? undefined,
-    );
-    return { ok: true, receipt };
+    const job = await getBackfillImportJob(jobId, CURRENT_TENANT_ID);
+    return { ok: true, job };
   } catch (err) {
-    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
-      const parsed = parseUploadFailure(err);
-      return {
-        ok: false,
-        status: err.status as 403 | 404 | 409 | 422,
-        ...parsed,
-      };
-    }
-    return { ok: false, status: "unknown", detail: null, serverErrors: [] };
+    return importJobFailure(err);
   }
 }

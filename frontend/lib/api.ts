@@ -1234,3 +1234,67 @@ async function requestText(path: string): Promise<ExportDownload> {
     mediaType: res.headers.get("content-type") ?? "text/plain",
   };
 }
+
+// Q161/A2：批量回填异步导入任务（可轮询形态）。worker 门控关时 POST 请求内同步
+// 跑到终态（201 直接回 completed/failed），门控开时回 queued，由 GET /jobs/{id} 轮询。
+export interface BackfillImportJobError {
+  line?: number;
+  index?: number;
+  field?: string | null;
+  message: string;
+}
+
+export interface BackfillImportJobView {
+  job_id: string;
+  tenant_id: string;
+  content_id: string;
+  format: string;
+  filename: string | null;
+  status: string;
+  received: number;
+  matched: number;
+  orphan: number;
+  upserted: number;
+  row_count: number;
+  requested_by: string;
+  error: string | null;
+  errors: BackfillImportJobError[] | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export async function submitBackfillImportJob(
+  tenantId: string,
+  contentId: string,
+  body: {
+    format: "csv" | "xlsx";
+    csv?: string;
+    contentBase64?: string;
+    filename?: string;
+  },
+): Promise<BackfillImportJobView> {
+  return request<BackfillImportJobView>("/api/effects/backfill/jobs", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      content_id: contentId,
+      format: body.format,
+      ...(body.csv !== undefined ? { csv: body.csv } : {}),
+      ...(body.contentBase64 !== undefined
+        ? { content_base64: body.contentBase64 }
+        : {}),
+      ...(body.filename ? { filename: body.filename } : {}),
+      actor: { id: CURRENT_ACTOR_ID, roles: [] },
+    }),
+  });
+}
+
+export async function getBackfillImportJob(
+  jobId: string,
+  tenantId: string,
+): Promise<BackfillImportJobView> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<BackfillImportJobView>(
+    `/api/effects/backfill/jobs/${encodeURIComponent(jobId)}?${params.toString()}`,
+  );
+}
