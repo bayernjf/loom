@@ -21,6 +21,7 @@
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
 | CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132） | D4 | 🟢 CSV/JSON 同步导出 + 导出任务记录已落地（见 §2.3/§2.4）；queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（env 默认关，门控关走同步）；limit/offset 分页与行数硬上限已随 Q142 落地（env `LOOM_EXPORT_MAX_ROWS` 默认 10 万，超限 422） |
 | 台内白名单 6 层原料包 JSON | GET /api/fcw/{final_id}/material.json（Q155） | 09:87 / 01 line14 | 🟢 后端全量 JSON 已落地（见 §2.5，台内卡片口径、非中台 final_id-only 面）；台内卡片前端随 D3.5 点工 |
+| 管理端白名单卡片只读台（跨租户列表 + 六层内嵌） | GET /api/admin/fcw、GET /api/admin/fcw/{final_id}/material（Q177） | 09:87（D3.5） | 🟢 D3.5 运营只读首片已落地（见 §2.6，读闸 operations\|platform_admin、零迁移）；组装工作台/审核台/冻结管理/客户视图等 D3.5 余项随菜单点工 |
 
 ---
 
@@ -149,7 +150,17 @@
 - `GET /api/fcw/{final_id}/material.json`：只读、无 RBAC 闸、不触发 Guard、不写审计、未知 final_id 404（读纪律同 `GET /api/fcw/{final_id}`）；响应 `application/json` + `Content-Disposition: attachment; filename="fcw-material-{final_id}.json"`。
 - 包体 schema `loom.fcw.material-pack.v1`：`{schema, final_id, issued:{tenant_id,product_space_id,platform,slot_id,goal,country,score,score_incomplete,score_detail,publish_status,issued_by,created_at,published_at}, layers:{product,platform,strategy,structure,expression,compliance}, guards, warnings:[]}`。product=PwsSnapshot 冻结快照（池原子/PWC combo）、platform=PcpWeightTable 权重 + PublishSlot、strategy/structure/expression=三包 Package（csp/cstp/cep 定键 payload）、compliance=CcrReport + 关联 LawReview 列表。
 - 引用行物理缺失不 500，该层引用回 `{"_ref":<id>,"available":false}` 并在 `warnings` 收一条。
-- **边界**：本片只销后端 JSON 能力，台内卡片前端（D3.5 白名单组装引擎菜单）整片未建、随菜单点工，复制 ID/多选/列表卡片不扩张；零迁移。
+- **边界**：本片只销后端 JSON 能力；台内卡片前端 D3.5 的**运营只读首片（跨租户列表＋行内六层卡片）已随 Q177 落地（见 §2.6）**，组装工作台/6 层可视化编辑/合理性校验/审核台/冻结管理/客户卡片视图/单条与多选复制 ID 等 D3.5 余项仍随菜单点工；零迁移。
+
+### 2.6 管理端白名单卡片只读台（Q177，已落地；D3.5 运营只读首片）
+
+**用途**：docs/09 D3.5「白名单组装引擎」运营只读首片，给平台运营/管理员一个**跨租户**的成品 FCW 浏览与六层原料查看台；区别于 §2.5 Q155 面向台内单卡的附件**导出口**与按产品空间的 `GET /api/product-spaces/{id}/fcw`（不跨租户）。纯只读，不触发 Guard、不写审计、零迁移。
+
+- `GET /api/admin/fcw`：query 读闸 `actor_id`（必填，缺失 422）+ `roles`（可重复；须含 operations|platform_admin，越权 403）；过滤/分页 `tenant_id`（可选，min_length 1，留空＝全部租户）、`limit`（默认 50，ge 1/le 200，越界 422）、`offset`（ge 0）。返回 envelope `{count,total,limit,offset,has_more,items:[fcw_view]}`，**items 只含成品元信息、不含六层大包**；`service.list_fcw_admin` 按 created_at/final_id 倒序。
+- `GET /api/admin/fcw/{final_id}/material`：同款 query 读闸（缺 actor 422/越权 403），返回与 §2.5 **同一** `build_material_pack` 六层包（schema `loom.fcw.material-pack.v1`），但为**内嵌 JSON、不带 `Content-Disposition` 头**（供页面岛直接渲染，不触发下载）；未知 final_id 404，引用缺失同样回 `available:false`+warning 不 500。
+- **两口关系**：内嵌面（本节，过读闸、无 attachment）与 Q155 导出口（§2.5，attachment、无闸、保 V1）共用 `build_material_pack` 但分两口，互不改变对方行为。
+- 前端 `app/[locale]/admin/fcw/`（`page.tsx` force-dynamic 只读 RSC 跨租户列表＋租户过滤＋分页、`actions.ts` Server Action 本地角色闸与 403/404/409/422 映射、`material-island.tsx` client 岛点击才拉六层 details/pre 展示），管理端 sidebar **第 11 项** /admin/fcw；枚举 platform/goal/publish_status 原样直出。
+- **接缝甲案三项（待负责人追认，02 C1.121）**：①入口落管理端运营台 /admin/fcw（读 operations|platform_admin），客户卡片视图随 D3.5 菜单另点；②新增跨租户只读列表口（区别于按产品空间的列表）；③六层内嵌面与 Q155 导出口共用 build_material_pack 但分两口（内嵌过读闸无 attachment／导出带 attachment 无闸保 V1）。
 
 ### 2.4 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
 
