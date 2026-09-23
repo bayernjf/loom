@@ -36,6 +36,7 @@ const requiredKeys = [
   "admin.effectsNav",
   "admin.agentKeysNav",
   "admin.exportsNav",
+  "admin.fcwNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -364,6 +365,42 @@ const requiredKeys = [
     "notReady",
     "actorUnconfigured",
   ].map((k) => `admin.exports.${k}`),
+  ...[
+    "title",
+    "intro",
+    "tenantLabel",
+    "tenantPlaceholder",
+    "querySubmit",
+    "reset",
+    "listTitle",
+    "empty",
+    "loadFailed",
+    "actorUnconfigured",
+    "actorMissingRole",
+    "colFinal",
+    "colTenant",
+    "colPlatform",
+    "colSlot",
+    "colGoal",
+    "colScore",
+    "colStatus",
+    "colCreated",
+    "colAction",
+    "pageInfo",
+    "prev",
+    "next",
+    "materialShow",
+    "materialHide",
+    "materialLoading",
+    "warningsTitle",
+    "guardsTitle",
+    "layer.product",
+    "layer.platform",
+    "layer.strategy",
+    "layer.structure",
+    "layer.expression",
+    "layer.compliance",
+  ].map((k) => `admin.fcw.${k}`),
   ...["from", "to", "apply", "reset", "placeholderFrom", "placeholderTo", "invalidRange"].map(
     (k) => `admin.dateFilter.${k}`,
   ),
@@ -409,6 +446,9 @@ const requiredFiles = [
   join("exports", "actions.ts"),
   join("exports", "create-island.tsx"),
   join("exports", "download-island.tsx"),
+  join("fcw", "page.tsx"),
+  join("fcw", "actions.ts"),
+  join("fcw", "material-island.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -509,10 +549,12 @@ if (!sidebarText.includes("/admin/agent-keys"))
   problems.push("admin sidebar must link the agent key admin page (Q167)");
 if (!sidebarText.includes("/admin/exports"))
   problems.push("admin sidebar must link the export jobs admin page (Q168)");
+if (!sidebarText.includes("/admin/fcw"))
+  problems.push("admin sidebar must link the in-platform whitelist card page (Q177)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 10)
-    problems.push(`admin sidebar must keep exactly 10 admin entries, got ${navCount}`);
+  if (navCount !== 11)
+    problems.push(`admin sidebar must keep exactly 11 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -553,6 +595,9 @@ for (const token of [
   "createExportJob",
   "downloadExportJob",
   "/api/exports/jobs",
+  "listAdminFcw",
+  "getAdminFcwMaterial",
+  "/api/admin/fcw",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -1321,6 +1366,66 @@ if (!exportsRouter.includes('prefix="/api/exports"'))
 for (const route of ['"/jobs"', '"/jobs/{job_id}"', '"/jobs/{job_id}/download"']) {
   if (!exportsRouter.includes(route))
     problems.push(`backend exports router must register ${route}`);
+}
+
+// Q177：D3.5 白名单组装引擎运营只读首片（跨租户 FCW 列表 + 六层原料包按需展开）。
+const fcwPage = readAdmin(join("fcw", "page.tsx"));
+const fcwActions = readAdmin(join("fcw", "actions.ts"));
+const fcwIsland = readAdmin(join("fcw", "material-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(fcwPage))
+  problems.push("fcw/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(fcwPage) || /https?:\/\//.test(fcwPage))
+  problems.push("fcw/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (fcwPage.includes(forbidden))
+    problems.push(`fcw/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of ["listAdminFcw", "MaterialIsland", 'name="tenant_id"', "data-testid"]) {
+  if (!fcwPage.includes(token))
+    problems.push(`fcw/page.tsx must contain ${token}`);
+}
+if (!/^"use server"/m.test(fcwActions))
+  problems.push("fcw/actions.ts must be a Server Action module");
+for (const token of [
+  "getFcwMaterialAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "unconfigured",
+  "missing_role",
+  "getAdminFcwMaterial",
+]) {
+  if (!fcwActions.includes(token))
+    problems.push(`fcw/actions.ts must contain ${token}`);
+}
+for (const status of [403, 404, 409, 422]) {
+  if (!fcwActions.includes(String(status)))
+    problems.push(`getFcwMaterialAction must map failure status ${status}`);
+}
+if (!/^"use client"/m.test(fcwIsland))
+  problems.push("fcw material island must be a client island");
+if (
+  fcwIsland.includes("@/lib/api") ||
+  /\bfetch\s*\(/.test(fcwIsland) ||
+  /https?:\/\//.test(fcwIsland)
+)
+  problems.push("fcw material island must call only the Server Action, never the API directly");
+if (fcwIsland.includes("router.refresh"))
+  problems.push("fcw material island is read-only and must not refresh the router");
+for (const token of ["getFcwMaterialAction", "data-testid", "JSON.stringify"]) {
+  if (!fcwIsland.includes(token))
+    problems.push(`fcw material island must contain ${token}`);
+}
+const fcwRouter = readFileSync(
+  join(repoRoot, "backend", "app", "final", "final_whitelist", "router.py"),
+  "utf8",
+);
+for (const route of ['"/api/admin/fcw"', '"/api/admin/fcw/{final_id}/material"']) {
+  if (!fcwRouter.includes(route))
+    problems.push(`backend fcw router must register ${route}`);
+}
+for (const token of ["require_fcw_admin_view", "OPERATIONS", "PLATFORM_ADMIN"]) {
+  if (!fcwRouter.includes(token))
+    problems.push(`backend fcw admin endpoints must gate via ${token}`);
 }
 
 if (problems.length > 0) {

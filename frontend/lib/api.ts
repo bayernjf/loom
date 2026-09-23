@@ -1298,3 +1298,71 @@ export async function getBackfillImportJob(
     `/api/effects/backfill/jobs/${encodeURIComponent(jobId)}?${params.toString()}`,
   );
 }
+
+
+// Q177：D3.5 白名单组装引擎运营只读首片（管理端跨租户 FCW 列表 + 六层原料包内嵌口）。
+export interface FcwListItem {
+  final_id: string;
+  task_id: string | null;
+  tenant_id: string;
+  product_space_id: string;
+  platform: string;
+  slot_id: string;
+  goal: string;
+  country: string | null;
+  score: number | null;
+  score_incomplete: boolean;
+  guards_passed: boolean;
+  publish_status: string;
+  issued_by: string;
+  created_at: string;
+  published_at: string | null;
+}
+
+export interface FcwAdminPage {
+  count: number;
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  items: FcwListItem[];
+}
+
+export interface FcwMaterialPack {
+  schema: string;
+  final_id: string;
+  issued: Record<string, unknown>;
+  layers: {
+    product?: Record<string, unknown>;
+    platform?: Record<string, unknown>;
+    strategy?: Record<string, unknown>;
+    structure?: Record<string, unknown>;
+    expression?: Record<string, unknown>;
+    compliance?: Record<string, unknown>;
+  };
+  guards: Record<string, unknown>;
+  warnings: unknown[];
+}
+
+export async function listAdminFcw(opts: {
+  tenantId?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<FcwAdminPage> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.tenantId) params.set("tenant_id", opts.tenantId);
+  params.set("limit", String(opts.limit ?? 50));
+  params.set("offset", String(opts.offset ?? 0));
+  return request<FcwAdminPage>(`/api/admin/fcw?${params}`);
+}
+
+export async function getAdminFcwMaterial(
+  finalId: string,
+): Promise<FcwMaterialPack> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<FcwMaterialPack>(
+    `/api/admin/fcw/${encodeURIComponent(finalId)}/material?${params}`,
+  );
+}

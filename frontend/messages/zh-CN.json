@@ -566,6 +566,7 @@
     "effectsNav": "效果回流",
     "agentKeysNav": "Agent Key 管理",
     "exportsNav": "导出任务",
+    "fcwNav": "白名单卡片",
     "slaTodos": {
       "title": "待办 SLA 看板",
       "intro": "跨租户运营待办，按截止时间升序排列；看板态由后端依据 due_at 与升级状态实时派生。",
@@ -725,6 +726,44 @@
       "downloadSubmit": "下载",
       "notReady": "任务尚未完成（排队/处理中/失败），暂不可下载。",
       "actorUnconfigured": "未配置管理员身份（LOOM_ADMIN_ACTOR_ID），无法创建导出任务。"
+    },
+    "fcw": {
+      "title": "白名单卡片（台内）",
+      "intro": "D3.5 白名单组装引擎运营只读首片：跨租户浏览已发证白名单（final_id），展开查看完整六层提示词原料包（Q177）。",
+      "tenantLabel": "租户 ID",
+      "tenantPlaceholder": "留空查看全部租户",
+      "querySubmit": "查询",
+      "reset": "清除筛选",
+      "listTitle": "已发证白名单",
+      "empty": "暂无已发证白名单。",
+      "loadFailed": "白名单列表加载失败，请稍后重试。",
+      "actorUnconfigured": "未配置管理员身份（LOOM_ADMIN_ACTOR_ID），无法查看白名单卡片。",
+      "actorMissingRole": "当前管理员身份缺少 operations/platform_admin 角色，无法查看白名单卡片。",
+      "colFinal": "final_id",
+      "colTenant": "租户",
+      "colPlatform": "平台",
+      "colSlot": "发布位",
+      "colGoal": "目的",
+      "colScore": "评分",
+      "colStatus": "发布状态",
+      "colCreated": "发证时间",
+      "colAction": "卡片",
+      "pageInfo": "第 {from}–{to} 条，共 {total} 条",
+      "prev": "上一页",
+      "next": "下一页",
+      "materialShow": "查看六层原料包",
+      "materialHide": "收起六层原料包",
+      "materialLoading": "六层原料包加载中…",
+      "warningsTitle": "引用告警（warnings）",
+      "guardsTitle": "发证 Guard 留痕",
+      "layer": {
+        "product": "产品层（PWS 快照）",
+        "platform": "平台层（PCP + 发布位）",
+        "strategy": "策略层（CSP）",
+        "structure": "结构层（CSTP）",
+        "expression": "表达层（CEP）",
+        "compliance": "合规层（CCR + 法审）"
+      }
     }
   }
 }

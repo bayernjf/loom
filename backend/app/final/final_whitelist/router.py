@@ -4,18 +4,46 @@ E1.1 publishFCW 是全系统 final_id 唯一出口（line 11036）：
 本路由之外任何模块写 final_content_whitelists 均为协议违反。
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.queue import StreamBackendError
+from app.core.rbac import (
+    OPERATIONS,
+    PLATFORM_ADMIN,
+    PermissionDenied,
+    require_any_role,
+)
 from app.final.final_whitelist import material, service
 from app.final.final_whitelist.schemas import AssemblyManual, AssemblyTaskCreate
 
 router = APIRouter(tags=["final-whitelist"])
+
+
+def _query_actor(*roles: str):
+    """Q177 管理面只读口 query actor 闸（同 Q109/Q118/Q125/Q130：缺 actor_id 422、越权 403）。"""
+
+    def dependency(
+        actor_id: str = Query(...),
+        roles_param: list[str] = Query(default_factory=list, alias="roles"),
+    ) -> Actor:
+        actor = Actor(id=actor_id, roles=roles_param)
+        try:
+            require_any_role(actor, *roles)
+        except PermissionDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        return actor
+
+    return dependency
+
+
+# 台内白名单卡片运营视图：组装发证本就要求 operations，运营台读 operations|platform_admin。
+require_fcw_admin_view = _query_actor(OPERATIONS, PLATFORM_ADMIN)
 
 
 def _guard_conflict(exc: service.GuardsFailed) -> HTTPException:
@@ -159,3 +187,50 @@ async def export_fcw_material(
             "Content-Disposition": f'attachment; filename="fcw-material-{final_id}.json"'
         },
     )
+
+
+@router.get("/api/admin/fcw")
+async def admin_list_fcw(
+    tenant_id: str | None = Query(default=None, min_length=1),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_fcw_admin_view),
+) -> dict:
+    """Q177 D3.5 白名单组装引擎运营只读首片：跨租户分页浏览已发证 FCW。
+
+    与按产品空间的 GET /api/product-spaces/{id}/fcw（中台/客户口径）不同，本口
+    供管理端运营台跨租户查看；tenant_id 可选过滤，只回元信息、不含六层大包。
+    """
+
+    rows, total = await service.list_fcw_admin(
+        session, tenant_id=tenant_id, limit=limit, offset=offset
+    )
+    return {
+        "count": len(rows),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(rows) < total,
+        "items": [service.fcw_view(r) for r in rows],
+    }
+
+
+@router.get("/api/admin/fcw/{final_id}/material")
+async def admin_fcw_material(
+    final_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_fcw_admin_view),
+) -> JSONResponse:
+    """Q177 运营台卡片详情：六层原料包内嵌 JSON（读闸、无 attachment 头）。
+
+    与 Q155 GET /api/fcw/{final_id}/material.json（导出下载、attachment 头、无
+    query actor 闸）是同一 build_material_pack 的两个面：本口供页面内展开，过
+    operations|platform_admin 读闸；只读、不触发 Guard、不写审计，未知 id 404。
+    """
+
+    fcw = await service.get_fcw(session, final_id)
+    if fcw is None:
+        raise HTTPException(404, f"FCW not found: {final_id}")
+    pack = await material.build_material_pack(session, fcw)
+    return JSONResponse(content=jsonable_encoder(pack))
