@@ -35,6 +35,7 @@ const requiredKeys = [
   "admin.contentOpsNav",
   "admin.effectsNav",
   "admin.agentKeysNav",
+  "admin.staffKeysNav",
   "admin.exportsNav",
   "admin.fcwNav",
   "admin.unconfigured",
@@ -341,6 +342,50 @@ const requiredKeys = [
   ...[
     "title",
     "intro",
+    "issueTitle",
+    "staffIdLabel",
+    "staffIdPlaceholder",
+    "staffNameLabel",
+    "staffNamePlaceholder",
+    "rolesLabel",
+    "issueSubmit",
+    "secretOnceWarning",
+    "copySecret",
+    "copied",
+    "listTitle",
+    "showRevoked",
+    "hideRevoked",
+    "empty",
+    "loadFailed",
+    "colStaff",
+    "colName",
+    "colRoles",
+    "colPrefix",
+    "colStatus",
+    "colCreated",
+    "colLastUsed",
+    "colAction",
+    "revokeSubmit",
+    "revokeConfirm",
+    "statusRevoked",
+    "actorUnconfigured",
+    "actorMissingRole",
+  ].map((k) => `admin.staffKeys.${k}`),
+  ...[
+    "title",
+    "intro",
+    "identityLabel",
+    "logout",
+    "tokenLabel",
+    "tokenPlaceholder",
+    "submit",
+    "emptyToken",
+    "disabledHint",
+    "invalidHint",
+  ].map((k) => `admin.staffAuth.${k}`),
+  ...[
+    "title",
+    "intro",
     "tenantLabel",
     "tenantPlaceholder",
     "querySubmit",
@@ -442,6 +487,13 @@ const requiredFiles = [
   join("agent-keys", "actions.ts"),
   join("agent-keys", "issue-island.tsx"),
   join("agent-keys", "revoke-island.tsx"),
+  join("staff-keys", "page.tsx"),
+  join("staff-keys", "actions.ts"),
+  join("staff-keys", "issue-staff-island.tsx"),
+  join("staff-keys", "revoke-staff-island.tsx"),
+  join("login", "page.tsx"),
+  join("login", "actions.ts"),
+  join("login", "login-island.tsx"),
   join("exports", "page.tsx"),
   join("exports", "actions.ts"),
   join("exports", "create-island.tsx"),
@@ -547,14 +599,16 @@ if (!sidebarText.includes("/admin/effects"))
   problems.push("admin sidebar must link the effects ops page (Q130)");
 if (!sidebarText.includes("/admin/agent-keys"))
   problems.push("admin sidebar must link the agent key admin page (Q167)");
+if (!sidebarText.includes("/admin/staff-keys"))
+  problems.push("admin sidebar must link the staff PAT admin page (Q178)");
 if (!sidebarText.includes("/admin/exports"))
   problems.push("admin sidebar must link the export jobs admin page (Q168)");
 if (!sidebarText.includes("/admin/fcw"))
   problems.push("admin sidebar must link the in-platform whitelist card page (Q177)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 11)
-    problems.push(`admin sidebar must keep exactly 11 admin entries, got ${navCount}`);
+  if (navCount !== 12)
+    problems.push(`admin sidebar must keep exactly 12 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -591,6 +645,16 @@ for (const token of [
   "issueAgentKey",
   "revokeAgentKey",
   "/api/admin/agent-keys",
+  "listStaffKeys",
+  "issueStaffKey",
+  "revokeStaffKey",
+  "getStaffMe",
+  "/api/admin/staff-keys",
+  "/api/auth/me",
+  "getStaffToken",
+  "Authorization",
+  "Bearer ",
+  "/admin/login",
   "listExportJobs",
   "createExportJob",
   "downloadExportJob",
@@ -1306,6 +1370,112 @@ for (const token of ["issue_key", "revoke_key", "PLATFORM_ADMIN"]) {
   if (!apiKeysService.includes(token))
     problems.push(`api_keys service must keep platform_admin gate on ${token}`);
 }
+
+// Q178：内部运营个人访问令牌（PAT）治理页（甲案第一切片；platform_admin 写闸）。
+const skPage = readAdmin(join("staff-keys", "page.tsx"));
+const skActions = readAdmin(join("staff-keys", "actions.ts"));
+const skIssue = readAdmin(join("staff-keys", "issue-staff-island.tsx"));
+const skRevoke = readAdmin(join("staff-keys", "revoke-staff-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(skPage))
+  problems.push("staff-keys/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(skPage) || /https?:\/\//.test(skPage))
+  problems.push("staff-keys/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (skPage.includes(forbidden))
+    problems.push(`staff-keys/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of ["listStaffKeys", "IssueStaffKeyIsland", "RevokeStaffKeyButton", "staff-keys"]) {
+  if (!skPage.includes(token))
+    problems.push(`staff-keys page must use ${token}`);
+}
+if (!/^"use server"/m.test(skActions))
+  problems.push("staff-keys/actions.ts must be a Server Action module");
+for (const token of [
+  "issueStaffKeyAction",
+  "revokeStaffKeyAction",
+  "STAFF_ROLE_CODES",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "platform_admin",
+  "unconfigured",
+  "missing_role",
+  "issueStaffKey",
+  "revokeStaffKey",
+]) {
+  if (!skActions.includes(token))
+    problems.push(`staff-keys actions must contain ${token}`);
+}
+for (const status of [400, 401, 403, 404, 409, 422]) {
+  if (!skActions.includes(String(status)))
+    problems.push(`staff-keys actions must map failure status ${status}`);
+}
+for (const [name, text] of [["issue-staff-island", skIssue], ["revoke-staff-island", skRevoke]]) {
+  if (!/^"use client"/m.test(text))
+    problems.push(`${name} must be a client island`);
+  if (text.includes("@/lib/api") || /\bfetch\s*\(/.test(text) || /https?:\/\//.test(text))
+    problems.push(`${name} must call only the Server Action, never the API directly`);
+  if (!text.includes("router.refresh"))
+    problems.push(`${name} must refresh the RSC view after success`);
+}
+if (!skIssue.includes('data-testid="issued-staff-secret"'))
+  problems.push("staff issue island must show the one-time secret in a marked region");
+if (!skRevoke.includes("window.confirm"))
+  problems.push("staff revoke island must confirm the terminal revoke action");
+if (!getKey(messages, "admin.staffKeys.revokeConfirm")?.includes("{name}"))
+  problems.push("admin.staffKeys.revokeConfirm must contain the {name} placeholder");
+// 角色码为系统标识，必须在 actions 以常量原样提供、不得翻译进消息表。
+if (!/operations[\s\S]*platform_admin[\s\S]*product_reviewer[\s\S]*dictionary_admin[\s\S]*internal_compliance/.test(skActions))
+  problems.push("staff-keys actions must list the five internal role codes raw");
+const staffRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "staff_auth", "router.py"), "utf8",
+);
+for (const route of ['"/api/admin/staff-keys"', "/revoke", '"/api/auth/me"']) {
+  if (!staffRouter.includes(route))
+    problems.push(`backend staff_auth router must register ${route}`);
+}
+const staffService = readFileSync(
+  join(repoRoot, "backend", "app", "core", "staff_auth", "service.py"), "utf8",
+);
+for (const token of ["loom_staff_", "INTERNAL_STAFF_ROLES", "PLATFORM_ADMIN"]) {
+  if (!staffService.includes(token))
+    problems.push(`staff_auth service must keep ${token} (staff token prefix / internal roles / admin gate)`);
+}
+
+// Q178：内部运营登录录入页（粘贴 PAT → /api/auth/me 自检 → httpOnly cookie）。
+const loginPage = readAdmin(join("login", "page.tsx"));
+const loginActions = readAdmin(join("login", "actions.ts"));
+const loginIsland = readAdmin(join("login", "login-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(loginPage))
+  problems.push("login/page.tsx must be force-dynamic (reads the auth cookie)");
+if (/NEXT_PUBLIC/.test(loginPage) || /https?:\/\//.test(loginPage))
+  problems.push("login/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const token of ["LoginIsland", "getStaffMe", "getStaffToken"]) {
+  if (!loginPage.includes(token))
+    problems.push(`login page must use ${token}`);
+}
+if (!/^"use server"/m.test(loginActions))
+  problems.push("login/actions.ts must be a Server Action module");
+for (const token of [
+  "loginStaffAction",
+  "logoutStaffAction",
+  "getStaffMe",
+  "setStaffToken",
+  "clearStaffToken",
+]) {
+  if (!loginActions.includes(token))
+    problems.push(`login actions must contain ${token}`);
+}
+if (!/^"use client"/m.test(loginIsland))
+  problems.push("login-island must be a client island");
+if (loginIsland.includes("@/lib/api") || /\bfetch\s*\(/.test(loginIsland) || /https?:\/\//.test(loginIsland))
+  problems.push("login island must call only the Server Action, never the API directly");
+for (const token of ["loginStaffAction", "logoutStaffAction"]) {
+  if (!loginIsland.includes(token))
+    problems.push(`login island must expose ${token}`);
+}
+if (!/loom_staff_/.test(getKey(messages, "admin.staffAuth.tokenPlaceholder") ?? ""))
+  problems.push("admin.staffAuth.tokenPlaceholder must hint the loom_staff_ prefix");
 
 // Q168：中台导出任务管理页（消费 Q132/Q137 jobs；创建/下载经 Server Action）。
 const exPage = readAdmin(join("exports", "page.tsx"));

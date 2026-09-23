@@ -2,6 +2,10 @@
 // LOOM_API_BASE_URL / LOOM_TENANT_ID 不带 NEXT_PUBLIC 前缀，不会进入浏览器包；
 // 浏览器经 RSC 与 Server Action 间接访问，规避后端无 CORS 的现状（V2 真实认证后改为会话派生租户）。
 
+import { redirect } from "next/navigation";
+
+import { getStaffToken } from "./staff-auth";
+
 // 工程临时键：产品名在 profile 中的 fid 基线未回填（g2_fields cat='common' 为空表，
 // docs/04:58 仅有中文名枚举，溯 line 682-698），基线落地后须对齐替换，挂账 Q98。
 export const PRODUCT_NAME_PROFILE_KEY = "product_name";
@@ -44,11 +48,22 @@ export const CURRENT_TENANT_ID = process.env.LOOM_TENANT_ID ?? "";
 export const CURRENT_ACTOR_ID = process.env.LOOM_ACTOR_ID ?? "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  // Q178：门控开启后，服务端请求统一带 httpOnly staff 令牌（无 cookie 即门控关 V1 自报）。
+  const staffToken = await getStaffToken();
+  if (staffToken && !headers.has("Authorization"))
+    headers.set("Authorization", `Bearer ${staffToken}`);
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     cache: "no-store",
-    headers: { "content-type": "application/json", ...init?.headers },
+    headers,
   });
+  // Q178：门控开启后内部管理端点缺/失效令牌统一 401，跳登录录入页；/api/auth/me
+  // 是登录自检口，交由调用方处理 400/401，不在此重定向（避免登录页自跳）。
+  if (res.status === 401 && path.startsWith("/api/admin/")) {
+    redirect("/admin/login");
+  }
   if (!res.ok) {
     let detail = "";
     try {
@@ -1216,7 +1231,13 @@ export async function downloadExportJob(jobId: string): Promise<ExportDownload> 
 
 // 文本下载通道（与 request 同构，但解析文本体与 Content-Disposition；函数声明提升）。
 async function requestText(path: string): Promise<ExportDownload> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const headers = new Headers();
+  const staffToken = await getStaffToken();
+  if (staffToken) headers.set("Authorization", `Bearer ${staffToken}`);
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store", headers });
+  if (res.status === 401 && path.startsWith("/api/admin/")) {
+    redirect("/admin/login");
+  }
   if (!res.ok) {
     let detail = "";
     try {
@@ -1364,5 +1385,74 @@ export async function getAdminFcwMaterial(
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   return request<FcwMaterialPack>(
     `/api/admin/fcw/${encodeURIComponent(finalId)}/material?${params}`,
+  );
+}
+
+// Q178：内部运营个人访问令牌（PAT，甲案第一切片）。门控开启后请求由 request 底层统一
+// 注入 httpOnly staff Bearer，且后端以令牌身份覆盖 query/body 自报 actor；门控关闭时
+// 沿用 V1 env 自报（用于引导签发首个 platform_admin 令牌）。明文 secret 仅签发返回一次。
+export interface StaffKeyView {
+  key_id: string;
+  staff_id: string;
+  staff_name: string;
+  roles: string[];
+  key_prefix: string;
+  status: string;
+  created_at: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
+}
+
+export interface StaffKeyIssued extends StaffKeyView {
+  secret: string;
+}
+
+export interface StaffMe {
+  staff_id: string;
+  staff_name: string;
+  roles: string[];
+}
+
+// 登录自检：显式携带待校验令牌（此时 cookie 尚未写入），不经 /api/admin 重定向。
+export async function getStaffMe(token: string): Promise<StaffMe> {
+  return request<StaffMe>("/api/auth/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function listStaffKeys(
+  opts: { includeRevoked?: boolean } = {},
+): Promise<StaffKeyView[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.includeRevoked) params.set("include_revoked", "true");
+  return request<StaffKeyView[]>(`/api/admin/staff-keys?${params.toString()}`);
+}
+
+export async function issueStaffKey(input: {
+  staff_id: string;
+  staff_name: string;
+  roles: string[];
+}): Promise<StaffKeyIssued> {
+  return request<StaffKeyIssued>("/api/admin/staff-keys", {
+    method: "POST",
+    body: JSON.stringify({
+      staff_id: input.staff_id,
+      staff_name: input.staff_name,
+      roles: input.roles,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+export async function revokeStaffKey(keyId: string): Promise<StaffKeyView> {
+  return request<StaffKeyView>(
+    `/api/admin/staff-keys/${encodeURIComponent(keyId)}/revoke`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
   );
 }

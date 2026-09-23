@@ -565,6 +565,7 @@
     "contentOpsNav": "内容运营台",
     "effectsNav": "效果回流",
     "agentKeysNav": "Agent Key 管理",
+    "staffKeysNav": "运营令牌",
     "exportsNav": "导出任务",
     "fcwNav": "白名单卡片",
     "slaTodos": {
@@ -764,6 +765,50 @@
         "expression": "表达层（CEP）",
         "compliance": "合规层（CCR + 法审）"
       }
+    },
+    "staffKeys": {
+      "title": "运营令牌（PAT）",
+      "intro": "内部运营个人访问令牌（Q178 甲案第一切片）。门控开启后，管理端请求以令牌身份鉴权并覆盖自报操作人；明文令牌仅在签发时显示一次，吊销即时生效。客户侧真实认证随 V2。",
+      "issueTitle": "签发运营令牌",
+      "staffIdLabel": "人员 ID",
+      "staffIdPlaceholder": "例如：ops.zhang（稳定唯一的人员标识）",
+      "staffNameLabel": "人员姓名",
+      "staffNamePlaceholder": "例如：张三",
+      "rolesLabel": "内部角色（至少一个，角色码原样）",
+      "issueSubmit": "签发",
+      "secretOnceWarning": "请立即复制并妥善保存明文令牌，它只会显示这一次，离开页面后无法再次查看。",
+      "copySecret": "复制令牌",
+      "copied": "已复制",
+      "listTitle": "令牌列表",
+      "showRevoked": "显示已吊销",
+      "hideRevoked": "隐藏已吊销",
+      "empty": "暂无运营令牌。",
+      "loadFailed": "令牌列表加载失败，请稍后重试。",
+      "colStaff": "人员 ID",
+      "colName": "姓名",
+      "colRoles": "角色",
+      "colPrefix": "令牌前缀",
+      "colStatus": "状态",
+      "colCreated": "创建时间",
+      "colLastUsed": "最近使用",
+      "colAction": "操作",
+      "revokeSubmit": "吊销",
+      "revokeConfirm": "确认吊销「{name}」的运营令牌？吊销后该令牌立即无法登录与调用。",
+      "statusRevoked": "已吊销",
+      "actorUnconfigured": "未配置平台管理员身份（LOOM_ADMIN_ACTOR_ID），无法签发或吊销。",
+      "actorMissingRole": "当前管理员身份缺少 platform_admin 角色，无法签发或吊销。"
+    },
+    "staffAuth": {
+      "title": "运营登录",
+      "intro": "粘贴内部运营个人访问令牌（PAT）完成登录；令牌由 platform_admin 在「运营令牌」页签发，门控开启后访问管理端必须先登录。",
+      "identityLabel": "当前登录",
+      "logout": "退出登录",
+      "tokenLabel": "运营令牌",
+      "tokenPlaceholder": "粘贴 loom_staff_ 开头的运营令牌",
+      "submit": "登录",
+      "emptyToken": "请先粘贴运营令牌。",
+      "disabledHint": "后端尚未开启运营令牌门控（LOOM_STAFF_AUTH_ENABLED），当前沿用 V1 自报身份，无需登录。",
+      "invalidHint": "令牌无效或已被吊销，请核对后重试。"
     }
   }
 }

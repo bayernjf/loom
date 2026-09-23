@@ -15,6 +15,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/content", labelKey: "admin.contentOpsNav" },
   { href: "/admin/effects", labelKey: "admin.effectsNav" },
   { href: "/admin/agent-keys", labelKey: "admin.agentKeysNav" },
+  { href: "/admin/staff-keys", labelKey: "admin.staffKeysNav" },
   { href: "/admin/exports", labelKey: "admin.exportsNav" },
   { href: "/admin/fcw", labelKey: "admin.fcwNav" },
 ] as const;
