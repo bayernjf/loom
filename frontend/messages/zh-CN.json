@@ -217,6 +217,8 @@
     "backfillBatchSubmit": "整批提交回填",
     "backfillBatchSuccess": "批量回填成功，已匹配 {count} 条记录。",
     "backfillBatchPreviewMore": "其余 {count} 行已通过校验，提交时一并入库（预览仅显示前 10 行）。",
+    "backfillBatchProcessing": "导入任务处理中，请稍候，本页会自动刷新结果。",
+    "backfillBatchPollTimeout": "任务长时间未完成，请稍后重新提交或联系运营人员。",
     "backfillMetric": {
       "plays": "播放",
       "likes": "点赞",

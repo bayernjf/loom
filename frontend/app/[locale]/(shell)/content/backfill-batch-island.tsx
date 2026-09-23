@@ -9,13 +9,13 @@
 // 指标列留空即缺席（绝不补 0）；captured_at 必须带时区（Z 或 ±HH:MM），不臆造时区。
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
-  batchBackfillEffectsAction,
-  batchBackfillExcelAction,
-  type BatchBackfillActionResult,
-  type BackfillServerError,
+  pollBackfillImportJobAction,
+  submitBackfillImportJobAction,
+  type BackfillImportJobView,
+  type ImportJobActionResult,
 } from "./actions";
 import styles from "./content.module.css";
 
@@ -33,6 +33,9 @@ const HEADER_COLUMNS = ["platform_post_id", "captured_at", ...METRIC_KEYS];
 // 与后端 LOOM_BACKFILL_UPLOAD_MAX_ROWS 默认值对齐（服务端为权威，env 可调）。
 const MAX_ROWS = 10000;
 const PREVIEW_ROWS = 10;
+// A2：异步导入任务轮询节奏与封顶（门控开时 queued/running；2s × 90＝180s 兜底）。
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_ATTEMPTS = 90;
 
 const KNOWN_STATUSES = new Set([403, 404, 409, 422]);
 // 服务端计数列只接受非负整数字面量（^\d+$），镜像该口径。
@@ -218,7 +221,11 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
   const [filename, setFilename] = useState<string | null>(null);
   // csv＝本地即时预览后提交 CSV 原文；excel＝.xlsx 读 base64 直传，服务端唯一解析。
   const [excelBase64, setExcelBase64] = useState<string | null>(null);
-  const [result, setResult] = useState<BatchBackfillActionResult | null>(null);
+  // A2：提交即得到可轮询的导入任务；门控关时直接终态，门控开时 queued/running 轮询。
+  const [job, setJob] = useState<BackfillImportJobView | null>(null);
+  const [submitFailure, setSubmitFailure] = useState<ImportJobActionResult | null>(null);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
+  const attemptsRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isExcel = excelBase64 !== null;
@@ -229,8 +236,10 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
     parsed.errors.length > 0 ||
     parsed.rows.length === 0;
   const blocked = isExcel ? excelBase64 === null : csvBlocked;
+  const jobActive =
+    job !== null && (job.status === "queued" || job.status === "running");
 
-  function failureText(failure: Extract<BatchBackfillActionResult, { ok: false }>): string {
+  function failureText(failure: Extract<ImportJobActionResult, { ok: false }>): string {
     if (failure.status === "unconfigured") return t("actorUnconfigured");
     if (failure.status === "unknown") return tError("unknown");
     if (failure.status === 422 && failure.detail) return failure.detail;
@@ -239,18 +248,29 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
     );
   }
 
-  function serverErrorText(error: BackfillServerError): string {
-    // 服务端逐行回执（field 可空，如表头/文件级错误）；message 为后端权威文本。
+  // 任务逐行错误（job.errors）：line 为含表头物理行号，缺 line 时由 index+2 换算。
+  function jobErrorLineText(error: {
+    line?: number;
+    index?: number;
+    field?: string | null;
+    message: string;
+  }): string {
+    const line = error.line ?? (error.index !== undefined ? error.index + 2 : 1);
     const prefix = error.field ? `${error.field}: ` : "";
     return t("backfillBatchLine", {
-      line: error.line,
+      line,
       message: `${prefix}${error.message}`,
     });
   }
 
-  function resetResultAndInput() {
-    setResult(null);
+  function resetInput() {
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function clearStatus() {
+    setJob(null);
+    setSubmitFailure(null);
+    setPollTimedOut(false);
   }
 
   function loadFile(file: File | undefined) {
@@ -264,7 +284,8 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
         setExcelBase64(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
         setText("");
         setFilename(file.name);
-        resetResultAndInput();
+        clearStatus();
+        resetInput();
       };
       reader.readAsDataURL(file);
       return;
@@ -273,28 +294,66 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
       setText(typeof reader.result === "string" ? reader.result : "");
       setExcelBase64(null);
       setFilename(file.name);
-      resetResultAndInput();
+      clearStatus();
+      resetInput();
     };
     reader.readAsText(file);
   }
 
+  // A2：提交导入任务。门控关→201 直接终态；门控开→queued，由下方 effect 轮询。
   function submit() {
     if (blocked) return;
-    setResult(null);
+    clearStatus();
+    attemptsRef.current = 0;
     startTransition(async () => {
       // Excel 直传 base64；CSV 提交原文（浏览器解析仅用于上方即时预览）。
-      const actionResult = isExcel
-        ? await batchBackfillExcelAction(contentId, excelBase64 as string, filename)
-        : await batchBackfillEffectsAction(contentId, text, filename);
-      setResult(actionResult);
+      const payload = isExcel ? (excelBase64 as string) : text;
+      const actionResult = await submitBackfillImportJobAction(
+        contentId,
+        isExcel ? "xlsx" : "csv",
+        payload,
+        filename,
+      );
       if (actionResult.ok) {
-        setText("");
-        setExcelBase64(null);
-        setFilename(null);
-        router.refresh();
+        setJob(actionResult.job);
+        if (actionResult.job.status === "completed") {
+          setText("");
+          setExcelBase64(null);
+          setFilename(null);
+          router.refresh();
+        }
+      } else {
+        setSubmitFailure(actionResult);
       }
     });
   }
+
+  // queued/running 时定时轮询；404 视为任务丢失，其余瞬时错误重试到封顶。
+  useEffect(() => {
+    if (!job || !jobActive) return;
+    const timer = setTimeout(() => {
+      void pollBackfillImportJobAction(job.job_id).then((actionResult) => {
+        attemptsRef.current += 1;
+        if (actionResult.ok) {
+          const next = actionResult.job;
+          const active = next.status === "queued" || next.status === "running";
+          if (active && attemptsRef.current >= POLL_MAX_ATTEMPTS) {
+            setPollTimedOut(true);
+            return;
+          }
+          setJob(next);
+          if (next.status === "completed") router.refresh();
+        } else if (actionResult.status === 404) {
+          setJob({ ...job, status: "failed", error: "import job not found" });
+        } else if (attemptsRef.current >= POLL_MAX_ATTEMPTS) {
+          setPollTimedOut(true);
+        } else {
+          setJob({ ...job });
+        }
+      });
+    }, POLL_INTERVAL_MS);
+    return () => clearTimeout(timer);
+  }, [job, jobActive, router]);
 
   const previewRows = parsed.rows.slice(0, PREVIEW_ROWS);
 
@@ -333,7 +392,7 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
               setText(event.target.value);
               setExcelBase64(null);
               setFilename(null);
-              setResult(null);
+              clearStatus();
             }}
           />
           {parsed.headerError ? (
@@ -408,37 +467,72 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
         <button
           type="button"
           className={styles.primaryButton}
-          disabled={pending || blocked}
+          disabled={pending || blocked || jobActive}
           onClick={submit}
         >
           {t("backfillBatchSubmit")}
         </button>
       </div>
-      {result ? (
-        result.ok ? (
-          <p className={styles.successText} role="status">
-            {t("backfillBatchSuccess", { count: result.receipt.matched })}
-          </p>
-        ) : (
+      {submitFailure && !submitFailure.ok ? (
+        submitFailure.serverErrors.length > 0 ? (
           <div className={styles.errorText} role="status">
-            {result.serverErrors.length > 0 ? (
-              <>
-                <p>
-                  {t("backfillBatchServerErrors", {
-                    count: result.serverErrors.length,
-                  })}
-                </p>
-                <ul>
-                  {result.serverErrors.slice(0, 20).map((error, idx) => (
-                    <li key={`${error.line}-${idx}`}>{serverErrorText(error)}</li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p>{failureText(result)}</p>
-            )}
+            <p>
+              {t("backfillBatchServerErrors", {
+                count: submitFailure.serverErrors.length,
+              })}
+            </p>
+            <ul>
+              {submitFailure.serverErrors.slice(0, 20).map((error, idx) => {
+                const prefix = error.field ? `${error.field}: ` : "";
+                return (
+                  <li key={`${error.line}-${idx}`}>
+                    {t("backfillBatchLine", {
+                      line: error.line,
+                      message: `${prefix}${error.message}`,
+                    })}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
+        ) : (
+          <p className={styles.errorText} role="status">
+            {failureText(submitFailure)}
+          </p>
         )
+      ) : null}
+      {job ? (
+        job.status === "completed" ? (
+          <p className={styles.successText} role="status">
+            {t("backfillBatchSuccess", { count: job.matched })}
+          </p>
+        ) : job.status === "failed" ? (
+          job.errors && job.errors.length > 0 ? (
+            <div className={styles.errorText} role="status">
+              <p>{t("backfillBatchServerErrors", { count: job.errors.length })}</p>
+              <ul>
+                {job.errors.slice(0, 20).map((error, idx) => (
+                  <li key={`${error.line ?? "x"}-${idx}`}>
+                    {jobErrorLineText(error)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className={styles.errorText} role="status">
+              {job.error ?? tError("unknown")}
+            </p>
+          )
+        ) : (
+          <p className={styles.blockNote} role="status">
+            {t("backfillBatchProcessing")}
+          </p>
+        )
+      ) : null}
+      {pollTimedOut ? (
+        <p className={styles.errorText} role="status">
+          {t("backfillBatchPollTimeout")}
+        </p>
       ) : null}
     </section>
   );

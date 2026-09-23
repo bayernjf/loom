@@ -110,6 +110,8 @@ const requiredKeys = [
   "content.backfillBatchSubmit",
   "content.backfillBatchSuccess",
   "content.backfillBatchPreviewMore",
+  "content.backfillBatchProcessing",
+  "content.backfillBatchPollTimeout",
   "content.backfillMetric.plays",
   "content.backfillMetric.likes",
   "content.backfillMetric.comments",
@@ -277,10 +279,13 @@ for (const token of [
   "customerBackfillEffects",
   "uploadBackfillCsv",
   "uploadBackfillExcel",
+  "submitBackfillImportJob",
+  "getBackfillImportJob",
   "/api/content",
   "/api/effects/backfill",
   "/api/effects/backfill/upload",
   "/api/effects/backfill/upload-excel",
+  "/api/effects/backfill/jobs",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must export/use ${token}`);
 }
@@ -328,15 +333,15 @@ for (const token of [
   "decideContentAction",
   "saveContentBodyAction",
   "backfillEffectAction",
-  "batchBackfillEffectsAction",
-  "batchBackfillExcelAction",
+  "submitBackfillImportJobAction",
+  "pollBackfillImportJobAction",
   "approveContent",
   "rejectContent",
   "reviseContent",
   "editContentBody",
   "customerBackfillEffects",
-  "uploadBackfillCsv",
-  "uploadBackfillExcel",
+  "submitBackfillImportJob",
+  "getBackfillImportJob",
   "CURRENT_TENANT_ID",
 ]) {
   if (!actionsText.includes(token))
@@ -415,8 +420,10 @@ const batchIsland = readFileSync(
   join(shell, "content", "backfill-batch-island.tsx"), "utf8",
 );
 for (const token of [
-  "batchBackfillEffectsAction",
-  "batchBackfillExcelAction",
+  "submitBackfillImportJobAction",
+  "pollBackfillImportJobAction",
+  "POLL_INTERVAL_MS",
+  "setTimeout",
   "toISOString",
   "FileReader",
   "readAsText",
@@ -424,9 +431,10 @@ for (const token of [
   "router.refresh",
   "all-or-nothing",
   "filename",
+  "backfillBatchProcessing",
 ]) {
   if (!batchIsland.includes(token))
-    problems.push(`batch backfill island must contain ${token} (Q159/Q160 CSV+Excel upload)`);
+    problems.push(`batch backfill island must contain ${token} (Q174 async import job polling)`);
 }
 if (/\bfetch\s*\(/.test(batchIsland) || /https?:\/\//.test(batchIsland) || batchIsland.includes("@/lib/api"))
   problems.push("batch backfill island must use server actions, not direct fetch/api imports");
@@ -439,6 +447,21 @@ if (!effectsRouterText.includes('"/api/effects/backfill/upload"'))
   problems.push("backend effects router must keep POST /api/effects/backfill/upload (Q156 server-side CSV)");
 if (!effectsRouterText.includes('"/api/effects/backfill/upload-excel"'))
   problems.push("backend effects router must keep POST /api/effects/backfill/upload-excel (Q160 server-side Excel)");
+// Q161/Q174：异步导入任务端点（提交/列表/单查），前端岛据单查口轮询。
+const importsRouterText = readFileSync(
+  join(backend, "app", "core", "imports", "router.py"), "utf8",
+);
+// router 以 prefix="/api/effects/backfill" 拼接，装饰器只写相对路径。
+if (!importsRouterText.includes('prefix="/api/effects/backfill"'))
+  problems.push("backend imports router must keep prefix /api/effects/backfill (Q161)");
+for (const route of [
+  '@router.post("/jobs"',
+  '@router.get("/jobs"',
+  '@router.get("/jobs/{job_id}"',
+]) {
+  if (!importsRouterText.includes(route))
+    problems.push(`backend imports router must keep ${route}… (Q161 async import jobs)`);
+}
 
 // Q162：客户合规风控页三子岛后端读口必须存在（无闸客户读，同 Q101 口径）。
 const complianceRouterText = readFileSync(
