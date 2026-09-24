@@ -58,10 +58,12 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("content.ai_quality_threshold", "content", "float", 0.85, "Q57/line5196", {"min": 0.0, "max": 1.0}),
     ("content.regen_limit", "content", "int", 3, "Q56", {"min": 1}),
     # Q187/C4：discarded 终态成品的保留窗口（天）。Q124 只裁"作废回池"、未给清理
-    # 口径（docs/20 §6.5 C4 明列"归档策略未定义"），180 天为工程甲案推荐值、
-    # 原文未给出，配置中心热更、待负责人追认后调值不改码。
+    # 口径（docs/20 §6.5 C4 明列"归档策略未定义"），180 天为工程甲案推荐值、原文
+    # 未给出；甲案已经负责人 2026-09-25 追认（02 C1.134），调值走配置中心热更不改码。
+    # 注：source_ref 只在播种时写入，存量库里那行仍显示旧文案"待追认"，属可见陈旧，
+    # 不经数据订正不会自愈（本仓无种子回写机制，故在此留痕而非补迁移）。
     ("content.discard_retention_days", "content", "int", 180,
-     "Q187/C4 甲案（原文未给出，待追认）", {"min": 1}),
+     "Q187/C4 甲案（原文未给出，2026-09-25 负责人追认）", {"min": 1}),
     # ---- 段13 反馈/KUP/校准（Q61/Q63/Q65）----
     ("hot.median_multiplier", "feedback", "float", 5.0, "Q61", {"min": 1.0}),
     ("hot.window_days", "feedback", "int", 90, "Q61", {"min": 1}),
