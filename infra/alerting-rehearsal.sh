@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Q185 指标消费侧端到端演练（docs/17 §7.6，02 C1.129）。
+# Q185 指标消费侧端到端演练（docs/17 §7.6，02 C1.129）；Q188 业务级打点后扩至 10 条
+# 规则、两张看板（02 C1.132）。
 #
 # 起真栈（真 PG/Redis/backend/frontend）+ monitoring overlay（Prometheus 规则求值
 # + Grafana 看板 + watchdog 告警转发），全程 synthetic 不花钱，验证四段链路：
-#   1. 配置静态校验：promtool check config/rules 通过、解析出 3 条规则；
+#   1. 配置静态校验：promtool check config/rules 通过、解析出 10 条规则；
 #   2. 采集面真实可用：backend target health=up、Q181 两族 HTTP 指标真的进了 TSDB；
-#   3. 消费面就位：3 条规则不仅装载、且 health=ok（表达式在真 TSDB 上真能求值，
-#      比 promtool 的纯语法检查强一档）、Grafana 看板/数据源文件式置备可查、
-#      数据源代理能查回真值、overlay 已替 watchdog 打开转发档；
+#   3. 消费面就位：10 条规则不仅装载、且 health=ok（表达式在真 TSDB 上真能求值，
+#      比 promtool 的纯语法检查强一档；Q188 业务族无流量时无序列，空向量求值仍
+#      应为 ok，这条正是「无数据 ≠ 求值失败」的实证）、Grafana 两张看板与数据源
+#      文件式置备可查、数据源代理能查回真值、overlay 已替 watchdog 打开转发档；
 #   4. 端到端触发：停 backend → up 转 0 → LoomBackendUnreachable 转 firing →
 #      watchdog 把该告警转发进 LOOM_ALERT_WEBHOOK，且**整段只转发一次**（去重）。
 #
@@ -104,7 +106,7 @@ stage_static() {
     $COMPOSE exec -T prometheus /bin/promtool check config /etc/prometheus/prometheus.yml
   ci "promtool check rules SUCCESS" \
     "$COMPOSE exec -T prometheus /bin/promtool check rules /etc/prometheus/alert_rules.yml" \
-    "SUCCESS: 3 rules found"
+    "SUCCESS: 10 rules found"
   ci "Prometheus /-/ready 200" "net_api GET http://prometheus:9090/-/ready" "STATUS 200"
   ci "Grafana 容器在跑" "docker inspect -f '{{.State.Running}}' ${PROJECT}-grafana-1" "true"
 }
@@ -128,19 +130,28 @@ stage_consume() {
   # 只数 `"name":"Loom` 前缀出现次数：告警名含数字（LoomHigh5xxRatio / LoomHighP99…），
   # 用 [A-Za-z]* 收尾的正则会在数字处截断而误判条数。
   n=$(printf '%s' "$rules" | grep -o '"name":"Loom' | wc -l | tr -d ' ')
-  c "Prometheus 装载 3 条告警规则（got $n）" test "$n" -eq 3
-  for name in LoomHigh5xxRatio LoomHighP99Latency LoomBackendUnreachable; do
+  # Q185 三条 HTTP RED + Q188 七条业务信号。
+  c "Prometheus 装载 10 条告警规则（got $n）" test "$n" -eq 10
+  for name in \
+    LoomHigh5xxRatio LoomHighP99Latency LoomBackendUnreachable \
+    LoomJobFailed LoomStreamDeadLettered LoomQueueBacklog LoomStreamNearTrimLimit \
+    LoomLockLost LoomLlmUpstreamSlow LoomLlmBudgetBlocked; do
     c "规则 $name 已注册" sh -c "printf '%s' '$rules' | grep -qF '\"$name\"'"
   done
   # health=ok 才说明表达式在真 TSDB 上求值不报错（promtool 只验语法，语法过 ≠ 能跑）。
+  # 业务族在无流量时**无序列**，空向量求值仍是 ok——这条正是确认「无数据 ≠ 求值失败」。
   ok=$(printf '%s' "$rules" | grep -o '"health":"ok"' | wc -l | tr -d ' ')
-  c "3 条规则 health 全为 ok（表达式可求值，got $ok）" test "$ok" -ge 3
+  c "10 条规则 health 全为 ok（表达式可求值，got $ok）" test "$ok" -ge 10
   c "无规则求值报错" sh -c "! printf '%s' '$rules' | grep -qF '\"health\":\"err\"'"
 
   ci "Grafana /api/health 200" \
     "net_api GET http://grafana:3000/api/health '' '$GRAFANA_AUTH'" "STATUS 200"
   ci "Grafana 看板 loom-http 文件式置备可查" \
     "net_api GET http://grafana:3000/api/dashboards/uid/loom-http '' '$GRAFANA_AUTH'" \
+    "STATUS 200"
+  # Q188 第二张看板：同一 provider 目录自动装载，不需要改 compose。
+  ci "Grafana 看板 loom-operations 文件式置备可查" \
+    "net_api GET http://grafana:3000/api/dashboards/uid/loom-operations '' '$GRAFANA_AUTH'" \
     "STATUS 200"
   ci "Grafana 数据源 loom-prom 置备可查" \
     "net_api GET http://grafana:3000/api/datasources/uid/loom-prom '' '$GRAFANA_AUTH'" \

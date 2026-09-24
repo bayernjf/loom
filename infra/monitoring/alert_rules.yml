@@ -1,14 +1,24 @@
-# Q185：Loom 告警规则（指标消费侧）。
+# Q185：Loom 告警规则（指标消费侧）· HTTP RED 基本盘。
+# Q188：补业务级打点后新增 loom-operations 组（作业失败 / 队列积压 / 锁易主 / LLM）。
 #
 # 事实纪律：本文件**只引用 app/core/metrics 实际注册的序列**，不臆造指标名。
-# Q181 目前只注册了三类指标（middleware.py），全仓除中间件自身外零业务打点，
-# 因此可告警面限于「可用性 / 错误率 / 延迟」三条 RED 基本盘：
+# 契约测试 tests/unit/test_backup_monitoring_contract.py 双向硬守这条：
+#   ① 规则/面板引用的名字必须已注册；② 每个注册族必须至少被一条规则或面板消费。
+#
+# 当前注册面（app/core/metrics/middleware.py + business.py）：
 #   up                                 Gauge（注：与 Prometheus 自生成的 target up 同名，见下）
 #   http_requests_total                Counter(method, path, status)
 #   http_request_duration_seconds      Histogram(method, path) + _bucket/_sum/_count
+#   loom_job_failed_total              Counter(kind=export|import|fcw)
+#   loom_stream_dead_letters_total     Counter(stream)
+#   loom_stream_pending                Gauge(stream, group)   —— XPENDING 未 ACK 深度
+#   loom_stream_length                 Gauge(stream)          —— XLEN，逼近 MAXLEN≈10000 即开始裁剪
+#   loom_lock_lost_total               Counter(lock)
+#   loom_llm_budget_blocked_total      Counter(scene)
+#   loom_llm_upstream_duration_seconds Histogram(scene, provider, outcome) 桶 1..120s
 #
-# 队列积压 / 导出与导入 job failed / 锁易主 LockLost / LLM 预算与延迟**目前无指标**，
-# 故无对应告警规则；这些是 Q185 显式记录的挂账（docs/17 §7.6），补打点后另立规则。
+# 队列两族只在异步 worker 开启时有序列（V1 默认关，无队列可言）；Gauge 序列不存在
+# 时 `>` 比较不触发，Counter 走 increase() 同理，故默认部署形态不会误报。
 groups:
   - name: loom-http
     interval: 15s
@@ -55,3 +65,95 @@ groups:
         annotations:
           summary: "Loom 后端不可抓取"
           description: "Prometheus 抓取 backend:8000/metrics 连续 1 分钟失败。"
+
+  # Q188：业务级信号（docs/20 §6.5 R1）。逐条只引用 business.py 真实注册的序列；
+  # 阈值 100 / 5000 / 30s 为工程默认值（原文未给出），按甲案落地待负责人追认。
+  - name: loom-operations
+    interval: 15s
+    rules:
+      - alert: LoomJobFailed
+        # 任一域（export|import|fcw）的作业被判 failed：超限死信、确定性校验失败、
+        # 入流 fail-closed 三条路径都在 service 写点计入同一序列。
+        expr: >
+          sum by (kind) (increase(loom_job_failed_total[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loom 异步作业进入 failed"
+          description: "近 15 分钟 kind={{ $labels.kind }} 累计 {{ $value }} 个作业被判失败。"
+
+      - alert: LoomStreamDeadLettered
+        # 消息进死信流：只有「重复投递仍失败」或「作业行始终不可见」才会走到这里。
+        expr: >
+          sum by (stream) (increase(loom_stream_dead_letters_total[15m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loom 队列出现死信"
+          description: "近 15 分钟 stream={{ $labels.stream }} 有 {{ $value }} 条进死信流。"
+
+      - alert: LoomQueueBacklog
+        # XPENDING：已投递未 ACK 的条目堆积，说明消费跟不上或有 worker 卡死。
+        expr: >
+          loom_stream_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loom 消费组未 ACK 积压过高"
+          description: "stream={{ $labels.stream }} group={{ $labels.group }} 未 ACK {{ $value }} 条，已连续 10 分钟超过 100。"
+
+      - alert: LoomStreamNearTrimLimit
+        # XLEN 逼近 add_event 的近似 MAXLEN=10000：开始裁剪就是真丢未消费消息。
+        expr: >
+          loom_stream_length > 5000
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loom 队列逼近裁剪上限"
+          description: "stream={{ $labels.stream }} 长度 {{ $value }}，超过约 10000 的近似 MAXLEN 将丢弃未消费消息。"
+
+      - alert: LoomLockLost
+        # 看门狗判丢（锁过期易主或续约期 Redis 故障 fail-closed）。多副本下的
+        # 双跑前兆，Q139/Q151 的协作中止正是为它兜底。
+        expr: >
+          sum by (lock) (increase(loom_lock_lost_total[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loom leader 租约易主"
+          description: "近 15 分钟 lock={{ $labels.lock }} 出现 {{ $value }} 次租约判丢。"
+
+      - alert: LoomLlmUpstreamSlow
+        # 真供应商往返 P99 > 30s。只看 outcome="ok"：失败调用的耗时是另一回事。
+        # 零流量守卫：无调用时不报（与 5xx 规则同型）。
+        expr: >
+          (
+            histogram_quantile(
+              0.99,
+              sum by (le, scene) (rate(loom_llm_upstream_duration_seconds_bucket{outcome="ok"}[10m]))
+            ) > 30
+          )
+          and
+          sum by (scene) (rate(loom_llm_upstream_duration_seconds_count{outcome="ok"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loom 模型上游 P99 延迟过高"
+          description: "scene={{ $labels.scene }} 近 10 分钟成功调用 P99 为 {{ $value }}s，已连续 10 分钟超过 30s。"
+
+      - alert: LoomLlmBudgetBlocked
+        # 日预算硬停（Q82/Q87 语义）：调用在花钱前就被拒，内容生产实质停摆。
+        expr: >
+          sum by (scene) (increase(loom_llm_budget_blocked_total[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loom 模型日预算已打满"
+          description: "近 15 分钟 scene={{ $labels.scene }} 有 {{ $value }} 次调用被日预算硬停拒绝。"
