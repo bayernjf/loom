@@ -32,9 +32,11 @@ export LOOM_ALERT_WEBHOOK="${LOOM_ALERT_WEBHOOK:-http://frontend:3000/}"
 export LOOM_GRAFANA_ADMIN_PASSWORD="${LOOM_GRAFANA_ADMIN_PASSWORD:-loom-alerting-rehearsal}"
 GRAFANA_AUTH="admin:${LOOM_GRAFANA_ADMIN_PASSWORD}"
 COMPOSE="docker compose ${FILES[*]} -p ${PROJECT} --profile monitoring"
-# HTTP 探针走 watchdog 容器（python:3.12-slim，全程存活）：阶段 4 会停 backend，
-# 从 backend 发探针会随之失效；Grafana 未发布宿主端口，只能从网格内打。
+# 网格内 HTTP 探针走 watchdog 容器（python:3.12-slim，全程存活）：阶段 4 会停 backend，
+# 从 backend 发探针会随之失效。Grafana 自 Q192 起**只绑宿主回环 127.0.0.1:3001**，
+# 故「看板真能打开」必须由**宿主侧**断言（见 GRAFANA_HOST_URL），网格内那条只证明服务活着。
 NET="${PROJECT}-watchdog-1"
+GRAFANA_HOST_URL="http://127.0.0.1:3001/api/health"
 
 c_green=$'\033[32m'; c_red=$'\033[31m'; c_bold=$'\033[1m'; c_off=$'\033[0m'
 pass=0; fail=0
@@ -153,6 +155,13 @@ stage_consume() {
   ci "Grafana 看板 loom-operations 文件式置备可查" \
     "net_api GET http://grafana:3000/api/dashboards/uid/loom-operations '' '$GRAFANA_AUTH'" \
     "STATUS 200"
+
+  # Q192：负责人拍板开 Grafana 回环端口。断言必须打在**宿主**上，否则证明的是网格内
+  # 可达（那在没有发布端口时也一样成立），等于没验这次改动。
+  c "宿主直连 Grafana 回环端口 $GRAFANA_HOST_URL" \
+    curl -fsS --max-time 10 "$GRAFANA_HOST_URL"
+  ci "该端口只绑 127.0.0.1（未裸露网卡）" \
+    "docker port ${PROJECT}-grafana-1 3000/tcp" "127.0.0.1:3001"
   ci "Grafana 数据源 loom-prom 置备可查" \
     "net_api GET http://grafana:3000/api/datasources/uid/loom-prom '' '$GRAFANA_AUTH'" \
     "STATUS 200"

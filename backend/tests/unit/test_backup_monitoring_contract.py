@@ -287,11 +287,40 @@ def test_monitoring_overlay_services_rotate_logs() -> None:
         assert logging["options"]["max-file"] == "3"
 
 
-def test_monitoring_services_publish_no_new_host_ports() -> None:
-    """Q145 收敛发布口：只沿用 Q181 已有的 9090，Grafana 不额外开宿主端口。"""
+def _parse_port(spec: str) -> tuple[str, str, str]:
+    """`[IP:]HOST:CONTAINER` → (bind-ip, host 端口, 容器端口)；无 IP 即 0.0.0.0。"""
+    parts = spec.split(":")
+    if len(parts) == 3:
+        return parts[0], parts[1], parts[2]
+    return "0.0.0.0", parts[0], parts[1]
+
+
+def test_prometheus_keeps_its_port_and_no_other_service_publishes() -> None:
+    """Q181/Q185：监控栈里只有 Prometheus 沿用既有 9090，其余服务不得悄悄加发布口。"""
     services = yaml.safe_load(MONITORING_COMPOSE.read_text())["services"]
     assert services["prometheus"]["ports"] == ["9090:9090"]
-    assert "ports" not in services["grafana"]
+    for name, service in services.items():
+        if name in {"prometheus", "grafana"}:
+            continue
+        assert "ports" not in service, f"{name} publishes a host port"
+
+
+def test_grafana_is_loopback_only() -> None:
+    """Q192：Grafana 可打开，但**只能绑回环**，且不得撞 frontend 的 3000。
+
+    口令裸露到网卡＝把唯一那道门交给全网扫描；而 base compose 已把 frontend 放在
+    宿主 3000，复用会直接端口冲突。两条都是"看起来能跑、出事在别处"的错，故硬守。
+    """
+    services = yaml.safe_load(MONITORING_COMPOSE.read_text())["services"]
+    grafana_ports = services["grafana"]["ports"]
+    assert len(grafana_ports) == 1, f"grafana publishes {len(grafana_ports)} ports"
+    bind_ip, host_port, container_port = _parse_port(grafana_ports[0])
+    assert bind_ip == "127.0.0.1", f"grafana bound to {bind_ip!r}; loopback only"
+    assert container_port == "3000"
+    assert host_port != "3000", "宿主 3000 已被 frontend 占用"
+    frontend_ports = yaml.safe_load(COMPOSE.read_text())["services"]["frontend"]["ports"]
+    frontend_host = [_parse_port(p)[1] for p in frontend_ports]
+    assert host_port not in frontend_host, "grafana 与 frontend 抢同一宿主端口"
 
 
 def test_prometheus_mounts_rules_without_an_alerting_block() -> None:

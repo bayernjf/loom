@@ -39,6 +39,11 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${LOOM_GRAFANA_ADMIN_PASSWORD:?set LOOM_GRAFANA_ADMIN_PASSWORD to start grafana}
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
+    # Q192（负责人拍板）：看板要能真打开，但**只绑回环**——Grafana 唯一的门是那个管理员
+    # 口令，绑 0.0.0.0 等于把口令裸露在网卡上。宿主端口取 3001：base compose 已把
+    # frontend 放在 3000，复用会直接端口冲突（此约束有契约测试硬守，见
+    # tests/unit/test_backup_monitoring_contract.py::test_grafana_is_loopback_only）。
+    ports: ["127.0.0.1:3001:3000"]
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafanadata:/var/lib/grafana

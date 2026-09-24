@@ -140,3 +140,58 @@
 - **演练**：全链验证跑 `infra/fullchain-rehearsal.sh`（synthetic 不花钱；真 LLM 演练需授权 + 当日预算内）；高可用/负载演练 `infra/ha-rehearsal.sh`、`infra/load-rehearsal.sh`（本地手动不进 CI）。
 
 > 校准类口径（效果反哺算法、Q54 评分等）原文【待补】，运营不得自行编公式，按业务/数据科学口径下达后执行。
+
+## 5. 告警与值班处置（Q185 消费面 ＋ Q188 业务信号）
+
+**先记住三条前提，否则会误判"没告警＝没事"：**
+
+1. **默认部署一条告警都不会发。** 规则与 Prometheus 都在 opt-in overlay 里，须
+   `docker compose -f docker-compose.yml -f docker-compose.monitoring.yml --profile monitoring up -d` 起监控栈；
+   没起栈就没有任何告警面，`/metrics` 仍可自己抓。
+2. **同一个故障只通知一次。** 投递是 watchdog 轮询 `Prometheus /api/v1/alerts` 转发进 `LOOM_ALERT_WEBHOOK`
+   （**刻意不开 Alertmanager 容器**，Q185 实测其 0.34.1 两条 URL 通路都不可用），语义为
+   「只转发 `state=firing`、按 `alertname|instance|activeAt` 去重」。**收到一次后长期静默不等于已恢复**，
+   要确认恢复得回看 Prometheus；同理**没有 grouping / silencing / inhibition**，维护窗口期会照常打到群裡。
+3. **业务队列两族指标只在 worker 开着时存在。** `LOOM_EXPORT_WORKER_ENABLED` / `LOOM_IMPORT_WORKER_ENABLED` /
+   `LOOM_FCW_WORKER_ENABLED` 默认全关（V1 单副本同步形态），此时 `loom_stream_pending` / `loom_stream_length`
+   **无序列**、两条队列规则**永不触发**——这是事实，不是漏报。
+
+**规则 → 第一步查哪里 → 要不要停线**（`infra/monitoring/alert_rules.yml`；序列定义在
+`backend/app/core/metrics/business.py`）：
+
+| 规则 | 它在说什么 | 第一步查哪里 | 停线？ |
+|---|---|---|---|
+| `LoomBackendUnreachable` (critical) | Prometheus 抓 `backend:8000/metrics` 连续 1 分钟失败 | 容器是否活着／健康检查；`GET /healthz` | **是**，先当服务不可用处理 |
+| `LoomHigh5xxRatio` (critical) | 近 5 分钟 5xx 占比 >5% | 后端日志栈顶异常类型；审计表看是否集中在某写口 | 视占比，>20% 按故障处理 |
+| `LoomHighP99Latency` (warning) | 后端 P99 >1s 持续 5 分钟 | 慢在哪个路由模板（`http_request_duration_seconds_bucket` 的 `path` 标签） | 否，先观察 |
+| `LoomJobFailed` (warning) | 有异步作业进入 `failed` 终态（kind=export\|import\|fcw） | 导出 `GET /api/exports/jobs` 与管理端 /admin/exports；导入 `GET /api/effects/backfill/jobs`；FCW `GET /api/fcw/assembly-tasks/{id}`；审计 `export.job_failed` / `import.job_failed` / `fcw.assembly_task_failed` | 否，**但必须有人认领**——failed 不会自动重试 |
+| `LoomStreamDeadLettered` (critical) | 消息重复投递仍失败、已进死信流 | 读 Redis 死信流 `loom:stream:exports:dead` / `loom:stream:imports:dead` / `loom:fcw-assembly:dead`（字段 `_dead_reason`、`_dead_origin_id`）；**管理端无死信页**，目前只能 `XRANGE` | 否，但死因要归类：`max-deliveries-exceeded`＝下游真故障，`job-not-found`＝入流早于提交可见 |
+| `LoomQueueBacklog` (warning) | 某消费组「已投递未 ACK」>100 持续 10 分钟 | 是不是只有 1 个 consumer 在跑（Q152 可调 `LOOM_EXPORT_WORKER_CONCURRENCY`）；或 worker 卡在真 LLM/DB 慢调用 | 否 |
+| `LoomStreamNearTrimLimit` (critical) | 流长度 >5000，逼近近似 `MAXLEN≈10000`——**再涨就开始丢未消费消息** | 生产侧是否远快于消费（入流闸门/门控）；必要时临时加 consumer 数或扩 MAXLEN | **是**，这是数据丢失前最后一站 |
+| `LoomLockLost` (warning) | 看门狗判 leader 租约易主（锁过期被抢／续约期 Redis 故障 fail-closed） | 是否多副本同开 `LOOM_DISTRIBUTED_LOCK_ENABLED` 且机器时钟漂移；Q143/Q151 的 PG 行级 fence 已挡旧 leader 迟到写，故先看是否伴随 `LoomQueueBacklog`／sweep 停摆 | 否，fence 已兜底，但要查 TTL/时钟 |
+| `LoomLlmUpstreamSlow` (warning) | 某 scene 成功调用 P99 >30s 持续 10 分钟（按 `provider` 分开，synthetic 不污染） | 供应商侧状态；`LOOM_LLM_HTTP_TIMEOUT_SECONDS`（Q172 配置化，默认 60s）是否偏小——注意超时打满会同时顶到 30s P99 规则 | 否，链会变慢但不断 |
+| `LoomLlmBudgetBlocked` (warning) | 某 scene 调用被**日预算硬停**在花钱之前拒绝 | 配置中心该模型 `daily_budget` 与当日 `SkillRun` 花费；**这是停摆不是降级**——AI 候选不再产出 | 视业务，需要就调预算并留审计 |
+
+**数值来源纪律**：`100`（未 ACK）/ `5000`（流长）/ `30s`（上游 P99）与 `content.discard_retention_days=180 天`
+**原文均未给出**，是工程默认值（甲案已经负责人 2026-09-25 追认＝02 C1.134）；**追认结的是设计选择，不结数值校准**——
+真队列压出来之前这些阈值没被证明合理，误报/漏报请记回 docs/20 而不是各自改本地值。
+
+**看板可达性（Q192 起，已实测）**：监控 overlay 给 Grafana 发布的是**宿主回环端口**
+`127.0.0.1:3001`（**不是** 3000——base compose 里 3000 已经是 frontend）。
+
+- 在**跑着栈的那台宿主机**上开浏览器：`http://127.0.0.1:3001`，用户名 `admin`、口令即
+  `LOOM_GRAFANA_ADMIN_PASSWORD`（该变量无默认值，不设则监控栈根本起不来）。
+- 两张看板文件式置备、`uid` 固定：`loom-http`（HTTP 基本盘）与 `loom-operations`（Q188 业务信号）。
+  机器可核的路径是 `GET /api/dashboards/uid/loom-operations`（演练里断言 200）。
+- **只绑回环是刻意的**：Grafana 唯一的门就是那个管理员口令，绑 `0.0.0.0` 等于把它裸露在网卡上。
+  代价是**远程看盘需要自己起隧道**（例如 `ssh -L 3001:127.0.0.1:3001 <host>`），
+  该做法本仓未实测，不在此充当标准步骤。
+- 不想开 Grafana 时的替代：Prometheus 仍发布 `9090`，其 `/graph` 表达式页可直接查这 10 条规则用到的
+  全部序列；`GET /metrics` 是原始文本。
+- **可达性由演练守着**：`infra/alerting-rehearsal.sh` 阶段 3 有两条宿主侧断言——从宿主机 `curl`
+  `127.0.0.1:3001/api/health` 必须 200，且 `docker port grafana` 必须显示只绑 `127.0.0.1`。
+  2026-09-25 全量演练 **34/34 PASS**。发布口形状另有契约测试硬守
+  （`test_grafana_is_loopback_only`：绑错网卡、撞 3000、多开口子都判红）。
+
+> 起监控栈需要 `LOOM_GRAFANA_ADMIN_PASSWORD`（**无默认值、缺失即 compose 报错**）——这是 Q185 有意为之，
+> 拒绝内置弱口令；该变量只在监控 overlay 里必填，不开监控栈的默认部署不受影响。
