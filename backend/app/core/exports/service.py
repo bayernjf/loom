@@ -40,6 +40,7 @@ from app.core.exports.models import (
     JOB_TERMINAL_STATES,
     ExportJob,
 )
+from app.core.metrics.business import record_job_failed
 from app.core.queue import (
     DEFAULT_MAXLEN,
     add_event,
@@ -398,6 +399,9 @@ async def fail_export_job(
     """Q137 worker：置 failed（超限死信/渲染持续失败），留痕可查。"""
 
     job.status = JOB_FAILED
+    # Q188：DB 里 job 行变 failed 的唯一事实点即指标点；入流 fail-closed 的
+    # router 也走本函数，故请求路径同样被覆盖。
+    record_job_failed("export")
     job.error = error[:2000]
     job.completed_at = datetime.now(UTC)
     await append_audit(

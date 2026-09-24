@@ -43,6 +43,7 @@ from app.core.imports.models import (
     ImportJob,
 )
 from app.core.imports.schemas import BackfillImportJobIn
+from app.core.metrics.business import record_job_failed
 from app.core.queue import (
     DEFAULT_MAXLEN,
     add_event,
@@ -171,6 +172,8 @@ async def process_import_job(
         await session.rollback()
         failed = await session.get(ImportJob, job_id)
         failed.status = JOB_FAILED
+        # Q188：确定性校验失败（不重试、不进死信）同样是作业失败。
+        record_job_failed("import")
         failed.error = str(exc)
         failed.errors = _stored_errors(exc.errors)
         failed.completed_at = datetime.now(UTC)
@@ -190,6 +193,8 @@ async def process_import_job(
         failed = await session.get(ImportJob, job_id)
         errors = [{"index": exc.index, "field": exc.field, "message": str(exc)}]
         failed.status = JOB_FAILED
+        # Q188：效果校验的确定性失败同样是作业终态失败，与入流/死信路径同计数。
+        record_job_failed("import")
         failed.error = str(exc)
         failed.errors = _stored_errors(errors)
         failed.completed_at = datetime.now(UTC)
@@ -237,6 +242,8 @@ async def fail_import_job(
     """入流失败 / 死信：置 failed，留痕可查（镜像 export fail_export_job）。"""
 
     job.status = JOB_FAILED
+    # Q188：入流 fail-closed 的 router 也走本函数，请求路径同样被计入。
+    record_job_failed("import")
     job.error = error[:2000]
     job.completed_at = datetime.now(UTC)
     await append_audit(

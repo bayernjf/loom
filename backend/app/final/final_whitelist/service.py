@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 
 from app.core.actor import Actor
 from app.core.audit import append_audit
+from app.core.metrics.business import record_job_failed
 from app.core.queue import (
     DEFAULT_MAXLEN,
     add_event,
@@ -506,6 +507,8 @@ async def enqueue_fcw_task(task_id: str) -> None:
 async def fail_fcw_task(session, task: FcwAssemblyTask, error: str) -> FcwAssemblyTask:
     """Q165 worker：超 MAX_DELIVERIES 死信 / 入流失败时置 failed，留痕可查。"""
     task.status = TASK_STATUS_FAILED
+    # Q188：与导出/导入同口径——DB 行进 failed 即计数一次。
+    record_job_failed("fcw")
     task.results = {**(task.results or {}), "error": error[:500]}
     task.completed_at = datetime.now(tz=UTC)
     await append_audit(

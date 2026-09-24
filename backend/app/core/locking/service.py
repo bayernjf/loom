@@ -21,6 +21,7 @@ import redis
 import redis.asyncio as aioredis
 
 from app.core.config import get_settings
+from app.core.metrics.business import record_lock_lost
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,9 @@ class LockLease:
         return self.held
 
     def _mark_lost(self) -> None:
+        # Q188：看门狗判丢的唯一漏斗（锁易主与续约故障两条分支都走这里），
+        # 在此计数而不是在四个 catch 站点各计一次——那会把一次易主数成多次。
+        record_lock_lost(self.name)
         self._lost.set()
 
     async def wait_lost(self) -> None:
