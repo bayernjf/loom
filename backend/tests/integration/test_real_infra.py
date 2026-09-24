@@ -46,7 +46,9 @@ from app.core.locking import (
     override_lock_client,
 )
 from app.core.locking import service as lock_service
+from app.core.metrics.business import STREAM_LENGTH, STREAM_PENDING
 from app.core.queue.streams import (
+    StreamBackendError,
     ack_event,
     add_event,
     ensure_group,
@@ -54,6 +56,8 @@ from app.core.queue.streams import (
     override_stream_client,
     read_new,
     reclaim_pending,
+    sample_stream_depth,
+    stream_depth,
 )
 from app.core.restock.fencing import (
     CLAIM_ACQUIRED,
@@ -73,6 +77,7 @@ from app.core.sla.fencing import (
     fence_current as tick_gate,
 )
 from app.core.sla.models import SweepTickClaim
+from tests.metric_reads import gauge_value
 
 PG_DSN = os.getenv("LOOM_TEST_REAL_PG_DSN")
 REDIS_URL = os.getenv("LOOM_TEST_REAL_REDIS_URL")
@@ -331,6 +336,56 @@ async def test_real_redis_streams_shard_reclaim_and_dead_letter(redis_client):
         assert len(pending) == 2
     finally:
         await redis_client.delete(stream, dead_stream)
+        override_stream_client(None)
+
+
+
+# ---------------------------------------------------------------------------
+# 真 Redis Streams 队列深度：XPENDING 汇总 / XLEN 的真实语义（Q188）
+# ---------------------------------------------------------------------------
+
+
+@requires_redis
+@pytest.mark.asyncio
+async def test_real_redis_stream_depth_and_fail_soft(redis_client):
+    """`stream_depth` 的语义此前**只在自建假件上验过**，而假件是按假设写的、证不了伪。
+
+    真 Redis 才能证的三件事：① ``XPENDING`` 汇总返回 ``{"pending": int}`` 且**只数
+    已投递未 ACK**（未投递的条目不进 pending，与 ``XLEN`` 是两回事）；② 消费（XACK）
+    不裁剪流，pending 回落而长度不变；③ 组不存在时真 Redis 抛 ``NOGROUP``（ResponseError
+    → RedisError 子类），必须被归一成 ``StreamBackendError`` 并被取样层吞掉——否则一个
+    只为看数的读会把 worker tick 打成「失败→退避→再失败」的无限空转（Q157 同类坑）。
+    """
+    override_stream_client(redis_client)
+    suffix = uuid.uuid4().hex[:12]
+    stream = f"loom:test:depth:{suffix}"
+    group = f"g-{suffix}"
+    try:
+        await ensure_group(redis_client, stream, group)
+        assert await stream_depth(redis_client, stream, group) == (0, 0)
+
+        for i in range(3):
+            await add_event(redis_client, stream, {"seq": str(i)})
+        assert await stream_depth(redis_client, stream, group) == (0, 3)
+
+        delivered = await read_new(redis_client, stream, group, "c1", count=2)
+        assert len(delivered) == 2
+        assert await stream_depth(redis_client, stream, group) == (2, 3)
+
+        assert await sample_stream_depth(redis_client, stream, group) is True
+        assert gauge_value(STREAM_PENDING, stream=stream, group=group) == 2
+        assert gauge_value(STREAM_LENGTH, stream=stream) == 3
+
+        await ack_event(redis_client, stream, group, *(eid for eid, _ in delivered))
+        assert await stream_depth(redis_client, stream, group) == (0, 3)
+
+        # 组不存在：原语 fail-closed 归一，取样层吞掉并保持上一次的 Gauge 值。
+        with pytest.raises(StreamBackendError):
+            await stream_depth(redis_client, f"{stream}:absent", group)
+        assert await sample_stream_depth(redis_client, f"{stream}:absent", group) is False
+        assert gauge_value(STREAM_PENDING, stream=stream, group=group) == 2
+    finally:
+        await redis_client.delete(stream)
         override_stream_client(None)
 
 
