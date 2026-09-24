@@ -111,6 +111,15 @@ class Settings(BaseSettings):
     # 与 actor↔tenant 绑定后置，不受本门控影响；机器端点（Agent Key/A2A）独立鉴权。
     staff_auth_enabled: bool = False
 
+    # Q187 段12 discarded 成品保留期物理清理（docs/20 §6.5 C4 收口，甲案）：默认关。
+    # 关闭时第五个 sweep 作业空转返回 0，V1 现有行为一字不变；开启后过
+    # content.discard_retention_days 保留窗口、且无任何下游引用（effect_records/
+    # effect_claims 硬 FK、import_jobs 可重放历史）的 discarded 行被物理删除并逐行
+    # 写 content.discard_purged 审计。破坏性动作，故与 Q87/Q137/Q161 同例门控默认关。
+    discard_purge_enabled: bool = False
+    # 单轮 sweep 最多清理的行数（运维防护参数，非 Q9 业务旋钮），防单事务过大。
+    discard_purge_batch: int = 200
+
 
 @lru_cache
 def get_settings() -> Settings:

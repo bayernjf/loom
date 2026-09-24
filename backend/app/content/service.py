@@ -1,8 +1,8 @@
 """段12 内容生成 + 复检 + 客户审阅服务（P4）。"""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.content import generation
@@ -380,6 +380,76 @@ async def discard_content(
         },
     )
     return content
+
+
+DISCARD_RETENTION_KEY = "content.discard_retention_days"
+PURGE_ACTION = "content.discard_purged"
+
+
+async def purge_expired_discarded(
+    session: AsyncSession, now: datetime, limit: int
+) -> int:
+    """Q187/C4：过保留期的 discarded 终态成品物理清理（甲案，门控见 config）。
+
+    只清理**无任何下游引用**的行：effect_records.matched_content_id 与
+    effect_claims.content_id 是硬 FK（Q126/Q127），import_jobs.content_id 是
+    payload 可重放的作业历史（Q161）——被引用的行本身即归档，一律留档不删，
+    既避免 FK 违约也不切断段13 时序。
+
+    保留窗口取配置中心 ``content.discard_retention_days``（热更）；计时基准是
+    discard 时写入的 updated_at（表无 discarded_at 列，discarded 为终态故其后
+    不再被改写）。逐行写 PURGE_ACTION 审计（actor 为空＝系统作业），提交边界由
+    统一 runner 负责，不自行提交。
+    """
+    from app.core.effects.models import EffectClaim, EffectRecord
+    from app.core.imports.models import ImportJob
+
+    cutoff = now - timedelta(days=int(knob(DISCARD_RETENTION_KEY)))
+    stmt = (
+        select(ContentProduct)
+        .where(
+            ContentProduct.status == CONTENT_DISCARDED,
+            ContentProduct.updated_at.is_not(None),
+            ContentProduct.updated_at <= cutoff,
+            ~exists(
+                select(1).where(
+                    EffectRecord.matched_content_id == ContentProduct.content_id
+                )
+            ),
+            ~exists(
+                select(1).where(EffectClaim.content_id == ContentProduct.content_id)
+            ),
+            ~exists(
+                select(1).where(ImportJob.content_id == ContentProduct.content_id)
+            ),
+        )
+        .order_by(ContentProduct.updated_at.asc(), ContentProduct.content_id.asc())
+        .limit(limit)
+    )
+    expired = list((await session.scalars(stmt)).all())
+    for content in expired:
+        tenant_id = content.tenant_id
+        content_id = content.content_id
+        detail = {
+            "final_id": content.final_id,
+            "language": content.language,
+            "kind": content.kind,
+            "discard_reason": content.discard_reason,
+            "discarded_at": content.updated_at.isoformat(),
+            "retention_days": int(knob(DISCARD_RETENTION_KEY)),
+        }
+        await session.delete(content)
+        await append_audit(
+            session,
+            tenant_id=tenant_id,
+            actor_id=None,
+            actor_roles=None,
+            action=PURGE_ACTION,
+            entity_type="content_product",
+            entity_id=content_id,
+            detail=detail,
+        )
+    return len(expired)
 
 
 async def list_ready_to_publish(
