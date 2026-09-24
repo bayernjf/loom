@@ -261,3 +261,31 @@ async def test_admin_material_forbidden_and_unknown_404(client, session_factory)
         "/api/admin/fcw/nonexistent-id/material", params=_actor_params(OPS)
     )
     assert missing.status_code == 404
+
+
+# Q180 D3.5 客户卡片视图：GET /api/fcw 客户只读集合口（无闸、tenant 必填、强制租户过滤）。
+async def test_customer_list_requires_tenant(client, session_factory):
+    await _issue(client, session_factory, tenant="t1")
+    # 缺 tenant_id 由 FastAPI Query(min_length=1) 判 422。
+    resp = await client.get("/api/fcw")
+    assert resp.status_code == 422
+
+
+async def test_customer_list_tenant_filtered(client, session_factory):
+    fcw_t1 = await _issue(client, session_factory, tenant="t1")
+    fcw_t2 = await _issue(client, session_factory, tenant="t2", slot_code="xs-02")
+    resp = await client.get("/api/fcw", params={"tenant_id": "t1"})
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["final_id"] == fcw_t1["final_id"]
+    assert rows[0]["tenant_id"] == "t1"
+    # t2 只回 t2 的卡。
+    t2 = await client.get("/api/fcw", params={"tenant_id": "t2"})
+    assert [r["final_id"] for r in t2.json()] == [fcw_t2["final_id"]]
+
+
+async def test_customer_list_empty_tenant(client, session_factory):
+    resp = await client.get("/api/fcw", params={"tenant_id": "tenant-without-fcw"})
+    assert resp.status_code == 200
+    assert resp.json() == []
