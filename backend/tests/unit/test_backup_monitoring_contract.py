@@ -9,7 +9,9 @@ real loopback HTTP servers.
 Q185 adds the metric-consumption half: the monitoring overlay shape, and — the
 load-bearing guard — that alert_rules.yml only ever references metrics the
 process actually registers, so no future rule can be written against a
-fabricated name.
+fabricated name. Q188 closes the loop in both directions: business metrics are
+now really instrumented (so those names are legal), the guard also walks every
+dashboard file, and no registered family may go unconsumed.
 """
 
 import http.server
@@ -170,16 +172,34 @@ def test_watchdog_alert_posts_webhook_and_swallows_delivery_errors(
 
 
 # ---------------------------------------------------------------------------
-# Q185 指标消费侧
+# Q185 指标消费侧 / Q188 业务级打点
 # ---------------------------------------------------------------------------
 
-# Prometheus 选择器语法里指标名总是紧跟 `{`（标签）或 `[`（区间向量）；
-# 函数调用跟 `(`，标签名跟在 `{` 之后，故两者都不会被这条正则误抓。
-_METRIC_REF = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*[\{\[]")
+# 指标名后面要么紧跟标签 `{` 要么紧跟区间 `[`，要么是裸比较（如
+# `loom_stream_pending > 100`）。只认前两种的话，裸比较里的臆造名会漏网——
+# Q188 的两条 Gauge 规则正是裸比较。
+_METRIC_REF = re.compile(
+    r"(?<![\w.])([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*(?:[\{\[]|>=|<=|==|!=|>|<))"
+)
+# 会被上面这条正则误抓的 PromQL 函数/关键字（表达式里合法，但不是指标名）。
+_PROMQL_WORDS = {
+    "abs", "and", "avg", "bool", "by", "ceil", "clamp_max", "clamp_min", "count",
+    "count_over_time", "day_of_month", "delta", "exp", "floor", "histogram_quantile",
+    "hour", "increase", "irate", "label_join", "label_replace", "ln", "log10", "log2",
+    "max", "max_over_time", "min", "min_over_time", "month", "or", "predict_linear",
+    "rate", "round", "scalar", "sort", "sort_desc", "sum", "time", "timestamp",
+    "vector", "week", "year", "without",
+}
 _SERIES_SUFFIXES = ("_bucket", "_sum", "_count")
 
 
 def _registered_metric_names() -> set[str]:
+    """进程真实注册的族名及其派生序列名。
+
+    必须 import **包**而不是 middleware 子模块：Q188 的业务族登记在
+    ``app/core/metrics/business.py``，只有走包 __init__ 才会被注册进同一个 REGISTRY。
+    """
+    import app.core.metrics  # noqa: F401  (registration side effect)
     from app.core.metrics.middleware import REGISTRY
 
     names = set()
@@ -190,9 +210,43 @@ def _registered_metric_names() -> set[str]:
     return names
 
 
+def _registered_families() -> set[str]:
+    import app.core.metrics  # noqa: F401
+    from app.core.metrics.middleware import REGISTRY
+
+    return set(REGISTRY._metrics)
+
+
+def _referenced_names(expr: str) -> set[str]:
+    return set(_METRIC_REF.findall(expr)) - _PROMQL_WORDS
+
+
+def _family_of(name: str) -> str:
+    """派生序列名归回族名：`..._bucket/_sum/_count` 与它们的直方图族同名。"""
+    for suffix in _SERIES_SUFFIXES:
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
 def _alert_rules() -> list[dict]:
     doc = yaml.safe_load(ALERT_RULES.read_text())
     return [rule for group in doc["groups"] for rule in group["rules"]]
+
+
+def _dashboards() -> list[dict]:
+    """装载 provisioning/dashboards 下**全部**看板 JSON。
+
+    Q185 时只读 loom-http.json；Q188 加了第二张看板，逐文件写死等于给新看板
+    留一个不受守卫的引用面。
+    """
+    import json
+
+    base = REPO_ROOT / "infra" / "monitoring" / "grafana" / "provisioning" / "dashboards"
+    return [
+        json.loads(path.read_text())
+        for path in sorted(base.glob("*.json"))
+    ]
 
 
 def test_monitoring_overlay_is_separate_and_gated() -> None:
@@ -254,29 +308,83 @@ def test_prometheus_mounts_rules_without_an_alerting_block() -> None:
 def test_alert_rules_reference_only_registered_metrics() -> None:
     """事实纪律守卫：规则里出现的每个指标名都必须是进程真实注册（或其派生序列）。
 
-    Q181 目前只有 up / http_requests_total / http_request_duration_seconds 三族、
-    全仓零业务打点，因此任何"队列积压/job failed/锁易主"式规则都是臆造指标名。
+    Q185 立这条时全仓只有三族，任何「队列积压/job failed/锁易主」式规则都是臆造
+    指标名；Q188 补了业务打点，于是这些名字变成合法引用——但**只有真正注册过的**
+    才合法，改代码的人若把序列名打错，这里直接红。
     """
     registered = _registered_metric_names()
     referenced = set()
     for rule in _alert_rules():
-        referenced.update(_METRIC_REF.findall(str(rule["expr"])))
+        referenced.update(_referenced_names(str(rule["expr"])))
     assert referenced, "no metric referenced - the regex stopped matching real rules"
     unknown = sorted(referenced - registered)
     assert unknown == [], f"alert rules reference unregistered metrics: {unknown}"
 
 
-def test_alert_rules_cover_the_three_RED_signals() -> None:
+def test_every_registered_metric_is_consumed() -> None:
+    """反向守卫：注册了却没有任何规则/面板消费的族＝死打点。
+
+    与 Q176「裸建无消费方的死索引」同一教训：打点不是免费的，没人看的指标只会
+    让人误以为有问题被覆盖了。
+    """
+    consumed: set[str] = set()
+    for rule in _alert_rules():
+        consumed.update(_referenced_names(str(rule["expr"])))
+    for dash in _dashboards():
+        for panel in dash["panels"]:
+            for target in panel["targets"]:
+                consumed.update(_referenced_names(str(target["expr"])))
+
+    families = _registered_families()
+    consumed_families = {_family_of(name) for name in consumed}
+    uncovered = sorted(families - consumed_families)
+    assert uncovered == [], f"registered but never alerted or plotted: {uncovered}"
+
+
+_HTTP_RULES = {
+    "LoomHigh5xxRatio",
+    "LoomHighP99Latency",
+    "LoomBackendUnreachable",
+}
+# Q188：四类业务信号各有权重最高的那条（预算与上游延迟分列）。
+_BUSINESS_RULES = {
+    "LoomJobFailed",
+    "LoomStreamDeadLettered",
+    "LoomQueueBacklog",
+    "LoomStreamNearTrimLimit",
+    "LoomLockLost",
+    "LoomLlmUpstreamSlow",
+    "LoomLlmBudgetBlocked",
+}
+
+
+def test_alert_rules_cover_http_red_and_business_signals() -> None:
     rules = {rule["alert"]: rule for rule in _alert_rules()}
-    assert set(rules) == {
-        "LoomHigh5xxRatio",
-        "LoomHighP99Latency",
-        "LoomBackendUnreachable",
-    }
+    assert set(rules) == _HTTP_RULES | _BUSINESS_RULES
     for rule in rules.values():
         assert rule["labels"]["severity"] in {"critical", "warning"}
         assert rule["annotations"]["summary"]
         assert "for" in rule
+
+    doc = yaml.safe_load(ALERT_RULES.read_text())
+    groups = {group["name"]: group["rules"] for group in doc["groups"]}
+    assert set(groups) == {"loom-http", "loom-operations"}
+    assert {rule["alert"] for rule in groups["loom-operations"]} == _BUSINESS_RULES
+
+
+def test_business_rules_each_reference_a_business_metric() -> None:
+    """业务组不得退化成只引用 HTTP 指标——那等于没消费新打点。"""
+    families = _registered_families()
+    doc = yaml.safe_load(ALERT_RULES.read_text())
+    business_group = next(
+        group["rules"] for group in doc["groups"] if group["name"] == "loom-operations"
+    )
+    for rule in business_group:
+        used = _referenced_names(str(rule["expr"]))
+        assert any(name.startswith("loom_") for name in used), (
+            f"{rule['alert']} references no loom_* business metric"
+        )
+        assert {_family_of(name) for name in used} & families
 
 
 def test_alert_delivery_reuses_the_single_watchdog_webhook_channel() -> None:
@@ -363,15 +471,18 @@ def test_monitoring_dashboard_provisioning_mounts_and_is_wired() -> None:
     provider = yaml.safe_load((base / "dashboards" / "loom.yml").read_text())
     assert provider["providers"][0]["options"]["path"] == "/etc/grafana/provisioning/dashboards"
 
-    import json
-
-    dash = json.loads((base / "dashboards" / "loom-http.json").read_text())
-    assert dash["uid"] == "loom-http"
+    # 目录下**每张**看板都过同一条守卫（Q188 起了第二张，逐文件写死会漏）。
     registered = _registered_metric_names()
-    for panel in dash["panels"]:
-        for target in panel["targets"]:
-            for name in _METRIC_REF.findall(str(target["expr"])):
-                assert name in registered, f"panel {panel['id']} uses unregistered {name}"
+    uids = set()
+    for dash in _dashboards():
+        uids.add(dash["uid"])
+        for panel in dash["panels"]:
+            for target in panel["targets"]:
+                for name in _referenced_names(str(target["expr"])):
+                    assert name in registered, (
+                        f"panel {panel['id']} of {dash['uid']} uses unregistered {name}"
+                    )
+    assert uids == {"loom-http", "loom-operations"}
 
 
 def test_wal_archiver_minio_dependency_is_optional() -> None:
