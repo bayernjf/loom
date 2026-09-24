@@ -176,6 +176,17 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 
 **出站模型商 Key**（Q82 模型网关，`app/core/model_registry/`）：Fernet 可逆加密入库 + env 主密钥（与入站单向哈希刻意区分——出站需代持调用）；端点 **POST /api/admin/ai-models/{model_id}/keys**（录入/轮换，body=secret/actor，原子把旧 active 行置 revoked 并插新密文行）、**GET /api/admin/ai-models/{model_id}/keys**（清单，仅 key_id/fingerprint/status/时间元数据）、POST /api/admin/ai-model-keys/{key_id}/revoke（吊销，幂等），platform_admin 治理。
 
+**内部运营人员令牌（Staff PAT）**（Q178 甲案身份层第一切片，2026-09-24，02 C1.122，迁移 0040_staff_api_keys，门控 `LOOM_STAFF_AUTH_ENABLED` 默认关）：与机器 Agent Key（`loom_`，Q88）**分表分前缀**，人员令牌明文 `loom_staff_`+token_urlsafe(30)，新表 `staff_api_keys` 同样 SHA-256 哈希存储、明文仅签发返回一次、吊销 append-only。仅覆盖内部运营管理端；客户侧真实认证与 actor↔tenant 绑定仍 V2。
+
+| 方法/路径 | 说明 |
+|---|---|
+| POST /api/admin/staff-keys | 签发（201）：请求 `{staff_id, staff_name, roles[], actor}`，platform_admin 红线（门控开走 staff 认证、门控关走自报以引导首发）；roles 限五内部角色 {operations, platform_admin, product_reviewer, dictionary_admin, internal_compliance}（**不含 whitelist_owner**），空/未知/客户角色 422；响应含 `secret` 明文（仅本次） |
+| GET /api/admin/staff-keys?include_revoked=false | 列表：key_id/staff_id/staff_name/roles/key_prefix/status/created_at/last_used_at，不回明文与哈希；platform_admin |
+| POST /api/admin/staff-keys/{key_id}/revoke | 吊销：body=actor，platform_admin，未知 key 404、越权 403，幂等 append-only |
+| GET /api/auth/me | 当前令牌自检：**门控关 400**；门控开无/坏/吊销令牌 401，有效返 `{staff_id, staff_name, roles}`；供 /admin/login 录入页校验，不触发 401 跳转 |
+
+**认证与授权分离（端点签名零改动）**：认证＝app 级全局依赖 `staff_auth_context`（门控开仅验 `loom_staff_` Bearer、独立短事务验真并把人员 Actor 写入请求级 contextvar、命中记 last_used_at；无令牌或机器 `loom_` 前缀直接放行，不误伤 effect-callback/A2A/客户/公开口，坏或吊销 staff 令牌 401）；授权＝`rbac.require_any_role` 唯一收口（门控开且要求内部角色时：contextvar 无认证人 401 NotAuthenticated、角色不足 403 PermissionDenied、通过则**就地覆盖**自报 actor.id/roles，防 `?actor_id&roles=platform_admin` 提权、审计落真实人员；门控关或纯客户角色 whitelist_owner 维持 V1 自报）。门控开时读口 actor_id query、写口 body.actor 仍是必填 schema 形状（缺失 422，不构成绕过），值被令牌覆盖。Q88/Q109 有意免闸的 agent-keys GET 门控开改挂 `internal_gate(platform_admin)`（门控关 no-op 保持免闸）。审计 `staff_api_key.issue/revoke`（tenant=`_platform`）。**引导顺序（门控关签发首个 platform_admin 令牌→/admin/login 录入→再开门控）、回滚（关 env）、env 明细见 docs/17**；前端 /admin/login 不进 sidebar、/admin/staff-keys 为 sidebar 第 12 项。
+
 ---
 
 ## 3. 通用规范（原文未定义，均为【建议】）

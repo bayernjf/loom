@@ -15,7 +15,8 @@ from app.core.api_keys.schemas import (
     AgentKeyView,
 )
 from app.core.db import get_session
-from app.core.rbac import PermissionDenied
+from app.core.rbac import PLATFORM_ADMIN, PermissionDenied
+from app.core.staff_auth.deps import internal_gate
 
 router = APIRouter(tags=["agent-api-keys"])
 
@@ -55,8 +56,10 @@ async def issue_agent_key(
 async def list_agent_keys(
     include_revoked: bool = False,
     session: AsyncSession = Depends(get_session),
+    _: bool = Depends(internal_gate(PLATFORM_ADMIN)),
 ) -> list[AgentKeyView]:
-    # GET 无 actor 体，与 outbound Key 列表同口径（平台管理面，写操作过角色闸）。
+    # GET 门控关无 actor 体（Q109 有意开放，与 outbound Key 列表同口径，写操作过
+    # 角色闸）；Q178 门控开启后由 internal_gate 要求 platform_admin staff 令牌。
     rows = await service.list_keys(session, include_revoked=include_revoked)
     return [_view(row) for row in rows]
 

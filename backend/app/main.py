@@ -1,7 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.content.router import router as content_router
 from app.core.a2a.router import router as a2a_router
@@ -18,12 +19,15 @@ from app.core.exports.worker import ExportWorker, build_export_workers
 from app.core.imports.router import router as imports_router
 from app.core.imports.worker import ImportWorker, build_import_workers
 from app.core.model_registry.router import router as model_registry_router
+from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
 from app.core.skill7.router import router as skill7_router
 from app.core.sla.router import router as sla_router
 from app.core.sla.runner import run_jobs
 from app.core.sla.scheduler import SweepScheduler
+from app.core.staff_auth.deps import staff_auth_context
+from app.core.staff_auth.router import router as staff_auth_router
 from app.core.tenants.router import customer_router
 from app.core.tenants.router import router as tenants_router
 from app.core.workbench.router import router as workbench_router
@@ -135,7 +139,26 @@ async def lifespan(app: FastAPI):
             _scheduler = None
 
 
-app = FastAPI(title="Loom", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Loom",
+    version="0.1.0",
+    lifespan=lifespan,
+    # Q178：每请求先跑 staff 认证依赖（门控关闭时直接返回，零行为变化）。
+    dependencies=[Depends(staff_auth_context)],
+)
+
+
+# Q178：内部角色闸的统一 HTTP 映射（局部 try/except 已映射者优先，这里兜底，
+# 避免未局部捕获时退化为 500）。NotAuthenticated→401，PermissionDenied→403。
+@app.exception_handler(NotAuthenticated)
+async def _not_authenticated_handler(_: Request, exc: NotAuthenticated) -> JSONResponse:
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+
+@app.exception_handler(PermissionDenied)
+async def _permission_denied_handler(_: Request, exc: PermissionDenied) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
+
 
 app.include_router(intake_router)
 app.include_router(modeling_router)
@@ -150,6 +173,7 @@ app.include_router(workbench_router)
 app.include_router(sla_router)
 app.include_router(restock_router)
 app.include_router(agent_keys_router)
+app.include_router(staff_auth_router)
 app.include_router(tenants_router)
 app.include_router(customer_router)
 app.include_router(atom_router)

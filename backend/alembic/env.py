@@ -11,6 +11,7 @@ from app.core import models as _core_models  # noqa: F401  (register audit_logs)
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
 from app.core.config_center import models as _config_models  # noqa: F401
 from app.core.db import Base
+from app.core.staff_auth import models as _staff_auth_models  # noqa: F401
 from app.decision.compliance_center import models as _ccr_models  # noqa: F401
 from app.decision.layer_strategy import models as _package_models  # noqa: F401
 from app.final.final_whitelist import models as _fcw_models  # noqa: F401

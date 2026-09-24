@@ -103,6 +103,14 @@ class Settings(BaseSettings):
     # 未设置时测试/本地用进程内临时密钥（重启后旧密文不可解，仅限开发态）。
     master_key: str = ""
 
+    # Q178 内部运营个人访问令牌（PAT）身份层第一切片：默认关。关闭时管理面读口
+    # （query actor）与运营写口（body actor）维持 V1 自报口径，零行为变化；开启后
+    # 凡要求内部角色（operations/platform_admin/internal_compliance/dictionary_admin/
+    # product_reviewer）的端点一律以 Authorization: Bearer loom_staff_... 验真的人员/
+    # 角色为准，忽略自报 roles（无令牌 401、角色不足 403、自报提权无效）。客户侧身份
+    # 与 actor↔tenant 绑定后置，不受本门控影响；机器端点（Agent Key/A2A）独立鉴权。
+    staff_auth_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

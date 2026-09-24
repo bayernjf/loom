@@ -492,3 +492,29 @@
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
 }
+
+/* Q178：staff PAT 签发岛的内部角色多选（只消费既有 token，不新增） */
+.roleFieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.rolesLabel {
+  width: 100%;
+  padding: 0 var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.roleCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
