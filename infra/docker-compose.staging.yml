@@ -14,6 +14,10 @@ services:
     ports: !reset []
     # No V1 service consumes S3; skip when the image cannot be pulled.
     profiles: [unused-in-rehearsal]
+  # Q185：wal-archiver 硬依赖 minio（mc 推对象存储），彩排网格里没有 minio 时会
+  # 无限重启并拖住 `--wait`，故随 minio 一起移出。真实部署不带本 overlay 即照常起。
+  wal-archiver:
+    profiles: [unused-in-rehearsal]
   backend:
     environment:
       LOOM_LLM_BASE_URL_OPENAI: https://apihub.agnes-ai.com/v1

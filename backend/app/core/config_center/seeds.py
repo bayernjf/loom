@@ -57,6 +57,11 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     # ---- 段12 内容（先登记，Q56/Q57）----
     ("content.ai_quality_threshold", "content", "float", 0.85, "Q57/line5196", {"min": 0.0, "max": 1.0}),
     ("content.regen_limit", "content", "int", 3, "Q56", {"min": 1}),
+    # Q187/C4：discarded 终态成品的保留窗口（天）。Q124 只裁"作废回池"、未给清理
+    # 口径（docs/20 §6.5 C4 明列"归档策略未定义"），180 天为工程甲案推荐值、
+    # 原文未给出，配置中心热更、待负责人追认后调值不改码。
+    ("content.discard_retention_days", "content", "int", 180,
+     "Q187/C4 甲案（原文未给出，待追认）", {"min": 1}),
     # ---- 段13 反馈/KUP/校准（Q61/Q63/Q65）----
     ("hot.median_multiplier", "feedback", "float", 5.0, "Q61", {"min": 1.0}),
     ("hot.window_days", "feedback", "int", 90, "Q61", {"min": 1}),

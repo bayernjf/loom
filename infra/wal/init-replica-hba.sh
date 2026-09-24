@@ -7,6 +7,8 @@ set -eu
 auth="$(postgres -C password_encryption)"
 echo "host replication all all ${auth}" >> "${PGDATA}/pg_hba.conf"
 
-# Q182：归档卷挂载点默认属 root（postgres 无法写入），改为 postgres 所有。
-# 本脚本在 initdb 阶段以 root 运行；chown 不可用时退化为 0777。
-chown postgres:postgres /wal-archive 2>/dev/null || chmod 0777 /wal-archive
+# Q185 修正：归档卷属主不在此处理。官方镜像把 /docker-entrypoint-initdb.d 下的
+# .sh 以 **postgres（uid 999）** 身份执行，而非 Q182 注释所假设的 root；空命名卷
+# 挂载点默认 root:root，故此处 chown 与 chmod 退路会双双 EPERM，被 set -e 打死、
+# postgres 容器 exit 1（全新卷的 `docker compose up` 必挂）。卷属主改由 compose 里
+# 的 wal-archive-init 一次性 root 容器负责。
