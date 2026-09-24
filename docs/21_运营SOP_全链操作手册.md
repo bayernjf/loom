@@ -11,14 +11,26 @@
 | 角色（actor.roles） | 职责 | 主要入口 |
 |---|---|---|
 | `customer` | 段1 提交资料、段12 审阅成品/改稿、段13 回填效果 | 客户台：products / content / compliance / workbench / analytics / settings（social-accounts、templates 为 V2 占位） |
-| `operations` | 段1 推进、段2 触发识别、段3–5 编排与 Gate 送裁、段11 组装、段12 触发生成与发布回填 | 管理台：/admin/intakes、review-workload、review-queue、content、effects、exports 等 10 页 |
+| `operations` | 段1 推进、段2 触发识别、段3–5 编排与 Gate 送裁、段11 组装、段12 触发生成与发布回填 | 管理台：/admin/intakes、review-workload、review-queue、content、effects、exports、fcw 等 12 页（见 §0.1 登录） |
 | `product_reviewer` | 字段池 / 原子 / PWC 三道 Gate 的人工裁决 | /admin/review-workload、/admin/review-queue |
 | `whitelist_owner` | PWS 冻结 | API（V1 无独立页面） |
 | `internal_compliance` | 段10 合规清洗 CCR | /admin/content（及 API） |
-| `platform_admin` | 租户、Agent Key、AI 模型与场景路由、字典管理 | /admin/tenants、/admin/agent-keys、/admin/token-cost |
+| `platform_admin` | 租户、Agent Key、运营人员令牌、AI 模型与场景路由、字典管理、导出任务 | /admin/tenants、/admin/agent-keys、/admin/staff-keys、/admin/token-cost、/admin/exports |
 | `dictionary_admin` | 内容语言清单等字典维护 | API（语言清单管理） |
 
-> Actor 为请求体内 `{"id","roles"}` 自报（V1 无真实认证层，身份层压 V2 第一项，Q144）；private beta 由平台内控保证。
+> **身份（Q178，2026-09-24 起）**：内部运营管理端已有可选的个人访问令牌（staff PAT）认证层，门控 `LOOM_STAFF_AUTH_ENABLED` **默认关**——门控关时 Actor 仍为请求体内 `{"id","roles"}` 自报（private beta 由平台内控保证）；门控开后管理口必须持 staff 令牌、自报 actor 被令牌身份覆盖（防提权）。开通与登录操作见 **§0.1**。客户侧真实认证与 actor↔tenant 绑定仍为 V2 第一项（Q88 租户绑定口径【待补】）。
+
+### 0.1 运营登录与身份（Q178 staff PAT，门控默认关）
+
+人员令牌（前缀 `loom_staff_`，表 staff_api_keys）与机器 Agent Key（前缀 `loom_`，/admin/agent-keys，段13 用）**分表分前缀、不可互换**；人员令牌无租户、审计恒记 `_platform`，可签发角色限五种内部角色（operations / platform_admin / product_reviewer / dictionary_admin / internal_compliance，不含客户角色 whitelist_owner）。
+
+**首次开通（鸡生蛋引导，platform_admin 操作）**：
+1. 门控仍关时，用自报 platform_admin 调 `POST /api/admin/staff-keys` `{staff_id, staff_name, roles}` 签发**首个**人员令牌——secret 仅签发响应返回一次，立即离线保存。
+2. 浏览器打开 `/admin/login`，录入该令牌（存 httpOnly cookie，前端后续请求自动注入 `Authorization: Bearer`）；`GET /api/auth/me` 可验当前身份。
+3. 运维置 `LOOM_STAFF_AUTH_ENABLED=true` 重启服务即生效；此后管理口无令牌 **401**、角色不足 **403**，query/body 自报的 actor_id/roles 一律被令牌身份覆盖。
+4. **回滚**：关掉该 env 重启即恢复 V1 自报行为（纯加法、无迁移回滚）。
+
+**日常管理**（/admin/staff-keys，sidebar 第 12 项；/admin/login 不进 sidebar）：platform_admin 签发/列表/吊销（revoke 为 platform_admin 红线），一人可发多令牌便于轮换；吊销即 401 不可恢复。机器 Agent Key 的签发仍在 /admin/agent-keys（见段 13 步骤 1）。
 
 ---
 
@@ -76,7 +88,8 @@
 - **operations**：`POST /api/fcw/assemble` `{product_space_id, platform, slot_id, goal, actor}`。
 - 七 Guard 全量不短路；通过则签发 `final_id`，`publish_status=published`、`guards_passed=true`；不通过返回 **409** 与 `detail.guards` 逐门结果。
 - 中台导出：CSV `GET /api/fcw/{final_id}.fcw.csv`、JSON envelope `….fcw.json`（含 limit/offset，行数上限 env `LOOM_EXPORT_MAX_ROWS` 默认 10 万）；台内原料 `GET /api/fcw/{final_id}/material.json`。
-- 异步导出经 `/api/exports/jobs`（worker 门控默认关，关时同步落 completed）。
+- 异步导出经 `/api/exports/jobs`（worker 门控默认关，关时同步落 completed；管理页 /admin/exports）。
+- **白名单卡片查看（Q177/Q180）**：运营在管理台 /admin/fcw 跨租户分页查看全部成品卡片、行内展开六层原料（只读，operations|platform_admin）；客户在自己台的 content → cards（`/content/cards`，客户 nav 不增项）只看本租户卡片，后端 `GET /api/fcw?tenant_id=` 强制单租户隔离。
 
 ---
 
@@ -106,7 +119,7 @@
 
 | 码 | 典型含义 | 处置 |
 |---|---|---|
-| 401 | Agent Key 缺失/无效/停用（effect-callback、A2A tasks） | 核对 Bearer secret 与 Key 状态 |
+| 401 | Agent Key 缺失/无效/停用（effect-callback、A2A tasks）；或门控开后管理口 staff 令牌缺失/损坏/吊销（Q178） | 机器口核对 `loom_` secret 与 Key 状态；人员口在 /admin/login 重新录入有效的 `loom_staff_` 令牌 |
 | 403（PermissionDenied） | actor.roles 不含该口所需角色 | 换正确角色账号；勿在业务流程中提权 |
 | 404 | 资源不存在（intake/ps/pws/fcw/content） | 核对 ID；FCW 未签发前段12 各口必 404 |
 | 409 状态机冲突 | 事件在当前态非法 / 重复发证 / FCW 已签发 / 材料缺失 / 下载口对 queued·running 作业 | 查当前状态再决定下一步；assemble 的 409 看 `detail.guards` |
@@ -122,6 +135,8 @@
 - **SLA sweep**：调度器自动巡检（受单 leader 锁/PG 行级 fence 保护）；手工触发 `POST /api/admin/sla/run`；阈值 SLA 72h、黄 24h、红 48h（Q149）。
 - **难产/孤儿/待发布三队列**：每日在 /admin/content 与 /admin/effects 过 needs-attention、orphans、ready-to-publish。
 - **审计**：每个写操作与每次 LLM 调用均落审计；异常排查先查审计与 `/admin/token-cost`。
-- **演练**：全链验证跑 `infra/fullchain-rehearsal.sh`（synthetic 不花钱；真 LLM 演练需授权 + 当日预算内）；备份恢复见 `infra/restore-rehearsal.sh`。
+- **指标（Q181）**：`GET /metrics` 暴露 Prometheus 文本（Counter/Gauge/Histogram + 每请求计时，path 按路由模板低基数），不鉴权（同 /healthz），供抓取；可选 prometheus 容器在 compose `monitoring` profile 后、默认不启动（`docker compose --profile monitoring up`）。
+- **备份与恢复**：逻辑备份＝db-backup sidecar 每日 `pg_dump` + 7 天保留（`infra/backup/backup.sh`），异机逻辑恢复演练 `infra/restore-rehearsal.sh`（Q158，12/12）；**WAL 归档 + 基础备份 + 对象存储 PITR（Q182）**＝postgres 持续归档 WAL（archive_timeout=300s）、db-basebackup 周期基础备份、wal-archiver 推 MinIO，RPO 分钟级、可回滚到指定时点，演练脚本 `infra/wal/pitr-rehearsal.sh`（before=1/after=0 实测，本地手动不进 CI）；跨 region 对象存储冗余仍为 V2。
+- **演练**：全链验证跑 `infra/fullchain-rehearsal.sh`（synthetic 不花钱；真 LLM 演练需授权 + 当日预算内）；高可用/负载演练 `infra/ha-rehearsal.sh`、`infra/load-rehearsal.sh`（本地手动不进 CI）。
 
 > 校准类口径（效果反哺算法、Q54 评分等）原文【待补】，运营不得自行编公式，按业务/数据科学口径下达后执行。

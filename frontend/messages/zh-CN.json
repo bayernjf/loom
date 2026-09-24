@@ -132,6 +132,23 @@
     "unknown": "操作失败，请稍后重试"
   },
   "content": {
+    "cards": {
+      "title": "白名单卡片",
+      "pageNote": "本租户已发证的最终白名单卡片（FCW）；展开可查看该卡片六层原料包完整快照。",
+      "unconfigured": "未配置租户（LOOM_TENANT_ID），请联系管理员。",
+      "empty": "暂无已发证白名单卡片。",
+      "subnavContent": "内容成品",
+      "subnavCards": "白名单卡片",
+      "columnPlatform": "平台",
+      "columnGoal": "目的",
+      "columnCountry": "市场",
+      "columnScore": "评分",
+      "columnCreated": "发证时间",
+      "expandMaterial": "展开六层原料包",
+      "collapseMaterial": "收起",
+      "loading": "加载中…",
+      "materialFailed": "原料包加载失败，请稍后重试。"
+    },
     "title": "内容生产与发布",
     "pageNote": "内容由平台运营依据已发布白名单生成；您可在此查看各语言成品并完成审阅（通过 / 驳回 / 改稿）。生成与 AI 重新生成由运营执行。",
     "unconfigured": "未配置租户（LOOM_TENANT_ID），请联系管理员。",

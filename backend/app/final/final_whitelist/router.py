@@ -158,6 +158,24 @@ async def list_fcw(
     return [service.fcw_view(r) for r in rows]
 
 
+@router.get("/api/fcw")
+async def list_tenant_fcw(
+    tenant_id: str = Query(min_length=1),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """Q180 D3.5 客户卡片视图：按租户列出已发证 FCW（客户只读口）。
+
+    客户口径同 GET /api/content（无鉴权闸、tenant_id query 必填、强制租户过滤）：
+    只回本租户白名单元信息；六层原料包经 GET /api/fcw/{final_id}/material.json
+    按需反解析；不触发 Guard、不写审计。
+    """
+
+    rows, _ = await service.list_fcw_admin(
+        session, tenant_id=tenant_id, limit=100000, offset=0
+    )
+    return [service.fcw_view(r) for r in rows]
+
+
 @router.get("/api/fcw/{final_id}")
 async def get_fcw(final_id: str, session: AsyncSession = Depends(get_session)) -> dict:
     fcw = await service.get_fcw(session, final_id)

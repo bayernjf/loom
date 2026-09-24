@@ -1,0 +1,31 @@
+/* Q180 D3.5：客户白名单卡片视图样式（沿用全局 token，复用 content 容器类）。 */
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.subnav {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-md);
+}
+
+.subnav a {
+  color: var(--color-brand-active);
+  text-decoration: none;
+}
+
+.subnav a:hover {
+  text-decoration: underline;
+}
