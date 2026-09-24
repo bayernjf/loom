@@ -1,0 +1,11 @@
+# Q181：可选 Prometheus 抓取配置（经 docker-compose profile `monitoring` 启动，默认不起）。
+# 后端 /metrics 零依赖自写 Prometheus 文本；本文件仅在需要抓取/看板时挂载。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: loom-backend
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8000"]

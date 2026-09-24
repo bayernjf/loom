@@ -140,4 +140,13 @@ services:
       minio: {condition: service_started}
     restart: unless-stopped
     logging: *default-logging
-volumes: {pgdata:, redisdata:, miniodata:, pgbackups:, walarchive:, basebackups:}
+  prometheus:
+    image: quay.io/prometheus/prometheus:latest
+    profiles: ["monitoring"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports: ["9090:9090"]
+    restart: unless-stopped
+    logging: *default-logging
+volumes: {pgdata:, redisdata:, miniodata:, pgbackups:, walarchive:, basebackups:, prometheusdata:}
