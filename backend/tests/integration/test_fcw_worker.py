@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.actor import Actor
 from app.core.config import get_settings
 from app.core.db import Base, get_session
+from app.core.metrics.business import JOBS_FAILED, STREAM_DEAD_LETTERS, STREAM_PENDING
 from app.core.models import AuditLog
 from app.core.queue import (
     add_event,
@@ -52,6 +53,7 @@ from tests.integration.test_fcw_api import (
     _make_ps,
     _seed_static_inputs,
 )
+from tests.metric_reads import counter_value, gauge_value
 
 ACTOR = Actor(**OPS)
 
@@ -385,12 +387,21 @@ async def test_infra_failure_over_limit_dead_letters_and_fails_task(
         raise RuntimeError("database down")
 
     monkeypatch.setattr(service, "process_task", _boom)
+    failed_before = counter_value(JOBS_FAILED, kind="fcw")
+    dead_before = counter_value(STREAM_DEAD_LETTERS, stream=service.FCW_STREAM)
     worker = FcwWorker(
         session_factory, block_ms=0, min_idle_ms=0, max_deliveries=1
     )
     await worker._tick()  # reclaim deliveries=2 > max 1 → 死信 + failed
     assert _pel(fake) == {}
     assert service.FCW_DEAD_STREAM in fake.streams
+    # Q188：第三个 worker 与导出/导入同口径——进 failed 计一次、进死信计一次，
+    # 且 tick 末尾顺带把该流深度写进 Gauge。
+    assert counter_value(JOBS_FAILED, kind="fcw") - failed_before == 1
+    assert counter_value(STREAM_DEAD_LETTERS, stream=service.FCW_STREAM) - dead_before == 1
+    assert gauge_value(
+        STREAM_PENDING, stream=service.FCW_STREAM, group=service.FCW_GROUP
+    ) == 0
     async with session_factory() as session:
         task = await service.get_task(session, task_id)
         assert task.status == service.TASK_STATUS_FAILED

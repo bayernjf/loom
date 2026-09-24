@@ -18,6 +18,12 @@ from app.core.exports.models import (
     JOB_QUEUED,
 )
 from app.core.exports.worker import ExportWorker, build_export_workers
+from app.core.metrics.business import (
+    JOBS_FAILED,
+    STREAM_DEAD_LETTERS,
+    STREAM_LENGTH,
+    STREAM_PENDING,
+)
 from app.core.queue import (
     DEFAULT_COUNT,
     StreamBackendError,
@@ -30,6 +36,7 @@ from app.core.queue import streams as streams_mod
 from app.core.tenants.models import Tenant
 from app.final.final_whitelist.models import FinalContentWhitelist
 from tests.integration.stream_fakes import FakeStreamsRedis
+from tests.metric_reads import counter_value, gauge_value
 
 
 @pytest_asyncio.fixture
@@ -107,6 +114,11 @@ async def test_completes_new_job_and_acks(factory, fake):
         assert job.completed_at is not None
     assert worker.completed == 1
     assert _pel(fake) == {}  # 成功即 ACK，PEL 清空
+    # Q188：tick 末尾顺带取样队列深度——入流 1 条，成功 ACK 后未 ACK 归零。
+    assert gauge_value(
+        STREAM_PENDING, stream=service.EXPORT_STREAM, group=service.EXPORT_GROUP
+    ) == 0
+    assert gauge_value(STREAM_LENGTH, stream=service.EXPORT_STREAM) == 1
 
 
 async def test_reclaims_crashed_pending_and_completes(factory, fake):
@@ -192,6 +204,8 @@ async def test_repeated_processing_failure_fails_job_and_dead_letters(
     await _seed(factory)
     job_id = await _queued_job(factory)
     await service.enqueue_export_job(job_id)
+    failed_before = counter_value(JOBS_FAILED, kind="export")
+    dead_before = counter_value(STREAM_DEAD_LETTERS, stream=service.EXPORT_STREAM)
 
     async def _boom(*_a, **_k):
         raise RuntimeError("render backend down")
@@ -214,6 +228,11 @@ async def test_repeated_processing_failure_fails_job_and_dead_letters(
     assert second.failed == 1
     assert _pel(fake) == {}
     assert service.EXPORT_DEAD_STREAM in fake.streams
+    # Q188：DB 行进 failed 与消息进死信各计一次（首轮未超限，不该有计数）。
+    assert counter_value(JOBS_FAILED, kind="export") - failed_before == 1
+    assert (
+        counter_value(STREAM_DEAD_LETTERS, stream=service.EXPORT_STREAM) - dead_before == 1
+    )
 
 
 async def test_stream_backend_failure_is_fail_closed(factory, fake):

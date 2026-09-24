@@ -25,6 +25,8 @@ from .streams import (
     override_stream_client,
     read_new,
     reclaim_pending,
+    sample_stream_depth,
+    stream_depth,
 )
 
 __all__ = [
@@ -46,4 +48,6 @@ __all__ = [
     "override_stream_client",
     "read_new",
     "reclaim_pending",
+    "sample_stream_depth",
+    "stream_depth",
 ]

@@ -24,6 +24,7 @@ from app.core.imports.models import (
 )
 from app.core.imports.schemas import BackfillImportJobIn
 from app.core.imports.worker import ImportWorker
+from app.core.metrics.business import JOBS_FAILED, STREAM_DEAD_LETTERS
 from app.core.queue import (
     add_event,
     ensure_group,
@@ -32,6 +33,7 @@ from app.core.queue import (
 )
 from app.core.queue import streams as streams_mod
 from tests.integration.stream_fakes import FakeStreamsRedis
+from tests.metric_reads import counter_value
 
 CUSTOMER = {"id": "cust-1", "roles": []}
 
@@ -161,6 +163,8 @@ async def test_validation_failure_marks_failed_and_acks_without_retry(factory, f
     job_id = await _queued_job(factory, _csv_body(CSV_BAD_ROW))
     await service.enqueue_import_job(job_id)
 
+    failed_before = counter_value(JOBS_FAILED, kind="import")
+    dead_before = counter_value(STREAM_DEAD_LETTERS, stream=service.IMPORT_STREAM)
     worker = ImportWorker(factory, block_ms=0)
     await worker._tick()
 
@@ -178,6 +182,11 @@ async def test_validation_failure_marks_failed_and_acks_without_retry(factory, f
     assert worker.completed == 0
     assert _pel(fake) == {}  # 已 ACK，不留 PEL
     assert service.IMPORT_DEAD_STREAM not in fake.streams  # 不进死信
+    # Q188：确定性失败计一次 job failed、零次死信——与「不重试不进死信」同口径。
+    assert counter_value(JOBS_FAILED, kind="import") - failed_before == 1
+    assert (
+        counter_value(STREAM_DEAD_LETTERS, stream=service.IMPORT_STREAM) - dead_before == 0
+    )
 
 
 async def test_reclaims_crashed_pending_and_completes(factory, fake):

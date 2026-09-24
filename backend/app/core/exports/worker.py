@@ -33,6 +33,7 @@ from app.core.queue import (
     move_to_dead,
     read_new,
     reclaim_pending,
+    sample_stream_depth,
 )
 from app.core.queue import streams as streams_mod
 
@@ -120,6 +121,8 @@ class ExportWorker:
         )
         for entry_id, fields, deliveries in reclaimed:
             await self._handle(client, entry_id, fields, deliveries)
+        # Q188：每 tick 顺带取一次队列深度（纯观测读，故障不影响本轮）。
+        await sample_stream_depth(client, service.EXPORT_STREAM, service.EXPORT_GROUP)
 
     async def _handle(
         self, client, entry_id: str, fields: dict[str, str], deliveries: int

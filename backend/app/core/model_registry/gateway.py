@@ -13,6 +13,7 @@ from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
+from app.core.metrics.business import observe_llm_call, record_budget_blocked
 from app.core.model_registry import crypto, drivers
 from app.core.model_registry.models import (
     AIModel,
@@ -351,6 +352,9 @@ async def invoke(session: AsyncSession, scene: str, variables: dict) -> Invocati
     model = await _resolve_model(session, scene)
     budget = model.daily_budget
     if budget is not None and await spend_today(session, model.model_id) >= Decimal(str(budget)):
+        # Q188：预算硬停＝内容生产被停摆，必须可告警；只计数，异常语义一字不改
+        # （worker 侧仍按 Q87 把 BudgetExhausted 判为瞬态）。
+        record_budget_blocked(scene)
         raise BudgetExhausted(f"daily budget exhausted for model {model.model_code!r}")
 
     user_message = await _render_current_prompt(session, scene, variables)
@@ -358,8 +362,12 @@ async def invoke(session: AsyncSession, scene: str, variables: dict) -> Invocati
     if model.provider != "synthetic":
         kwargs["api_key"] = await _active_key_secret(session, model.model_id)
     try:
-        result = await drivers.driver_for(model.provider).generate(
-            scene=scene, user_message=user_message, variables=variables, **kwargs
+        result = await observe_llm_call(
+            scene,
+            model.provider,
+            drivers.driver_for(model.provider).generate(
+                scene=scene, user_message=user_message, variables=variables, **kwargs
+            ),
         )
     except drivers.DriverError as exc:
         raise GenerationUpstreamError(str(exc)) from exc
@@ -384,14 +392,20 @@ async def embed(session: AsyncSession, scene: str, texts: list[str]) -> Embeddin
     model = await _resolve_model(session, scene, capability="embedding")
     budget = model.daily_budget
     if budget is not None and await spend_today(session, model.model_id) >= Decimal(str(budget)):
+        # Q188：与 chat 侧同一计数口径（按场景），embedding 预算停摆同样可告警。
+        record_budget_blocked(scene)
         raise BudgetExhausted(f"daily budget exhausted for model {model.model_code!r}")
 
     kwargs: dict = {"model_code": model.model_code, "provider": model.provider}
     if model.provider != "synthetic":
         kwargs["api_key"] = await _active_key_secret(session, model.model_id)
     try:
-        result = await drivers.driver_for(model.provider).embed(
-            scene=scene, texts=texts, **kwargs
+        result = await observe_llm_call(
+            scene,
+            model.provider,
+            drivers.driver_for(model.provider).embed(
+                scene=scene, texts=texts, **kwargs
+            ),
         )
     except drivers.DriverError as exc:
         raise GenerationUpstreamError(str(exc)) from exc

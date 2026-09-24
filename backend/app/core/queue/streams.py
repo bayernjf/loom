@@ -26,6 +26,7 @@ import redis.asyncio as aioredis
 from redis.exceptions import ResponseError
 
 from app.core.config import get_settings
+from app.core.metrics.business import record_dead_letter, set_stream_depth
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,37 @@ async def read_new(
     return _flatten(resp)
 
 
+async def stream_depth(client, stream: str, group: str) -> tuple[int, int]:
+    """只读探一次队列深度，返回 ``(未 ACK 条目数, 流内条目数)``。
+
+    与 ``reclaim_pending`` 里的 ``XPENDING RANGE`` 不是一回事：那条带 idle 过滤且
+    被 count 截断，只覆盖「空闲超阈值可接管」的子集，不代表积压总量；这里取
+    ``XPENDING`` 汇总 + ``XLEN``。流长逼近 MAXLEN 时近似裁剪会开始丢未消费消息。
+    """
+    try:
+        summary = await client.xpending(stream, group)
+        length = int(await client.xlen(stream))
+    except redis.RedisError as exc:
+        raise StreamBackendError(f"xpending {stream}/{group} failed: {exc}") from exc
+    return int((summary or {}).get("pending", 0)), length
+
+
+async def sample_stream_depth(client, stream: str, group: str) -> bool:
+    """Q188：把队列深度写进指标，返回是否取样成功。
+
+    纯观测读，故障只记 debug、**绝不上抛**：一个只为看数的读取若抛
+    ``StreamBackendError``，会被 worker 的上层当成后端故障退避，让监控改动反过来
+    干扰消费循环；失败时保留上一次的 Gauge 值。
+    """
+    try:
+        pending, length = await stream_depth(client, stream, group)
+    except StreamBackendError:
+        logger.debug("stream depth sample skipped for %s/%s", stream, group)
+        return False
+    set_stream_depth(stream, group, pending, length)
+    return True
+
+
 async def reclaim_pending(
     client,
     stream: str,
@@ -205,6 +237,9 @@ async def move_to_dead(
     dead_fields = {**fields, DEAD_REASON_FIELD: reason, DEAD_ORIGIN_FIELD: entry_id}
     dead_id = await add_event(client, dead_stream, dead_fields, maxlen=maxlen)
     acked = await ack_event(client, stream, group, entry_id)
+    # Q188：死信漏斗唯一计数点（三种 worker 共用本函数）。计入原流名而非死信流名，
+    # 便于按业务流看积压死因；只在写死信与 ACK 都成功后计，避免重试双计。
+    record_dead_letter(stream)
     logger.error(
         "stream entry %s moved to dead-letter %s after %s",
         entry_id,
