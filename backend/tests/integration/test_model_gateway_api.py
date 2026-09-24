@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.actor import Actor
 from app.core.db import Base, get_session
+from app.core.metrics.business import LLM_BUDGET_BLOCKED, LLM_UPSTREAM_DURATION
 from app.core.model_registry import drivers, gateway
 from app.core.model_registry.drivers import GenerationResult
 from app.core.model_registry.models import (
@@ -41,6 +42,7 @@ from app.product.modeling.models import (
 )
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import G2Field
+from tests.metric_reads import counter_value, histogram_count
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
@@ -305,11 +307,21 @@ async def test_prompt_versioning_is_append_only(client):
 
 async def test_llm_invoke_happy_path_then_human_gate(client, session_factory):
     intake_id = await _submitted_intake(client)
+    ok_before = histogram_count(
+        LLM_UPSTREAM_DURATION,
+        scene=SCENE_CAT_RECOG, provider="synthetic", outcome="ok",
+    )
     r = await client.post(
         f"/api/intakes/{intake_id}/c1-recognition/llm-invoke",
         json={"actor": OPS},
     )
     assert r.status_code == 201, r.text
+    # Q188：一次真调用记一条成功样本；provider 标签把 synthetic 与真供应商分开，
+    # 否则内存合成调用会把上游 P99 拉平到看不见真延迟。
+    assert histogram_count(
+        LLM_UPSTREAM_DURATION,
+        scene=SCENE_CAT_RECOG, provider="synthetic", outcome="ok",
+    ) - ok_before == 1
     body = r.json()
     assert body["source"] == "llm_auto"
     assert body["model_id"] == SYNTHETIC_MODEL_ID
@@ -407,10 +419,13 @@ async def test_llm_invoke_disabled_model_and_budget_hardstop(client):
         "model_id": zero_id, "actor": OPS,
     })
     assert r.status_code == 200
+    blocked_before = counter_value(LLM_BUDGET_BLOCKED, scene=SCENE_CAT_RECOG)
     r = await client.post(
         f"/api/intakes/{intake_id}/c1-recognition/llm-invoke", json={"actor": OPS}
     )
     assert r.status_code == 409
+    # Q188：预算硬停是「花钱前就被拒」，内容生产实质停摆，必须可告警。
+    assert counter_value(LLM_BUDGET_BLOCKED, scene=SCENE_CAT_RECOG) - blocked_before == 1
 
 
 async def test_llm_invoke_remote_model_without_key_is_422(client):

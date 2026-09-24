@@ -97,6 +97,28 @@ class FakeStreamsRedis:
             )
         return rows[:count]
 
+    async def xpending(self, stream, group):
+        """XPENDING 汇总（Q188 只读深度探针用）：真实未 ACK 条数，不受 count/idle 截断。"""
+        self._boom()
+        key = (stream, group)
+        if key not in self.groups:
+            raise ResponseError("NOGROUP No such consumer group")
+        pel = self.groups[key]["pel"]
+        ids = list(pel)
+        return {
+            "pending": len(ids),
+            "min": ids[0] if ids else None,
+            "max": ids[-1] if ids else None,
+            "consumers": [
+                {"name": name, "pending": sum(1 for m in pel.values() if m["consumer"] == name)}
+                for name in {m["consumer"] for m in pel.values()}
+            ],
+        }
+
+    async def xlen(self, stream):
+        self._boom()
+        return len(self.streams.get(stream, []))
+
     async def xclaim(self, stream, group, consumer, min_idle_ms, ids):
         self._boom()
         pel = self.groups[(stream, group)]["pel"]
