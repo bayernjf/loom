@@ -25,6 +25,22 @@ const messages = JSON.parse(
 );
 
 const requiredKeys = [
+  // Q180 D3.5 客户白名单卡片视图。
+  "content.cards.title",
+  "content.cards.pageNote",
+  "content.cards.unconfigured",
+  "content.cards.empty",
+  "content.cards.subnavContent",
+  "content.cards.subnavCards",
+  "content.cards.columnPlatform",
+  "content.cards.columnGoal",
+  "content.cards.columnCountry",
+  "content.cards.columnScore",
+  "content.cards.columnCreated",
+  "content.cards.expandMaterial",
+  "content.cards.collapseMaterial",
+  "content.cards.loading",
+  "content.cards.materialFailed",
   "content.title",
   "content.pageNote",
   "content.unconfigured",
@@ -218,6 +234,9 @@ const requiredFiles = [
   "app/[locale]/(shell)/content/body-edit-island.tsx",
   "app/[locale]/(shell)/content/backfill-island.tsx",
   "app/[locale]/(shell)/content/backfill-batch-island.tsx",
+  "app/[locale]/(shell)/content/cards/page.tsx",
+  "app/[locale]/(shell)/content/cards/card-material-island.tsx",
+  "app/[locale]/(shell)/content/cards/cards.module.css",
   "app/[locale]/(shell)/content/content.module.css",
   "app/[locale]/(shell)/analytics/page.tsx",
   "app/[locale]/(shell)/analytics/analytics.module.css",
@@ -270,6 +289,8 @@ const apiText = readFileSync(join(root, "lib", "api.ts"), "utf8");
 if (/process\.env\.NEXT_PUBLIC/.test(apiText))
   problems.push("lib/api.ts must not read NEXT_PUBLIC_* env (would leak into browser bundle)");
 for (const token of [
+  "listMyFcw",
+  "getFcwMaterial",
   "listContent",
   "getContent",
   "approveContent",
@@ -587,6 +608,35 @@ if (!getKey(messages, "analytics.readRateSamples")?.includes("{count}"))
   problems.push("analytics.readRateSamples must contain the {count} placeholder");
 if (!getKey(messages, "analytics.truncated")?.includes("{limit}"))
   problems.push("analytics.truncated must contain the {limit} placeholder");
+
+// Q180 D3.5：客户白名单卡片视图（cards 子页 + 六层展开岛 + 后端集合口）。
+const cardsPageText = readFileSync(
+  join(shell, "content", "cards", "page.tsx"), "utf8",
+);
+if (!cardsPageText.includes("force-dynamic"))
+  problems.push("content/cards/page.tsx must be force-dynamic");
+if (cardsPageText.includes("MenuPlaceholder"))
+  problems.push("content/cards/page.tsx must not render MenuPlaceholder");
+if (!cardsPageText.includes("CardMaterialIsland"))
+  problems.push("content/cards/page.tsx must mount CardMaterialIsland");
+if (!cardsPageText.includes("listMyFcw"))
+  problems.push("content/cards/page.tsx must list FCW via listMyFcw");
+const cardIslandText = readFileSync(
+  join(shell, "content", "cards", "card-material-island.tsx"), "utf8",
+);
+if (!cardIslandText.startsWith('"use client"'))
+  problems.push('card-material-island.tsx must start with "use client"');
+if (cardIslandText.includes("@/lib/api"))
+  problems.push("card-material-island.tsx must not import @/lib/api");
+if (/\bfetch\s*\(/.test(cardIslandText) || /https?:\/\//.test(cardIslandText))
+  problems.push("card-material-island.tsx must not call fetch/URLs directly; use server actions");
+const fcwRouterText = readFileSync(
+  join(backend, "app", "final", "final_whitelist", "router.py"), "utf8",
+);
+if (!fcwRouterText.includes('@router.get("/api/fcw")'))
+  problems.push("backend final_whitelist router must keep GET /api/fcw collection endpoint (Q180)");
+if (!fcwRouterText.includes('"/api/fcw/{final_id}/material.json"'))
+  problems.push("backend final_whitelist router must keep material.json export (Q155)");
 
 if (problems.length > 0) {
   console.error(`check-content: ${problems.length} problem(s)\n${problems.join("\n")}`);

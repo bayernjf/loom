@@ -428,6 +428,37 @@ export async function getContent(contentId: string): Promise<ContentProductView>
   );
 }
 
+// Q180 D3.5：客户白名单卡片视图（FCW 元信息，按租户强制过滤）。
+export interface FcwCardView {
+  final_id: string;
+  task_id: string | null;
+  tenant_id: string;
+  product_space_id: string;
+  platform: string;
+  slot_id: string | null;
+  goal: string;
+  country: string | null;
+  score: number | null;
+  score_incomplete: boolean;
+  guards_passed: boolean;
+  publish_status: string;
+  created_at: string | null;
+  published_at: string | null;
+}
+
+// 六层原料包（Q155/Q180）：复用 Q177 已定义的 FcwMaterialPack 具体结构（见本文件后部）。
+
+export async function listMyFcw(tenantId: string): Promise<FcwCardView[]> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return request<FcwCardView[]>(`/api/fcw?${params}`);
+}
+
+export async function getFcwMaterial(finalId: string): Promise<FcwMaterialPack> {
+  return request<FcwMaterialPack>(
+    `/api/fcw/${encodeURIComponent(finalId)}/material.json`,
+  );
+}
+
 function contentPost(
   path: string,
   payload: Record<string, unknown>,

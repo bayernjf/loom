@@ -9,11 +9,13 @@ import {
   customerBackfillEffects,
   editContentBody,
   getBackfillImportJob,
+  getFcwMaterial,
   rejectContent,
   reviseContent,
   submitBackfillImportJob,
   type BackfillImportJobView,
   type EffectBatchReceipt,
+  type FcwMaterialPack,
 } from "@/lib/api";
 
 // Q174：client 岛只能经本文件取类型，re-export 任务视图（不引 @/lib/api 实现）。
@@ -235,5 +237,24 @@ export async function pollBackfillImportJobAction(
     return { ok: true, job };
   } catch (err) {
     return importJobFailure(err);
+  }
+}
+
+// Q180 D3.5：客户白名单卡片六层展开——client 岛经此 Server Action 取数（不直连后端）。
+export type FcwMaterialActionResult =
+  | { ok: true; pack: FcwMaterialPack }
+  | { ok: false; status: 404 | "unknown" };
+
+export async function getFcwMaterialAction(
+  finalId: string,
+): Promise<FcwMaterialActionResult> {
+  if (!finalId.trim()) return { ok: false, status: "unknown" };
+  try {
+    const pack = await getFcwMaterial(finalId);
+    return { ok: true, pack };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404)
+      return { ok: false, status: 404 };
+    return { ok: false, status: "unknown" };
   }
 }

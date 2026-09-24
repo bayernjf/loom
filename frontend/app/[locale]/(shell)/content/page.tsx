@@ -8,6 +8,7 @@ import {
   type ContentProductListItem,
 } from "@/lib/api";
 import styles from "./content.module.css";
+import cardsStyles from "./cards/cards.module.css";
 
 // Q122：客户「内容生产与发布」V1 功能页——成品列表（每语言成品并列）+ 详情审阅。
 // 运行时读取服务端 env，不得构建期静态固化；生成/重生成仍由 operations 触发，不在本页外放。
@@ -149,6 +150,10 @@ export default async function ContentPage() {
   return (
     <div>
       <h1 className={styles.title}>{t("title")}</h1>
+      <nav className={cardsStyles.subnav}>
+        <span aria-current="page">{t("cards.subnavContent")}</span>
+        <Link href="/content/cards">{t("cards.subnavCards")}</Link>
+      </nav>
       <p className={styles.notice}>{t("pageNote")}</p>
       {body}
     </div>
