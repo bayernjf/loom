@@ -71,6 +71,37 @@ for _metric in (
     REGISTRY.register(_metric)
 
 
+# ---- 首次事件可见性（Q193）---------------------------------------------
+# 懒创建的 counter 首个样本就是 1，Prometheus 看不见 0→1 跳变，常量序列的
+# increase() 恒为 0 ⇒「进程里第一次发生该类事件」系统性地不可告警——而 private
+# beta 低流量下要报的恰恰就是这一次。真栈演练（停 Redis→入流 fail-closed→503）
+# 实测坐实：/metrics 已是 1、Prometheus 也抓到 1，increase(…[15m]) 仍为 0、 firing 为空。
+# 故对所有**可静态枚举**的标签组合在 import 时先置 0；不可枚举的（按 scene 的预算
+# 停）由 owning 模块自己枚举后调用 prime_*。
+JOB_KINDS: tuple[str, ...] = ("export", "import", "fcw")
+
+
+def prime(metric, **labels: object) -> None:
+    """把某标签组合的 Counter 显式置 0 序列，使下一次真实增量跨两次抓取可见。"""
+    metric.inc(0.0, **labels)
+
+
+for _kind in JOB_KINDS:
+    prime(JOBS_FAILED, kind=_kind)
+
+
+def prime_dead_letter(stream: str) -> None:
+    prime(STREAM_DEAD_LETTERS, stream=stream)
+
+
+def prime_lock_lost(lock: str) -> None:
+    prime(LOCK_LOST, lock=lock)
+
+
+def prime_budget_blocked(scene: str) -> None:
+    prime(LLM_BUDGET_BLOCKED, scene=scene)
+
+
 def record_job_failed(kind: str) -> None:
     """作业进入 failed 终态时计一次。
 

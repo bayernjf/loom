@@ -21,7 +21,7 @@ import redis
 import redis.asyncio as aioredis
 
 from app.core.config import get_settings
-from app.core.metrics.business import record_lock_lost
+from app.core.metrics.business import prime_lock_lost, record_lock_lost
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,10 @@ SWEEP_LOCK = "loom:lock:sla-sweep"
 RESTOCK_LOCK = "loom:lock:restock-worker"
 
 DEFAULT_TTL_SECONDS = 60.0
+
+# Q193：两把循环级锁的 lost 序列在 import 时置 0，否则"本进程第一次易主"不可告警。
+for _lock_name in (SWEEP_LOCK, RESTOCK_LOCK):
+    prime_lock_lost(_lock_name)
 
 # 仅当持有者 token 匹配才动作，避免误删/误续别人的锁（TTL 过期换主场景）。
 _RELEASE_LUA = (
