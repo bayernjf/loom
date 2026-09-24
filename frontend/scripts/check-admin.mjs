@@ -437,6 +437,12 @@ const requiredKeys = [
     "materialShow",
     "materialHide",
     "materialLoading",
+    "downloadMaterial",
+    "copyId",
+    "copied",
+    "bulkCopy",
+    "bulkCopyHint",
+    "selectAll",
     "warningsTitle",
     "guardsTitle",
     "layer.product",
@@ -501,6 +507,7 @@ const requiredFiles = [
   join("fcw", "page.tsx"),
   join("fcw", "actions.ts"),
   join("fcw", "material-island.tsx"),
+  join("fcw", "fcw-table.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -1542,6 +1549,7 @@ for (const route of ['"/jobs"', '"/jobs/{job_id}"', '"/jobs/{job_id}/download"']
 const fcwPage = readAdmin(join("fcw", "page.tsx"));
 const fcwActions = readAdmin(join("fcw", "actions.ts"));
 const fcwIsland = readAdmin(join("fcw", "material-island.tsx"));
+const fcwTable = readAdmin(join("fcw", "fcw-table.tsx"));
 
 if (!/export const dynamic = "force-dynamic"/.test(fcwPage))
   problems.push("fcw/page.tsx must be force-dynamic (server-only env)");
@@ -1551,7 +1559,7 @@ for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
   if (fcwPage.includes(forbidden))
     problems.push(`fcw/page.tsx is read-only RSC; must not contain ${forbidden}`);
 }
-for (const token of ["listAdminFcw", "MaterialIsland", 'name="tenant_id"', "data-testid"]) {
+for (const token of ["listAdminFcw", "FcwTable", 'name="tenant_id"', "data-testid"]) {
   if (!fcwPage.includes(token))
     problems.push(`fcw/page.tsx must contain ${token}`);
 }
@@ -1584,6 +1592,36 @@ if (fcwIsland.includes("router.refresh"))
 for (const token of ["getFcwMaterialAction", "data-testid", "JSON.stringify"]) {
   if (!fcwIsland.includes(token))
     problems.push(`fcw material island must contain ${token}`);
+}
+// Q186：六层原料包一键存盘（与 Q168 导出下载同范式，Blob + object URL，不经裸 URL）。
+if (!fcwIsland.includes("Blob") || !fcwIsland.includes("createObjectURL"))
+  problems.push("fcw material island must save the pack via a Blob object URL");
+for (const token of ["downloadMaterial", "revokeObjectURL"]) {
+  if (!fcwIsland.includes(token))
+    problems.push(`fcw material island download must contain ${token}`);
+}
+// Q186：D3.5 余项 final_id 单条/多选复制。表格下沉 client 岛只为承载本页选中态，
+// 仍不得直连后端、不得写数据、不得刷新路由。
+if (!/^"use client"/m.test(fcwTable))
+  problems.push("fcw-table.tsx must be a client island");
+if (
+  /\bfetch\s*\(/.test(fcwTable) ||
+  /https?:\/\//.test(fcwTable) ||
+  /^import\s+(?!type\b).*"@\/lib\/api"/m.test(fcwTable)
+)
+  problems.push("fcw-table.tsx must not call the API directly (type-only import allowed)");
+if (fcwTable.includes("router.refresh"))
+  problems.push("fcw-table.tsx is read-only and must not refresh the router");
+for (const token of [
+  "navigator.clipboard.writeText",
+  'data-testid="fcw-copy-id"',
+  'data-testid="fcw-bulk-copy"',
+  'data-testid="fcw-select-all"',
+  "MaterialIsland",
+  'import type { FcwListItem }',
+]) {
+  if (!fcwTable.includes(token))
+    problems.push(`fcw-table.tsx must contain ${token}`);
 }
 const fcwRouter = readFileSync(
   join(repoRoot, "backend", "app", "final", "final_whitelist", "router.py"),

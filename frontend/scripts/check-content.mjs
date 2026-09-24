@@ -41,6 +41,9 @@ const requiredKeys = [
   "content.cards.collapseMaterial",
   "content.cards.loading",
   "content.cards.materialFailed",
+  "content.cards.copyId",
+  "content.cards.copied",
+  "content.cards.downloadMaterial",
   "content.title",
   "content.pageNote",
   "content.unconfigured",
@@ -236,6 +239,7 @@ const requiredFiles = [
   "app/[locale]/(shell)/content/backfill-batch-island.tsx",
   "app/[locale]/(shell)/content/cards/page.tsx",
   "app/[locale]/(shell)/content/cards/card-material-island.tsx",
+  "app/[locale]/(shell)/content/cards/copy-id-island.tsx",
   "app/[locale]/(shell)/content/cards/cards.module.css",
   "app/[locale]/(shell)/content/content.module.css",
   "app/[locale]/(shell)/analytics/page.tsx",
@@ -621,6 +625,9 @@ if (!cardsPageText.includes("CardMaterialIsland"))
   problems.push("content/cards/page.tsx must mount CardMaterialIsland");
 if (!cardsPageText.includes("listMyFcw"))
   problems.push("content/cards/page.tsx must list FCW via listMyFcw");
+// Q186 D3.5 余项：客户卡片行内 final_id 复制。
+if (!cardsPageText.includes("CopyIdButton"))
+  problems.push("content/cards/page.tsx must mount CopyIdButton (Q186)");
 const cardIslandText = readFileSync(
   join(shell, "content", "cards", "card-material-island.tsx"), "utf8",
 );
@@ -630,6 +637,26 @@ if (cardIslandText.includes("@/lib/api"))
   problems.push("card-material-island.tsx must not import @/lib/api");
 if (/\bfetch\s*\(/.test(cardIslandText) || /https?:\/\//.test(cardIslandText))
   problems.push("card-material-island.tsx must not call fetch/URLs directly; use server actions");
+// Q186：六层原料包一键存盘（与 Q168 导出下载同范式，Blob + object URL）。
+if (!cardIslandText.includes("Blob") || !cardIslandText.includes("createObjectURL"))
+  problems.push("card-material-island.tsx must save the pack via a Blob object URL");
+for (const token of ["downloadMaterial", "revokeObjectURL"]) {
+  if (!cardIslandText.includes(token))
+    problems.push(`card-material-island.tsx download must contain ${token}`);
+}
+const copyIslandText = readFileSync(
+  join(shell, "content", "cards", "copy-id-island.tsx"), "utf8",
+);
+if (!copyIslandText.startsWith('"use client"'))
+  problems.push('copy-id-island.tsx must start with "use client"');
+if (copyIslandText.includes("@/lib/api"))
+  problems.push("copy-id-island.tsx must not import @/lib/api");
+if (/\bfetch\s*\(/.test(copyIslandText) || /https?:\/\//.test(copyIslandText))
+  problems.push("copy-id-island.tsx must not call fetch/URLs directly");
+if (!copyIslandText.includes("navigator.clipboard.writeText"))
+  problems.push("copy-id-island.tsx must copy via navigator.clipboard.writeText");
+if (!copyIslandText.includes('data-testid="card-copy-id"'))
+  problems.push('copy-id-island.tsx must expose data-testid="card-copy-id"');
 const fcwRouterText = readFileSync(
   join(backend, "app", "final", "final_whitelist", "router.py"), "utf8",
 );

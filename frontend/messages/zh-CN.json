@@ -147,7 +147,10 @@
       "expandMaterial": "展开六层原料包",
       "collapseMaterial": "收起",
       "loading": "加载中…",
-      "materialFailed": "原料包加载失败，请稍后重试。"
+      "materialFailed": "原料包加载失败，请稍后重试。",
+      "copyId": "复制 ID",
+      "copied": "已复制",
+      "downloadMaterial": "下载原料包 JSON"
     },
     "title": "内容生产与发布",
     "pageNote": "内容由平台运营依据已发布白名单生成；您可在此查看各语言成品并完成审阅（通过 / 驳回 / 改稿）。生成与 AI 重新生成由运营执行。",
@@ -772,6 +775,12 @@
       "materialShow": "查看六层原料包",
       "materialHide": "收起六层原料包",
       "materialLoading": "六层原料包加载中…",
+      "downloadMaterial": "下载原料包 JSON",
+      "copyId": "复制 ID",
+      "copied": "已复制",
+      "bulkCopy": "复制所选 final_id",
+      "bulkCopyHint": "已选 {count} 条（换行分隔）",
+      "selectAll": "全选本页",
       "warningsTitle": "引用告警（warnings）",
       "guardsTitle": "发证 Guard 留痕",
       "layer": {

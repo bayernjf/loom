@@ -4,10 +4,12 @@ import { Link } from "@/i18n/navigation";
 import { CURRENT_TENANT_ID, listMyFcw } from "@/lib/api";
 
 import { CardMaterialIsland } from "./card-material-island";
+import { CopyIdButton } from "./copy-id-island";
 import styles from "./cards.module.css";
 import contentStyles from "../content.module.css";
 
 // Q180 D3.5：客户白名单卡片视图——本租户已发证 FCW 卡片列表 + 行内六层原料包展开。
+// Q186：行内补 final_id 复制与原料包 JSON 存盘（D3.5 余项，纯前端）。
 // 运行时读取服务端 env，不构建期固化；只读，不触发 Guard、不写审计。
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,7 @@ export default async function FcwCardsPage() {
                 <span className={contentStyles.statusChip}>
                   {item.publish_status}
                 </span>
+                <CopyIdButton finalId={item.final_id} />
               </div>
               <dl className={contentStyles.detailList}>
                 <dt>{t("columnPlatform")}</dt>

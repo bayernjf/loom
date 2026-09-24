@@ -54,6 +54,23 @@ export function MaterialIsland({ finalId }: { finalId: string }) {
     );
   }
 
+  // Q186 D3.5 余项：已展开的六层原料包一键存盘。与 Q168 导出下载同范式——组 Blob
+  // 触发浏览器下载（不经裸 URL），只读岛不刷新路由。
+  function downloadJson() {
+    if (!pack) return;
+    const blob = new Blob([JSON.stringify(pack, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `fcw-${finalId}-material.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       <button
@@ -76,6 +93,14 @@ export function MaterialIsland({ finalId }: { finalId: string }) {
           {pack ? (
             <>
               <p className={styles.metaLine}>{pack.schema}</p>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={downloadJson}
+                data-testid="fcw-material-download"
+              >
+                {t("downloadMaterial")}
+              </button>
               {Array.isArray(pack.warnings) && pack.warnings.length > 0 ? (
                 <details open>
                   <summary>{t("warningsTitle")}</summary>

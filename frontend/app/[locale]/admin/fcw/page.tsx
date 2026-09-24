@@ -3,12 +3,14 @@ import { getTranslations } from "next-intl/server";
 
 import { ApiError, CURRENT_ADMIN_ACTOR_ID, listAdminFcw } from "@/lib/api";
 import styles from "../admin.module.css";
-import { MaterialIsland } from "./material-island";
+import { FcwTable } from "./fcw-table";
 
 export const dynamic = "force-dynamic";
 
 // Q177：D3.5 白名单组装引擎运营只读首片（02 C1.121）。跨租户分页浏览已发证
 // FCW（tenant_id 可空＝全部），行内按需展开六层原料包；纯只读 RSC，枚举码原样直出。
+// Q186：表格下沉为 client 岛以承载「本页选中态」（多选复制 final_id），数据仍由
+// 本 RSC 取好后传入，岛内不直连后端。
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const PAGE_SIZE = 50;
@@ -20,14 +22,6 @@ function oneParam(value: string | string[] | undefined): string | undefined {
 function parseOffset(value: string | undefined): number {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : 0;
-}
-
-function shortId(value: string): string {
-  return value.slice(0, 8);
-}
-
-function fmt(iso: string | null): string {
-  return iso ? iso.slice(0, 16).replace("T", " ") : "—";
 }
 
 export default async function FcwAdminPage({
@@ -107,60 +101,7 @@ export default async function FcwAdminPage({
             <p className={styles.notice}>{t("empty")}</p>
           ) : (
             <>
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>{t("colFinal")}</th>
-                      <th>{t("colTenant")}</th>
-                      <th>{t("colPlatform")}</th>
-                      <th>{t("colSlot")}</th>
-                      <th>{t("colGoal")}</th>
-                      <th>{t("colScore")}</th>
-                      <th>{t("colStatus")}</th>
-                      <th>{t("colCreated")}</th>
-                      <th>{t("colAction")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((fcw) => (
-                      <tr key={fcw.final_id}>
-                        <td>
-                          <span className={styles.metaLine} title={fcw.final_id}>
-                            {shortId(fcw.final_id)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={styles.metaLine}>{fcw.tenant_id}</span>
-                        </td>
-                        <td>{fcw.platform}</td>
-                        <td>
-                          <span className={styles.metaLine} title={fcw.slot_id}>
-                            {shortId(fcw.slot_id)}
-                          </span>
-                        </td>
-                        <td>{fcw.goal}</td>
-                        <td>{fcw.score === null ? "—" : fcw.score.toFixed(1)}</td>
-                        <td>
-                          <span
-                            className={`${styles.chip} ${
-                              fcw.publish_status === "published"
-                                ? styles.chipActive
-                                : ""
-                            }`}
-                          >
-                            {fcw.publish_status}
-                          </span>
-                        </td>
-                        <td>{fmt(fcw.created_at)}</td>
-                        <td>
-                          <MaterialIsland finalId={fcw.final_id} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <FcwTable items={items} />
               <p className={styles.metaLine}>
                 {t("pageInfo", { from, to, total })}
               </p>
