@@ -1,0 +1,13 @@
+# Q185：Grafana 看板自动置备（文件式，不建库、不进 UI 手工导入）。
+apiVersion: 1
+
+providers:
+  - name: loom
+    orgId: 1
+    folder: Loom
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

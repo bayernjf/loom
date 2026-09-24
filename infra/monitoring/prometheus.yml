@@ -1,8 +1,13 @@
 # Q181：可选 Prometheus 抓取配置（经 docker-compose profile `monitoring` 启动，默认不起）。
 # 后端 /metrics 零依赖自写 Prometheus 文本；本文件仅在需要抓取/看板时挂载。
+# Q185：补 rule_files（告警规则消费侧）。投递不走 Alertmanager——由 watchdog 轮询
+# /api/v1/alerts 转发到既有 LOOM_ALERT_WEBHOOK（原因见 watchdog.py 头注释）。
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alert_rules.yml
 
 scrape_configs:
   - job_name: loom-backend

@@ -1,0 +1,56 @@
+# Q185：可选监控栈（Prometheus 规则求值 + Grafana 看板 + watchdog 告警转发）。
+#
+# 独立 overlay 而非 base 里的 profile：compose 的 `${VAR:?}` 插值在解析期**全局**求值、
+# 与 profile 激活与否无关，把 Grafana 管理员口令的必填护栏放 base 会连带打断
+# 不开监控的默认部署路径。放在这里，护栏就只约束真正 `-f` 进来的人。
+#
+# 起法（默认不启）：
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml \
+#     --profile monitoring up -d
+# 演练：./alerting-rehearsal.sh up
+x-logging: &default-logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
+services:
+  prometheus:
+    image: quay.io/prometheus/prometheus:latest
+    profiles: ["monitoring"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheusdata:/prometheus
+    ports: ["9090:9090"]
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+    logging: *default-logging
+  # 指标看板。文件式置备数据源与看板，不建库、不进 UI 手工导入。
+  # 口令刻意无默认值：缺失即 compose 响亮报错，不内置弱口令。
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${LOOM_GRAFANA_ADMIN_PASSWORD:?set LOOM_GRAFANA_ADMIN_PASSWORD to start grafana}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      prometheus: {condition: service_started}
+    restart: unless-stopped
+    logging: *default-logging
+  # Q185：告警投递复用 Q146 的 watchdog 与同一 LOOM_ALERT_WEBHOOK——本 overlay 一旦
+  # 引入，就替 watchdog 打开「转发 Prometheus firing 告警」这一档（base 里不设该
+  # env，故不开监控时转发链完全惰性，不会每轮打一条失败日志）。
+  watchdog:
+    environment:
+      PROMETHEUS_ALERTS_URL: http://prometheus:9090/api/v1/alerts
+
+volumes: {prometheusdata:, grafanadata:}

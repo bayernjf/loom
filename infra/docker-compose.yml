@@ -28,6 +28,19 @@ services:
       # Q182：首次初始化追加 replication pg_hba 条目（供 db-basebackup 连接）。
       - ./wal/init-replica-hba.sh:/docker-entrypoint-initdb.d/zz-replica-hba.sh:ro
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U loom"], interval: 5s, timeout: 3s, retries: 10}
+    depends_on:
+      # Q185：归档卷属主必须先于 postgres 初始化就绪（见 wal-archive-init）。
+      wal-archive-init: {condition: service_completed_successfully}
+    logging: *default-logging
+  # Q185：空命名卷的挂载点默认 root:root，而官方镜像的 initdb.d 脚本以 postgres
+  # （uid 999）身份运行、改不动属主（chown/chmod 双双 EPERM → postgres exit 1）。
+  # 故用一个一次性 root 容器先把属主交给 postgres；复用 pg 镜像不额外拉新镜像。
+  wal-archive-init:
+    image: pgvector/pgvector:pg16
+    user: root
+    entrypoint: ["sh", "-c", "chown 999:999 /wal-archive && chmod 700 /wal-archive"]
+    volumes: [walarchive:/wal-archive]
+    restart: "no"
     logging: *default-logging
   redis:
     image: redis:7
@@ -137,16 +150,13 @@ services:
       - basebackups:/basebackups
     entrypoint: ["/bin/sh", "/scripts/archive-wal.sh"]
     depends_on:
-      minio: {condition: service_started}
+      # minio 可被 overlay 挪到非激活 profile（staging/ha 彩排即如此），故声明为可选
+      # 依赖；否则 `required` 默认 true 会让整个 compose project 判为 invalid。
+      minio: {condition: service_started, required: false}
     restart: unless-stopped
     logging: *default-logging
-  prometheus:
-    image: quay.io/prometheus/prometheus:latest
-    profiles: ["monitoring"]
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheusdata:/prometheus
-    ports: ["9090:9090"]
-    restart: unless-stopped
-    logging: *default-logging
-volumes: {pgdata:, redisdata:, miniodata:, pgbackups:, walarchive:, basebackups:, prometheusdata:}
+# Q181 的 Prometheus 与 Q185 的 Grafana 移入 docker-compose.monitoring.yml 独立
+# overlay。原因：compose 的 `${VAR:?}` 插值在**解析期全局求值**、与 profile 是否激活
+# 无关，把 Grafana 管理员口令的必填护栏留在此处会连带打断不开监控的默认部署路径。
+# 告警投递不开独立组件，由 watchdog 轮询 Prometheus 转发（见 monitoring overlay）。
+volumes: {pgdata:, redisdata:, miniodata:, pgbackups:, walarchive:, basebackups:}
