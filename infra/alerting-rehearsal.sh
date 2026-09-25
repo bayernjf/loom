@@ -25,7 +25,9 @@ set -uo pipefail
 
 cd "$(dirname "$0")"
 PROJECT=loom-alerting
-FILES=(-f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.monitoring.yml)
+# Q193：多叠一层演练专用 override，只为打开导出 worker 门控（业务告警实触发用）。
+FILES=(-f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.monitoring.yml \
+       -f docker-compose.alerting-rehearsal.yml)
 # 告警通道指向 frontend：POST 结果可忽略、阶段 4 仍存活。真正的 webhook 投递语义
 # 由 tests/unit/test_backup_monitoring_contract.py 覆盖，本演练只验「转发被触发」。
 export LOOM_ALERT_WEBHOOK="${LOOM_ALERT_WEBHOOK:-http://frontend:3000/}"
@@ -95,6 +97,13 @@ UP_QUERY='http://prometheus:9090/api/v1/query?query=up%7Bjob%3D%22loom-backend%2
 
 up_stack() {
   echo "${c_bold}== 起栈（monitoring overlay）==${c_off}"
+  # 先确认演练项目下已无残留容器：早先一次 `down -v` 静默失败，导致本轮把上一轮的
+  # 转发日志与 15 分钟窗口里的旧 firing 当成自己的证据（假失败＋假通过同时出现）。
+  local leftover
+  leftover=$(docker ps -a --format '{{.Names}}' | grep -c "^${PROJECT}-" || true)
+  if [ "$leftover" != "0" ]; then
+    echo "${c_red}  ABORT${c_off} 演练项目残留 $leftover 个容器，先执行 $0 down"; exit 2
+  fi
   # --wait 若因旁路服务不齐而超时，回退普通 up -d，后续断言自身收敛。
   $COMPOSE up -d --build --wait --wait-timeout 240 >/dev/null 2>&1 \
     || $COMPOSE up -d --build >/dev/null 2>&1
@@ -180,7 +189,9 @@ stage_consume() {
 
 stage_fire() {
   echo "${c_bold}== 阶段 4：端到端触发（停 backend → firing → watchdog 单次转发）==${c_off}"
-  local before after hits
+  local before after hits t0
+  # docker logs 会跨轮次累积（若容器未被重建），所以转发次数只统计本阶段开始之后的行。
+  t0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   before=$(net_api GET "$UP_QUERY" | query_value)
   echo "     触发前 up{job=loom-backend}=$before"
   c "触发前 up 为 1" sh -c "case '$before' in 1|1.0) exit 0;; *) exit 1;; esac"
@@ -195,7 +206,7 @@ stage_fire() {
   ci "Prometheus 判 LoomBackendUnreachable 为 firing" \
     "net_api GET $RULES_URL" '"name":"LoomBackendUnreachable"'
 
-  hits=$(docker logs "$NET" 2>&1 | grep -c "ALERT target=prometheus:LoomBackendUnreachable")
+  hits=$(docker logs --since "$t0" "$NET" 2>&1 | grep -c "ALERT target=prometheus:LoomBackendUnreachable")
   echo "     watchdog 转发命中 $hits 次（180s 内轮询 ~6 轮）"
   c "watchdog 至少转发一次（规则不是死文本）" test "$hits" -ge 1
   # 去重是硬要求：同一 activeAt 的同一告警多轮轮询只该通知一次。
@@ -203,15 +214,90 @@ stage_fire() {
 
   echo "     恢复 backend …"
   $COMPOSE up -d backend >/dev/null 2>&1
-  sleep 45
-  ci "恢复后 backend 重新可抓取" "net_api GET $RULES_URL" '"name":"LoomBackendUnreachable"'
+  # 固定 sleep 45 不够：backend entrypoint 先跑 alembic upgrade head 才起服务（Q145），
+  # 冷启动时长随迁移数量增长。改为轮询到 up 回 1，最多 180s——超时即真失败。
+  local back=0
+  while [ "$back" -lt 180 ]; do
+    sleep 15; back=$((back + 15))
+    if [ "$(net_api GET "$UP_QUERY" | query_value)" = "1" ]; then break; fi
+  done
+  echo "     等待 ${back}s 后检查 up"
+  # 原断言写的是「规则列表里出现 LoomBackendUnreachable」——该名字无论 firing 还是
+  # resolved 都在 /api/v1/rules 里，**永远绿、证不了任何事**（Q193 复核时抓出）。
+  # 改判真信号：up 必须回到 1。
+  recovered=$(net_api GET "$UP_QUERY" | query_value)
+  echo "     恢复后 up{job=loom-backend}=$recovered"
+  c "恢复后 backend 重新可抓取（up 回 1）" sh -c "case '$recovered' in 1|1.0) exit 0;; *) exit 1;; esac"
+}
+
+# Q193：业务告警实触发——七条业务规则此前只被证明「表达式可求值」，从未证明
+# 「真出事前会发生」。本阶段用一条**真实生产故障路径**（入流 fail-closed）把它打红：
+# 停 redis → POST /api/exports/jobs（门控已开）→ enqueue 抛 StreamBackendError
+# → service.fail_export_job 落 DB 并 inc loom_job_failed_total → 抓取 → 规则 firing
+# → watchdog 转发进 LOOM_ALERT_WEBHOOK。全程不 monkeypatch 容器内代码。
+
+# 真判据：从 /api/v1/alerts 找"该 alertname 当前 state=firing"。
+# 绝不用 /api/v1/rules 的规则名当判据——规则名无论 firing/pending/inactive 都在里面。
+alert_firing() { # <alertname> [label=value]
+  docker exec -i "$NET" python - "$1" "${2:-}" <<'PYEOF'
+import json, sys, urllib.request
+name, want = sys.argv[1], sys.argv[2]
+key, _, val = want.partition("=")
+d = json.load(urllib.request.urlopen("http://prometheus:9090/api/v1/alerts", timeout=20))
+for a in d["data"]["alerts"]:
+    if a["state"] != "firing" or a["labels"].get("alertname") != name:
+        continue
+    if want and a["labels"].get(key) != val:
+        continue
+    sys.exit(0)
+sys.exit(1)
+PYEOF
+}
+
+stage_business_alert() {
+  echo "${c_bold}== 阶段 5：业务告警实触发（入流 fail-closed → LoomJobFailed → 转发）==${c_off}"
+  local code hits waited saw_firing t0
+  t0=$(date -u +%Y-%m-%dT%H:%M:%SZ); T0="$t0"
+  $COMPOSE stop redis >/dev/null 2>&1
+  echo "     redis 已停（导出 worker 门控本阶段已开）…"
+  code=$(net_api POST "http://backend:8000/api/exports/jobs" \
+    '{"tenant_id":"t-rehearsal-biz","format":"csv","actor":{"id":"ops-1","roles":["operations"]}}')
+  echo "     POST /api/exports/jobs → $code"
+  # 注意 ci 的签名是 <desc> <cmd> <needle>，把 $code 直接摊进去会让判据变成 JSON 块。
+  c "入流失败按 Q137 口径回 503（不是 201、不是静默成功）" \
+    sh -c 'printf "%s" "$1" | grep -qF "STATUS 503"' _ "$code"
+
+  # 两个观测都必须在轮询里采样：告警先 pending（activeAt 起算）后 firing，事后一次性
+  # 快照 state=="firing" 会撞进这个窗口——上一版正是因此假失败（20s 就转发到了，那一刻
+  # 规则尚在 pending）。要求"曾见 firing"且"已转发"同时成立才退出。
+  echo "     等待抓取 + for:1m 判定 + watchdog 轮询（最多 300s）…"
+  waited=0; hits=0; saw_firing=0
+  while [ "$waited" -lt 300 ]; do
+    sleep 15; waited=$((waited + 15))
+    if [ "$saw_firing" = 0 ] && alert_firing LoomJobFailed kind=export; then
+      saw_firing=1; echo "     (${waited}s) 已观测到 firing（kind=export）"
+    fi
+    hits=$(docker logs --since "$t0" "$NET" 2>&1 | grep -c "ALERT target=prometheus:LoomJobFailed")
+    if [ "$saw_firing" = 1 ] && [ "$hits" -ge 1 ]; then break; fi
+  done
+  c "阶段内曾观测到 LoomJobFailed firing（含 kind=export 标签）" test "$saw_firing" -eq 1
+  echo "     watchdog 转发 LoomJobFailed 命中 $hits 次（等了 ${waited}s）"
+  c "业务告警真走完投递链（watchdog 转发过 LoomJobFailed）" test "$hits" -ge 1
+  ci "watchdog 日志行格式与 Q185 转发链一致（target=prometheus:规则名）" \
+    "docker logs --since $T0 $NET 2>&1" "ALERT target=prometheus:LoomJobFailed"
+
+  echo "     恢复 redis …"
+  $COMPOSE start redis >/dev/null 2>&1
+  sleep 20
+  c "redis 恢复且健康" docker inspect -f "{{.State.Health.Status}}" "${PROJECT}-redis-1"
 }
 
 case "${1:-up}" in
-  up)    up_stack; stage_static; stage_scrape; stage_consume; stage_fire ;;
+  up)    up_stack; stage_static; stage_scrape; stage_consume; stage_fire; stage_business_alert ;;
   run)   stage_static; stage_scrape; stage_consume ;;
+  biz)   stage_business_alert ;;
   down)  $COMPOSE down ;;
-  *) echo "usage: $0 up|run|down"; exit 2 ;;
+  *) echo "usage: $0 up|run|biz|down"; exit 2 ;;
 esac
 
 echo "${c_bold}== 演练结果：${c_green}PASS=$pass${c_off}  ${c_red}FAIL=$fail${c_off} ==${c_off}"

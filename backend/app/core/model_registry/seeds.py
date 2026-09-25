@@ -240,3 +240,16 @@ $body
 """
 
 ARTICLE_SEMANTIC_PROMPT_VARIABLES = ["body", "language"]
+
+
+def all_scene_codes() -> tuple[str, ...]:
+    """本模块声明的全部 SCENE_* 场景码（Q193：供指标预置零序列用）。
+
+    走 vars() 扫描而非再抄一份清单，是为了让"新增场景忘了登记"只能以一种方式发生：
+    常量名不以 SCENE_ 开头——而 tests/unit/test_business_metrics.py 有守卫比对两者。
+    """
+    return sorted(
+        value
+        for name, value in globals().items()
+        if name.startswith("SCENE_") and isinstance(value, str)
+    )

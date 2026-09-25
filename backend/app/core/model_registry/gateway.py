@@ -13,8 +13,12 @@ from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
-from app.core.metrics.business import observe_llm_call, record_budget_blocked
-from app.core.model_registry import crypto, drivers
+from app.core.metrics.business import (
+    observe_llm_call,
+    prime_budget_blocked,
+    record_budget_blocked,
+)
+from app.core.model_registry import crypto, drivers, seeds
 from app.core.model_registry.models import (
     AIModel,
     AIModelKey,
@@ -54,6 +58,11 @@ class BudgetExhausted(ModelUnavailable):
 class GenerationUpstreamError(Exception):
     pass
 
+
+# Q193：按场景枚举的预算硬停序列在 import 时置 0，否则「某场景第一次被预算挡住」
+# 这种正是需要人介入的事件对 increase() 永久不可见。
+for _scene_code in seeds.all_scene_codes():
+    prime_budget_blocked(_scene_code)
 
 # ---------- 模型注册表 ----------------------------------------------------------
 

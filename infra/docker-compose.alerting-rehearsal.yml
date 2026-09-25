@@ -1,0 +1,13 @@
+# Q193：仅供 alerting-rehearsal.sh 使用的演练叠加层——把导出 worker 门控打开，
+# 让「入流 fail-closed → job failed → 业务告警真触发」这条链在真栈里可演。
+#
+# 为什么不复用 staging/monitoring overlay：worker 门控属**业务面**开关，塞进
+# staging 会让 ha/restore 等其它彩排连带起 worker（它们无意验证消费路径），
+# 塞进 monitoring 更会把「看监控」变成「开异步作业」。演练专用文件、零影响面。
+#
+# base compose 不转发该 env（backend environment 只列 DSN/Key 等），故必须在此
+# 显式传给容器；`--profile monitoring` 与本文件由脚本 -f 叠加，不影响默认部署。
+services:
+  backend:
+    environment:
+      LOOM_EXPORT_WORKER_ENABLED: "true"

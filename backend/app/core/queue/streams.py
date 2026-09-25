@@ -26,7 +26,11 @@ import redis.asyncio as aioredis
 from redis.exceptions import ResponseError
 
 from app.core.config import get_settings
-from app.core.metrics.business import record_dead_letter, set_stream_depth
+from app.core.metrics.business import (
+    prime_dead_letter,
+    record_dead_letter,
+    set_stream_depth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +174,9 @@ async def sample_stream_depth(client, stream: str, group: str) -> bool:
     ``StreamBackendError``，会被 worker 的上层当成后端故障退避，让监控改动反过来
     干扰消费循环；失败时保留上一次的 Gauge 值。
     """
+    # Q193：死信计数只有在本流真被消费时才可能产生，故随取样一起预置 0 序列，
+    # 保证"本进程第一次进死信"对 increase() 可见。
+    prime_dead_letter(stream)
     try:
         pending, length = await stream_depth(client, stream, group)
     except StreamBackendError:

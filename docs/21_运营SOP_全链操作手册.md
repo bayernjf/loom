@@ -190,7 +190,7 @@
   全部序列；`GET /metrics` 是原始文本。
 - **可达性由演练守着**：`infra/alerting-rehearsal.sh` 阶段 3 有两条宿主侧断言——从宿主机 `curl`
   `127.0.0.1:3001/api/health` 必须 200，且 `docker port grafana` 必须显示只绑 `127.0.0.1`。
-  2026-09-25 全量演练 **34/34 PASS**。发布口形状另有契约测试硬守
+  2026-09-25 全量演练 **39/39 PASS**（含阶段 5「业务告警实触发」：停 redis 让导出作业真失败，断言 `LoomJobFailed` 曾 firing 且带 `kind=export`、watchdog 恰转发一次——七条业务规则唯有此处被端到端证明过）。发布口形状另有契约测试硬守
   （`test_grafana_is_loopback_only`：绑错网卡、撞 3000、多开口子都判红）。
 
 > 起监控栈需要 `LOOM_GRAFANA_ADMIN_PASSWORD`（**无默认值、缺失即 compose 报错**）——这是 Q185 有意为之，
