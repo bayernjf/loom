@@ -121,10 +121,10 @@
 |---|---|---|
 | 401 | Agent Key 缺失/无效/停用（effect-callback、A2A tasks）；或门控开后管理口 staff 令牌缺失/损坏/吊销（Q178） | 机器口核对 `loom_` secret 与 Key 状态；人员口在 /admin/login 重新录入有效的 `loom_staff_` 令牌 |
 | 403（PermissionDenied） | actor.roles 不含该口所需角色 | 换正确角色账号；勿在业务流程中提权 |
-| 404 | 资源不存在（intake/ps/pws/fcw/content）；**导出任务口跨租户也回 404**（Q196，与不存在同码，不做存在性探针） | 核对 ID 与 `tenant_id` 是否同一租户；FCW 未签发前段12 各口必 404 |
+| 404 | 资源不存在（intake/ps/pws/fcw/content）；**导出任务口跨租户也回 404**（Q196）、**内容口与 intake 语言口同**（Q200，与不存在同码，不做存在性探针） | 核对 ID 与 `tenant_id` 是否同一租户；FCW 未签发前段12 各口必 404；Q200 起五个内容口与 intake 语言口缺 `tenant_id` 即 422、跨租户即 404 |
 | 409 状态机冲突 | 事件在当前态非法 / 重复发证 / FCW 已签发 / 材料缺失 / 下载口对 queued·running 作业 | 查当前状态再决定下一步；assemble 的 409 看 `detail.guards` |
 | 409 锁冲突 | 单 leader 锁被占（SLA/restock 手工 /run） | 单实例稍后重试；LockLost→409 表示锁已易主，本轮中止 |
-| 422 | 请求体校验失败：submit 缺 common fids、语言不在 eligible、PWC/评分参数非法、导出行数超上限、时区缺失、Excel/CSV 坏行、**导出任务状态口/下载口缺 `tenant_id`**（Q196 起必填） | 按 detail 字段（如 missing_fids、eligible、逐行错误）修正后整批重提 |
+| 422 | 请求体校验失败：submit 缺 common fids、语言不在 eligible、PWC/评分参数非法、导出行数超上限、时区缺失、Excel/CSV 坏行、**导出任务状态口/下载口缺 `tenant_id`**（Q196 起必填）、**内容口与 intake 语言口缺 `tenant_id`**（Q200 起必填） | 按 detail 字段（如 missing_fids、eligible、逐行错误）修正后整批重提 |
 | 503 | 锁后端故障 / 异步 worker 入流失败（fail-closed） | 排查 Redis/基础设施后重试 |
 | ModelConfigError（500/配置错） | 场景无路由 / 模型或 Key 未配置 | platform_admin 在模型管理补模型、Key 与场景路由 |
 

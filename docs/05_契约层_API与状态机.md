@@ -312,20 +312,20 @@
 | 方法与路径 | 契约 | 来源 |
 |---|---|---|
 | POST `/api/content/generate` | **operations**（越权 403）：body=`{final_id, kind?=article, language?=zh-CN, actor}`；按 final_id 只读消费 FCW（PT-ART-GEN-V1.5）并从 FCW 取 tenant/product_space/goal/platform/slot/country；201 返回 `ContentProductView`；final_id 不存在 404；kind=video 或未知 422（P4 仅 article）；**Q119：language 不在「发布位市场 ∩ 产品目标语言」交集 → 422（detail 回带 eligible）、同 final_id+language+kind 成品已存在 → 409**；模型输出非法 502；状态闸（非 generating）409 | Q116/Q119 |
-| POST `/api/content/{content_id}/approve` | **客户**通过（Q59）：review→ready_for_publish；不存在 404；状态不合法 409 | Q116 |
-| POST `/api/content/{content_id}/reject` | **客户**驳回（Q59）：**原因必填**，空/空白 422；review→rejected，reason 落 `reject_reason` 供段13 回流；不存在 404；状态不合法 409 | Q116 |
-| POST `/api/content/{content_id}/revise` | **客户**改稿：review→revising（强制重过 CONTENT-COMPLIANCE 复检：词库扫描 + 语义级检测，Q121）；重生成次数达 `content.regen_limit`（默认 3、运营可配，Q120 接通）422（detail 回带 {count}/{limit}）；不存在 404；状态不合法 409 | Q116/Q120 |
+| POST `/api/content/{content_id}/approve` | **客户**通过（Q59）：review→ready_for_publish；**Q200 起 `tenant_id` 必填 query、跨租户与不存在同回 404**；不存在 404；状态不合法 409 | Q116/**Q200** |
+| POST `/api/content/{content_id}/reject` | **客户**驳回（Q59）：**原因必填**，空/空白 422；review→rejected，reason 落 `reject_reason` 供段13 回流；**Q200 起 `tenant_id` 必填 query、跨租户与不存在同回 404**；状态不合法 409 | Q116/**Q200** |
+| POST `/api/content/{content_id}/revise` | **客户**改稿：review→revising（强制重过 CONTENT-COMPLIANCE 复检：词库扫描 + 语义级检测，Q121）；重生成次数达 `content.regen_limit`（默认 3、运营可配，Q120 接通）422（detail 回带 {count}/{limit}）；**Q200 起 `tenant_id` 必填 query、跨租户与不存在同回 404**；状态不合法 409 | Q116/Q120/**Q200** |
 | POST `/api/content/{content_id}/regenerate` | **operations**（越权 403）：revising→generating（`regenerate_count`+1）→review；非 revising 或达上限 422；不存在 404；模型输出非法 502 | Q116 |
 | GET `/api/content?tenant_id=` | **客户·无闸**（Q122）：租户内容成品列表，created_at DESC，**列表项不含 body**（`ContentProductListItem`）；未知租户 200 返空（口径同 Q101），缺 tenant_id 422 | Q122 |
-| GET `/api/content/{content_id}` | **客户·无闸**（Q122）：成品详情（含 body 与完整 review_hits/质量字段）；不存在 404 | Q122 |
-| PATCH `/api/content/{content_id}/body` | **客户·无闸**（Q122，Q56-a 人工编辑）：仅 revising 态可调（非 revising 409），body 空白 422、不存在 404；换正文后**重跑词库 + 语义复检与 ARTICLE-QC**，经 `manual_resubmit` 回 review；**不调 ARTICLE-GEN、不增 regenerate_count**，审计 `content.body_edited` | Q122/Q56 |
+| GET `/api/content/{content_id}` | **客户·无闸**（Q122）：成品详情（含 body 与完整 review_hits/质量字段）；**Q200 起 `tenant_id` 必填 query、跨租户与不存在同回 404**；不存在 404 | Q122/**Q200** |
+| PATCH `/api/content/{content_id}/body` | **客户·无闸**（Q122，Q56-a 人工编辑）：仅 revising 态可调（非 revising 409），body 空白 422、不存在 404；**Q200 起 `tenant_id` 必填 query、跨租户与不存在同回 404**；换正文后**重跑词库 + 语义复检与 ARTICLE-QC**，经 `manual_resubmit` 回 review；**不调 ARTICLE-GEN、不增 regenerate_count**，审计 `content.body_edited` | Q122/Q56/**Q200** |
 | GET `/api/admin/content-languages` | **dictionary_admin**（query actor 闸 Q118：缺 actor_id 422、越权 403）：语言清单，`include_archived=false` 默认仅 active；返回 `[{code,name,markets,status}]` | Q119 |
 | PUT `/api/admin/content-languages` | **dictionary_admin**（body actor，越权 403）：upsert 语言 `{code(BCP-47),name,markets[] ,actor}`，markets 空数组=全市场（含 country 空）；code/name 空 422、markets 含空串 422；显式 upsert 复活已归档语言（同 content_goals） | Q119 |
 | POST `/api/admin/content-languages/{code}/archive` | **dictionary_admin**：软归档（active→archived）；不存在 404、越权 403 | Q119 |
 | GET `/api/content/eligible-languages?final_id=` | **operations**（query actor 闸，缺 422/越权 403）：生成前查可生成语言，返回 `{final_id,country,ps_target_languages,eligible[]}`；final_id 不存在 404 | Q119 |
 | PUT `/api/product-spaces/{ps_id}/target-languages` | **operations**（body actor，越权 403）：设产品侧目标语言 `{languages[],actor}`，空列表=清空（未声明/不限，返回 null）；产品空间不存在 404、语言重复 422 | Q119 |
 | GET `/api/content/languages` | **客户·无闸**（Q123）：仅返回 active 语言清单 `[{code,name,markets,status}]`（不含归档；管理面含归档清单走 dictionary_admin 的 `/api/admin/content-languages`）；**注册顺序必须先于 `GET /api/content/{content_id}`**，否则被路径参数吞掉 | Q123/Q119 |
-| PATCH `/api/intakes/{intake_id}/target-languages` | **客户·无闸**（Q123）：按 intake 维度设产品目标语言 `{languages[],actor}`，空数组=未声明（写 NULL）；产品空间未生成 404、语言码重复/未知/已归档 422；回显 `ProductSpaceView`（新增 target_languages 字段）；operations 的 PUT 代设入口与 OPERATIONS 闸原样保留 | Q123/Q58 |
+| PATCH `/api/intakes/{intake_id}/target-languages` | **客户·无闸**（Q123）：按 intake 维度设产品目标语言 `{languages[],actor}`，空数组=未声明（写 NULL）；**Q200 起 `tenant_id` 必填 query、跨租户与不存在同回 404**；产品空间未生成 404、语言码重复/未知/已归档 422；回显 `ProductSpaceView`（新增 target_languages 字段）；operations 的 PUT 代设入口与 OPERATIONS 闸原样保留 | Q123/Q58/**Q200** |
 | POST `/api/content/{content_id}/discard` | **operations 写口**（Q124，越权客户 403）：body=`{reason(1–500 必填),actor}`；仅 review/revising/rejected 可作废（draft/generating/ready_for_publish 409），空白 reason 422、未知 404；落 `discard_reason` + 审计 `content.discarded`，行转终态 discarded 并经 partial unique index 释放同键生成机会（回池） | Q124/Q56-b |
 | PUT `/api/admin/content/{content_id}/publish-info` | **operations 写口**（Q125，越权 403）：body=`{url(必填非空白,≤1000),platform_post_id?(≤128),actor}`；仅 ready_for_publish（否则 409）、未知 404、空白 url 422；首次落 `published_at`，可重复回填修正 url（不重置时间），post_id 缺省不动、空串清空；审计 `content.publish_info_set` | Q125/Q60c |
 | GET `/api/admin/content/ready-to-publish` | **operations \| platform_admin 读口**（Q125，query actor 闸，缺 422/越权 403）：跨租户全部 ready_for_publish 成品，created_at 升序先到先发，行不含 body；published_at 空=待回填、非空=已回填（显链接可修正） | Q125/Q60c |
