@@ -68,7 +68,8 @@
 
 ### 1.3 鉴权与治理（横切）
 - **API Key 唯一入口**：真接 LLM 时模型注册页是唯一入口（line 2101）；Q67 合并为一张模型注册表（per-1M）。**Q82 已落地 outbound 半套**：Key 密文落库 + env 主密钥、注册页录入/轮换/吊销，明文永不回显；**入站“一 Agent 一 Key 可吊销”Key 半套已随 Q88（2026-09-15）落地**：独立新表 `agent_api_keys` 存 SHA-256 哈希（非可逆加密，入站只需比对）+ 展示前缀，`/api/admin/agent-keys` 签发/列表/吊销（platform_admin），Bearer 401 验签依赖已备；effect-callback 业务端点本体仍随段13/P3（V2）。
-- **单一出口红线（line 11036）**：全系统只有 E1.1 publishFCW 能生成 final_content_whitelist_id；任何其他模块/Skill/Agent 写 final_id = 越权 = 违反协议。
+- **单一出口红线（line 11036）**：全系统只有 E1.1 publishFCW 能生成 final_content_whitelist_id；任何其他模块/Skill/Agent 写 final_id = 越权 = 违反协议。**Q203 起这条红线有运行期守卫**：`final_content_whitelist` 的 ORM mapper 在 E1.1 的签发作用域（`app/final/final_whitelist/exit_guard.py`）之外拒绝 INSERT，直插即判红。覆盖边界＝ORM flush；Core `insert()`/裸 SQL 不经 mapper 事件，全仓今日对该表无此类写入（迁移里只有建表、无种子），边界由 `test_fcw_single_exit_guard.py` 钉成实测事实而非断言。
+- **E1.1 写口的身份（Q203 收紧）**：`POST /api/fcw/assemble` 与 `POST /api/fcw/assembly-tasks` **只认已验真的内部令牌**（`loom_staff_` PAT，Q178）——`Authorization: Bearer` 缺失/无效/吊销一律 401，令牌角色不含 operations 一律 403；**body 里自报的 `actor` 不再是身份**（被验真令牌覆盖，被推翻的自报值按 Q196 口径降级存证）。与 Q178 全局门控的分工：这两个口在 `LOOM_STAFF_AUTH_ENABLED=false`（默认形态）下**也自行验真**，所以发证保护不是 opt-in；其余内部口仍按 Q178（门控开才强制）。代价：脚本/测试打这两个口须先按 Q178 引导流程签一枚令牌。
 
 ### 1.4 M1–M11 已落地 REST 端点（2026-09-13 起后端切片实现登记；实现序 M7→M11→M8，段11 已闭合）
 
@@ -174,8 +175,8 @@
 
 | 方法/路径 | 说明 | 依据 |
 |---|---|---|
-| POST `/fcw/assemble` | 手动单条发证（operations；body 指定 PS/pws_id(缺省取 active 版)/platform/slot_id/goal/country）：机械解析六路材料→7 项 Guard，全绿 mint final_id 直接 published；任一 Guard 败 → 409 回带逐项 guards（不生成 final_id，失败尝试仍 writeAudit `fcw.assembly_blocked` 并提交）；材料缺失 409、slot/平台不符 422、goal 未知 404、重复发证 409 | PT-FCW-ASM/Q52/Q53/Q55 |
-| POST `/fcw/assembly-tasks` | Q55 任务驱动批量（operations；product×platform×goal×count，可选 slot_ids 长度须=count 且不重复否则 422）：同步逐条组装，不给 slot_ids 时取该平台 active 发布位前 N；单项失败（Guard/材料/去重）不阻断其余，任务 completed，results 留痕 issued/failures 每条原因；每条发证 writeAudit `fcw.issued`（六路材料+Guard 结果+E1_owner=publishFCW），任务另记 `fcw.assembly_task` | Q55 |
+| POST `/fcw/assemble` | 手动单条发证（operations；body 指定 PS/pws_id(缺省取 active 版)/platform/slot_id/goal/country）：机械解析六路材料→7 项 Guard，全绿 mint final_id 直接 published；任一 Guard 败 → 409 回带逐项 guards（不生成 final_id，失败尝试仍 writeAudit `fcw.assembly_blocked` 并提交）；材料缺失 409、slot/平台不符 422、goal 未知 404、重复发证 409；**Q203：需 `Authorization: Bearer <loom_staff_…>`，无令牌 401、令牌无 operations 403，body 自报 `actor` 不再算身份** | PT-FCW-ASM/Q52/Q53/Q55 |
+| POST `/fcw/assembly-tasks` | Q55 任务驱动批量（operations；product×platform×goal×count，可选 slot_ids 长度须=count 且不重复否则 422）：同步逐条组装，不给 slot_ids 时取该平台 active 发布位前 N；单项失败（Guard/材料/去重）不阻断其余，任务 completed，results 留痕 issued/failures 每条原因；每条发证 writeAudit `fcw.issued`（六路材料+Guard 结果+E1_owner=publishFCW），任务另记 `fcw.assembly_task`；**Q203：需 `Authorization: Bearer <loom_staff_…>`，无令牌 401、令牌无 operations 403，body 自报 `actor` 不再算身份** | Q55 |
 | GET `/fcw/assembly-tasks/{task_id}` | 任务结果（不存在 404） | Q55 |
 | GET `/product-spaces/{id}/fcw`、GET `/fcw/{final_id}` | 成品列表（新→旧）/单条明细（含 guards 明细、score/score_detail/incomplete） | line 870 |
 | GET `/exports/fcw.csv` | M12 中台导出（Q100）：同步流式 CSV，**仅 final_id 单列**（含表头），query tenant_id 必填（空 422）、product_space_id 可选收窄；只导 published、created_at DESC；读路径不触发 Q95 准入门，未知租户 200 仅表头；`Content-Disposition: attachment; filename="fcw-<tenant>.csv"` | Q100/D4 |

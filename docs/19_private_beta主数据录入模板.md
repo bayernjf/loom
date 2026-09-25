@@ -141,4 +141,4 @@ beta 目的若用 EDUCATION/TRUST/RETENTION（现有无权重，fit_score 会返
 
 ## 5. 录完之后
 
-交回工程侧：① 起 staging 栈；② 灌入本模板数据；③ 跑段1→6→10→11 全链，`POST /api/fcw/assemble` 过七 Guard 产出真实 final_id；④ 重跑 pytest/ruff/eval 101、前端 next build，完成 Checklist #6 验收。
+交回工程侧：① 起 staging 栈；② 灌入本模板数据；③ 跑段1→6→10→11 全链，`POST /api/fcw/assemble` 过七 Guard 产出真实 final_id（**Q203：该口只认已验真 `loom_staff_` Bearer 令牌**，无令牌 401；引导签发见 Q178／docs/21 §2）；④ 重跑 pytest/ruff/eval 101、前端 next build，完成 Checklist #6 验收。

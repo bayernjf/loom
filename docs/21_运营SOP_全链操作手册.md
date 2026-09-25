@@ -85,7 +85,7 @@
 
 ### 段 11 — FCW 组装发证（V1 主链终点）
 
-- **operations**：`POST /api/fcw/assemble` `{product_space_id, platform, slot_id, goal, actor}`。
+- **operations**：`POST /api/fcw/assemble` `{product_space_id, platform, slot_id, goal, actor}`。**Q203 起必须带 `Authorization: Bearer <loom_staff_…>` 内部令牌**：无令牌/令牌失效 401，令牌角色不含 operations 403；`actor` 字段仍收但不再决定身份（以令牌为准，自报值被覆盖后在审计里降级存证）。批量口 `POST /api/fcw/assembly-tasks` 同口径。
 - 七 Guard 全量不短路；通过则签发 `final_id`，`publish_status=published`、`guards_passed=true`；不通过返回 **409** 与 `detail.guards` 逐门结果。
 - 中台导出：CSV `GET /api/fcw/{final_id}.fcw.csv`、JSON envelope `….fcw.json`（含 limit/offset，行数上限 env `LOOM_EXPORT_MAX_ROWS` 默认 10 万）；台内原料 `GET /api/fcw/{final_id}/material.json`。
 - 异步导出经 `/api/exports/jobs`（worker 门控默认关，关时同步落 completed；管理页 /admin/exports）。
