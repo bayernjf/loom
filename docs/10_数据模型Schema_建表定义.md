@@ -41,7 +41,7 @@
 
 ---
 
-## 2. 逐表 Schema（35 设计实体；截至 2026-09-24 物理表 62 张，迁移 0001–0040；0027 纯加外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030/0031 纯场景种子、0032 加列并把 content_products 唯一约束换为 partial unique index、0033 加三发布回填列，均不新增表；0034 新增 effect_records 1 表（段13 效果回流时序，Q126）；**0035 新增 effect_claims 1 表并给 effect_records 加两认领溯源列（Q127 孤儿人工认领，Q128 客户回填零迁移）；**0036 新增 export_jobs 1 表（Q132 中台导出任务记录）；**0037 新增 restock_claims 1 表（Q143 下游 PG 行级 fence 接 restock 花钱路径）；0038 新增 sweep_tick_claims 1 表（Q151 SLA sweep 写路径行级 fence，每把循环锁一行 lock_name/fence/claimed_by/claimed_at/updated_at）——0037/0038 均在首轮 DBA 全量复核之后，已经 pg16 往返实测，并已纳入 2026-09-21 第二轮全量列复核（60 表/637 列/212 索引/FK32＋UQ20，零漂移，见 §4 末）**；**0039 新增 import_jobs 1 表（Q161 客户效果回填异步导入任务，17 列、主键＋tenant_id/content_id 两索引，payload Text 落 CSV 原文/xlsx base64 可重放；在第二轮列复核之后落地，已经 pg16 往返实测，见 §2.8）**）
+## 2. 逐表 Schema（35 设计实体；截至 2026-09-24 物理表 62 张，迁移 0001–0041（**0041 为 Q187 纯配置种子、无 schema 变更，表数不变**）；0027 纯加外键不新增表，0028 新增 content_languages 1 表，0029 加两质量列、0030/0031 纯场景种子、0032 加列并把 content_products 唯一约束换为 partial unique index、0033 加三发布回填列，均不新增表；0034 新增 effect_records 1 表（段13 效果回流时序，Q126）；**0035 新增 effect_claims 1 表并给 effect_records 加两认领溯源列（Q127 孤儿人工认领，Q128 客户回填零迁移）；**0036 新增 export_jobs 1 表（Q132 中台导出任务记录）；**0037 新增 restock_claims 1 表（Q143 下游 PG 行级 fence 接 restock 花钱路径）；0038 新增 sweep_tick_claims 1 表（Q151 SLA sweep 写路径行级 fence，每把循环锁一行 lock_name/fence/claimed_by/claimed_at/updated_at）——0037/0038 均在首轮 DBA 全量复核之后，已经 pg16 往返实测，并已纳入 2026-09-21 第二轮全量列复核（60 表/637 列/212 索引/FK32＋UQ20，零漂移，见 §4 末）**；**0039 新增 import_jobs 1 表（Q161 客户效果回填异步导入任务，17 列、主键＋tenant_id/content_id 两索引，payload Text 落 CSV 原文/xlsx base64 可重放；在第二轮列复核之后落地，已经 pg16 往返实测，见 §2.8）**）
 
 > 字段明细以 04 为唯一来源（本文不重复罗列全部字段，只补建表级要素）；【类型】为建议列。
 

@@ -64,7 +64,7 @@
 | DB 浏览 / AI 调试台 / 调用日志 / 配额 / Key 管理 | D9.5 | 后台内部接口【待补】 |
 | 中台对接 API + Webhook 反馈回流 | D4 | V2 项：中台调 API 拿白名单 + Webhook 回流【待补】 |
 | 中台 SDK 嵌入 | D4 | V3 项：中台集成 Loom SDK【待补】 |
-| 中台 CSV/JSON 导出 | D4 | V1 项：CSV 已定稿（Q100）=仅 final_id 单列同步 GET，中台手动用；JSON 形态仍【待补，挂后续】 |
+| 中台 CSV/JSON 导出 | D4 | V1 项：CSV 已定稿（Q100）=仅 final_id 单列同步 GET，中台手动用；~~JSON 形态仍【待补，挂后续】~~ **已落地：JSON 形态随 Q132（同口径 envelope）、异步导出任务随 Q132、真后台 Streams worker 随 Q137、分页与行数硬上限随 Q142**（见本文件导出端点表）｜2026-09-25 Q198 按实现回填缺口口径，非新决策 |
 
 ### 1.3 鉴权与治理（横切）
 - **API Key 唯一入口**：真接 LLM 时模型注册页是唯一入口（line 2101）；Q67 合并为一张模型注册表（per-1M）。**Q82 已落地 outbound 半套**：Key 密文落库 + env 主密钥、注册页录入/轮换/吊销，明文永不回显；**入站“一 Agent 一 Key 可吊销”Key 半套已随 Q88（2026-09-15）落地**：独立新表 `agent_api_keys` 存 SHA-256 哈希（非可逆加密，入站只需比对）+ 展示前缀，`/api/admin/agent-keys` 签发/列表/吊销（platform_admin），Bearer 401 验签依赖已备；effect-callback 业务端点本体仍随段13/P3（V2）。
@@ -181,9 +181,9 @@
 | GET `/exports/fcw.csv` | M12 中台导出（Q100）：同步流式 CSV，**仅 final_id 单列**（含表头），query tenant_id 必填（空 422）、product_space_id 可选收窄；只导 published、created_at DESC；读路径不触发 Q95 准入门，未知租户 200 仅表头；`Content-Disposition: attachment; filename="fcw-<tenant>.csv"` | Q100/D4 |
 | GET `/exports/fcw.json` | M12 中台导出 JSON 形态（Q132）：query/口径同 fcw.csv，响应 attachment JSON `{tenant_id, product_space_id, count, total, limit, offset, has_more, final_ids[]}`，未知租户空 envelope 200；**Q142 起 fcw.csv/fcw.json 均支持 `limit`(1..硬上限)/`offset` query，limit 超 env `LOOM_EXPORT_MAX_ROWS`(默认 10 万) 或 offset<0 返 422，CSV 分页走 `X-Export-Total/Limit/Offset/Has-More/Truncated` 响应头** | Q132·Q142/D4 |
 | GET `/fcw/{final_id}/material.json` | 台内白名单卡片 **6 层原料包全量 JSON**（Q155）：按 final_id 反解析六路，产 schema `loom.fcw.material-pack.v1`（issued 头 + product/platform/strategy/structure/expression/compliance 六层 + guards + warnings），attachment `fcw-material-<final_id>.json`；只读、无 RBAC 闸、不触发 Guard、不写审计、未知 404，引用行物理缺失回 `{_ref,available:false}` + warning 不 500；**不属中台 /api/exports 的 final_id-only 面**（Q100/Q132/Q142 分界，6 层包属台内卡片详情/复制口径，09:87）；前端卡片随 D3.5 菜单点工 | Q155/09:87 |
-| POST `/exports/jobs` | M12 异步导出任务（Q132，V1 请求内同步执行置 completed）：body {tenant_id, product_space_id?, format=csv\|json, actor}，201 任务视图含 download_url；审计 export.job_created；空 tenant/非法 format/缺 actor 422 | Q132/D4 |
-| GET `/exports/jobs/{job_id}` | 导出任务状态查询（未知 404；V2 真异步后供轮询） | Q132/D4 |
-| GET `/exports/jobs/{job_id}/download` | 按任务参数重渲染下载（未知 404、failed 409；幂等反映当前 published 集合，不存文件 payload） | Q132/D4 |
+| POST `/exports/jobs` | M12 异步导出任务（Q132，V1 请求内同步执行置 completed）：body {tenant_id, product_space_id?, format=csv\|json, actor}，201 任务视图含 download_url（**Q196 起该 URL 自带 `tenant_id`**）；审计 export.job_created；空 tenant/非法 format/缺 actor 422 | Q132/D4 |
+| GET `/exports/jobs/{job_id}` | 导出任务状态查询：~~V2 真异步后供轮询~~ **异步 worker 已随 Q137 落地**（env 门控默认关，关时请求内同步到终态）；**Q196 起 `tenant_id` 必填、任务须属该租户，跨租户与不存在同回 404**（不做存在性探针） | Q132/Q137/Q196·D4 |
+| GET `/exports/jobs/{job_id}/download` | 按任务参数重渲染下载（未知 404、failed 409 回带 error、**queued/running 409 not ready**；幂等反映当前 published 集合，不存文件 payload；**Q196 起同状态口 `tenant_id` 必填并按任务行归属收口**；`job_id` 改 `uuid4`，旧 uuid1 含时钟与节点分量可推算、不宜独担授权凭证） | Q132/Q137/Q196·D4 |
 
 > Guard 七项 code：`g1_pws_frozen`（PWS status=frozen）/`g2_compliance_clear`（block_required=false **且** cleaning_passed=true，无报告不放行【实现补】）/`g3_packages_active`（PCP active + CSP/CSTP/CEP active 且 gate=approved）/`g4_product_space_consistent`（六路 PS 一致）/`g5_tenant_consistent`（六路 tenant 一致）/`g6_law_review`（仅法审被触发时要求 approved，Q49）/`g7_pws_active_version`（is_active=true）。Q54 score（pwc×100×0.4 + fit×0.3 + 三包 conf 均值×100×0.3）仅排序，缺失即 null/incomplete=true，永不做门槛。draft publish_status V1 无创建入口；WF-09 AI Skill 随 V2。
 
@@ -476,7 +476,7 @@
 | review | revise | `regenerate_count` < `content.regen_limit`（默认 3、运营可配，Q120 接通） | revising | 改稿须强制重过复检（Q59） |
 | revising | **manual_resubmit** | **Q122/Q56-a 客户人工改正文后提交**（PATCH body；不调 ARTICLE-GEN、不增 regenerate_count） | review | 重跑词库 + 语义复检 + ARTICLE-QC；审计 content.body_edited |
 | 任意 | 达重生成上限 | `regenerate_count` ≥ `content.regen_limit`（默认 3） | 仅可 reject | 转人工；运营亦可对 review/revising/rejected 显式作废（Q124，见下） |
-| review / revising / rejected | **discard** | **Q124 operations 显式动作**，reason 必填 1–500 字 | **discarded（新终态、只读）** | 落 discard_reason + 审计 content.discarded；partial unique index 释放同键生成机会（回池），旧行保留；draft/generating/ready_for_publish 不可作废，终态上无可用事件 |
+| review / revising / rejected | **discard** | **Q124 operations 显式动作**，reason 必填 1–500 字 | **discarded（新终态、只读）** | 落 discard_reason + 审计 content.discarded；partial unique index 释放同键生成机会（回池），旧行保留——**Q187 起「保留」是有条件的**：超过配置中心 `content.discard_retention_days`（默认 180 天）的行由第五个 SLA sweep 作业物理删＋逐行 `content.discard_purged` 审计，**有下游引用（effect_records/effect_claims/import_jobs）的行留档不删**，整块动作受 env `LOOM_DISCARD_PURGE_ENABLED` 门控、默认关；draft/generating/ready_for_publish 不可作废，终态上无可用事件 |
 
 > 枚举码：`draft/generating/review/ready_for_publish/rejected/revising/discarded`（Q124 起七态）原样不翻译进消息表；discarded 为终态，客户页显弱化只读 chip 与作废原因。
 >
