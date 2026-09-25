@@ -20,6 +20,11 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import SessionLocal, settings
+from app.core.identity import (
+    CREDENTIAL_STAFF,
+    reset_verified_credential,
+    set_verified_credential,
+)
 from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.staff_auth import service
 from app.core.staff_auth.context import get_current_staff, set_current_staff
@@ -38,6 +43,9 @@ async def staff_auth_context(
     authorization: str | None = Header(default=None),
     auth_session: AsyncSession | None = Depends(get_auth_session),
 ) -> None:
+    # 每个请求从"无凭证"起步：即便 ASGI 实现复用了同一 context 副本，也不会有
+    # 上一请求的凭证泄漏进本请求的审计。
+    reset_verified_credential()
     if not settings.staff_auth_enabled:
         return
     token = service.parse_bearer(authorization)
@@ -48,7 +56,10 @@ async def staff_auth_context(
     if row is None:
         raise NotAuthenticated("invalid or revoked staff access token")
     await auth_session.commit()
-    set_current_staff(service.staff_actor(row))
+    actor = service.staff_actor(row)
+    set_current_staff(actor)
+    # Q196 口径 B 甲：审计口看的是"任意已验真凭证"，不只 staff。
+    set_verified_credential(actor, CREDENTIAL_STAFF)
 
 
 def internal_gate(*roles: str):

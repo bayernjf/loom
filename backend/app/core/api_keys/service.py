@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.api_keys.models import AgentApiKey
 from app.core.audit import append_audit
+from app.core.identity import CREDENTIAL_AGENT_KEY, set_verified_credential
 from app.core.rbac import PLATFORM_ADMIN, require_any_role
 
 PLATFORM_TENANT = "_platform"
@@ -129,4 +130,6 @@ async def require_agent_key(
     row = await verify_key(session, token) if token else None
     if row is None:
         raise HTTPException(status_code=401, detail="invalid or revoked agent API key")
+    # Q196 口径 B 甲：机器凭证同样是"已验真身份"，审计以此为准、不认自报。
+    set_verified_credential(Actor(id=row.key_id, roles=[]), CREDENTIAL_AGENT_KEY)
     return row
