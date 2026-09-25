@@ -16,6 +16,7 @@ from app.core.queue import StreamBackendError
 from app.core.rbac import (
     OPERATIONS,
     PLATFORM_ADMIN,
+    NotAuthenticated,
     PermissionDenied,
     require_any_role,
 )
@@ -60,7 +61,12 @@ def _guard_conflict(exc: service.GuardsFailed) -> HTTPException:
 async def assemble_manual(
     body: AssemblyManual, session: AsyncSession = Depends(get_session)
 ) -> dict:
+    # Q200 #34：E1.1 publishFCW 写口统一过 rbac.require_any_role——门控开启时
+    # 自报 operations 不再能直接 mint final_id（无 staff 令牌 → 401）；门控关闭
+    # 维持 V1 自报口径。service 层 _require_ops 仍留作内部兜底（后台 worker 不
+    # 经 HTTP，无请求级 staff 上下文，见 Q178 设计边界）。
     try:
+        require_any_role(body.actor, OPERATIONS)
         fcw = await service.assemble_one(
             session,
             product_space_id=body.product_space_id,
@@ -71,6 +77,10 @@ async def assemble_manual(
             country=body.country,
             pws_id=body.pws_id,
         )
+    except NotAuthenticated as exc:
+        raise HTTPException(401, str(exc)) from exc
+    except PermissionDenied as exc:
+        raise HTTPException(403, str(exc)) from exc
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except (service.PwsNotFound, service.SlotNotFound) as exc:
@@ -102,6 +112,8 @@ async def create_assembly_task(
     """
     enabled = get_settings().fcw_worker_enabled
     try:
+        # Q200 #34：同 assemble 写口，门控开启时要求 staff 令牌（见上）。
+        require_any_role(body.actor, OPERATIONS)
         task = await service.create_task_record(
             session,
             body,
@@ -109,6 +121,10 @@ async def create_assembly_task(
             if enabled
             else service.TASK_STATUS_RUNNING,
         )
+    except NotAuthenticated as exc:
+        raise HTTPException(401, str(exc)) from exc
+    except PermissionDenied as exc:
+        raise HTTPException(403, str(exc)) from exc
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PwsNotFound as exc:

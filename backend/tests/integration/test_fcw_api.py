@@ -475,3 +475,45 @@ async def test_law_review_blocks_g6_until_approved(client, session_factory):
     )
     ok = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
     assert ok.status_code == 200, ok.text
+
+
+# ---------- Q200 #34：治理不变式运行期强制 ----------
+
+async def test_assemble_gated_without_token_is_401(client, session_factory, monkeypatch):
+    """门控开启时自报 operations 不再能直接 mint final_id（Q199 探针：修复前 200）。
+
+    修复前 service._require_ops 只查自报 roles、不经 rbac.require_any_role——"唯一
+    出口"只是注释约定；本条即判红哨兵：门控开 + 无 staff 令牌 → 401。
+    """
+    from app.core.db import settings
+
+    monkeypatch.setattr(settings, "staff_auth_enabled", True)
+    ps_id = await _make_ps(session_factory)
+    pws = await _freeze(client, ps_id)
+    slot_id = await _seed_static_inputs(client, ps_id)
+    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
+
+    resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
+    assert resp.status_code == 401, resp.text
+
+    # 任务写口同闸：门控开 + 无令牌 → 401（不是 200/201 异步入队）。
+    task = await client.post(
+        "/api/fcw/assembly-tasks",
+        json={**_assemble_body(ps_id, slot_id), "count": 1},
+    )
+    assert task.status_code == 401, task.text
+
+
+async def test_assemble_gate_off_self_declared_operations_still_ok(
+    client, session_factory
+):
+    """门控关（V1 默认）维持自报口径：正文口照常发证（Q178 纯加法承诺）。
+
+    与上一条成对：401 只来自「门控开启缺认证」，不破坏 V1 默认部署路径。
+    """
+    ps_id = await _make_ps(session_factory)
+    pws = await _freeze(client, ps_id)
+    slot_id = await _seed_static_inputs(client, ps_id)
+    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
+    resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
+    assert resp.status_code == 200, resp.text
