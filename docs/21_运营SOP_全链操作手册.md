@@ -18,7 +18,7 @@
 | `platform_admin` | 租户、Agent Key、运营人员令牌、AI 模型与场景路由、字典管理、导出任务 | /admin/tenants、/admin/agent-keys、/admin/staff-keys、/admin/token-cost、/admin/exports |
 | `dictionary_admin` | 内容语言清单等字典维护 | API（语言清单管理） |
 
-> **身份（Q178，2026-09-24 起）**：内部运营管理端已有可选的个人访问令牌（staff PAT）认证层，门控 `LOOM_STAFF_AUTH_ENABLED` **默认关**——门控关时 Actor 仍为请求体内 `{"id","roles"}` 自报（private beta 由平台内控保证）；门控开后管理口必须持 staff 令牌、自报 actor 被令牌身份覆盖（防提权）。开通与登录操作见 **§0.1**。客户侧真实认证与 actor↔tenant 绑定仍为 V2 第一项（Q88 租户绑定口径【待补】）。
+> **身份（Q178，2026-09-24 起）**：内部运营管理端已有可选的个人访问令牌（staff PAT）认证层，门控 `LOOM_STAFF_AUTH_ENABLED` **默认关**——门控关时 Actor 仍为请求体内 `{"id","roles"}` 自报（private beta 由平台内控保证）；门控开后管理口必须持 staff 令牌、自报 actor 被令牌身份覆盖（防提权）。开通与登录操作见 **§0.1**。客户侧真实认证仍为 V2（Q196 口径 C 甲＝private beta 维持平台代运营、不做客户登录）。**Q196 起审计身份由服务端定**：写审计的唯一口按「已验真凭证 > 请求自报」取值，带 staff PAT 或 Agent Key 打的口，审计记的是凭证持有人，body/query 里自报的 id/roles 只作备查证据（`detail.declared_actor`），来源看 `detail._actor_via`∈{`staff_token`,`agent_key`,`declared`}；无凭证的客户口仍记自报并标 `declared`——**读到 `declared` 就等于「身份未经证实」**。中台导出任务状态口与下载口（§4 值班表可查）现须带 `tenant_id` 且只能读本租户任务。
 
 ### 0.1 运营登录与身份（Q178 staff PAT，门控默认关）
 

@@ -134,10 +134,10 @@
 同步 job、Q137 异步 worker、下载口全部经同一 `fetch_export_page` 受上限约束；export_jobs 不新增分页列，`export.job_created/job_completed` 审计 detail 追加 total/limit/truncated。
 
 **异步导出任务（V1 同步执行落表）**：
-- `POST /api/exports/jobs`：body `{tenant_id（必填）, product_space_id?（可选）, format: "csv"|"json"=csv, actor}`（中台面同 Q100 无 RBAC 闸，actor 仅留痕）；门控关（默认，`LOOM_EXPORT_WORKER_ENABLED=false`）在请求内同步导出并置 `completed`（同 Q55 FcwAssemblyTask 同步先例）、201 返回任务视图；门控开（Q137）置 queued/running 经 Redis Streams 消费组 ExportWorker 异步处理（只读幂等作业可水平并行、崩溃 PEL 接管、超限进死信）。
-- `GET /api/exports/jobs/{job_id}`：任务状态视图（未知 404；queued/running 供中台轮询，Q137 起支持）。
+- `POST /api/exports/jobs`：body `{tenant_id（必填）, product_space_id?（可选）, format: "csv"|"json"=csv, actor}`（中台面同 Q100 无 RBAC 闸，actor 仅留痕；**Q196：留痕不等于采信**——本次请求若验真过 staff PAT 或 Agent Key，审计里的操作人一律取凭证身份，自报值降级为 `detail.declared_actor` 备查，来源标在 `detail._actor_via`）；门控关（默认，`LOOM_EXPORT_WORKER_ENABLED=false`）在请求内同步导出并置 `completed`（同 Q55 FcwAssemblyTask 同步先例）、201 返回任务视图；门控开（Q137）置 queued/running 经 Redis Streams 消费组 ExportWorker 异步处理（只读幂等作业可水平并行、崩溃 PEL 接管、超限进死信）。
+- `GET /api/exports/jobs/{job_id}?tenant_id=`：任务状态视图（未知 404；queued/running 供中台轮询，Q137 起支持）。**Q196：`tenant_id` 必填且任务须属于该租户**，跨租户与不存在同回 404。
 - `GET /api/exports/jobs?tenant_id=&limit=`：任务列表口（Q137，envelope `{tenant_id,count,jobs[]}`，limit 默认 50、1..200）。
-- `GET /api/exports/jobs/{job_id}/download`：按任务参数**重新查询渲染**下载（不存文件 payload，幂等反映当前 published 集合；未知 404、status=failed 409 detail=error、queued/running 409 not ready，Q137），媒体类型与文件名按 job.format/file_name，渲染同样受 Q142 分页/硬上限约束。
+- `GET /api/exports/jobs/{job_id}/download?tenant_id=`（**Q196 起 `tenant_id` 必填并按任务行归属收口**）：按任务参数**重新查询渲染**下载（不存文件 payload，幂等反映当前 published 集合；未知 404、status=failed 409 detail=error、queued/running 409 not ready，Q137），媒体类型与文件名按 job.format/file_name，渲染同样受 Q142 分页/硬上限约束。
 - 任务视图 ExportJobView：`{job_id, tenant_id, product_space_id, format, status, row_count, file_name, requested_by, error, created_at, completed_at, download_url}`；row_count 为创建时留痕，不随后续数据变化。
 - 审计 `export.job_created`（tenant=客户租户、actor_id=requested_by、actor_roles=[]、entity_type=export_job、entity_id=job_id、detail {format,row_count,product_space_id}）；同步 CSV/JSON 两口沿用 Q100 不写审计。
 - 新表 export_jobs（迁移 0036，业务物理表 57→58，pg16 up/downgrade-1/up 实测）；错误：tenant_id 空 422、format 非 csv|json 422、缺 actor 422、未知 job 404、failed 任务下载 409。
