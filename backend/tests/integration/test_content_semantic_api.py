@@ -49,6 +49,7 @@ from app.core.model_registry.seeds import (
 from app.core.skill7.models import SkillRun
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
+from tests.integration.fcw_rows import add_fcw
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 CUSTOMER = {"id": "cust-1", "roles": ["customer"]}
@@ -130,7 +131,7 @@ async def client(session_factory):
             ContentLanguage(code="zh-CN", name="简体中文", markets=[], status="active"),
             _fcw(),
         ]
-        session.add_all(rows)
+        await add_fcw(session, rows)
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

@@ -52,6 +52,7 @@ from app.core.model_registry.seeds import (
 from app.core.skill7.models import SkillRun
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
+from tests.integration.fcw_rows import add_fcw
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 # Q106/Q122：客户前端身份 roles 恒空（server env 自报），客户端点必须可调。
@@ -134,7 +135,7 @@ async def client(session_factory):
             ARTICLE_SEMANTIC_PROMPT_ID, ARTICLE_SEMANTIC_PROMPT_TEMPLATE,
             ARTICLE_SEMANTIC_PROMPT_VARIABLES,
         )
-        session.add_all([
+        await add_fcw(session, [
             ContentLanguage(code="zh-CN", name="简体中文", markets=[], status="active"),
             ContentLanguage(code="en-US", name="English", markets=[], status="active"),
             _fcw(),

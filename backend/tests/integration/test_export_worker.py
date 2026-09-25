@@ -35,6 +35,7 @@ from app.core.queue import (
 from app.core.queue import streams as streams_mod
 from app.core.tenants.models import Tenant
 from app.final.final_whitelist.models import FinalContentWhitelist
+from tests.integration.fcw_rows import add_fcw
 from tests.integration.stream_fakes import FakeStreamsRedis
 from tests.metric_reads import counter_value, gauge_value
 
@@ -78,7 +79,7 @@ def _fcw(seq: int) -> FinalContentWhitelist:
 async def _seed(factory, *, fcw: int = 1) -> None:
     async with factory() as session:
         session.add(Tenant(tenant_id="t1", name="试点", plan="basic", status="active"))
-        session.add_all([_fcw(i) for i in range(fcw)])
+        await add_fcw(session, [_fcw(i) for i in range(fcw)])
         await session.commit()
 
 

@@ -25,7 +25,7 @@ from app.decision.layer_strategy.models import (
     KIND_CSTP,
     Package,
 )
-from app.final.final_whitelist import fcw_rules
+from app.final.final_whitelist import exit_guard, fcw_rules
 from app.final.final_whitelist.models import (
     PUBLISH_PUBLISHED,
     FcwAssemblyTask,
@@ -331,8 +331,10 @@ async def assemble_one(
         issued_by=actor.id,
         published_at=datetime.now(tz=UTC),
     )
-    session.add(fcw)
-    await session.flush()
+    # E1.1：这张表只有此处可写。作用域外的 flush 由 mapper 守卫判红（Q203 #34 后半）。
+    with exit_guard.issue_scope():
+        session.add(fcw)
+        await session.flush()
     await append_audit(
         session,
         tenant_id=pws.tenant_id,
