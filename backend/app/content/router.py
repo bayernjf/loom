@@ -100,11 +100,15 @@ async def generate_content(
 )
 async def approve_content(
     content_id: str,
-    body: ContentDecisionRequest,
+    tenant_id: str = Query(min_length=1),
+    body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
 ) -> ContentProductView:
+    """Q59 客户审阅通过（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
     try:
-        content = await service.approve_content(session, content_id, body.actor)
+        content = await service.approve_content(
+            session, content_id, tenant_id, body.actor
+        )
     except service.ContentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -116,12 +120,14 @@ async def approve_content(
 @router.post("/api/content/{content_id}/reject", response_model=ContentProductView)
 async def reject_content(
     content_id: str,
-    body: ContentDecisionRequest,
+    tenant_id: str = Query(min_length=1),
+    body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
 ) -> ContentProductView:
+    """Q59 客户驳回（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
     try:
         content = await service.reject_content(
-            session, content_id, body.reason, body.actor
+            session, content_id, tenant_id, body.reason, body.actor
         )
     except service.ContentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -136,11 +142,15 @@ async def reject_content(
 @router.post("/api/content/{content_id}/revise", response_model=ContentProductView)
 async def revise_content(
     content_id: str,
-    body: ContentDecisionRequest,
+    tenant_id: str = Query(min_length=1),
+    body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
 ) -> ContentProductView:
+    """Q59 客户改稿（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
     try:
-        content = await service.revise_content(session, content_id, body.actor)
+        content = await service.revise_content(
+            session, content_id, tenant_id, body.actor
+        )
     except service.ContentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except service.ContentReviseCap as exc:
@@ -390,10 +400,12 @@ async def list_active_languages(
 @router.get("/api/content/{content_id}", response_model=ContentProductView)
 async def get_content(
     content_id: str,
+    tenant_id: str = Query(min_length=1),
     session: AsyncSession = Depends(get_session),
 ) -> ContentProductView:
+    """Q122 客户内容详情（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
     try:
-        content = await service.get_content(session, content_id)
+        content = await service.get_content(session, content_id, tenant_id)
     except service.ContentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return service.content_view(content)
@@ -404,13 +416,15 @@ async def get_content(
 )
 async def edit_content_body(
     content_id: str,
-    body: ContentBodyPatch,
+    tenant_id: str = Query(min_length=1),
+    body: ContentBodyPatch = ...,
     session: AsyncSession = Depends(get_session),
 ) -> ContentProductView:
-    """Q56-a/Q122：客户在 revising 态人工编辑正文，提交后重过复检回 review。"""
+    """Q56-a/Q122：客户在 revising 态人工编辑正文，提交后重过复检回 review
+    （Q200 #32：必填 tenant_id，归属不符统一 404）。"""
     try:
         content = await service.edit_content_body(
-            session, content_id, body.body, body.actor
+            session, content_id, tenant_id, body.body, body.actor
         )
     except service.ContentNotFound as exc:
         await session.rollback()

@@ -182,7 +182,7 @@ async def test_semantic_findings_do_not_block_approve(client, session_factory):
         # advisory：语义命中不抬 block_required（词库 ban 的硬阻断不受影响）。
         assert review_hits["block_required"] is False
 
-    r = await client.post("/api/content/cp-risk/approve", json={"actor": CUSTOMER})
+    r = await client.post("/api/content/cp-risk/approve?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_READY
 
@@ -223,7 +223,7 @@ async def test_semantic_unavailable_does_not_block_generation(
 
     # 检测不可用同样不阻断客户通过。
     r = await client.post(
-        f"/api/content/{data['content_id']}/approve", json={"actor": CUSTOMER}
+        f"/api/content/{data['content_id']}/approve?tenant_id=t1", json={"actor": CUSTOMER}
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_READY
@@ -236,7 +236,7 @@ async def test_regenerate_reruns_semantic_check(client, session_factory):
     assert r.status_code == 201, r.text
     cid = r.json()["content_id"]
 
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": OPS})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": OPS})
     assert r.status_code == 200 and r.json()["status"] == "revising"
     r = await client.post(f"/api/content/{cid}/regenerate", json={"actor": OPS})
     assert r.status_code == 200, r.text

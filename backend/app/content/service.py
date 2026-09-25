@@ -130,9 +130,19 @@ def content_list_item(content: ContentProduct) -> ContentProductListItem:
     )
 
 
-async def _get_content(session: AsyncSession, content_id: str) -> ContentProduct:
+async def _get_content(
+    session: AsyncSession, content_id: str, tenant_id: str | None = None
+) -> ContentProduct:
+    """Q200 #32：按 id 定位并按声明租户反查归属。
+
+    客户口（详情/裁决/正文改写）必须显式声明 tenant_id，归属不符统一
+    ContentNotFound（404）——与 #31 导出口口径一致：不提供存在性探针，
+    跨租户与不存在同回 404。运营口（operations 闸、跨租户）不传 tenant_id。
+    """
     content = await session.get(ContentProduct, content_id)
     if content is None:
+        raise ContentNotFound(content_id)
+    if tenant_id is not None and content.tenant_id != tenant_id:
         raise ContentNotFound(content_id)
     return content
 
@@ -149,9 +159,11 @@ async def list_content(
     return list((await session.scalars(stmt)).all())
 
 
-async def get_content(session: AsyncSession, content_id: str) -> ContentProduct:
-    """Q122 客户内容详情（无角色闸，与 approve/reject/revise 同口径）。"""
-    return await _get_content(session, content_id)
+async def get_content(
+    session: AsyncSession, content_id: str, tenant_id: str | None = None
+) -> ContentProduct:
+    """Q122 客户内容详情（Q200 #32：按声明租户反查归属，不符 404）。"""
+    return await _get_content(session, content_id, tenant_id)
 
 
 async def run_content_review(session: AsyncSession, content: ContentProduct) -> dict:
@@ -254,19 +266,21 @@ async def generate_content(
     return await _run_generation(session, content, body.actor)
 
 
-async def approve_content(session: AsyncSession, content_id: str, actor) -> ContentProduct:
-    """客户通过（Q59）：review → ready_for_publish。"""
-    content = await _get_content(session, content_id)
+async def approve_content(
+    session: AsyncSession, content_id: str, tenant_id: str, actor
+) -> ContentProduct:
+    """客户通过（Q59）：review → ready_for_publish（Q200 #32：按租户归属校验）。"""
+    content = await _get_content(session, content_id, tenant_id)
     content.status = sm.target_status(content.status, sm.EVENT_APPROVE)
     content.updated_at = _now()
     return content
 
 
 async def reject_content(
-    session: AsyncSession, content_id: str, reason: str | None, actor
+    session: AsyncSession, content_id: str, tenant_id: str, reason: str | None, actor
 ) -> ContentProduct:
-    """客户驳回（Q59 必选原因）：review → rejected。"""
-    content = await _get_content(session, content_id)
+    """客户驳回（Q59 必选原因）：review → rejected（Q200 #32：按租户归属校验）。"""
+    content = await _get_content(session, content_id, tenant_id)
     if not reason or not reason.strip():
         raise ContentRejectReasonRequired("reject requires a non-empty reason")
     content.status = sm.target_status(content.status, sm.EVENT_REJECT)
@@ -275,9 +289,11 @@ async def reject_content(
     return content
 
 
-async def revise_content(session: AsyncSession, content_id: str, actor) -> ContentProduct:
-    """客户改稿（Q59/Q56）：review → revising；达重生成上限则拒绝。"""
-    content = await _get_content(session, content_id)
+async def revise_content(
+    session: AsyncSession, content_id: str, tenant_id: str, actor
+) -> ContentProduct:
+    """客户改稿（Q59/Q56）：review → revising；达重生成上限则拒绝（Q200 #32：按租户归属校验）。"""
+    content = await _get_content(session, content_id, tenant_id)
     limit = int(knob(qc.REGEN_LIMIT_KEY))
     if not sm.revise_allowed(content.status, content.regenerate_count, limit):
         raise ContentReviseCap(
@@ -305,14 +321,14 @@ async def regenerate_content(
 
 
 async def edit_content_body(
-    session: AsyncSession, content_id: str, new_body: str, actor
+    session: AsyncSession, content_id: str, tenant_id: str, new_body: str, actor
 ) -> ContentProduct:
-    """Q56-a/Q122 客户人工编辑（revising → review）。
+    """Q56-a/Q122 客户人工编辑（revising → review；Q200 #32：按租户归属校验）。
 
     与 operations regenerate 的区别：不调 ARTICLE-GEN、不增 regenerate_count；
     替换正文后强制重过复检（词库 + 语义，Q59）与 ARTICLE-QC 质量分，再回 review。
     """
-    content = await _get_content(session, content_id)
+    content = await _get_content(session, content_id, tenant_id)
     if content.status != sm.CONTENT_REVISING:
         raise ContentNotEditable(
             f"manual edit only allowed in {sm.CONTENT_REVISING}, "

@@ -164,12 +164,14 @@ export async function getProductSpace(intakeId: string): Promise<ProductSpaceVie
 }
 
 // B3/Q122：客户在段1 录入页设置产品目标语言（客户口径，无运营闸；空数组 = 未声明）。
+// Q200 #32：必填 tenant_id（服务端按产品空间归属校验，跨租户 404）。
 export async function setIntakeTargetLanguages(
   intakeId: string,
   languages: string[],
 ): Promise<ProductSpaceView> {
+  const params = new URLSearchParams({ tenant_id: CURRENT_TENANT_ID });
   return request<ProductSpaceView>(
-    `/api/intakes/${encodeURIComponent(intakeId)}/target-languages`,
+    `/api/intakes/${encodeURIComponent(intakeId)}/target-languages?${params}`,
     {
       method: "PATCH",
       body: JSON.stringify({
@@ -423,8 +425,10 @@ export async function listContent(tenantId: string): Promise<ContentProductListI
 }
 
 export async function getContent(contentId: string): Promise<ContentProductView> {
+  // Q200 #32：详情口必填 tenant_id（服务端归属校验，跨租户 404）。
+  const params = new URLSearchParams({ tenant_id: CURRENT_TENANT_ID });
   return request<ContentProductView>(
-    `/api/content/${encodeURIComponent(contentId)}`,
+    `/api/content/${encodeURIComponent(contentId)}?${params}`,
   );
 }
 
@@ -463,7 +467,9 @@ function contentPost(
   path: string,
   payload: Record<string, unknown>,
 ): Promise<ContentProductView> {
-  return request<ContentProductView>(path, {
+  // Q200 #32：客户裁决口必填 tenant_id（服务端归属校验，跨租户 404）。
+  const params = new URLSearchParams({ tenant_id: CURRENT_TENANT_ID });
+  return request<ContentProductView>(`${path}?${params}`, {
     method: "POST",
     body: JSON.stringify({
       actor: { id: CURRENT_ACTOR_ID, roles: [] },
@@ -491,8 +497,10 @@ export async function editContentBody(
   contentId: string,
   body: string,
 ): Promise<ContentProductView> {
+  // Q200 #32：客户正文改写口必填 tenant_id（服务端归属校验，跨租户 404）。
+  const params = new URLSearchParams({ tenant_id: CURRENT_TENANT_ID });
   return request<ContentProductView>(
-    `/api/content/${encodeURIComponent(contentId)}/body`,
+    `/api/content/${encodeURIComponent(contentId)}/body?${params}`,
     {
       method: "PATCH",
       body: JSON.stringify({ body, actor: { id: CURRENT_ACTOR_ID, roles: [] } }),

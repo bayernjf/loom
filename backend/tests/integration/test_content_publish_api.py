@@ -161,14 +161,18 @@ async def _generate(client, final_id: str = "fcw-1", language: str = "zh-CN") ->
     return r.json()["content_id"]
 
 
-async def _approve(client, cid: str) -> None:
-    r = await client.post(f"/api/content/{cid}/approve", json={"actor": CUSTOMER})
+async def _approve(client, cid: str, tenant: str = "t1") -> None:
+    r = await client.post(
+        f"/api/content/{cid}/approve?tenant_id={tenant}",
+        json={"actor": CUSTOMER},
+    )
     assert r.status_code == 200, r.text
 
 
 async def _ready(client, final_id: str = "fcw-1", language: str = "zh-CN") -> str:
     cid = await _generate(client, final_id, language)
-    await _approve(client, cid)
+    # Q200 #32：成品归属租户（fcw-2 属 t2），approve 声明对应租户。
+    await _approve(client, cid, tenant="t2" if final_id == "fcw-2" else "t1")
     return cid
 
 
@@ -232,7 +236,7 @@ async def test_backfill_only_accepted_in_ready_state(client):
 
     # rejected 态 → 409。
     r = await client.post(
-        f"/api/content/{cid}/reject",
+        f"/api/content/{cid}/reject?tenant_id=t1",
         json={"reason": "客户不认可", "actor": CUSTOMER},
     )
     assert r.status_code == 200

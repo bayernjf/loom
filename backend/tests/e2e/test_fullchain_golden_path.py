@@ -345,7 +345,8 @@ async def _drive(client: AsyncClient) -> dict:
     if REAL_LLM:
         assert gen.json().get("output_tokens") is None or True
     approved = await client.post(
-        f"/api/content/{content_id}/approve", json={"actor": CUSTOMER}
+        f"/api/content/{content_id}/approve?tenant_id={tenant_id}",
+        json={"actor": CUSTOMER},
     )
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "ready_for_publish"

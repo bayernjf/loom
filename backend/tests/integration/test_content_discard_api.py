@@ -214,7 +214,7 @@ async def test_discard_unknown_404(client):
 async def test_discard_from_revising_and_rejected(client):
     # revising → discarded
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200
     r = await _discard(client, cid)
     assert r.status_code == 200, r.text
@@ -224,7 +224,7 @@ async def test_discard_from_revising_and_rejected(client):
     cid2 = await _generate(client)
     assert cid2 != cid
     r = await client.post(
-        f"/api/content/{cid2}/reject",
+        f"/api/content/{cid2}/reject?tenant_id=t1",
         json={"reason": "客户不认可方向", "actor": CUSTOMER},
     )
     assert r.status_code == 200
@@ -237,7 +237,7 @@ async def test_discard_from_revising_and_rejected(client):
 async def test_discard_not_allowed_from_ready_and_draft(client, session_factory):
     # ready_for_publish 已进发布，不可作废。
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/approve", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/approve?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200
     assert r.json()["status"] == CONTENT_READY
     r = await _discard(client, cid)
@@ -331,7 +331,7 @@ async def test_needs_attention_queue_filters_order_and_role_gate(
     # c1 生成后停 review（t1）；c2 approve 后 ready，不进待处置。
     c1 = await _generate(client)
     c2 = await _generate(client, "en-US")
-    r = await client.post(f"/api/content/{c2}/approve", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{c2}/approve?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200
 
     async with session_factory() as session:
@@ -370,13 +370,13 @@ async def test_discarded_is_terminal(client):
     # revise 先过重生成上限闸（ContentReviseCap）返回 422，同为拒绝语义。
     cid = await _generate(client)
     await _discard(client, cid)
-    r = await client.post(f"/api/content/{cid}/approve", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/approve?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 409, r.text
     r = await client.post(
-        f"/api/content/{cid}/reject", json={"reason": "x", "actor": CUSTOMER}
+        f"/api/content/{cid}/reject?tenant_id=t1", json={"reason": "x", "actor": CUSTOMER}
     )
     assert r.status_code == 409, r.text
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 422, r.text
     # 重复作废同样 409。
     r = await _discard(client, cid)
