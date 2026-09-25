@@ -244,8 +244,23 @@ def job_view(job: ExportJob) -> dict:
         "error": job.error,
         "created_at": job.created_at,
         "completed_at": job.completed_at,
-        "download_url": f"/api/exports/jobs/{job.job_id}/download",
+        "download_url": f"/api/exports/jobs/{job.job_id}/download?tenant_id={job.tenant_id}",
     }
+
+
+async def get_scoped_job(
+    session: AsyncSession, job_id: str, tenant_id: str
+) -> ExportJob | None:
+    """Q196：按 id 取任务且必须属于声明租户——与 Q161 导入口 ``get_scoped_job`` 同口径。
+
+    不属该租户与不存在返回同一个 None，调用方回同一个 404，不把这里变成
+    "别的租户有哪些 job id" 的存在性探针。
+    """
+
+    job = await session.get(ExportJob, job_id)
+    if job is None or job.tenant_id != tenant_id:
+        return None
+    return job
 
 
 async def create_export_job(
@@ -267,7 +282,7 @@ async def create_export_job(
     )
     final_ids = page["final_ids"]
     job = ExportJob(
-        job_id=str(uuid.uuid1()),
+        job_id=str(uuid.uuid4()),
         tenant_id=tenant_id,
         product_space_id=product_space_id,
         format=fmt,
@@ -313,7 +328,7 @@ async def create_queued_export_job(
         # 路由层 pydantic Literal 已挡，此闸为服务层防御。
         raise ValueError(f"unsupported export format: {fmt}")
     job = ExportJob(
-        job_id=str(uuid.uuid1()),
+        job_id=str(uuid.uuid4()),
         tenant_id=tenant_id,
         product_space_id=product_space_id,
         format=fmt,

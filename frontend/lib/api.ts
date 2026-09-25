@@ -1256,8 +1256,15 @@ export async function createExportJob(opts: {
 }
 
 // 下载口返回 csv/json 文本（非 JSON）；文件名取 Content-Disposition，由 client 岛落盘。
-export async function downloadExportJob(jobId: string): Promise<ExportDownload> {
-  return requestText(`/api/exports/jobs/${encodeURIComponent(jobId)}/download`);
+// Q196：状态口/下载口的 tenant_id 必填并按任务归属收口（此前只认 job_id）。
+export async function downloadExportJob(
+  jobId: string,
+  tenantId: string,
+): Promise<ExportDownload> {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  return requestText(
+    `/api/exports/jobs/${encodeURIComponent(jobId)}/download?${params}`,
+  );
 }
 
 // 文本下载通道（与 request 同构，但解析文本体与 Content-Disposition；函数声明提升）。

@@ -166,11 +166,16 @@ async def list_export_jobs(
 @router.get("/jobs/{job_id}", response_model=ExportJobView)
 async def get_export_job(
     job_id: str,
+    tenant_id: str = Query(min_length=1),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """导出任务状态查询（Q137 异步后供中台轮询 queued/running/completed）。"""
+    """导出任务状态查询（Q137 异步后供中台轮询 queued/running/completed）。
 
-    job = await service.get_job(session, job_id)
+    Q196：``tenant_id`` 必填且任务须属于该租户（同 Q161 导入口口径）——此前只按
+    ``job_id`` 直查，任何能打到本口的调用方拿到 id 就能读别的租户的任务。
+    """
+
+    job = await service.get_scoped_job(session, job_id, tenant_id)
     if job is None:
         raise HTTPException(status_code=404, detail="export job not found")
     return service.job_view(job)
@@ -179,11 +184,15 @@ async def get_export_job(
 @router.get("/jobs/{job_id}/download")
 async def download_export_job(
     job_id: str,
+    tenant_id: str = Query(min_length=1),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    """按任务参数重新查询渲染下载（幂等，反映当前 published 集合，不存 payload）。"""
+    """按任务参数重新查询渲染下载（幂等，反映当前 published 集合，不存 payload）。
 
-    job = await service.get_job(session, job_id)
+    Q196：同状态口，租户必填并按任务行的归属收口。
+    """
+
+    job = await service.get_scoped_job(session, job_id, tenant_id)
     if job is None:
         raise HTTPException(status_code=404, detail="export job not found")
     if job.status == JOB_FAILED:
