@@ -19,7 +19,7 @@
 | DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部；其中 **2 个驾驶舱只读聚合已落地**：GET /api/admin/dashboards/token-cost、GET /api/admin/dashboards/review-workload（Q92） | D9.5 / Q92 | 🟡 驾驶舱两读口已落地（platform_admin，见 05 §1.4）；DB 浏览 / AI 调试台 / 配额【待补】 |
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
-| CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132） | D4 | 🟢 CSV/JSON 同步导出 + 导出任务记录已落地（见 §2.3/§2.4）；queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（env 默认关，门控关走同步）；limit/offset 分页与行数硬上限已随 Q142 落地（env `LOOM_EXPORT_MAX_ROWS` 默认 10 万，超限 422） |
+| CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132；**Q196 起两条任务口 `tenant_id` 必填并按任务行归属收口**） | D4 | 🟢 CSV/JSON 同步导出 + 导出任务记录已落地（见 §2.3/§2.4）；queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（env 默认关，门控关走同步）；limit/offset 分页与行数硬上限已随 Q142 落地（env `LOOM_EXPORT_MAX_ROWS` 默认 10 万，超限 422） |
 | 台内白名单 6 层原料包 JSON | GET /api/fcw/{final_id}/material.json（Q155） | 09:87 / 01 line14 | 🟢 后端全量 JSON 已落地（见 §2.5，台内卡片口径、非中台 final_id-only 面）；台内卡片前端随 D3.5 点工 |
 | 管理端白名单卡片只读台（跨租户列表 + 六层内嵌） | GET /api/admin/fcw、GET /api/admin/fcw/{final_id}/material（Q177） | 09:87（D3.5） | 🟢 D3.5 运营只读首片已落地（见 §2.6，读闸 operations\|platform_admin、零迁移）；组装工作台/审核台/冻结管理/客户视图等 D3.5 余项随菜单点工 |
 
@@ -118,7 +118,7 @@
 
 **口径**：只导 published（draft 通道 V1 未开；Q32 revoked 过滤随其落地自然生效）；读路径不触发 Q95 租户准入门——未知租户返回仅表头空文件 200，不 404。
 
-**未含（已销账）**：~~JSON 形态、异步导出/导出任务记录均挂后续/V2【待补】~~ ✅ 已随 Q132（2026-09-20，02 C1.76）落地，见 §2.4；仅真后台 worker 仍随 V2。
+**未含（已销账）**：~~JSON 形态、异步导出/导出任务记录均挂后续/V2【待补】~~ ✅ 已随 Q132（2026-09-20，02 C1.76）落地，见 §2.4；~~仅真后台 worker 仍随 V2~~ **真后台 Streams worker 与任务列表口亦已随 Q137 落地**（env 默认关）。
 
 ### 2.4 中台 JSON 导出与异步导出任务（Q132，已落地）
 
@@ -140,7 +140,7 @@
 - `GET /api/exports/jobs/{job_id}/download?tenant_id=`（**Q196 起 `tenant_id` 必填并按任务行归属收口**）：按任务参数**重新查询渲染**下载（不存文件 payload，幂等反映当前 published 集合；未知 404、status=failed 409 detail=error、queued/running 409 not ready，Q137），媒体类型与文件名按 job.format/file_name，渲染同样受 Q142 分页/硬上限约束。
 - 任务视图 ExportJobView：`{job_id, tenant_id, product_space_id, format, status, row_count, file_name, requested_by, error, created_at, completed_at, download_url}`；row_count 为创建时留痕，不随后续数据变化。
 - 审计 `export.job_created`（tenant=客户租户、actor_id=requested_by、actor_roles=[]、entity_type=export_job、entity_id=job_id、detail {format,row_count,product_space_id}）；同步 CSV/JSON 两口沿用 Q100 不写审计。
-- 新表 export_jobs（迁移 0036，业务物理表 57→58，pg16 up/downgrade-1/up 实测）；错误：tenant_id 空 422、format 非 csv|json 422、缺 actor 422、未知 job 404、failed 任务下载 409。
+- 新表 export_jobs（迁移 0036，业务物理表 57→58，pg16 up/downgrade-1/up 实测）；错误：tenant_id 空 422、format 非 csv|json 422、缺 actor 422、未知 job 404、failed 任务下载 409、**queued/running 下载 409 not ready（Q137）**、**状态口/下载口缺 `tenant_id` 422、声明租户与任务归属不符 404（Q196；与不存在同码，不把任务口变成跨租户存在性探针）**。
 - **未含（V2）**：失败重试策略细化。（queued/running 后台 worker 与任务列表口已随 Q137、分页与行数硬上限已随 Q142、多 ExportWorker 副本并发度/批量配置已随 Q152〔env `LOOM_EXPORT_WORKER_CONCURRENCY` 默认 1/`LOOM_EXPORT_STREAM_COUNT` 默认 20〕落地；中台导出契约仍为 final_id-only，**6 层原料包全量 JSON 不属本面、已随 Q155 落台内卡片口径见 §2.5**。）
 
 ### 2.5 台内白名单 6 层原料包 JSON（Q155，已落地）
@@ -162,7 +162,7 @@
 - 前端 `app/[locale]/admin/fcw/`（`page.tsx` force-dynamic 只读 RSC 跨租户列表＋租户过滤＋分页、`actions.ts` Server Action 本地角色闸与 403/404/409/422 映射、`material-island.tsx` client 岛点击才拉六层 details/pre 展示），管理端 sidebar **第 11 项** /admin/fcw；枚举 platform/goal/publish_status 原样直出。
 - **接缝甲案三项（待负责人追认，02 C1.121）**：①入口落管理端运营台 /admin/fcw（读 operations|platform_admin），客户卡片视图随 D3.5 菜单另点；②新增跨租户只读列表口（区别于按产品空间的列表）；③六层内嵌面与 Q155 导出口共用 build_material_pack 但分两口（内嵌过读闸无 attachment／导出带 attachment 无闸保 V1）。
 
-### 2.4 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
+### 2.7 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
 
 **入站一 Agent 一 Key**（`app/core/api_keys/`，platform_admin 红线）：
 
@@ -197,7 +197,7 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 | 租户隔离 | 所有接口按 tenant_id 隔离；跨租户不可见 | Q33 |
 | 错误码 | 统一 `{code, message, request_id}` 结构：400 参数错 / 401 未授权 / 404 不存在 / 409 冲突（幂等覆盖冲突）/ 429 限流 / 500 服务错 / 503 上游模型不可用 | 【建议】 |
 | 限流 | 外部推送接口按 Agent 配额（Rate Limit 见 09 D3.11）；补货防抖 5min | Q71 |
-| 审计 | 所有 API 调用写 writeAudit（append-only） | D3.11 |
+| 审计 | 所有 API 调用写 writeAudit（append-only）。**Q196：操作人由服务端定**——请求验真过 staff PAT 或入站 Agent Key 时一律取凭证身份，自报 id/roles 仅作兼容输入、被推翻时留在 `detail.declared_actor`，来源标 `detail._actor_via`∈{staff_token, agent_key, declared} | D3.11 · Q196 |
 | 版本 | URL 前缀 /api/v1；重大变更走新版本 | 【建议】 |
 | 上游降级 | 模型不可用时返回 503 + 客户端重试语义（幂等保证） | 【建议】 |
 
@@ -226,7 +226,7 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 - [x] 数据更新节奏与 Q62 一致（不做定时拉取，外部推送制）
 - [x] 白名单消费实现端点与 M5/Q71 代码一致（路径/请求体/响应/错误码，2026-09-17 补登 §2.2）
 - [x] CSV 导出与 Q100 实现一致（§2.3）
-- [x] 入站/出站 Key 治理端点与 Q88/Q82 实现一致（§2.4）
+- [x] 入站/出站 Key 治理端点与 Q88/Q82 实现一致（§2.7；本行原指 §2.4，而 §2.4 已被「中台 JSON 导出」段占用、§2.5/§2.6 亦各有其段，故 2026-09-25 Q198 把 Key 治理段重排到空出的 2.7 并同步本引用）
 - [x] effect-callback 入站第一片与 Q60/Q88/Q126 实现一致（鉴权/幂等键/metrics 缺“—”不当 0/matched·orphan 分流/只读队列，2026-09-19 补登 §2.1）
 - [x] effect-callback 续片：Q126 入站推送、Q127 孤儿人工认领、Q128 customer-backfill 客户通道、Q129 批量认领/解绑、Q130 管理端认领台、Q131 客户回填 UI 均已落地（见 §2.1，02 C1.70–C1.75）
 - [x] 客户批量回填上传链：Q156 服务端 CSV 上传、Q160 Excel .xlsx 上传（content_base64 零 multipart）、Q161 异步导入任务三端点（POST/GET 列表/GET 轮询，worker 门控默认关走同步，迁移 0039）均已落地（见 §2.1，02 C1.100/C1.104/C1.105）

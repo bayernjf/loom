@@ -19,11 +19,13 @@
 
 ## 0.1 actor 口径
 
-所有写口 body 内带：
+所有写口 body 内带（**Q196 起：该字段是兼容输入，不是可信来源**）：
 
 ```json
 {"actor": {"id": "ops:谁干的", "roles": ["operations"]}}
 ```
+
+> **读法（Q196／02 C1.140，2026-09-25）**：若部署侧已开 `LOOM_STAFF_AUTH_ENABLED`，审计里记的操作人是**令牌持有人**，上面这个 `id` 只在被推翻时作为 `detail.declared_actor` 留证；门控关（beta 默认）时按自报记录，来源标 `detail._actor_via=declared`。**因此录入模板里的 `id` 请写真实可辨识的人（如 `ops:张三`），不要共用一个账号名**——审计溯源靠它，共用会毁掉对账能力。
 
 `id` 为操作人标识（溯源用）；写口要求 `operations` 角色。
 
