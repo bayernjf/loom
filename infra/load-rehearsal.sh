@@ -21,6 +21,10 @@
 #   LOOM_CHURN_EVERY=2         leader /run 抢占间隔（秒）
 set -uo pipefail
 
+# Q200 #33：backend entrypoint 对空 LOOM_MASTER_KEY 启动即 fail-fast，
+# 彩排不注入真 Key，统一用演练专用测试值（非生产密钥）。
+export LOOM_MASTER_KEY="${LOOM_MASTER_KEY:-loom-rehearsal-only-master-key}"
+
 cd "$(dirname "$0")"
 PROJECT=loom-load
 FILES=(-f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.ha.yml)
