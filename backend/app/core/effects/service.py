@@ -390,9 +390,18 @@ async def ingest_customer_backfill(
     if receipt["orphan"]:  # pragma: no cover - 口径不变即不可达
         raise RuntimeError("customer backfill must never produce orphans")
 
+    # Q196 口径 A 甲：审计里的租户以命中成品行上记录的归属为准，不再直接抄调用方
+    # 声明的值。上面已按声明租户过滤且要求逐条命中，故此处派生值与声明值恒等——
+    # 本步改变的是"谁是权威"这一结构：将来若放宽过滤或接入 Q127 认领兜底，审计不
+    # 会跟着调用方的说法走。合法/非法调用的响应均不变。
+    owners = {content.tenant_id for content in content_map.values()}
+    if len(owners) != 1:  # pragma: no cover - 单租户过滤下不可达
+        raise RuntimeError("customer backfill batch must resolve to exactly one tenant")
+    derived_tenant = owners.pop()
+
     await append_audit(
         session,
-        tenant_id=tenant_id,
+        tenant_id=derived_tenant,
         actor_id=batch.actor.id,
         actor_roles=list(batch.actor.roles),
         action="effect.customer_backfilled",

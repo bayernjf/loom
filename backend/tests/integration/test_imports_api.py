@@ -9,6 +9,7 @@ POST 回 queued 并 XADD 入导入流，Redis 故障 fail-closed 置 failed 回 
 import base64
 import io
 from collections.abc import AsyncGenerator
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -152,6 +153,14 @@ async def test_unknown_content_fails_without_orphan(client):
     r = await client.post("/api/effects/backfill/jobs", json=_csv_body(content_id="nope"))
     assert r.status_code == 201
     assert r.json()["status"] == "failed"
+
+
+async def test_import_job_id_is_uuid4(client):
+    """Q196：导入任务 ID 同样改随机版本（与导出口一致）。"""
+
+    r = await client.post("/api/effects/backfill/jobs", json=_csv_body())
+    assert r.status_code == 201
+    assert UUID(r.json()["job_id"]).version == 4
 
 
 async def test_carrier_payload_mismatch_is_422(client):

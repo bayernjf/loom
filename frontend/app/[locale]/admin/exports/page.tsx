@@ -124,6 +124,7 @@ export default async function ExportsPage({
                         <td>
                           <DownloadExportButton
                             jobId={job.job_id}
+                            tenantId={job.tenant_id}
                             status={job.status}
                           />
                         </td>

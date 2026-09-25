@@ -86,7 +86,7 @@ async def create_queued_import_job(
     """建 queued 导入任务并固化可重放 payload（不解析、不执行），由调用方提交后入流。"""
 
     job = ImportJob(
-        job_id=str(uuid.uuid1()),
+        job_id=str(uuid.uuid4()),
         tenant_id=body.tenant_id,
         content_id=body.content_id,
         format=body.format,

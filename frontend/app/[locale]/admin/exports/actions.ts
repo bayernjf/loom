@@ -71,12 +71,15 @@ export async function createExportJobAction(
 
 export async function downloadExportJobAction(
   jobId: string,
+  tenantId: string,
 ): Promise<ExportDownloadResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
   const id = jobId.trim();
   if (!id) return { ok: false, status: 422, detail: null };
+  const tenant = tenantId.trim();
+  if (!tenant) return { ok: false, status: 422, detail: null };
   try {
-    const downloaded = await downloadExportJob(id);
+    const downloaded = await downloadExportJob(id, tenant);
     return { ok: true, ...downloaded };
   } catch (err) {
     if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {

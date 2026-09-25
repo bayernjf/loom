@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -221,7 +222,10 @@ async def test_create_csv_job_completed_and_download_matches(client, session_fac
     assert job["format"] == "csv"
     assert job["file_name"] == "fcw-t1.csv"
     assert job["completed_at"] is not None
-    assert job["download_url"] == f"/api/exports/jobs/{job['job_id']}/download"
+    # Q196：下载口按租户收口，URL 自带归属参数。
+    assert job["download_url"] == (
+        f"/api/exports/jobs/{job['job_id']}/download?tenant_id=t1"
+    )
 
     d = await client.get(job["download_url"])
     assert d.status_code == 200
@@ -311,11 +315,70 @@ async def test_list_jobs_paginates_with_limit_and_offset(client):
     assert set(first + second) == set(ids)
 
 
+async def test_export_job_id_is_uuid4(client):
+    """Q196：任务 ID 改随机版本。
+
+    uuid1 含时钟与节点（MAC）分量、可被推算，而它此前是这两个任务口**唯一**的
+    访问控制屏障；归属现由 tenant_id 收口，ID 也换成随机版本，两者不再互相顶包。
+    """
+
+    r = await client.post(
+        "/api/exports/jobs", json={"tenant_id": "ghost", "actor": {"id": "mg-1"}}
+    )
+    assert r.status_code == 201
+    assert UUID(r.json()["job_id"]).version == 4
+
+
 async def test_unknown_job_404_for_status_and_download(client):
-    r = await client.get("/api/exports/jobs/nope")
+    r = await client.get("/api/exports/jobs/nope", params={"tenant_id": "t1"})
     assert r.status_code == 404
-    r = await client.get("/api/exports/jobs/nope/download")
+    r = await client.get("/api/exports/jobs/nope/download", params={"tenant_id": "t1"})
     assert r.status_code == 404
+
+
+async def test_job_status_and_download_require_tenant_and_scope_by_it(
+    client, session_factory
+):
+    """Q196：状态口/下载口租户必填；声明租户与任务归属不一致按不存在处理。
+
+    此前两条路由只认 job_id——任何能打到后端的调用方拿到 id 就能读别的租户的
+    导出结果。这里同时钉住"不泄露存在性"：跨租户与不存在回同一个 404。
+    """
+
+    async with session_factory() as session:
+        session.add(_fcw("owner", "ps-1", 41))
+        await session.commit()
+    job_id = (
+        await client.post(
+            "/api/exports/jobs",
+            json={"tenant_id": "owner", "format": "csv", "actor": {"id": "mg-1"}},
+        )
+    ).json()["job_id"]
+
+    # 缺租户参数 → 422（必填）。
+    assert (await client.get(f"/api/exports/jobs/{job_id}")).status_code == 422
+    assert (
+        await client.get(f"/api/exports/jobs/{job_id}/download")
+    ).status_code == 422
+
+    # 正确租户可读，别的租户 404（与不存在的 job 同一口径）。
+    ok = await client.get(f"/api/exports/jobs/{job_id}", params={"tenant_id": "owner"})
+    assert ok.status_code == 200
+    assert ok.json()["tenant_id"] == "owner"
+    # 状态口本身也必须按租户收口——只钉下载口会漏掉这条分支（证伪自检抓出来的）。
+    assert (
+        await client.get(
+            f"/api/exports/jobs/{job_id}", params={"tenant_id": "intruder"}
+        )
+    ).status_code == 404
+    assert (
+        await client.get(
+            f"/api/exports/jobs/{job_id}/download", params={"tenant_id": "intruder"}
+        )
+    ).status_code == 404
+    assert (
+        await client.get("/api/exports/jobs/nope", params={"tenant_id": "intruder"})
+    ).status_code == 404
 
 
 async def test_job_download_rerenders_current_data(client, session_factory):
@@ -337,7 +400,9 @@ async def test_job_download_rerenders_current_data(client, session_factory):
     assert lines[0] == "final_id"
     assert len(lines) == 2  # 表头 + 新发证一条
 
-    again = await client.get(f"/api/exports/jobs/{job['job_id']}")
+    again = await client.get(
+        f"/api/exports/jobs/{job['job_id']}", params={"tenant_id": "t1"}
+    )
     assert again.json()["row_count"] == 0
 
 
@@ -509,6 +574,8 @@ async def test_async_post_enqueues_queued_job_and_blocks_early_download(
     assert job["status"] == "queued"
     assert job["row_count"] == 0
     assert job["completed_at"] is None
+    # Q196：异步路径的 ID 同样是随机版本（同步路径由另一条用例钉）。
+    assert UUID(job_id).version == 4
 
     # 任务已 XADD 进导出流，消费组已幂等创建。
     entries = async_exports.streams[export_service.EXPORT_STREAM]
@@ -526,9 +593,11 @@ async def test_async_post_enqueues_queued_job_and_blocks_early_download(
     assert payload["jobs"][0]["status"] == "queued"
 
     # queued/running 未就绪：下载 409，状态口仍可查。
-    d = await client.get(f"/api/exports/jobs/{job_id}/download")
+    d = await client.get(
+        f"/api/exports/jobs/{job_id}/download", params={"tenant_id": "t1"}
+    )
     assert d.status_code == 409
-    g = await client.get(f"/api/exports/jobs/{job_id}")
+    g = await client.get(f"/api/exports/jobs/{job_id}", params={"tenant_id": "t1"})
     assert g.json()["status"] == "queued"
 
 

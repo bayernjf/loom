@@ -16,9 +16,11 @@ const KNOWN_STATUSES = new Set([403, 404, 409, 422]);
 
 export function DownloadExportButton({
   jobId,
+  tenantId,
   status,
 }: {
   jobId: string;
+  tenantId: string;
   status: string;
 }) {
   const t = useTranslations("admin.exports");
@@ -40,7 +42,7 @@ export function DownloadExportButton({
   function download() {
     setError(null);
     startTransition(async () => {
-      const result = await downloadExportJobAction(jobId);
+      const result = await downloadExportJobAction(jobId, tenantId);
       if (!result.ok) {
         setError(failureText(result));
         return;

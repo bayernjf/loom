@@ -18,7 +18,7 @@
 | `platform_admin` | 租户、Agent Key、运营人员令牌、AI 模型与场景路由、字典管理、导出任务 | /admin/tenants、/admin/agent-keys、/admin/staff-keys、/admin/token-cost、/admin/exports |
 | `dictionary_admin` | 内容语言清单等字典维护 | API（语言清单管理） |
 
-> **身份（Q178，2026-09-24 起）**：内部运营管理端已有可选的个人访问令牌（staff PAT）认证层，门控 `LOOM_STAFF_AUTH_ENABLED` **默认关**——门控关时 Actor 仍为请求体内 `{"id","roles"}` 自报（private beta 由平台内控保证）；门控开后管理口必须持 staff 令牌、自报 actor 被令牌身份覆盖（防提权）。开通与登录操作见 **§0.1**。客户侧真实认证与 actor↔tenant 绑定仍为 V2 第一项（Q88 租户绑定口径【待补】）。
+> **身份（Q178，2026-09-24 起）**：内部运营管理端已有可选的个人访问令牌（staff PAT）认证层，门控 `LOOM_STAFF_AUTH_ENABLED` **默认关**——门控关时 Actor 仍为请求体内 `{"id","roles"}` 自报（private beta 由平台内控保证）；门控开后管理口必须持 staff 令牌、自报 actor 被令牌身份覆盖（防提权）。开通与登录操作见 **§0.1**。客户侧真实认证仍为 V2（Q196 口径 C 甲＝private beta 维持平台代运营、不做客户登录）。**Q196 起审计身份由服务端定**：写审计的唯一口按「已验真凭证 > 请求自报」取值，带 staff PAT 或 Agent Key 打的口，审计记的是凭证持有人，body/query 里自报的 id/roles 只作备查证据（`detail.declared_actor`），来源看 `detail._actor_via`∈{`staff_token`,`agent_key`,`declared`}；无凭证的客户口仍记自报并标 `declared`——**读到 `declared` 就等于「身份未经证实」**。中台导出任务状态口与下载口（见 §1 段 11 末「异步导出经 `/api/exports/jobs`」与 §3 的 404/422 行）现须带 `tenant_id` 且只能读本租户任务。
 
 ### 0.1 运营登录与身份（Q178 staff PAT，门控默认关）
 
@@ -121,10 +121,10 @@
 |---|---|---|
 | 401 | Agent Key 缺失/无效/停用（effect-callback、A2A tasks）；或门控开后管理口 staff 令牌缺失/损坏/吊销（Q178） | 机器口核对 `loom_` secret 与 Key 状态；人员口在 /admin/login 重新录入有效的 `loom_staff_` 令牌 |
 | 403（PermissionDenied） | actor.roles 不含该口所需角色 | 换正确角色账号；勿在业务流程中提权 |
-| 404 | 资源不存在（intake/ps/pws/fcw/content） | 核对 ID；FCW 未签发前段12 各口必 404 |
+| 404 | 资源不存在（intake/ps/pws/fcw/content）；**导出任务口跨租户也回 404**（Q196，与不存在同码，不做存在性探针） | 核对 ID 与 `tenant_id` 是否同一租户；FCW 未签发前段12 各口必 404 |
 | 409 状态机冲突 | 事件在当前态非法 / 重复发证 / FCW 已签发 / 材料缺失 / 下载口对 queued·running 作业 | 查当前状态再决定下一步；assemble 的 409 看 `detail.guards` |
 | 409 锁冲突 | 单 leader 锁被占（SLA/restock 手工 /run） | 单实例稍后重试；LockLost→409 表示锁已易主，本轮中止 |
-| 422 | 请求体校验失败：submit 缺 common fids、语言不在 eligible、PWC/评分参数非法、导出行数超上限、时区缺失、Excel/CSV 坏行 | 按 detail 字段（如 missing_fids、eligible、逐行错误）修正后整批重提 |
+| 422 | 请求体校验失败：submit 缺 common fids、语言不在 eligible、PWC/评分参数非法、导出行数超上限、时区缺失、Excel/CSV 坏行、**导出任务状态口/下载口缺 `tenant_id`**（Q196 起必填） | 按 detail 字段（如 missing_fids、eligible、逐行错误）修正后整批重提 |
 | 503 | 锁后端故障 / 异步 worker 入流失败（fail-closed） | 排查 Redis/基础设施后重试 |
 | ModelConfigError（500/配置错） | 场景无路由 / 模型或 Key 未配置 | platform_admin 在模型管理补模型、Key 与场景路由 |
 
