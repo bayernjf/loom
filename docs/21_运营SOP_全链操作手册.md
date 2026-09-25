@@ -172,6 +172,19 @@
 | `LoomLlmUpstreamSlow` (warning) | 某 scene 成功调用 P99 >30s 持续 10 分钟（按 `provider` 分开，synthetic 不污染） | 供应商侧状态；`LOOM_LLM_HTTP_TIMEOUT_SECONDS`（Q172 配置化，默认 60s）是否偏小——注意超时打满会同时顶到 30s P99 规则 | 否，链会变慢但不断 |
 | `LoomLlmBudgetBlocked` (warning) | 某 scene 调用被**日预算硬停**在花钱之前拒绝 | 配置中心该模型 `daily_budget` 与当日 `SkillRun` 花费；**这是停摆不是降级**——AI 候选不再产出 | 视业务，需要就调预算并留审计 |
 
+**每条规则被证明到哪一层（别把 39/39 读成「七条都端到端验过」**：
+
+| 规则 | 已证明 | 未证明 |
+|---|---|---|
+| `LoomBackendUnreachable` | **端到端**：真停 backend → firing → watchdog 恰一次转发（阶段 4） | — |
+| `LoomJobFailed` | **端到端**：真停 redis 走入流 fail-closed → 75s firing、105s 转发 1 次（阶段 5）＋exposition 0→1 单测 | — |
+| `LoomLlmBudgetBlocked` | 9 场景零序列已预置（单测）；真 HTTP 409 会计数（集成测试断言 counter +1） | 真栈上「求值→转发」那一段无独立证据（与上两条共用机制，但共用不等于验过） |
+| `LoomStreamDeadLettered` | 零序列随 worker tick 预置（单测，且后端故障时预置仍先生效） | 真栈未证：造一条死信需 ≥6 分钟投递接管轮（`max_deliveries=5`、`min_idle=60s` 皆非 env 可调），**刻意未做** |
+| `LoomQueueBacklog` / `LoomStreamNearTrimLimit` | 取样链与 Gauge 语义（真 Redis 实测 XPENDING 与 XLEN 正交） | 真栈无积压量级可造；阈值本身待校准 |
+| `LoomLlmUpstreamSlow` | 桶与 outcome 标签、真往返计时 | 分位数需窗口内 ≥2 次调用，**单次慢调用不触发**（固有性质非缺陷）；真供应商 P99 未测 |
+
+要补哪条的证据时，别靠放宽阈值让它变绿——那是把「没证明」换成「证明了一个不存在的东西」。
+
 **数值来源纪律**：`100`（未 ACK）/ `5000`（流长）/ `30s`（上游 P99）与 `content.discard_retention_days=180 天`
 **原文均未给出**，是工程默认值（甲案已经负责人 2026-09-25 追认＝02 C1.134）；**追认结的是设计选择，不结数值校准**——
 真队列压出来之前这些阈值没被证明合理，误报/漏报请记回 docs/20 而不是各自改本地值。
