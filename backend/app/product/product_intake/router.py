@@ -238,14 +238,17 @@ async def get_product_space(
 @router.patch("/{intake_id}/target-languages", response_model=ProductSpaceView)
 async def patch_target_languages(
     intake_id: str,
-    body: IntakeTargetLanguagesPatch,
+    tenant_id: str = Query(min_length=1),
+    body: IntakeTargetLanguagesPatch = ...,
     session: AsyncSession = Depends(get_session),
 ) -> ProductSpaceView:
-    """B3/Q122：客户在段1 录入页设置产品目标语言（客户口径，无运营闸）。"""
+    """B3/Q122：客户在段1 录入页设置产品目标语言（客户口径，无运营闸）。
+    Q200 #32：必填 tenant_id，与产品空间归属不符统一 404。"""
     try:
         space = await service.set_target_languages(
             session,
             intake_id=intake_id,
+            tenant_id=tenant_id,
             languages=body.languages,
             actor=body.actor,
         )

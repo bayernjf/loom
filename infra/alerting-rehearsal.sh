@@ -23,6 +23,10 @@
 #   ./alerting-rehearsal.sh down    # 拆除演练栈
 set -uo pipefail
 
+# Q200 #33：backend entrypoint 对空 LOOM_MASTER_KEY 启动即 fail-fast，
+# 彩排不注入真 Key，统一用演练专用测试值（非生产密钥）。
+export LOOM_MASTER_KEY="${LOOM_MASTER_KEY:-loom-rehearsal-only-master-key}"
+
 cd "$(dirname "$0")"
 PROJECT=loom-alerting
 # Q193：多叠一层演练专用 override，只为打开导出 worker 门控（业务告警实触发用）。

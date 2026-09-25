@@ -185,7 +185,7 @@ async def test_low_score_does_not_block_approve(client, session_factory):
         await session.commit()
         assert cp.quality_score == 0.62
 
-    r = await client.post("/api/content/cp-low/approve", json={"actor": CUSTOMER})
+    r = await client.post("/api/content/cp-low/approve?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["status"] == CONTENT_READY
@@ -225,7 +225,7 @@ async def test_regen_limit_is_configurable(client, session_factory):
     assert r.status_code == 201, r.text
     cid = r.json()["content_id"]
 
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": OPS})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": OPS})
     assert r.status_code == 200 and r.json()["status"] == "revising"
 
     r = await client.post(f"/api/content/{cid}/regenerate", json={"actor": OPS})
@@ -233,6 +233,6 @@ async def test_regen_limit_is_configurable(client, session_factory):
     assert r.json()["status"] == "review"
     assert r.json()["regenerate_count"] == 1
 
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": OPS})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": OPS})
     assert r.status_code == 422
     assert "1/1" in r.json()["detail"]

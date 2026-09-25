@@ -62,7 +62,7 @@ async def test_active_language_catalog_is_open_and_excludes_archived(client):
 
 async def test_customer_sets_target_languages_and_space_view_echoes(client):
     r = await client.patch(
-        "/api/intakes/int-1/target-languages",
+        "/api/intakes/int-1/target-languages?tenant_id=t1",
         json={"languages": ["zh-CN", "en-US"], "actor": CUSTOMER},
     )
     assert r.status_code == 200, r.text
@@ -75,7 +75,7 @@ async def test_customer_sets_target_languages_and_space_view_echoes(client):
 
 async def test_empty_languages_clears_to_null(client):
     r = await client.patch(
-        "/api/intakes/int-1/target-languages",
+        "/api/intakes/int-1/target-languages?tenant_id=t1",
         json={"languages": [], "actor": CUSTOMER},
     )
     assert r.status_code == 200, r.text
@@ -85,19 +85,19 @@ async def test_empty_languages_clears_to_null(client):
 async def test_invalid_language_codes_422(client):
     # 未知码
     r = await client.patch(
-        "/api/intakes/int-1/target-languages",
+        "/api/intakes/int-1/target-languages?tenant_id=t1",
         json={"languages": ["xx-XX"], "actor": CUSTOMER},
     )
     assert r.status_code == 422, r.text
     # 归档码不可选
     r = await client.patch(
-        "/api/intakes/int-1/target-languages",
+        "/api/intakes/int-1/target-languages?tenant_id=t1",
         json={"languages": ["fr-FR"], "actor": CUSTOMER},
     )
     assert r.status_code == 422, r.text
     # 重复码
     r = await client.patch(
-        "/api/intakes/int-1/target-languages",
+        "/api/intakes/int-1/target-languages?tenant_id=t1",
         json={"languages": ["zh-CN", "zh-CN"], "actor": CUSTOMER},
     )
     assert r.status_code == 422, r.text
@@ -105,7 +105,7 @@ async def test_invalid_language_codes_422(client):
 
 async def test_patch_without_product_space_404(client):
     r = await client.patch(
-        "/api/intakes/int-ghost/target-languages",
+        "/api/intakes/int-ghost/target-languages?tenant_id=t1",
         json={"languages": ["zh-CN"], "actor": CUSTOMER},
     )
     assert r.status_code == 404, r.text

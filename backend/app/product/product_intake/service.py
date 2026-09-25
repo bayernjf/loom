@@ -200,6 +200,7 @@ async def set_target_languages(
     session: AsyncSession,
     *,
     intake_id: str,
+    tenant_id: str,
     languages: list[str],
     actor,
 ) -> ProductSpace:
@@ -208,6 +209,7 @@ async def set_target_languages(
     与 Q119 operations ``PUT /api/product-spaces/{id}/target-languages`` 写同一列，
     但按 intake 维度定位产品空间，并额外校验语言码必须在 active content_languages
     清单内（运营代设入口维持原校验口径不变）；空列表 = 未声明 / 不收窄。
+    Q200 #32：客户口必须显式声明 tenant_id，与产品空间归属不符统一 404。
     """
     # 惰性 import：content.languages 反向依赖 product_intake.models，避开模块加载环。
     from app.content.languages import list_languages
@@ -215,7 +217,7 @@ async def set_target_languages(
     ps = await session.scalar(
         select(ProductSpace).where(ProductSpace.intake_id == intake_id)
     )
-    if ps is None:
+    if ps is None or ps.tenant_id != tenant_id:
         raise ProductSpaceNotCreated(intake_id)
 
     codes = [c.strip() for c in (languages or []) if isinstance(c, str) and c.strip()]

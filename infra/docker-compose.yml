@@ -20,8 +20,12 @@ services:
       - archive_timeout=300
       - -c
       - archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f
-    environment: {POSTGRES_USER: loom, POSTGRES_PASSWORD: loom, POSTGRES_DB: loom}
-    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-loom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-loom}
+      POSTGRES_DB: ${POSTGRES_DB:-loom}
+    # Q200 #33：数据口只绑宿主回环，不再向局域网/公网暴露（本机 psql 仍可达）。
+    ports: ["127.0.0.1:5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
       - walarchive:/wal-archive
@@ -31,6 +35,8 @@ services:
     depends_on:
       # Q185：归档卷属主必须先于 postgres 初始化就绪（见 wal-archive-init）。
       wal-archive-init: {condition: service_completed_successfully}
+    # Q200 #33：三 datastore 统一补 restart（Q199 §7.4 判据），宿主重启后数据面自愈。
+    restart: unless-stopped
     logging: *default-logging
   # Q185：空命名卷的挂载点默认 root:root，而官方镜像的 initdb.d 脚本以 postgres
   # （uid 999）身份运行、改不动属主（chown/chmod 双双 EPERM → postgres exit 1）。
@@ -44,23 +50,33 @@ services:
     logging: *default-logging
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    # Q200 #33：同 postgres，数据口只绑宿主回环。
+    ports: ["127.0.0.1:6379:6379"]
     volumes: [redisdata:/data]
     healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10}
+    # Q200 #33：同 postgres。
+    restart: unless-stopped
     logging: *default-logging
   minio:
     # Docker Hub 用户命名空间镜像在本机拉取受限，统一用 quay.io 官方源。
     image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
-    environment: {MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin}
-    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    # Q200 #33：API 与 console 只绑宿主回环。
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: [miniodata:/data]
+    # Q200 #33：同 postgres。
+    restart: unless-stopped
     logging: *default-logging
   backend:
     build: {context: .., dockerfile: backend/Dockerfile}
     environment:
-      LOOM_DATABASE_DSN: postgresql+asyncpg://loom:loom@postgres:5432/loom
+      LOOM_DATABASE_DSN: postgresql+asyncpg://${POSTGRES_USER:-loom}:${POSTGRES_PASSWORD:-loom}@postgres:5432/${POSTGRES_DB:-loom}
       LOOM_REDIS_DSN: redis://redis:6379/0
+      # Q200 #33：空值由 backend/docker-entrypoint.sh 启动即 fail-fast
+      # （不放 ${VAR:?}：compose 解析期全局求值会打断彩排/监控 overlay，见 Q185）。
       LOOM_MASTER_KEY: ${LOOM_MASTER_KEY:-}
       # Endpoint only; the outbound key lives encrypted in the database, never in env/files.
       LOOM_LLM_BASE_URL_OPENAI: ${LOOM_LLM_BASE_URL_OPENAI:-}
@@ -93,8 +109,8 @@ services:
     environment:
       PGHOST: postgres
       PGUSER: loom
-      PGPASSWORD: loom
-      PGDATABASE: loom
+      PGPASSWORD: ${POSTGRES_PASSWORD:-loom}
+      PGDATABASE: ${POSTGRES_DB:-loom}
       RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
     volumes:
@@ -125,7 +141,7 @@ services:
     environment:
       PGHOST: postgres
       PGUSER: loom
-      PGPASSWORD: loom
+      PGPASSWORD: ${POSTGRES_PASSWORD:-loom}
       BASEBACKUP_INTERVAL_SECONDS: ${BASEBACKUP_INTERVAL_SECONDS:-86400}
     volumes:
       - ./wal:/scripts:ro
@@ -139,8 +155,8 @@ services:
     image: quay.io/minio/mc:latest
     environment:
       S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: minioadmin
-      S3_SECRET_KEY: minioadmin
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       WAL_BUCKET: ${WAL_BUCKET:-loom-wal}
       WAL_ARCHIVE_INTERVAL_SECONDS: ${WAL_ARCHIVE_INTERVAL_SECONDS:-60}
     volumes:

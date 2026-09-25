@@ -179,13 +179,13 @@ async def test_list_by_tenant_excludes_body_and_unknown_tenant_empty(client):
 
 async def test_detail_returns_body_404(client):
     cid = await _generate(client)
-    r = await client.get(f"/api/content/{cid}")
+    r = await client.get(f"/api/content/{cid}?tenant_id=t1")
     assert r.status_code == 200, r.text
     detail = r.json()
     assert detail["content_id"] == cid
     assert detail["body"]
 
-    r = await client.get("/api/content/ghost-id")
+    r = await client.get("/api/content/ghost-id?tenant_id=t1")
     assert r.status_code == 404
 
 
@@ -193,12 +193,12 @@ async def test_manual_edit_happy_path_reruns_reviews_without_regen_count(
     client, session_factory
 ):
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_REVISING
 
     r = await client.patch(
-        f"/api/content/{cid}/body",
+        f"/api/content/{cid}/body?tenant_id=t1",
         json={"body": "这是客户人工改写后的全新正文。", "actor": CUSTOMER},
     )
     assert r.status_code == 200, r.text
@@ -223,18 +223,18 @@ async def test_manual_edit_guards(client):
     cid = await _generate(client)
     # review 态直接编辑 → 409（必须先 revise）。
     r = await client.patch(
-        f"/api/content/{cid}/body", json={"body": "x", "actor": CUSTOMER}
+        f"/api/content/{cid}/body?tenant_id=t1", json={"body": "x", "actor": CUSTOMER}
     )
     assert r.status_code == 409
     # 空白正文 → 422。
-    await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
     r = await client.patch(
-        f"/api/content/{cid}/body", json={"body": "   ", "actor": CUSTOMER}
+        f"/api/content/{cid}/body?tenant_id=t1", json={"body": "   ", "actor": CUSTOMER}
     )
     assert r.status_code == 422
     # 不存在 → 404。
     r = await client.patch(
-        "/api/content/ghost/body", json={"body": "x", "actor": CUSTOMER}
+        "/api/content/ghost/body?tenant_id=t1", json={"body": "x", "actor": CUSTOMER}
     )
     assert r.status_code == 404
 
@@ -243,7 +243,7 @@ async def test_manual_edit_reruns_wordlist_and_semantic(
     client, session_factory
 ):
     cid = await _generate(client)
-    await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
 
     # 人工正文同时含词库 ban 词与语义哨兵：词库硬阻断标记抬升、语义发现落段，
     # 但人工提交仍照常回 review（语义纯 advisory；ban 阻断在审阅侧消费，同 generate）。
@@ -256,7 +256,7 @@ async def test_manual_edit_reruns_wordlist_and_semantic(
         await session.commit()
 
     r = await client.patch(
-        f"/api/content/{cid}/body",
+        f"/api/content/{cid}/body?tenant_id=t1",
         json={"body": "人工正文包含违禁词与 [SEMANTIC_RISK] 哨兵。", "actor": CUSTOMER},
     )
     assert r.status_code == 200, r.text

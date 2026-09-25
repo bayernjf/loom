@@ -201,17 +201,17 @@ async def _generate(client) -> str:
 
 async def test_customer_approve(client):
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/approve", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/approve?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_READY
 
 
 async def test_reject_requires_reason(client):
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/reject", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/reject?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 422
     r = await client.post(
-        f"/api/content/{cid}/reject", json={"reason": "不合规", "actor": CUSTOMER}
+        f"/api/content/{cid}/reject?tenant_id=t1", json={"reason": "不合规", "actor": CUSTOMER}
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_REJECTED
@@ -220,7 +220,7 @@ async def test_reject_requires_reason(client):
 
 async def test_revise_regenerate_flow(client):
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_REVISING
 
@@ -233,10 +233,10 @@ async def test_revise_regenerate_flow(client):
 async def test_revise_capped_at_max(client):
     cid = await _generate(client)
     for _ in range(MAX_REGENERATE):
-        await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+        await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
         r = await client.post(f"/api/content/{cid}/regenerate", json={"actor": OPS})
         assert r.status_code == 200, r.text
-    r = await client.post(f"/api/content/{cid}/revise", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 422
 
 
