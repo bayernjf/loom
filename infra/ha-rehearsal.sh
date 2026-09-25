@@ -19,6 +19,11 @@ set -uo pipefail
 # 彩排不注入真 Key，统一用演练专用测试值（非生产密钥）。
 export LOOM_MASTER_KEY="${LOOM_MASTER_KEY:-loom-rehearsal-only-master-key}"
 
+# Q203 #33 残留 1：compose 里两个 datastore 口令已无弱默认（不给就起不来），
+# 彩排同样注入演练专用值；刻意不用 ${VAR:?}——解析期求值会打断没设变量的 overlay。
+export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-loom-rehearsal-only-pg}"
+export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-loom-rehearsal-only-minio}"
+
 cd "$(dirname "$0")"
 PROJECT=loom-ha
 FILES=(-f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.ha.yml)

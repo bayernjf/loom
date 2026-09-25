@@ -22,7 +22,7 @@ services:
       - archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-loom}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-loom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-loom}
     # Q200 #33：数据口只绑宿主回环，不再向局域网/公网暴露（本机 psql 仍可达）。
     ports: ["127.0.0.1:5432:5432"]
@@ -63,7 +63,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     # Q200 #33：API 与 console 只绑宿主回环。
     ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: [miniodata:/data]
@@ -73,7 +73,7 @@ services:
   backend:
     build: {context: .., dockerfile: backend/Dockerfile}
     environment:
-      LOOM_DATABASE_DSN: postgresql+asyncpg://${POSTGRES_USER:-loom}:${POSTGRES_PASSWORD:-loom}@postgres:5432/${POSTGRES_DB:-loom}
+      LOOM_DATABASE_DSN: postgresql+asyncpg://${POSTGRES_USER:-loom}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-loom}
       LOOM_REDIS_DSN: redis://redis:6379/0
       # Q200 #33：空值由 backend/docker-entrypoint.sh 启动即 fail-fast
       # （不放 ${VAR:?}：compose 解析期全局求值会打断彩排/监控 overlay，见 Q185）。
@@ -109,7 +109,7 @@ services:
     environment:
       PGHOST: postgres
       PGUSER: loom
-      PGPASSWORD: ${POSTGRES_PASSWORD:-loom}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
       PGDATABASE: ${POSTGRES_DB:-loom}
       RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
@@ -141,7 +141,7 @@ services:
     environment:
       PGHOST: postgres
       PGUSER: loom
-      PGPASSWORD: ${POSTGRES_PASSWORD:-loom}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
       BASEBACKUP_INTERVAL_SECONDS: ${BASEBACKUP_INTERVAL_SECONDS:-86400}
     volumes:
       - ./wal:/scripts:ro
@@ -156,7 +156,7 @@ services:
     environment:
       S3_ENDPOINT: http://minio:9000
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       WAL_BUCKET: ${WAL_BUCKET:-loom-wal}
       WAL_ARCHIVE_INTERVAL_SECONDS: ${WAL_ARCHIVE_INTERVAL_SECONDS:-60}
     volumes:
