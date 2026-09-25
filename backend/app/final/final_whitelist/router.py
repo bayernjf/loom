@@ -16,10 +16,10 @@ from app.core.queue import StreamBackendError
 from app.core.rbac import (
     OPERATIONS,
     PLATFORM_ADMIN,
-    NotAuthenticated,
     PermissionDenied,
     require_any_role,
 )
+from app.core.staff_auth.deps import require_internal_actor
 from app.final.final_whitelist import material, service
 from app.final.final_whitelist.schemas import AssemblyManual, AssemblyTaskCreate
 
@@ -59,14 +59,17 @@ def _guard_conflict(exc: service.GuardsFailed) -> HTTPException:
 
 @router.post("/api/fcw/assemble")
 async def assemble_manual(
-    body: AssemblyManual, session: AsyncSession = Depends(get_session)
+    body: AssemblyManual,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(require_internal_actor(OPERATIONS)),
 ) -> dict:
-    # Q200 #34：E1.1 publishFCW 写口统一过 rbac.require_any_role——门控开启时
-    # 自报 operations 不再能直接 mint final_id（无 staff 令牌 → 401）；门控关闭
-    # 维持 V1 自报口径。service 层 _require_ops 仍留作内部兜底（后台 worker 不
-    # 经 HTTP，无请求级 staff 上下文，见 Q178 设计边界）。
+    # Q203 #34：E1.1 两个写口只认已验真的 staff 令牌——门控关闭时也当场验真，
+    # 自报 operations 不再构成身份（Q200 那版仅在门控开时生效，默认形态＝opt-in）。
+    # 覆盖口径同 rbac.require_any_role；service._require_ops 仍留作 worker 内部兜底
+    # （后台不经 HTTP，无请求级 staff 上下文，见 Q178 设计边界）。
+    body.actor.id = verified.id
+    body.actor.roles = list(verified.roles)
     try:
-        require_any_role(body.actor, OPERATIONS)
         fcw = await service.assemble_one(
             session,
             product_space_id=body.product_space_id,
@@ -77,10 +80,6 @@ async def assemble_manual(
             country=body.country,
             pws_id=body.pws_id,
         )
-    except NotAuthenticated as exc:
-        raise HTTPException(401, str(exc)) from exc
-    except PermissionDenied as exc:
-        raise HTTPException(403, str(exc)) from exc
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except (service.PwsNotFound, service.SlotNotFound) as exc:
@@ -102,7 +101,9 @@ async def assemble_manual(
 
 @router.post("/api/fcw/assembly-tasks", status_code=201)
 async def create_assembly_task(
-    body: AssemblyTaskCreate, session: AsyncSession = Depends(get_session)
+    body: AssemblyTaskCreate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(require_internal_actor(OPERATIONS)),
 ) -> dict:
     """Q55 任务驱动批量发证；Q165 门控开启时改异步入队。
 
@@ -111,9 +112,10 @@ async def create_assembly_task(
     GET 状态口轮询。入流失败 fail-closed：删除 queued 行并回 503，不留半完成任务。
     """
     enabled = get_settings().fcw_worker_enabled
+    # Q203 #34：与 /assemble 同口径——已验真令牌才是身份，自报不算。
+    body.actor.id = verified.id
+    body.actor.roles = list(verified.roles)
     try:
-        # Q200 #34：同 assemble 写口，门控开启时要求 staff 令牌（见上）。
-        require_any_role(body.actor, OPERATIONS)
         task = await service.create_task_record(
             session,
             body,
@@ -121,10 +123,6 @@ async def create_assembly_task(
             if enabled
             else service.TASK_STATUS_RUNNING,
         )
-    except NotAuthenticated as exc:
-        raise HTTPException(401, str(exc)) from exc
-    except PermissionDenied as exc:
-        raise HTTPException(403, str(exc)) from exc
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PwsNotFound as exc:

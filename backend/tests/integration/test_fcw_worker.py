@@ -29,6 +29,7 @@ from app.core.queue import (
     read_new,
 )
 from app.core.queue import streams as streams_mod
+from app.core.staff_auth.deps import get_auth_session
 from app.final.fcw_worker.worker import FcwWorker
 from app.final.final_whitelist import service
 from app.final.final_whitelist.models import FcwAssemblyTask, FinalContentWhitelist
@@ -43,6 +44,7 @@ from app.product.condition import pwc_rules
 from app.product.condition.models import ContentGoal
 from app.product.fieldpool.models import FPSourceRoute
 from app.product.product_intake.models import G2Field
+from tests.integration.staff_tokens import bearer, issue_staff_token
 from tests.integration.stream_fakes import FakeStreamsRedis
 from tests.integration.test_fcw_api import (
     COMPLIANCE,
@@ -70,6 +72,8 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # Q203：E1.1 写口在门控关下也自行验真，走 get_auth_session 这条缝。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -99,6 +103,11 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Q203 #34：发证写口只认已验真令牌，本文件要发证，故默认带一枚 operations 令牌
+        # （引导口径同 Q178 上线流程；细节见 tests/integration/staff_tokens.py）。
+        ac.headers.update(
+            bearer(await issue_staff_token(ac, ["operations"]))
+        )
         yield ac
 
 
