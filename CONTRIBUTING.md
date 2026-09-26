@@ -23,7 +23,7 @@
 ## 分支与 PR
 
 - 工作分支为 `dev`（跟踪 `origin/dev`）；`main` 为发布基线，合入由负责人操作。
-- PR 必须通过 GitHub Actions CI（**三 job**，迁移门见 docs/17 §7.7）：后端 `ruff check` + `pytest` + eval runner（101 案），前端 `typecheck` + **八个**契约 checker（`frontend/scripts/check-*.mjs`），迁移 `alembic upgrade head` → 真 PG16 上 ORM⇄DB 列/约束/索引漂移检查 → `downgrade -1` → 再 `upgrade head`；`next build`/lint 非闸门。测试策略见 docs/16。
+- PR 必须通过 GitHub Actions CI（**四 job**，迁移门见 docs/17 §7.7）：后端 `ruff check` + `pytest` + eval runner（101 案），前端 `typecheck` + **八个**契约 checker（`frontend/scripts/check-*.mjs`），迁移 `alembic upgrade head` → 真 PG16 上 ORM⇄DB 列/约束/索引漂移检查 → `downgrade -1` → 再 `upgrade head`，真容器集成 `tests/integration/test_real_infra.py`（真 PG16 ＋ 真 Redis 两 service；**该 job 带 skip 哨兵**：这一族靠 env 门控，env 没生效时 pytest 是「全 skip ＋ exit 0」，故命中 skip 即判红，防静默绿灯）；`next build`/lint 非闸门。测试策略见 docs/16。
 
 ## License
 
