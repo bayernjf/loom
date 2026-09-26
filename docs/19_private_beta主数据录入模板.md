@@ -17,6 +17,8 @@
 > 段10 合规清洗报告（Guard② 的 cleaning_passed）由跑链过程产生，**不在本模板范围**。
 > 三包/PCP 创建后 `gate`/`risk` 默认 `approved`、`status` 默认 `active`（Q42 人工直编口径），无需另走审批端点。
 
+> **只想打通第一张 `final_id`？看 §0.2「最小可发证清单」**——§0 这张表是完整模板口径，其中若干项（四维分/risk/fit 权重/slot_type_defaults）不参与发证判定，首批不必向业务方索取。
+
 ## 0.1 actor 口径
 
 所有写口 body 内带（**Q196 起：该字段是兼容输入，不是可信来源**）：
@@ -37,6 +39,63 @@
 >    ⇒ 跑 §5 验收第③步（全链出真 `final_id`）**之前**必须先按 Q178 引导流程签一枚 operations 令牌，
 >    否则门控关着也会撞 401。引导：门控关下自报 `platform_admin` 调 `POST /api/admin/staff-keys`，明文只回一次。
 
+
+## 0.2 最小可发证清单（2026-09-26，据代码反推，不是照本文件 §1-§5 抄）
+
+> **为什么要单列这一节**：§1-§5 是"完整录入模板"，但**过七项 Guard 真正需要的东西比它少得多**。
+> 首批的目的只是"在真部署里出一张真 `final_id`"（docs/20 §9.2 认定的唯一剩余硬阻塞），
+> 所以对外要东西时请按这张表要，别把整份模板甩出去——那会把一件小任务说成一个大工程。
+> 下面每条都给了代码位置，判定依据是 `app/final/final_whitelist/service.py` 与 `fcw_rules.py` 的实际实现。
+
+### A. 工程已经备好、不需要业务方给的
+
+| 东西 | 状态 | 依据 |
+|---|---|---|
+| PCP **模板** 4 套（`short_video`/`community`/`photo_text`/`ecommerce`） | 已随种子落地 ⇒ **PCP 实例只是"选一个模板码"**，不是手填 17 项权重 | `app/platform/platform_adaptation/seeds.py`；Q39 |
+| `content_goals` 目的字典 | 已随迁移 0005 播种 ⇒ `goal` 不用业务方发明（现有 5 码见 §3） | `alembic/versions/0005_m5_stage5.py` |
+| 七项 Guard、发证口、内部角色与配置中心 | 全部已落地；且自 Q203 起 `final_id` 唯一出口有运行期守卫（作用域外写入判红） | `fcw_rules.py`；`exit_guard.py`；02 C1.147 |
+| 敏感领域字典 `cp_law_sensitive_domains` | **零行种子**（迁移 0007 只建表）⇒ 首批若不主动启用敏感类目治理，Guard⑥ 走"无法审单即放行"分支 | `compliance_center/service.py:164-196`（命中才建单）、`:603-624`（`law_review_required = 有单`）|
+
+> ⚠️ 最后一行是**可配置项，不是永久豁免**：合规团队一旦填了敏感领域字典，产品命中就转 48h 法审待办（Q49），Guard⑥ 立刻变成真门槛。首批选产品时请有意**避开**打算启用为敏感类目的行业，否则"打通第一张 `final_id`"会挂在等法务上。
+
+### B. 真需要人给的四样（按依赖顺序）
+
+| # | 要做的事 | 谁来 | 必填到什么程度 | 卡不卡发证 |
+|---|---|---|---|---|
+| 1 | 选一个真产品并录入（段1 intake → ProductSpace） | 业务/运营 | 一个真实产品即可，先只要 1 个 | **卡**（后面所有材料都挂在它身上） |
+| 2 | 建 **1 个发布位**：`platform` / `code` / `name` / `slot_type` | 运营（值由业务定） | `slot_type` 的**类型名要业务方给**——原 13 类目录随基准 HTML 永久丢失（Q115），工程不得编 | **卡**，但只查两件事：`status=active` 且 `platform` 与请求一致（`service.py:132-141`）——**`gate` 档不参与发证判定** |
+| 3 | 给该 产品×平台 建 **PCP** | 运营 | `POST /api/product-spaces/{id}/pcp` 只要 `{platform, template_code}`（选模板，不填权重） | **卡**：无 active PCP → 409 材料缺失（`service.py:164-178`） |
+| 4 | 建 **三包** CSP / CSTP / CEP 各一条 | **业务/内容**（这才是真需要人判断的部分） | payload 定键见 §3：CSP 6 键（目的/阶段/角度/强度/CTA/情绪）、CSTP 1 键（结构）、CEP 4 键（语气/人称/显性/软化） | **卡**（Guard③，`fcw_rules.py` g3） |
+
+### C. 光填表出不来 `final_id`——Guard①②⑦ 来自"跑一遍链"
+
+发证还要求 PWS `frozen` 且为 active 版（g1/g7）、有合规清洗报告且 `cleaning_passed && !block_required`（g2）。
+这三样**不是数据录入**，而是有人把 段1→5→6→10 走一遍并在 Gate 上裁决（01 铁律：AI 只产候选、人工 Gate 裁决）。
+
+所以本清单实际要向您要**两个人**：**录入的人**（B 表第 1/4 行）与**跑链裁决的人**（段5 PWC 批准、段6 冻结、段10 清洗）。
+如果没人跑链，第一张"真 `final_id`"只会以工程自造测试数据的形式出现——那种数据**不作数**，也违反"禁工程臆造"红线。
+
+### D. 可以留空、完全不影响发证的（别为这些等工期）
+
+发布位四维分 `traffic`/`safe`/`conv`/`load`、`risk`、`source_url`、`chars_max`/`dur_min`/`dur_max`、`gate` 档；
+fit 权重矩阵（缺了只是 `score_incomplete`——Q54 定死评分**仅用于排序、永不做门槛**）；`slot_type_defaults`（§0 表第 4 行已标"消费侧 V2 才接入"）。
+
+**这一条的实际用途**：四维分按 Q35 属"人工评估分"，是整份模板里最贵的一项。它不卡发证 ⇒
+**首批不应向业务方索取打分**。把打分列进首批清单，是最可能造成"主数据一直回不来"的假阻塞。
+
+### E. 一次验收实际怎么跑（命令级，含 Q203 的令牌前置）
+
+1. **引导签发令牌**（Q203 之后发证口无条件要）：门控关下自报 `platform_admin` 调
+   `POST /api/admin/staff-keys`，明文只回一次（口径见 §0.1 与 docs/21 §2）。
+2. 按 docs/21 SOP 走 段1→6→10（录入 → 字段池 → 原子 → PWC 人工批准 → PWS 冻结 → CCR 清洗）。
+3. `POST /api/fcw/assemble` 带 `Authorization: Bearer loom_staff_…`，body
+   `{product_space_id, platform, slot_id, goal, actor}` → **200 即出 `final_id`**；
+   若 **409**，响应回带七项 Guard 逐项明细，据此定位缺哪一路材料（不会静默失败）。
+4. **模型选择建议拆成两次**：第一次打通用 synthetic（不花钱、可反复跑），"真 agnes 全链"另立一次点工——
+   ATOM-AFFINITY 至今仍是 synthetic（Q148），把"验真模型"与"验能发证"绑一起做，只会两件事都变慢。
+
+**判"首批完成"的唯一标准**：在 staging/真部署的库里出现一张 `final_id`，其六路材料与 `fcw.issued` 审计
+指向**真实业务数据**（不是测试夹具、不是工程臆造的行）。
 
 ## 1. publish_slots 发布位
 
