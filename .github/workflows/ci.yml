@@ -97,3 +97,73 @@ jobs:
         run: |
           alembic downgrade -1
           alembic upgrade head
+
+  # Q209：real-infra 真容器集成验证进 CI。Q207 已经证明 CI 能起 pgvector/pg16
+  # service，「真容器进不了 CI」这个前提是被 Q207 自己拆掉的，只是没人回头收——
+  # 于是 docs/20 §9.3 第 4 条与 §10.1 里「real-infra 8 例不在 CI」这半句一直挂着。
+  # 这片测的是替身（FencingRedis/FakeStreamsRedis/FakeBroadcastRedis/sqlite）证不了的：
+  # 真 PG 跨连接池的提交可见性与行级锁串行化、真 Redis 的 SET NX/INCR/Lua 释放、
+  # Streams 消费组分片与 XCLAIM 接管、pub/sub 跨连接投递。
+  real-infra:
+    name: "Real infra gate (PG16 + Redis: fencing, streams, pub/sub)"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: loom
+          POSTGRES_PASSWORD: loom-ci-only
+          POSTGRES_DB: loom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U loom -d loom"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      LOOM_TEST_REAL_PG_DSN: postgresql+asyncpg://loom:loom-ci-only@localhost:5432/loom
+      LOOM_TEST_REAL_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install backend with dev extras
+        run: pip install -e "./backend[dev]"
+      - name: Real-infra integration tests (any skip fails the job)
+        working-directory: backend
+        run: |
+          set -o pipefail
+          python -m pytest tests/integration/test_real_infra.py -q -rs | tee real-infra.log
+          # 哨兵：这一族用例靠 env 门控，env 没设时 pytest 是「全 skip + exit 0」——
+          # 那样这个 job 会永远绿而从没跑过一行真断言。只在真容器上跑绿的检查
+          # 等于没有检查（Q193/Q204 同型教训），所以这里显式判红「有 skip」。
+          # 刻意不钉用例数（加一例就假红，Q207 不钉表数是同一个理由）。
+          summary="$(tail -n 1 real-infra.log)"
+          echo "pytest summary: ${summary}"
+          case "${summary}" in
+            *"no tests ran"*)
+              echo "::error::real-infra 一个用例都没收集到，检查路径是否被改"
+              exit 1
+              ;;
+            *skipped*)
+              echo "::error::real-infra 用例被 skip（通常是两个 LOOM_TEST_REAL_* env 没生效）——静默绿灯等于没跑"
+              exit 1
+              ;;
+            *passed*) ;;
+            *)
+              echo "::error::real-infra 没有 passed 用例，summary 无法判定"
+              exit 1
+              ;;
+          esac
