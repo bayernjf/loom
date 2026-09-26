@@ -7,11 +7,28 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
 from alembic import context
+
+# Every app.**.models module must be imported here: target_metadata is what alembic
+# sees, and 10 modules were missing from it (44 of 62 tables). A table absent from
+# target_metadata is invisible to autogenerate, so one `alembic --autogenerate` run
+# would have proposed DROPping those 18 tables - the only reason that never happened
+# is that this repo's migration convention forbids autogenerate (Q198 logged that).
+# Registration is checked on every push by backend/scripts/dba_schema_check.py (Q207).
+from app.content import models as _content_models  # noqa: F401  (段12 content_products)
 from app.core import models as _core_models  # noqa: F401  (register audit_logs)
+from app.core.api_keys import models as _api_key_models  # noqa: F401  (Q88 agent_api_keys)
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
 from app.core.config_center import models as _config_models  # noqa: F401
 from app.core.db import Base
-from app.core.staff_auth import models as _staff_auth_models  # noqa: F401
+from app.core.effects import models as _effects_models  # noqa: F401  (Q126/Q127 时序与认领)
+from app.core.exports import models as _export_models  # noqa: F401  (Q132 export_jobs)
+from app.core.imports import models as _import_models  # noqa: F401  (Q161 import_jobs)
+from app.core.model_registry import models as _registry_models  # noqa: F401  (Q82 五表)
+from app.core.restock import models as _restock_models  # noqa: F401  (Q143/Q144 fence 两表)
+from app.core.skill7 import models as _skill7_models  # noqa: F401  (Q76 skill 候选/运行)
+from app.core.sla import models as _sla_models  # noqa: F401  (Q85/Q151 SLA 与 tick fence)
+from app.core.staff_auth import models as _staff_auth_models  # noqa: F401  (Q178 PAT)
+from app.core.tenants import models as _tenant_models  # noqa: F401  (Q95 tenants)
 from app.decision.compliance_center import models as _ccr_models  # noqa: F401
 from app.decision.layer_strategy import models as _package_models  # noqa: F401
 from app.final.final_whitelist import models as _fcw_models  # noqa: F401

@@ -61,3 +61,24 @@ def test_every_committed_checker_script_is_wired() -> None:
         if token.startswith("scripts/check-") and token.endswith(".mjs")
     }
     assert on_disk == in_ci, f"checker drift: disk={on_disk} ci={in_ci}"
+
+
+def test_migration_gate_is_wired() -> None:
+    """Q207：真 PG16 的迁移门必须在 CI；job 被删或某步被摘就判红（Q118 同一手法）。"""
+    data = yaml.safe_load(WORKFLOW.read_text())
+    jobs = data["jobs"]
+    assert "migration" in jobs, (
+        "迁移门被摘掉了：ORM⇄迁移漂移与迁移可逆性会重新变成无人值守的事"
+    )
+    mig = jobs["migration"]
+    assert mig["services"]["postgres"]["image"] == "pgvector/pgvector:pg16", (
+        "漂移检查必须跑在带 vector 类型的 PG16 上（Q86 的 embedding 列）"
+    )
+    runs = _steps(mig)
+    assert "alembic upgrade head" in runs
+    assert "python scripts/dba_schema_check.py" in runs
+    assert "alembic downgrade -1" in runs
+    # CI 故意不钉死表数：新增表是常态，钉住会让每次合法迁移都假红。
+    assert "--expect-tables" not in runs
+    # `alembic check` 实测在 HEAD 上报 19 条命名差异（永久红），不得当门用。
+    assert "alembic check" not in runs
