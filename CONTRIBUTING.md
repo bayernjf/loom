@@ -23,7 +23,7 @@
 ## 分支与 PR
 
 - 工作分支为 `dev`（跟踪 `origin/dev`）；`main` 为发布基线，合入由负责人操作。
-- PR 必须通过 GitHub Actions CI（两 job，详见 docs/17 CI/CD）：后端 `ruff check` + `pytest` + eval runner（101 案），前端 `typecheck` + 七个契约 checker；`next build`/lint 非闸门。测试策略见 docs/16。
+- PR 必须通过 GitHub Actions CI（**三 job**，迁移门见 docs/17 §7.7）：后端 `ruff check` + `pytest` + eval runner（101 案），前端 `typecheck` + **八个**契约 checker（`frontend/scripts/check-*.mjs`），迁移 `alembic upgrade head` → 真 PG16 上 ORM⇄DB 列/约束/索引漂移检查 → `downgrade -1` → 再 `upgrade head`；`next build`/lint 非闸门。测试策略见 docs/16。
 
 ## License
 
