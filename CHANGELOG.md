@@ -3,6 +3,16 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q207 真 PG 迁移门进 CI（2026-09-26，**代码（仅 alembic 配置）＋脚本＋测试＋CI，零迁移零新表零新 env**；基线 940→**966 passed＋10 skipped**；02 C1.151）** — 四轮手工 DBA 复核（Q153/Q171/Q179）的比对逻辑每次用完就丢，
+  而 CI 两个 job 全跑 sqlite 替身、从没连过 PostgreSQL。新增 `backend/scripts/dba_schema_check.py`（表／列可空性与粗类型类／
+  PK／FK 列对／唯一约束／索引，**多重集**比对、**按列集不按名字**）与 CI 第三个 job `Migration gate`：真
+  `pgvector/pgvector:pg16` 上 `upgrade head` → 漂移检查 → `downgrade -1` → 再 `upgrade head`（四步先本地按 CI 定义原样跑通）。
+  **不用 `alembic check`**：实测在 HEAD 上报 19 条纯命名差异（永久红）。检查器自己的 25 例单测抓出它两处 bug——
+  通用方言渲染类型、`"time zone" in s` 同时匹配 `without time zone`（后者等于悄悄丢掉时区漂移检测）；
+  并含"验证验证器"：种一条多出的列与一条**同列重复索引**必须判红（按集合比对时那条是隐形的）。
+  **顺带修一个硬隐患**：`alembic/env.py` 只注册 24 个模型模块中的 14 个 ⇒ `target_metadata` 见 44／62 张表，
+  库里不缺表（迁移全手写）但一次 `--autogenerate` 就会提议 **DROP 那 18 张表**。
+  边界写清：不检查列长度精度／索引存储方法／默认值／CHECK，Q154 那类长度回归仍归 real-infra 用例。
 - **Q206 最小可发证清单（2026-09-26，**纯文档零代码零迁移零测试变化**；基线沿用 940 passed＋10 skipped；docs/19 新增 §0.2；02 C1.150）** — 「主数据零行」这句话掩盖了两件事，而 docs/19 索取清单的方式本身在拖慢它。新 §0.2 的判定逐条回代码取：发证真正只要求「1 个 active 发布位（`_resolve_slot:132-141` 只查 active＋平台一致，**不看 `gate` 档**）＋该 PS×平台一条 active PCP（PCP 只是选一个模板码，4 套 Q39 已播种）＋三包各一条 active」；而四维分/`risk`/`source_url`/fit 权重/`slot_type_defaults` **全部不卡**（Q54：评分仅排序、永不做门槛）——**把最贵的人工打分列进首批清单，就是主要假阻塞**。另一半：Guard①②⑦ 要的 PWS 冻结与清洗报告不来自填表，而来自有人把段1→6→10 跑一遍并在 Gate 裁决 ⇒ 这项阻塞真正要的是**两个人**（录入的＋跑链的），不是两张表。另标注 `cp_law_sensitive_domains` 零行种子使 Guard⑥ 默认放行，属**可配置项非永久豁免**；并建议「第一次打通用 synthetic、验真 agnes 另立一次点工」。§0 完整模板一字未动，只加一行指针。
 - **Q205 文档对账批（2026-09-26，**纯文档，零代码零迁移零测试变化**；基线沿用 940 passed＋10 skipped；docs/11 新增 §2.8；02 C1.149）** — 回答「还能不能往前推」时重扫，抓出两处**我自己前两批造成的**漂移：docs/08 §2.2 的权威当前行仍停在 Q200／926 passed（Q203/Q204 同步了七份文档却漏了它），docs/11 已定稿接口规格里**根本没有 E1.1 两个发证口**，于是 Q203 的鉴权变更在 API 规范里查不到。新权威行加在上方（Q204／940），旧两行标注为历史快照、正文不动；§2.8 写全两口路径、`require_internal_actor` 与门控无关地验真、401/403 条件、actor 覆盖、与 Q178/Q200/Q88 各面的分工、引导签发与唯一出口守卫及其 ORM flush 边界——**引用的六个代码位置逐个 sed 复核行号内容**。另修 docs/08 三条「当前基线见下一行」的错向指针，并当场抓掉一处自己引入的渲染缺陷（正文与 `---` 之间缺空行会被解析成 setext 标题）。想做的更深验证（真起空口令容器）被权限层拦下，compose 渲染半已实测、容器拒绝半仍标注为推断。
 - **Q204 收尾（2026-09-26，**测试＋文档，零生产代码零迁移**；基线 938→**940 passed＋10 skipped**；02 C1.148）** — push 后**第一次读到 CI 的 step 级结果**：run 36219634868 对 `ae8b2c2` 两个 job 全绿（后端 Ruff／Pytest／Eval、前端 npm ci／typecheck／八 checker），挂了六批的「CI 结果从未被读过」就此结清；compose 契约扫描提为纯函数并扩到 `infra/docker-compose*.yml` **全部五份文件**（base＋四个 overlay），另用三种坏样本证明**扫描器会响**；docs/19 §0.1 补发口径分岔（录入类写口仍按 Q178，发证两写口自 Q203 无条件要 `loom_staff_` Bearer，跑验收第③步前必须先引导签发）。**三处自我更正**：§9.3 的「三个 overlay」实为四个、「给业务方起草最小集说明」这条推荐是多余的（docs/19 §0 早有其表）、DB 层挡 Core 裸写**决定不做**并留下理由。
