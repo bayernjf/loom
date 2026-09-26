@@ -18,7 +18,9 @@ docs/19 §0.2 与发证解析器（`app/final/final_whitelist/service.py` 的
 默认分支（docs/19 §0.2：**可配置项、非永久豁免**，首批选产品应避开拟启用敏感
 类目的行业）——这是提示，不影响"可发证"判定。
 
-退出码：缺任一必填项 ⇒ 1；齐备 ⇒ 0。
+**本脚本只读**（Q218 起）：绝不建表、绝不写行；必需表都不在的库直接判「不可用」，不代建 schema。
+另检查目标库有没有 `alembic_version` 行——没有就说明它不是迁移建出来的，迁移自带的种子（`content_goals` 5 码、`cp_law_sensitive_domains` 6 个 active 领域、`pcp_templates` 4 套）自然都不在，此时输出的「零」是**建库方式**造成的、不是业务没回填。
+退出码：齐备 ⇒ 0；缺任一必填项 ⇒ 1；目标库不是 Loom 迁移库（缺必需表）⇒ 2。
 
 用法：
     python scripts/check_master_data.py [--json]
@@ -32,11 +34,12 @@ import asyncio
 import json
 import sys
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy import inspect as sqlalchemy_inspect
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
-from app.core.db import Base
 from app.decision.compliance_center.models import CpLawSensitiveDomain
 from app.decision.layer_strategy.models import KIND_CEP, KIND_CSP, KIND_CSTP, Package
 from app.platform.platform_adaptation.models import PcpWeightTable, PublishSlot
@@ -50,6 +53,19 @@ _REQUIRED_TABLES = (
     ContentGoal.__table__,
     CpLawSensitiveDomain.__table__,
 )
+
+
+async def is_migration_built(session) -> bool:
+    """库是否经 `alembic upgrade head` 建出。
+
+    迁移里带的业务种子（`content_goals` 5 码、`cp_law_sensitive_domains` 6 个 active 领域、
+    `pcp_templates` 4 套…）只存在于迁移路径；用 `Base.metadata.create_all` 起的测试/替身库
+    一行都没有。不检查这一条，"全零"就会被读成"业务还没回填"，而实际是"库不是这么建的"。
+    """
+    try:
+        return bool((await session.execute(text("SELECT version_num FROM alembic_version"))).all())
+    except SQLAlchemyError:  # 表不存在／方言不支持 ⇒ 不是迁移库
+        return False
 
 
 async def collect_facts(session) -> dict:
@@ -161,11 +177,27 @@ def evaluate(facts: dict) -> dict:
         )
 
     ready = ready_combo is not None and not missing_required
+    # `migration_built` 缺省为 True：只有采集层显式说"不是迁移库"才降级，避免误伤既有调用方。
+    migration_built = facts.pop("migration_built", True)
+    warnings: list[str] = []
+    if not migration_built:
+        warnings.append(
+            "此库没有 alembic_version 行 ⇒ 不是经 `alembic upgrade head` 建出的。"
+            "迁移自带的业务种子（content_goals 5 码、cp_law_sensitive_domains 6 个 active 领域、"
+            "pcp_templates 4 套等）在此库中一行都不会有，本判定的『零』可能来自建库方式而非业务未回填。"
+        )
+    if facts["sensitive_domains_count"] == 0 and migration_built:
+        warnings.append(
+            "active 敏感领域为 0：与迁移 0007 的种子（6 个）不符，说明有人清空/停用了敏感领域字典 ⇒ "
+            "Guard⑥ 当前不会因敏感领域拦人，这是**可配置态**而非默认态。"
+        )
     return {
         "ready": ready,
         "ready_combo": ready_combo,
         "missing_required": missing_required,
         "gaps": gaps,
+        "migration_built": migration_built,
+        "warnings": warnings,
         "sensitive_domains_zero": sens_zero,
         "counts": {
             "publish_slots_active": len(slots),
@@ -188,9 +220,12 @@ def _format_report(result: dict) -> str:
         f"content_goals(active)={counts['content_goals_active']}"
     )
     lines.append(
-        f"  cp_law_sensitive_domains={counts['cp_law_sensitive_domains']}"
-        + ("  ⚠ 零行⇒Guard⑥ 默认放行（可配置、非永久豁免）" if result["sensitive_domains_zero"] else "")
+        f"  cp_law_sensitive_domains(active)={counts['cp_law_sensitive_domains']}"
+        + ("  ⚠ 与迁移 0007 的 6 个种子不符 ⇒ 字典被清空/停用，Guard⑥ 当前不因敏感领域拦人（可配置态，非默认）"
+           if result["sensitive_domains_zero"] else "  （Guard⑥ 会对命中的行业建 48h 法审单）")
     )
+    for w in result.get("warnings", []):
+        lines.append(f"  ⚠ {w}")
     if result["ready"]:
         c = result["ready_combo"]
         lines.append(
@@ -208,15 +243,33 @@ def _format_report(result: dict) -> str:
 
 
 async def _run(dsn: str) -> dict:
+    """连接目标库并判定。**本脚本只读**：绝不建表、绝不写行（Q218 起；原先在此处
+    `create_all(tables=_REQUIRED_TABLES)`，等于偷偷改业务库的 schema，与文档「只读」不符）。
+    """
     engine = create_async_engine(dsn)
-    async with engine.begin() as conn:
-        # 仅确保本脚本关心的五张表存在（不碰其余 schema，不依赖迁移）。
-        await conn.run_sync(Base.metadata.create_all, tables=_REQUIRED_TABLES)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with session_factory() as session:
-        facts = await collect_facts(session)
-    await engine.dispose()
+    try:
+        async with session_factory() as session:
+            missing = await missing_required_tables(session)
+            if missing:
+                return {"unusable": missing, "ready": False, "warnings": [],
+                        "counts": {}, "missing_required": [], "gaps": []}
+            facts = await collect_facts(session)
+            facts["migration_built"] = await is_migration_built(session)
+    finally:
+        await engine.dispose()
     return evaluate(facts)
+
+
+async def missing_required_tables(session) -> list[str]:
+    """返回目标库里**不存在**的必需表名（只查元数据，不建任何东西）。"""
+
+    def _sync(sync_session):
+        # AsyncSession.run_sync 传进来的是同步 Session（不是 Connection），故经 get_bind() 拿引擎再 inspect。
+        existing = set(sqlalchemy_inspect(sync_session.get_bind()).get_table_names())
+        return [tbl.name for tbl in _REQUIRED_TABLES if tbl.name not in existing]
+
+    return await session.run_sync(_sync)
 
 
 def main() -> int:
@@ -231,6 +284,16 @@ def main() -> int:
 
     dsn = args.dsn or get_settings().database_dsn
     result = asyncio.run(_run(dsn))
+    unusable = result.get("unusable")
+    if unusable:
+        # 退出码 2 与"未回填齐备"（1）分开：这不是业务缺数据，是连的库根本不是 Loom 迁移库。
+        msg = (f"目标库缺少必需表：{', '.join(unusable)} ⇒ 这不是经 `alembic upgrade head` 建出的 Loom 库。"
+               "本脚本只读、不会代你建表（Q218 起）。")
+        if args.json:
+            print(json.dumps({"unusable": unusable, "ready": False, "message": msg}, ensure_ascii=False))
+        else:
+            print(f"⛔ {msg}")
+        return 2
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
