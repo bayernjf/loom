@@ -29,6 +29,15 @@
 
 `id` 为操作人标识（溯源用）；写口要求 `operations` 角色。
 
+> **Q204 订正（2026-09-26，02 C1.148）——两类写口的口径不同，别混**：
+> ① **本模板的录入写口**（publish-slots / PCP / 三包 / fit 权重 / slot-type-defaults）沿用 Q178：
+>    `LOOM_STAFF_AUTH_ENABLED` 关闭时接受上面的自报 `actor`，开启后必须有 staff 令牌且角色够。
+> ② **发证口**（`POST /api/fcw/assemble`、`POST /api/fcw/assembly-tasks`）自 **Q203** 起**无条件**要求已验真的
+>    `loom_staff_` Bearer：缺/坏/吊销 → 401，令牌角色不含 `operations` → 403，上面这个 `actor` 字段被令牌身份覆盖。
+>    ⇒ 跑 §5 验收第③步（全链出真 `final_id`）**之前**必须先按 Q178 引导流程签一枚 operations 令牌，
+>    否则门控关着也会撞 401。引导：门控关下自报 `platform_admin` 调 `POST /api/admin/staff-keys`，明文只回一次。
+
+
 ## 1. publish_slots 发布位
 
 `POST /api/admin/publish-slots`，body 形如 `{"item": {...}, "actor": {...}}`。
@@ -141,4 +150,4 @@ beta 目的若用 EDUCATION/TRUST/RETENTION（现有无权重，fit_score 会返
 
 ## 5. 录完之后
 
-交回工程侧：① 起 staging 栈；② 灌入本模板数据；③ 跑段1→6→10→11 全链，`POST /api/fcw/assemble` 过七 Guard 产出真实 final_id；④ 重跑 pytest/ruff/eval 101、前端 next build，完成 Checklist #6 验收。
+交回工程侧：① 起 staging 栈；② 灌入本模板数据；③ 跑段1→6→10→11 全链，`POST /api/fcw/assemble` 过七 Guard 产出真实 final_id（**Q203：该口只认已验真 `loom_staff_` Bearer 令牌**，无令牌 401；引导签发见 Q178／docs/21 §2）；④ 重跑 pytest/ruff/eval 101、前端 next build，完成 Checklist #6 验收。

@@ -19,6 +19,7 @@ from collections.abc import AsyncGenerator
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import SessionLocal, settings
 from app.core.identity import (
     CREDENTIAL_STAFF,
@@ -30,9 +31,15 @@ from app.core.staff_auth import service
 from app.core.staff_auth.context import get_current_staff, set_current_staff
 
 
-async def get_auth_session() -> AsyncGenerator[AsyncSession | None, None]:
-    """认证专用短事务；门控关闭时惰性返回 None（不获取连接）。"""
-    if not settings.staff_auth_enabled:
+async def get_auth_session(
+    authorization: str | None = Header(default=None),
+) -> AsyncGenerator[AsyncSession | None, None]:
+    """认证专用短事务；无凭证可验时惰性返回 None（不获取连接）。
+
+    Q203：门控关闭但请求带了 Bearer 时也必须给连接——E1.1 写口
+    （:func:`require_internal_actor`）在门控关下仍要自行验真，拿不到 None。
+    """
+    if not settings.staff_auth_enabled and not service.parse_bearer(authorization):
         yield None
         return
     async with SessionLocal() as session:
@@ -80,4 +87,52 @@ def internal_gate(*roles: str):
             raise PermissionDenied(f"requires one of roles: {', '.join(roles)}")
         return True
 
+    return dependency
+
+
+_NO_CREDENTIAL = "verified staff access token required (self-declared role is not identity)"
+
+
+def require_internal_actor(*roles: str):
+    """E1.1 发证写口专用：**不看全局门控**，必须有已验真的 staff 令牌才放行（Q203 #34）。
+
+    与 :func:`internal_gate` 正好相反——那个在门控关时透传以维持 V1 自报口径；本依赖在
+    门控关时自行完成验真，所以"正文里自报 operations"在任何默认部署形态下都不足以签发
+    `final_id`。返回已验真身份，调用方用它覆盖正文自报的 actor（与
+    ``rbac.require_any_role`` 门控开时的覆盖口径一致），审计口（Q196）也经 contextvar
+    拿到真实人员。
+
+    代价写清：这两个口从此不再有"无凭证也能跑"的路径，脚本/测试须先按 Q178 引导流程
+    签发一枚 staff 令牌。
+    """
+
+    async def dependency(
+        authorization: str | None = Header(default=None),
+        auth_session: AsyncSession | None = Depends(get_auth_session),
+    ) -> Actor:
+        if settings.staff_auth_enabled:
+            authn = get_current_staff()
+            if authn is None:
+                raise NotAuthenticated(_NO_CREDENTIAL)
+            actor = authn
+        else:
+            token = service.parse_bearer(authorization)
+            if not service.is_staff_token(token):
+                raise NotAuthenticated(_NO_CREDENTIAL)
+            # 带 Bearer 时 get_auth_session 必然给连接；拿不到即接线被改坏。
+            assert auth_session is not None
+            row = await service.verify_staff_key(auth_session, token)
+            if row is None:
+                raise NotAuthenticated("invalid or revoked staff access token")
+            await auth_session.commit()
+            actor = service.staff_actor(row)
+            set_current_staff(actor)
+            set_verified_credential(actor, CREDENTIAL_STAFF)
+        if roles and not any(r in actor.roles for r in roles):
+            raise PermissionDenied(f"requires one of roles: {', '.join(roles)}")
+        return actor
+
+    # 接线自检标记：路由上的 Depends 被删掉时，test_fcw_api 的结构用例判红。
+    # （行为用例当然也会红，但那条只会说"200 不是 401"，定位不到是接线掉了。）
+    dependency.loom_requires_internal_credential = roles
     return dependency

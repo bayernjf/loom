@@ -32,6 +32,7 @@ from app.core.model_registry.seeds import (
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
 from app.product.product_intake.models import ProductSpace
+from tests.integration.fcw_rows import add_fcw
 
 DICT = {"id": "u-dict", "roles": ["dictionary_admin"]}
 OPS = {"id": "u-ops", "roles": ["operations"]}
@@ -66,7 +67,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with maker() as session:
-        session.add_all([
+        await add_fcw(session, [
             AIModel(
                 model_id=SYNTHETIC_MODEL_ID, model_code="synthetic-deterministic",
                 provider="synthetic", status="active",

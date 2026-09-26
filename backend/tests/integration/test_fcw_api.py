@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.db import Base, get_session
 from app.core.models import AuditLog
+from app.core.staff_auth.deps import get_auth_session
+from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
 from app.platform.platform_adaptation.models import GoalFitWeight, PcpTemplate
 from app.platform.platform_adaptation.seeds import (
@@ -28,6 +30,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
+from tests.integration.staff_tokens import bearer, issue_staff_token
 
 OWNER = {"id": "owner-1", "roles": ["whitelist_owner"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
@@ -51,6 +54,9 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # Q203：E1.1 写口在门控关下也自行验真，走的是 get_auth_session 这条缝，
+    # 不一起覆盖就会去连应用真实的 SessionLocal（与测试内存库不是同一个库）。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -80,6 +86,12 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Q203 #34：E1.1 两个写口只认已验真令牌（门控关也验）。本文件绝大多数用例
+        # 的目的是发证/测 Guard，故在 client 上默认带一枚 operations 令牌；要测
+        # 「无令牌 / 令牌角色不足 / 自报不能提权」的用例自己换头，见文件末尾那组。
+        ac.headers.update(
+            bearer(await issue_staff_token(client=ac, roles=["operations"]))
+        )
         yield ac
 
 
@@ -274,11 +286,6 @@ async def test_role_and_input_errors(client, session_factory):
     await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
 
     body = _assemble_body(ps_id, slot_id)
-    denied = await client.post(
-        "/api/fcw/assemble", json={**body, "actor": NOBODY}
-    )
-    assert denied.status_code == 403
-
     bad_goal = await client.post(
         "/api/fcw/assemble", json={**body, "goal": "NOPE"}
     )
@@ -404,14 +411,28 @@ async def test_q55_task_driven_batch_with_per_item_failures(client, session_fact
         },
     )
     assert bad.status_code == 422
-    denied = await client.post(
+    # Q203 #34：正文自报 NOBODY 不再是身份（令牌才是）⇒ 照常 201，且 created_by 是令牌的人。
+    ignored = await client.post(
         "/api/fcw/assembly-tasks",
         json={
             "product_space_id": ps_id, "platform": PLATFORM, "goal": GOAL,
             "count": 1, "slot_ids": [slot1], "actor": NOBODY,
         },
     )
-    assert denied.status_code == 403
+    assert ignored.status_code == 201, ignored.text
+    assert ignored.json()["created_by"] == "s-ops"
+
+    # 403 只来自令牌角色不足——把令牌换成无 operations 的一枚。
+    secret = await issue_staff_token(client, ["dictionary_admin"], staff_id="s-dict")
+    client.headers.update(bearer(secret))
+    denied = await client.post(
+        "/api/fcw/assembly-tasks",
+        json={
+            "product_space_id": ps_id, "platform": PLATFORM, "goal": GOAL,
+            "count": 1, "slot_ids": [slot1], "actor": OPS,
+        },
+    )
+    assert denied.status_code == 403, denied.text
 
 
 async def test_law_review_blocks_g6_until_approved(client, session_factory):
@@ -477,43 +498,135 @@ async def test_law_review_blocks_g6_until_approved(client, session_factory):
     assert ok.status_code == 200, ok.text
 
 
-# ---------- Q200 #34：治理不变式运行期强制 ----------
+# ---------- Q203 #34：E1.1 写口只认已验真令牌（门控关也验） ----------
 
-async def test_assemble_gated_without_token_is_401(client, session_factory, monkeypatch):
-    """门控开启时自报 operations 不再能直接 mint final_id（Q199 探针：修复前 200）。
+async def _ready_for_issue(client, session_factory):
+    """铺到「只差发证」的前置态（PS + 冻结 PWS + 静态底表 + 合规清洗）。"""
+    ps_id = await _make_ps(session_factory)
+    pws = await _freeze(client, ps_id)
+    slot_id = await _seed_static_inputs(client, ps_id)
+    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
+    return ps_id, slot_id
 
-    修复前 service._require_ops 只查自报 roles、不经 rbac.require_any_role——"唯一
-    出口"只是注释约定；本条即判红哨兵：门控开 + 无 staff 令牌 → 401。
+
+async def test_no_credential_is_401_on_both_write_routes(
+    client, session_factory, monkeypatch
+):
+    """Q199 探针的终版：自报 operations **在默认形态下**就不该能 mint final_id。
+
+    Q200 那版只在门控开时才 401（门控关维持自报），而门控默认关 ⇒ 保护是 opt-in；
+    Q203 改成两个形态都验真，所以这里四种组合逐一钉住。
     """
     from app.core.db import settings
 
-    monkeypatch.setattr(settings, "staff_auth_enabled", True)
-    ps_id = await _make_ps(session_factory)
-    pws = await _freeze(client, ps_id)
-    slot_id = await _seed_static_inputs(client, ps_id)
-    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
+    ps_id, slot_id = await _ready_for_issue(client, session_factory)
+    client.headers.pop("Authorization")
+    body = _assemble_body(ps_id, slot_id)
 
+    off_assemble = await client.post("/api/fcw/assemble", json=body)
+    off_task = await client.post(
+        "/api/fcw/assembly-tasks", json={**body, "count": 1}
+    )
+    assert off_assemble.status_code == 401, off_assemble.text
+    assert off_task.status_code == 401, off_task.text
+
+    monkeypatch.setattr(settings, "staff_auth_enabled", True)
+    on_assemble = await client.post("/api/fcw/assemble", json=body)
+    on_task = await client.post(
+        "/api/fcw/assembly-tasks", json={**body, "count": 1}
+    )
+    assert on_assemble.status_code == 401, on_assemble.text
+    assert on_task.status_code == 401, on_task.text
+
+    async with session_factory() as session:
+        rows = (await session.scalars(select(FinalContentWhitelist))).all()
+        assert list(rows) == []
+
+
+async def test_bogus_or_revoked_token_is_401(client, session_factory):
+    ps_id, slot_id = await _ready_for_issue(client, session_factory)
+    client.headers.update(bearer("loom_staff_not_a_real_key"))
     resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
     assert resp.status_code == 401, resp.text
 
-    # 任务写口同闸：门控开 + 无令牌 → 401（不是 200/201 异步入队）。
-    task = await client.post(
-        "/api/fcw/assembly-tasks",
-        json={**_assemble_body(ps_id, slot_id), "count": 1},
+
+async def test_self_declared_role_no_longer_issues(client, session_factory):
+    """修复前的正路（无令牌 + 自报 operations → 200）从此 401，且不留半成品。
+
+    与上一条同为「Q178 纯加法承诺」的**取消**：发证口不再有免凭证路径。
+    """
+    from app.core.db import settings
+
+    ps_id, slot_id = await _ready_for_issue(client, session_factory)
+    client.headers.pop("Authorization")
+    resp = await client.post(
+        "/api/fcw/assemble", json=_assemble_body(ps_id, slot_id)
     )
-    assert task.status_code == 401, task.text
+    assert resp.status_code == 401
+    assert settings.staff_auth_enabled is False  # 门控关＝默认部署形态
 
 
-async def test_assemble_gate_off_self_declared_operations_still_ok(
+async def test_verified_token_identity_overrides_the_declared_actor(
     client, session_factory
 ):
-    """门控关（V1 默认）维持自报口径：正文口照常发证（Q178 纯加法承诺）。
-
-    与上一条成对：401 只来自「门控开启缺认证」，不破坏 V1 默认部署路径。
-    """
-    ps_id = await _make_ps(session_factory)
-    pws = await _freeze(client, ps_id)
-    slot_id = await _seed_static_inputs(client, ps_id)
-    await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
-    resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
+    """身份只看到验真令牌：正文自报 NOBODY 仍按令牌发证，`issued_by` 是令牌的人。"""
+    ps_id, slot_id = await _ready_for_issue(client, session_factory)
+    resp = await client.post(
+        "/api/fcw/assemble",
+        json=_assemble_body(ps_id, slot_id, actor=NOBODY),
+    )
     assert resp.status_code == 200, resp.text
+    assert resp.json()["issued_by"] == "s-ops"  # staff_tokens 的引导 staff_id，不是 nobody-1
+
+
+async def test_token_without_operations_role_is_403(client, session_factory):
+    ps_id, slot_id = await _ready_for_issue(client, session_factory)
+    secret = await issue_staff_token(client, ["product_reviewer"], staff_id="s-rev")
+    client.headers.update(bearer(secret))
+    resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
+    assert resp.status_code == 403, resp.text
+
+def test_write_routes_stay_wired_to_the_credential_dependency():
+    """接线自检（Q203）：两个发证写口各自必须挂着 require_internal_actor。
+
+    行为用例已经钉住「无令牌 401」，但那条判红只会说"状态码不是 401"，看不出是
+    Depends 被摘了；这条把接线本身钉住——摘掉即判红，且报错直接指向路由。
+    （本仓 FastAPI 用 `_IncludedRouter` 懒包含，故要顺着 original_router 找。）
+    """
+    from fastapi.routing import APIRoute
+
+    def find_route(path: str, method: str) -> APIRoute:
+        stack = list(app.routes)
+        while stack:
+            node = stack.pop()
+            sub = getattr(node, "original_router", None)
+            if sub is not None:
+                stack.extend(sub.routes)
+            elif (
+                isinstance(node, APIRoute)
+                and node.path == path
+                and method in node.methods
+            ):
+                return node
+        raise AssertionError(f"找不到 {method} {path}")
+
+    def marked_calls(route: APIRoute) -> list:
+        return [
+            d.call
+            for d in route.dependant.dependencies
+            if getattr(
+                d.call, "loom_requires_internal_credential", None
+            )
+            is not None
+        ]
+
+    for path in ("/api/fcw/assemble", "/api/fcw/assembly-tasks"):
+        route = find_route(path, "POST")
+        marked = marked_calls(route)
+        assert len(marked) == 1, f"{path} 上挂着 {len(marked)} 个凭证依赖"
+        assert "operations" in marked[0].loom_requires_internal_credential, path
+
+    # 反向对照：探针不是"逢路由就报有"——只读的状态口没有凭证依赖。
+    assert marked_calls(
+        find_route("/api/fcw/assembly-tasks/{task_id}", "GET")
+    ) == []

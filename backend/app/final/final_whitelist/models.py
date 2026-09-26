@@ -11,6 +11,7 @@ from sqlalchemy import Boolean, DateTime, Float, Integer, String, UniqueConstrai
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, JSONType
+from app.final.final_whitelist import exit_guard
 
 
 def _uuid_pk() -> str:
@@ -72,6 +73,11 @@ class FinalContentWhitelist(Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+# 模块导入即把「唯一出口」装成运行期守卫（Q203 #34 后半）：只要有人拿到这个模型，
+# 在 E1.1 之外 flush 一条成品就会判红——不依赖他是否记得 import 守卫模块。
+exit_guard.install(FinalContentWhitelist)
 
 
 class FcwAssemblyTask(Base):

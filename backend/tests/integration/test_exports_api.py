@@ -19,6 +19,7 @@ from app.final.final_whitelist.models import (
     FinalContentWhitelist,
 )
 from app.main import app
+from tests.integration.fcw_rows import add_fcw
 from tests.integration.stream_fakes import FakeStreamsRedis
 
 
@@ -89,7 +90,7 @@ async def test_export_header_only_for_unknown_tenant(client):
 async def test_export_published_only_scoped(client, session_factory):
     async with session_factory() as session:
         session.add(Tenant(tenant_id="t2", name="第二客户", plan="basic", status="active"))
-        session.add_all(
+        await add_fcw(session, 
             [
                 _fcw("t1", "ps-1", 1),
                 _fcw("t1", "ps-1", 2),
@@ -175,7 +176,7 @@ async def test_json_export_published_only_scoped(client, session_factory):
         session.add(
             Tenant(tenant_id="t2", name="第二客户", plan="basic", status="active")
         )
-        session.add_all(
+        await add_fcw(session, 
             [
                 _fcw("t1", "ps-1", 11),
                 _fcw("t1", "ps-1", 12, status=PUBLISH_DRAFT),
@@ -203,7 +204,7 @@ async def test_json_export_rejects_empty_tenant(client):
 
 async def test_create_csv_job_completed_and_download_matches(client, session_factory):
     async with session_factory() as session:
-        session.add_all(
+        await add_fcw(session, 
             [
                 _fcw("t1", "ps-1", 21),
                 _fcw("t1", "ps-1", 22, status=PUBLISH_DRAFT),
@@ -238,7 +239,7 @@ async def test_create_json_job_download_matches_json_endpoint(
     client, session_factory
 ):
     async with session_factory() as session:
-        session.add(_fcw("t1", "ps-1", 23))
+        await add_fcw(session, [_fcw("t1", "ps-1", 23)])
         await session.commit()
 
     r = await client.post(
@@ -346,7 +347,7 @@ async def test_job_status_and_download_require_tenant_and_scope_by_it(
     """
 
     async with session_factory() as session:
-        session.add(_fcw("owner", "ps-1", 41))
+        await add_fcw(session, [_fcw("owner", "ps-1", 41)])
         await session.commit()
     job_id = (
         await client.post(
@@ -392,7 +393,7 @@ async def test_job_download_rerenders_current_data(client, session_factory):
     assert job["row_count"] == 0
 
     async with session_factory() as session:
-        session.add(_fcw("t1", "ps-1", 24))
+        await add_fcw(session, [_fcw("t1", "ps-1", 24)])
         await session.commit()
 
     d = await client.get(job["download_url"])
@@ -408,7 +409,7 @@ async def test_job_download_rerenders_current_data(client, session_factory):
 
 async def test_job_creation_writes_audit(client, session_factory):
     async with session_factory() as session:
-        session.add(_fcw("t1", "ps-1", 25))
+        await add_fcw(session, [_fcw("t1", "ps-1", 25)])
         await session.commit()
 
     r = await client.post(
@@ -441,7 +442,7 @@ async def test_job_creation_writes_audit(client, session_factory):
 
 async def _seed_published(session_factory, n: int, tenant: str = "t1", psid: str = "ps-1"):
     async with session_factory() as session:
-        session.add_all(
+        await add_fcw(session, 
             [_fcw(tenant, psid, 100 + i) for i in range(n)]
         )
         await session.commit()
@@ -561,7 +562,7 @@ async def test_async_post_enqueues_queued_job_and_blocks_early_download(
     client, session_factory, async_exports
 ):
     async with session_factory() as session:
-        session.add(_fcw("t1", "ps-1", 31))
+        await add_fcw(session, [_fcw("t1", "ps-1", 31)])
         await session.commit()
 
     r = await client.post(

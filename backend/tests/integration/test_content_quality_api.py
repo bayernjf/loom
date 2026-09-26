@@ -51,6 +51,7 @@ from app.core.model_registry.seeds import (
 from app.core.skill7.models import SkillRun
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
+from tests.integration.fcw_rows import add_fcw
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 CUSTOMER = {"id": "cust-1", "roles": ["customer"]}
@@ -102,7 +103,7 @@ async def session_factory():
 @pytest_asyncio.fixture
 async def client(session_factory):
     async with session_factory() as session:
-        session.add_all([
+        await add_fcw(session, [
             AIModel(
                 model_id=SYNTHETIC_MODEL_ID, model_code="synthetic-deterministic",
                 provider="synthetic", status="active",
