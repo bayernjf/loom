@@ -78,7 +78,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 
 ## 最近进度（2026-09-20 ~ 2026-09-26）
 - **Q209 real-infra 真容器集成验证进 CI（2026-09-26；**CI 配置＋契约测试，零生产代码零迁移零前端改动**；基线 966→**970 passed＋10 skipped**（总收集 980；＋4＝接线守卫 1＋哨兵行为 3）、ruff 净、eval 101/101、前端 tsc＋八 checker 全绿；02 C1.153）**：负责人问「有什么能推进的」，本仓「工程侧已推到零」这句话已被自己的扫描推翻过六次，所以没有复述结论而是回代码与原文扫了一遍——扫出这项的**触发点不是新发现，而是 Q207 自己**：Q207 证明了 CI 能起 `pgvector/pgvector:pg16` service，「真容器进不了 CI」这个前提已经被它拆掉，只是没人回头收，于是 docs/20 §9.3 第 4 条与 §10.1 里「real-infra 8 例不在 CI」这半句一直挂着（与五套演练并列）。
-  - **形态**：`.github/workflows/ci.yml` 新增第四个 job `real-infra`（`pgvector/pgvector:pg16` ＋ `redis:7-alpine` 两 service ＋ 两个 `LOOM_TEST_REAL_*` env），本机按 CI 的 service 定义起同款容器原样跑通 **9 例全过、6.5–7.9s**。
+  - **形态**：`.github/workflows/ci.yml` 新增第四个 job `real-infra`（`pgvector/pgvector:pg16` ＋ `redis:7-alpine` 两 service ＋ 两个 `LOOM_TEST_REAL_*` env），本机按 CI 的 service 定义起同款容器原样跑通 **9 例全过、6.5–7.9s**。**CI 侧已读到 step 级结果**：run `36254461661`（`b6768a3`）四 job 全 success，`Real infra gate` 打印 **`9 passed in 4.20s`**（真跑过，非 skip）；同 run backend `970 passed, 10 skipped` 与本地同数。
   - **skip 哨兵（本批承重设计）**：这一族靠 env 门控，env 没设时 pytest 是「全 skip ＋ exit 0」，**没有哨兵的 job 会永远绿而从没跑过一行真断言**（Q193「看起来在守」/Q204「只在真文件上跑绿的检查等于没有检查」同型教训）。哨兵取 summary 末行，命中 `skipped`／`no tests ran`／无 `passed` 任一情形即 `exit 1`。**刻意不钉用例数**（加一例就假红，与 Q207 不钉表数同理由）。
   - **契约守卫 ＋4 例**（照 Q207 范式）：`test_real_infra_gate_is_wired` 钉 job/service/env 三件套；`test_real_infra_skip_sentinel_fires` 参数化三例**把 CI 里那段脚本原样取出来真跑**（假 `python` 喂 `9 skipped`／`no tests ran`／`9 passed` 三种末行判退出码）——静态断言挡不住有人把哨兵改成一句 echo。
   - **证伪**：三种植入缺陷全部判红——哨兵换 echo（2 红）／摘 redis service（1 红）／少注入一个 env（1 红），撤掉全回绿。
