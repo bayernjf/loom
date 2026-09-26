@@ -101,6 +101,64 @@ fit 权重矩阵（缺了只是 `score_incomplete`——Q54 定死评分**仅用
 **判"首批完成"的唯一标准**：在 staging/真部署的库里出现一张 `final_id`，其六路材料与 `fcw.issued` 审计
 指向**真实业务数据**（不是测试夹具、不是工程臆造的行）。
 
+## 0.3 业务方回填操作指引（一步一步）
+
+> 本节能让业务/运营在**真实部署库**里把"够发证的四样"填齐并自检齐备，不要求懂 API 细节——字段含义见 §1–§5，命令级发证见 §0.2 §E 与 docs/21。
+> 本指引只覆盖"填数据＋自检"；**真出 `final_id` 还需要另一个人跑链裁决**（见 §0.2 §C、§0.2 §E 第 2/3 步），本指引不替代那一步。
+> **纯业务方版（去技术细节）**：`docs/19_业务方回填指引.md` —— 可直接转发给业务/运营。
+
+### 两个人
+- **录入人（您）**：提供并写入"四样"（§0.2 §B）。
+- **跑链裁决人**：按 docs/21 SOP 把 段1→6→10 走一遍并在 Gate 裁决，产出 PWS 冻结与合规清洗报告（Guard①②⑦，§0.2 §C）。没人跑链，第一张 `final_id` 出不来，且工程自造数据不作数（违反禁臆造红线）。
+
+### 前置条件
+1. 一个正在运行的 staging / 真部署后端，连着**真实的** PostgreSQL（`check_master_data.py` 与 seed 脚本都连真实库，不连本地测试库）。
+2. 该库连接串 `LOOM_DATABASE_DSN`（或 seed 脚本的 `--dsn` 参数）。
+3. 一枚 `operations` 的 staff 令牌——**仅发证那一步要**（Q203，§0.1、§0.2 §E.1）；录入写口在门控关时按自报 `actor` 即可。
+4. 一个您自己定义的**平台码**（英文大写短码，全库一致，如 `EXAMPLE`）；原 13 类目录已丢失，类型码由您定（§1、§0.2 §B.2）。
+
+### 步骤
+
+**第 0 步 · 定平台码与首个产品**
+- 先定一个平台码（如 `EXAMPLE`），后面所有 `platform` 字段都用它，保持一致。
+- 选一个真实产品作为首个 `final_id` 的载体（§0.2 §B.1）。
+
+**第 1 步 · 建产品空间（段1 intake → ProductSpace）**
+- 按 docs/21 段1 SOP 录入该产品，得到 `product_space_id`；后面 PCP / 三包都挂它身上。
+
+**第 2 步 · 用 seed 模板把"四样"一次性填入**
+- 打开 `backend/scripts/seed_master_data_template.py`，顶部 `CONFIG` 全是 `<REPLACE_ME_...>` 占位哨兵。**把每个占位符换成真实业务值**（字段含义见 §1 发布位 / §2 PCP / §3 三包）：
+  - 发布位：至少 `platform` / `code` / `name` / `slot_type`（§1）；四维分 / `risk` / `source_url` 等**可不填**（§0.2 §D）。
+  - PCP：填 `platform` + `template_code`（四选一，§2），`weights` 传 `null`；挂在**第 1 步**的 `product_space_id` 上。
+  - 三包：CSP 6 键 / CSTP 1 键 / CEP 4 键（§3），各一条 `active`；同样挂在 `product_space_id` 上。
+- 先跑 `python backend/scripts/seed_master_data_template.py --dry-run`：只打印将写入的行、**不落库**，用来核对。
+- 想先看机制是否通，可跑 `--demo`（用示例假值跑通插入＋自检），确认无误后再用真实值：
+  `python backend/scripts/seed_master_data_template.py --dsn "$LOOM_DATABASE_DSN"`。
+- ⚠️ **占位符没改完脚本会自己中止**，防止 `<REPLACE_ME>` 写进库（不臆造业务事实）。
+
+**第 3 步 · 自检齐备**
+- 回填后跑：`python backend/scripts/check_master_data.py`（可加 `--json`）。
+  - 退出码 **0** = 四样 active 数据齐备，可以进入跑链。
+  - 退出码 **1** = 还差哪类，命令行会直接告诉您（如"缺 PCP""三包不齐"）；补上对应数据重跑即可。
+  - 脚本**单独提示** `cp_law_sensitive_domains` 是否零行（Guard⑥ 默认放行，§0.2 §A 末行）——首批产品请**有意避开**打算启用为敏感类目的行业，否则会卡在等法务。
+
+**第 4 步 · 交跑链裁决人（关键，别跳过）**
+- 把 `product_space_id` / `platform` / `slot_id` / `goal` 交给跑链人，按 §0.2 §E.2–3 跑 段1→6→10 并在 Gate 裁决，得到 PWS 冻结 + 合规清洗报告（Guard①②⑦）。
+
+**第 5 步 · 发证（需要 staff 令牌）**
+- 跑链人按 §0.2 §E.1 先签一枚 `operations` 令牌；再 `POST /api/fcw/assemble` 带 `Authorization: Bearer loom_staff_…`，body `{product_space_id, platform, slot_id, goal, actor}`。
+  - **200** = 出 `final_id`，首批完成。
+  - **409** = 响应回带七项 Guard 逐项明细，据此补材料重跑（不会静默失败）。
+
+### 完成标准
+库里出现一张 `final_id`，其六路材料与 `fcw.issued` 审计指向**真实业务数据**（非测试夹具、非工程臆造），即判首批完成（§0.2 §E 末段）。
+
+### 别为这些等工期（§0.2 §D）
+四维分 `traffic/safe/conv/load`、`risk`、`source_url`、时长类、`gate` 档、fit 权重矩阵、`slot_type_defaults`——**全部不卡发证**，首批不必向业务方索取打分。
+
+### 审计溯源提醒（§0.1）
+所有写口 `actor.id` 请写**真实可辨识的人**（如 `ops:张三`），不要多人共用一个账号名——审计对账靠它。
+
 ## 1. publish_slots 发布位
 
 `POST /api/admin/publish-slots`，body 形如 `{"item": {...}, "actor": {...}}`。
