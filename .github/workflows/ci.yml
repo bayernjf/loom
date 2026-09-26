@@ -51,3 +51,49 @@ jobs:
           node scripts/check-compliance.mjs
           node scripts/check-admin.mjs
           node scripts/check-settings.mjs
+
+  # Q207：真 PG16 上的迁移与 ORM 漂移门。此前这四件事只在本地一次性容器里手工做
+  # （DBA 复核 Q153/Q171/Q179 各是一批），所以"模型⇄迁移零漂移"每隔几十片就要人工
+  # 重新证明一次，而 compose/迁移类改动在 CI 里完全看不见。
+  # 刻意不用 `alembic check`：实测它在 HEAD 上报 19 条差异，全是索引命名
+  # （手写迁移 ix_audit_entity vs ORM 自动名 ix_audit_logs_entity_id）与一处
+  # "唯一约束 vs 唯一索引"，是永久红，不能当门。dba_schema_check.py 按列集比对，
+  # 正是为了不被命名差异牵着走。
+  migration:
+    name: "Migration gate (real PG16: upgrade, ORM drift, downgrade)"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: loom
+          POSTGRES_PASSWORD: loom-ci-only
+          POSTGRES_DB: loom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U loom -d loom"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      LOOM_DATABASE_DSN: postgresql+asyncpg://loom:loom-ci-only@localhost:5432/loom
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install backend with dev extras
+        run: pip install -e "./backend[dev]"
+      - name: Alembic upgrade head on a fresh database
+        working-directory: backend
+        run: alembic upgrade head
+      - name: ORM ⇄ DB schema drift check
+        working-directory: backend
+        run: python scripts/dba_schema_check.py
+      - name: Downgrade one revision and upgrade back (reversibility)
+        working-directory: backend
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
