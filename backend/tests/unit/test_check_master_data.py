@@ -184,7 +184,8 @@ def test_collect_and_evaluate_ready_on_seeded_db():
     assert result["ready"] is True
     assert result["counts"]["publish_slots_active"] == 1
     assert result["counts"]["packages_active"] == 3
-    assert result["counts"]["g1_categories_active"] == 0  # Q229：迁移不种子类目，采集层如实报 0
+    # Q230：迁移 0042 起已种 6 个最小类目；本夹具走 create_all（不含迁移种子），故如实报 0。
+    assert result["counts"]["g1_categories_active"] == 0
 
 
 def test_collect_reports_not_ready_when_a_package_missing():
