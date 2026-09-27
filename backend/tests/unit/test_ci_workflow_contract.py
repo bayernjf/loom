@@ -114,36 +114,48 @@ def test_real_infra_gate_is_wired() -> None:
     assert "tests/integration/test_real_infra.py" in runs
 
 
-def _job_run(job_name: str) -> str:
-    data = yaml.safe_load(WORKFLOW.read_text())
-    return _steps(data["jobs"][job_name])
+def _job_run(job_name: str, step: str = "") -> str:
+    """取该 job 的 run 脚本；给 step 就只取名字含该串的那一步（默认全部拼接）。"""
+    job = yaml.safe_load(WORKFLOW.read_text())["jobs"][job_name]
+    if not step:
+        return _steps(job)
+    for item in job.get("steps", []):
+        if isinstance(item, dict) and step in item.get("name", ""):
+            return item.get("run", "")
+    raise AssertionError(f"{job_name} 没有名字含 {step!r} 的 step")
 
 
-def _run_sentinel_block(job_name: str, summary: str, pytest_exit: int = 0) -> int:
-    """把 CI 里那段 step 脚本原样取出来跑一遍，用假 `python` 喂一个 summary 末行。
+def _run_step_script(
+    job_name: str, stub_name: str, summary: str, stub_exit: int = 0, step: str = ""
+) -> int:
+    """把 CI 里该 step 脚本原样取出来跑，用假的可执行文件（python/docker）喂输出行。
 
     为什么不只是断言哨兵「文本存在」：env 没设时这一族是「全 skip + exit 0」，
     没有哨兵的 job 会永远绿而从没跑过一行真断言（Q193/Q204 同型教训），而静态
     断言挡不住有人把哨兵改成一句 echo。所以这里喂三种末行真跑它的退出码。
     """
-    run = _job_run(job_name)
+    run = _job_run(job_name, step)
     with tempfile.TemporaryDirectory() as tmp:
-        stub = Path(tmp) / "python"
+        stub = Path(tmp) / stub_name
         stub.write_text(
             "#!/bin/sh\n"
-            'printf "%s\\n" "$FAKE_PYTEST_SUMMARY"\n'
-            'exit "${FAKE_PYTEST_EXIT:-0}"\n'
+            'printf "%s\\n" "$FAKE_SUMMARY"\n'
+            'exit "${FAKE_EXIT:-0}"\n'
         )
         stub.chmod(0o755)
         env = dict(
             os.environ,
             PATH=f"{tmp}{os.pathsep}{os.environ['PATH']}",
-            FAKE_PYTEST_SUMMARY=summary,
-            FAKE_PYTEST_EXIT=str(pytest_exit),
+            FAKE_SUMMARY=summary,
+            FAKE_EXIT=str(stub_exit),
         )
         return subprocess.run(
             ["bash", "-c", run], cwd=tmp, env=env, capture_output=True, check=False
         ).returncode
+
+
+def _run_sentinel_block(job_name: str, summary: str, pytest_exit: int = 0) -> int:
+    return _run_step_script(job_name, "python", summary, pytest_exit)
 
 
 @pytest.mark.parametrize(
@@ -201,6 +213,56 @@ def test_fullchain_e2e_skip_sentinel_fires(summary: str, expected_exit: int) -> 
     assert _run_sentinel_block("fullchain-e2e", summary) == expected_exit, (
         f"哨兵对 summary={summary!r} 的判定不对：expected exit {expected_exit}"
     )
+
+
+# ---------------------------------------------------------------- Q229 infra-static
+
+
+def test_infra_static_gate_is_wired() -> None:
+    """Q229（A3 裁「只加廉价等价门」）：六套演练里不需要多容器/宿主网络的静态半边进 CI。
+
+    搬的是等价断言而非脚本本体：compose 各 overlay 组合静态可解析 + promtool 规则语法。
+    ha/load/restore/rpo-rto/pitr 仍本地手动（多容器/宿主网络），是登记的代价判断。
+    """
+    data = yaml.safe_load(WORKFLOW.read_text())
+    jobs = data["jobs"]
+    assert "infra-static" in jobs, (
+        "infra-static 门被摘掉了：compose 解析与 PromQL 语法会退回「只在本地演练里验」"
+    )
+    job = jobs["infra-static"]
+    # 静态门一旦起 service 就不再廉价；这一族要证的东西本来就不需要容器。
+    assert not job.get("services"), "infra-static 不得起任何 service"
+    runs = _steps(job)
+
+    # 磁盘上每个 compose overlay 都必须被这道门验过：新增 overlay 而漏接即红
+    # （Q118 的 checker 漂移手法——CI 集合与磁盘集合一致）。
+    import re
+
+    on_disk = {p.name for p in (REPO_ROOT / "infra").glob("docker-compose*.yml")}
+    in_gate = set(re.findall(r"docker-compose[\w.-]*\.yml", runs))
+    assert on_disk == in_gate, f"compose overlay 漂移: disk={on_disk} gate={in_gate}"
+
+    # 默认部署路径必须能在不注入任何 secret 时解析（Q185：护栏只许待在 opt-in overlay）。
+    assert "config -q" in runs, "缺 compose 静态解析断言"
+    # promtool 两条都要查：config（挂载 + rule_files 接线）与 rules（PromQL 语法）。
+    assert "check config" in runs and "check rules" in runs, (
+        "promtool 只查了一半：config 证接线、rules 证语法，缺哪个都留盲区"
+    )
+
+
+@pytest.mark.parametrize(
+    "summary,expected_exit",
+    [
+        ("SUCCESS: 0 rules found", 1),  # 规则文件被清空/挂载错：语法绿但规则没装载
+        ("CHECK FAILED: bad expression", 1),  # 未报出规则数，无法判定
+        ("SUCCESS: 10 rules found", 0),  # 正常：绿（刻意不钉条数，加规则不该假红）
+        ("SUCCESS: 11 rules found", 0),  # 加一条规则仍绿 ⇒ 条数没被钉死
+    ],
+)
+def test_infra_static_rules_sentinel_fires(summary: str, expected_exit: int) -> None:
+    assert _run_step_script(
+        "infra-static", "docker", summary, step="Prometheus"
+    ) == expected_exit, f"哨兵对 summary={summary!r} 的判定不对：expected exit {expected_exit}"
 
 
 def test_coverage_is_wired_and_gates_nothing() -> None:
