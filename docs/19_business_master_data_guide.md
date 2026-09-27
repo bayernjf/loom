@@ -89,10 +89,11 @@
 
 ---
 
-## 5. ⚠️ Two common pitfalls
+## 5. ⚠️ Three common pitfalls
 
 1. **Don't wait on these**: four-dim scores, risk, source URL, durations, gate, fit-weight matrix, slot_type_defaults — **none of them gate issuance**. Don't solicit scoring from business for the first batch; listing those in the first-batch scope is the most common **false blocker** that keeps master data from arriving.
 2. **Avoid sensitive-category industries**: there is a "sensitive-domain dictionary", and it **ships with six active domains** (medical / children / weight-loss / whitening / medical device / finance) - it is not empty and does not need to be switched on first. Any first-batch product matching one of the six is turned into a **48h legal-review todo** and cannot be issued until that ticket closes. So for the first batch either **avoid those six domains** or **schedule the legal sign-off**; compliance may instead deactivate a domain, which is a configuration choice, not the default.
+3. **Don't go looking for a "category dictionary" to fill**: the G1 category dictionary used by content recognition (Segment 2) **ships pre-seeded by engineering with six top-level categories** (beauty & skincare / food & beverage / mother & baby / apparel & bags / home & daily / health & wellness) - it is **not empty and you do not fill it**. Just fill **your** data into the three tables above; the categories are supplied by the system and used during recognition.
 
 ---
 
