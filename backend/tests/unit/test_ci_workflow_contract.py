@@ -158,3 +158,18 @@ def test_real_infra_skip_sentinel_fires(summary: str, expected_exit: int) -> Non
     assert _run_sentinel_block(summary) == expected_exit, (
         f"哨兵对 summary={summary!r} 的判定不对：expected exit {expected_exit}"
     )
+
+
+def test_coverage_is_wired_and_gates_nothing() -> None:
+    """覆盖率＝只测不设门（Q221）：接线要在，阈值不能在。"""
+    data = yaml.safe_load(WORKFLOW.read_text())
+    backend = data["jobs"]["backend"]
+    runs = _steps(backend)
+    assert "--cov=app" in runs, "后端 pytest 未接覆盖率测量 ⇒ docs/16 §4 的阈值仍是不可判定"
+    assert "scripts/coverage_report.py" in runs, "缺覆盖率读数步骤"
+    assert "--cov-fail-under" not in runs, (
+        "出现了 --cov-fail-under ⇒ 阈值被静默变成硬门；docs/16 §4 是【建议】，"
+        "把它变成门需要负责人裁决"
+    )
+    names = [s.get("name", "") for s in backend.get("steps", []) if isinstance(s, dict)]
+    assert any("Coverage report" in n for n in names), f"没有独立的覆盖率读数步骤：{names}"
