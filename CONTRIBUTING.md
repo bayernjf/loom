@@ -5,6 +5,7 @@
 ## 前提
 
 - 改动前**先读** [handoff.md](handoff.md)（当前状态/待办）与 [docs/README_文档地图与治理.md](docs/README_文档地图与治理.md)（场景导航 + 治理规则）。
+- **后端依赖一律从锁装**（Q222，2026-09-27）：开发机用 `uv pip install -r backend/requirements-dev.lock`（或 `pip install -r`），再 `pip install -e ./backend --no-deps`。CI 三个 Python job 装同一份 dev lock，**后端镜像只装 `backend/requirements.lock`（runtime 43 条，不含 mypy/pytest/ruff 等工装）**——**pyproject 里的开放下界是库的兼容声明，不是"让构建随机取最新版"的许可**。要升级某个包＝重生成两份 lock ＋ 跑全量门 ＋ 在 02 追加一片说明为什么，三条守卫会钉住任何绕过或两侧版本不一致。
 
 ## 怎么改文档
 
