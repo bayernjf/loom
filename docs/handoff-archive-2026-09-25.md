@@ -237,3 +237,13 @@
   - **两处过程事实**：① 第一轮"证伪"是假的——pytest 从仓库根跑得到 exit 4（用法错误、根本没收集用例），**exit 非 0 ≠ 测试判红**；加无种植对照组、cwd 改回 `backend/` 后才拿到三个真判红。② **守卫第一次跑就判红在我自己生成的 lock 上**：`uv pip freeze` 把可编辑包写成 `-e file:///本机路径`，`grep -v "^loom-backend"` 滤不掉 ⇒ lock 混进一行本机绝对路径；已删并改再生成命令为 `grep -vE '^(loom-backend|-e )'`。
   - **边界**：lock 由 uv 约束在 macOS arm64 实测版本上解出（dev lock 与实测集合 58/58 一致、runtime 43 条为子集且零 dev 工装）；Linux **aarch64** 已真建镜像并在容器内测得 `sqlalchemy==2.0.52`／`starlette==1.6.0`、mypy/pytest/ruff/coverage 全部缺失、`import app.main` 通过——**首次建像失败过一次，原因是 pip `ReadTimeoutError`（本机 ~70 kB/s 拉 15.8 MB botocore），不是 lock**，已补 `PIP_RETRIES`／`PIP_DEFAULT_TIMEOUT`；**Linux amd64（CI runner）侧同批已证**：run `36299690229`（`e0aaa6e`）三个 job 都从 dev lock 装、解析到 SQLAlchemy 2.0.52、`996 passed, 10 skipped`、四 job 全绿，且**预测读数成立**——runner `app/` 回到 72.02%。**复判不变**：① 达标／② 未达标（三表＋一个真产品＋两个人）／③ 未达标——本批把 ③ 的"制品不可复现"这一条从隐含变显式并已修，网关/TLS 归属仍未裁。
 
+## 滚出条目（2026-09-27 第三十四次续写：Q228 批后按上限滚出 Q223）
+
+> 逐字搬入，一字未改（父条目＋4 条 sub-bullets 共 5 行）；权威逐条台账仍是 docs/02 C1.167。
+
+- **Q223 第四次项目级 MVP 复评（2026-09-27；**纯评审＋文档，零代码零迁移零测试变化**；基线沿用 **996 passed＋10 skipped**（总收集 1006）；02 C1.167；报告＝docs/20 §13）**：不复述 §7–§12，先与 git 对账（HEAD＝`259efb1`＝`origin/dev`），再**当场新建一次性真 pg16 库**跑判据——0 表 → `alembic upgrade head` 到 `0041`（62 业务表）→ 在**这个库**上跑自检器与八条探针；按 §12.6 那条旧错，本轮刻意**没有**再用 `create_all` 建替身库。
+  - **判定＝未达到"产品核心完全可用的 MVP"**，三层不得合并：① 功能覆盖**达标**〔远端 step 级〕；② **仍未达标**，但本轮把它从代码级升级为**执行级**——真新库上 `check_master_data.py` 实测 **exit 1**（`publish_slots`／`pcp_weight_tables`／`packages` 三表 0 行，而 `content_goals=5`、敏感领域 6 由迁移自带），且发证另需 active PWS 与 guards/法审 ⇒ **要两个人**；段4 仍 `synthetic-embedding`；③ **仍未达标**，本轮减一条（Q222 制品可复现：镜像 98.1MB、内装 SA 2.0.52、真进程 `/healthz` 200），剩网关/TLS 待裁。
+  - **新登记一条常被混用的边界**：真模型全链 e2e 带 `skipif not REAL_LLM or not AGNES_KEY`（`tests/e2e/test_fullchain_golden_path.py:427`）⇒ **CI 常绿的链是 synthetic 跑的**，真 agnes 全链只有 Q172 本地一次；谈"AI 在环已验"时不得算作 CI 证据。
+  - **探针 8/8 符合预期，未查出新的工程缺陷**：无凭证 401／伪造 staff 401／引导签发 201／真令牌打不存在 PS 404／非 operations 角色 403／A 带**自己合法 tenant_id** 审 B 的成品 404 ⇄ **P6b 正向对照 B 审自己的 409**／作用域外直插 `OutsidePublishFCW`；并在**已构建镜像的真进程**上 HTTP 复核发证口三种凭证一律 401。
+  - **本轮自纠四处方法错（docs/20 §13.4）**：① absence 断言未排除叙述性 docs ⇒ 7 个假阳性全是自家文档在描述该结论；② Docker Desktop 的 `--network host` 不发布宿主端口，把 `healthz=000` 误读成镜像故障（容器一直 `Up (healthy)`）；③ 系统 `python3` 死于 Xcode license，打断 `docker run` 参数；④ **上一批过早 `docker rmi` 掉本轮还要用的镜像**。
+
