@@ -34,12 +34,14 @@
 ### Step 1 · Create the product space
 - Register the product per the ops SOP (docs/21 stage 1); you get a **product space id**. All later materials hang off it.
 
-### Step 2 · Fill the "four items" in one go using the template
+### Step 2 · Fill the "three kinds" in one go using the template (the product was created in Step 1)
 - Engineers give you `seed_master_data_template.py`. It ships with placeholders; replace each with a real business value (fields in Section 4):
   - **Publish slot**: at least platform / code / name / type; scores, risk, source URL etc. **may be left empty**.
   - **PCP platform config**: platform + template code (one of four); leave weights empty for defaults.
   - **Three packages (strategy / structure / expression)**: one each.
 - Run a "preview" first to see what will be written, **without actually writing**; only write for real once confirmed.
+- **Re-running is safe.** If a goal code or sensitive-domain code already exists in the database (every fresh Loom database ships with 5 goal codes and 6 sensitive domains), the script **skips it and tells you, line by line, what it skipped** - it no longer errors out and it never inserts a second row. Resuming a half-filled run is safe for the same reason.
+- **The script will not build your database for you.** If engineers have not yet run the schema upgrade on that database, the script **refuses and says why** - have engineers run the migration rather than letting the tool create tables in an empty database. (There is also a "demo" mode that runs against a throwaway in-memory database; it only proves the script works, **not your database's situation**.)
 - ⚠️ If placeholders are unfinished, the script **refuses to run**, preventing "to-be-filled" values from being written to the DB.
 
 ### Step 3 · Self-check "are we ready to issue"
