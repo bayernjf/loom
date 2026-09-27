@@ -15,8 +15,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install backend with dev extras
-        run: pip install -e "./backend[dev]"
+      - name: Install backend from requirements-dev.lock
+        run: |
+          pip install -r backend/requirements-dev.lock
+          pip install -e ./backend --no-deps
       - name: Ruff lint
         working-directory: backend
         run: ruff check .
@@ -90,8 +92,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install backend with dev extras
-        run: pip install -e "./backend[dev]"
+      - name: Install backend from requirements-dev.lock
+        run: |
+          pip install -r backend/requirements-dev.lock
+          pip install -e ./backend --no-deps
       - name: Alembic upgrade head on a fresh database
         working-directory: backend
         run: alembic upgrade head
@@ -145,8 +149,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install backend with dev extras
-        run: pip install -e "./backend[dev]"
+      - name: Install backend from requirements-dev.lock
+        run: |
+          pip install -r backend/requirements-dev.lock
+          pip install -e ./backend --no-deps
       - name: Real-infra integration tests (any skip fails the job)
         working-directory: backend
         run: |

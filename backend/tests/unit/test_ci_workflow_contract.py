@@ -173,3 +173,69 @@ def test_coverage_is_wired_and_gates_nothing() -> None:
     )
     names = [s.get("name", "") for s in backend.get("steps", []) if isinstance(s, dict)]
     assert any("Coverage report" in n for n in names), f"没有独立的覆盖率读数步骤：{names}"
+
+
+# ---------------------------------------------------------------- Q222 依赖锁
+
+
+def _lock_map(path: Path) -> dict[str, str]:
+    import re
+
+    out = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#") or "==" not in line:
+            continue
+        name, _, version = line.partition("==")
+        out[re.split(r"[\[<>=!~;]", name)[0].strip().lower().replace("_", "-")] = version.split("#")[0].strip()
+    return out
+
+
+def test_every_python_job_installs_from_the_dev_lock() -> None:
+    """门必须测它将要发出去的那套依赖 ⇒ 三个 Python job 一律从 dev lock 装（Q222）。"""
+    text = WORKFLOW.read_text()
+    data = yaml.safe_load(text)
+    pinned = {name for name, job in data["jobs"].items() if "pip install" in _steps(job)}
+    assert pinned == {"backend", "migration", "real-infra"}, f"装依赖的 job 集合变了：{sorted(pinned)}"
+    for name in pinned:
+        runs = _steps(data["jobs"][name])
+        assert "requirements-dev.lock" in runs, f"{name} 未从 dev lock 安装 ⇒ 门与镜像可各自浮动解析"
+        assert "--no-deps" in runs, f"{name} 缺 --no-deps ⇒ 装包时仍会按开放下界重新解析"
+    assert "backend[dev]" not in text, "仍有 `pip install -e ./backend[dev]` ⇒ 浮动解析回来了"
+
+
+def test_image_installs_the_runtime_lock_and_nothing_else() -> None:
+    """镜像走 runtime lock：既不能绕锁裸装，也不能把测试工装打进生产（Q222 曾踩）。"""
+    docker = (REPO_ROOT / "backend" / "Dockerfile").read_text()
+    assert "pip install -r requirements.lock" in docker
+    assert "pip install . --no-deps" in docker
+    assert "RUN pip install .\n" not in docker, "裸 `pip install .` 会绕过 lock 重新解析依赖"
+    runtime = _lock_map(REPO_ROOT / "backend" / "requirements.lock")
+    shipped = sorted(k for k in runtime if k.startswith(("mypy", "pytest", "ruff", "coverage")))
+    assert not shipped, f"生产镜像将打进开发工具：{shipped}"
+
+
+def test_runtime_and_dev_locks_agree_and_cover_every_declared_dependency() -> None:
+    """两份 lock 的锁死关系：runtime ⊆ dev 且版本逐一对齐，各自覆盖自己那侧的声明。"""
+    import re
+    import tomllib
+
+    py = tomllib.loads((REPO_ROOT / "backend" / "pyproject.toml").read_text())
+    runtime = _lock_map(REPO_ROOT / "backend" / "requirements.lock")
+    dev = _lock_map(REPO_ROOT / "backend" / "requirements-dev.lock")
+
+    def norm(spec: str) -> str:
+        return re.split(r"[\[<>=!~;]", spec)[0].strip().lower().replace("_", "-")
+
+    base = [norm(d) for d in py["project"]["dependencies"]]
+    extras = [norm(d) for extra in py["project"].get("optional-dependencies", {}).values() for d in extra]
+    assert not [k for k in base if k not in runtime], f"runtime lock 缺声明依赖：{[k for k in base if k not in runtime]}"
+    assert not [k for k in base + extras if k not in dev], "dev lock 缺 runtime＋dev 全量"
+    # CI 装的 dev lock 与镜像装的 runtime lock 必须在同名同版本上重合，否则"门测的＝发出去的"是假话
+    clash = sorted(f"{k}: runtime={v} dev={dev[k]}" for k, v in runtime.items() if k in dev and dev[k] != v)
+    assert not clash, f"两份 lock 版本冲突：{clash}"
+    assert not [k for k in runtime if k not in dev], "runtime lock 有 dev lock 之外的包 ⇒ 镜像装了门没测过的东西"
+    for path in (REPO_ROOT / "backend" / "requirements.lock", REPO_ROOT / "backend" / "requirements-dev.lock"):
+        body = path.read_text(encoding="utf-8")
+        assert not re.search(r"^(-e |.*@ |.*; platform)", body, re.MULTILINE), f"{path.name} 含可编辑/直链/平台标记"
+        lines = [ln for ln in body.splitlines() if ln and not ln.startswith("#")]
+        assert not [ln for ln in lines if ln.lower().startswith("loom-backend")], f"{path.name} 混入自身包"
