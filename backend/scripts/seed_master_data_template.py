@@ -77,9 +77,10 @@ CONFIG = {
     },
     # PCP 权重：17 池权重初值（按平台类型模板派生；此处占位，业务方替换）。
     "PCP_WEIGHTS": {"<REPLACE_ME_DIMENSION>": 1.0},
-    # 可选：敏感领域清单。留空列表 ⇒ cp_law_sensitive_domains 为零行，Guard⑥ 走默认放行
-    # （可配置非永久豁免，首批选产品应避开拟启用敏感类目的行业）。填了则 Guard⑥ 按清单审。
-    "SENSITIVE_DOMAINS": [],  # 例：[{"code":"MEDICAL","name":"医疗健康"}, ...]
+    # 可选：追加敏感领域清单。**留空不会关掉 Guard⑥**——迁移 0007 已播 6 个 active 领域
+    # （medical/children/weight_loss/whitening/medical_device/finance），命中即建 48h 法审单、
+    # 结单前 g6 不放行。填了是**追加**；与已播种同码（不分大小写）的行会被跳过而非撞唯一约束。
+    "SENSITIVE_DOMAINS": [],  # 例：[{"code":"beauty_injection","name":"医美注射"}, ...]
 }
 
 _SENTINEL = "<REPLACE_ME_"
@@ -160,33 +161,83 @@ def build_rows(cfg: dict) -> dict:
     return {"slot": slot, "pcp": pcp, "content_goal": cg, "packages": packages, "sens": sens}
 
 
-async def _ensure_tables(engine) -> None:
+async def _create_tables_for_demo(engine) -> None:
+    """仅 `--demo` 的内存库用：它没有迁移产物，就地建表验证机制。真实库路径绝不调用。"""
     async with engine.begin() as conn:
-        await conn.run_sync(
-            Base.metadata.create_all, tables=cmd._REQUIRED_TABLES
+        await conn.run_sync(Base.metadata.create_all, tables=cmd._REQUIRED_TABLES)
+
+
+async def _assert_real_schema(session) -> list[str]:
+    """真实库＝只往已有 schema 里写。缺表直接中止（不代建），非迁移库返回警告文案。
+
+    与 `check_master_data.py` 的 exit 2 同一口径：本脚本会**写库**，替一个没经
+    `alembic upgrade head` 的库建表比拒绝更糟——迁移自带的种子一行都不会有。
+    """
+    missing = await cmd.missing_required_tables(session)
+    if missing:
+        raise SchemaMissing(
+            f"缺表：{missing}；这不是经 `alembic upgrade head` 建出的 Loom 库，"
+            "本模板不代建表（要建库请跑迁移，而不是往空库里塞表）"
         )
+    if not await cmd.is_migration_built(session):
+        return [
+            (
+                "库里没有 `alembic_version` 行 ⇒ 它不是迁移建出来的；"
+                '迁移自带的目的码/敏感领域等种子在此一行都没有，填完请别据此判定"业务零行"'
+            )
+        ]
+    return []
 
 
-async def seed(session, rows: dict) -> None:
+async def existing_keys(session) -> tuple[set[str], set[str]]:
+    """库里已存在的目的码与敏感领域码（后者折成小写，用于跳过同义重复行）。"""
+    from sqlalchemy import select
+
+    goals = set((await session.scalars(select(ContentGoal.code))).all())
+    domains = {d.lower() for d in (await session.scalars(select(CpLawSensitiveDomain.code))).all()}
+    return goals, domains
+
+
+async def seed(session, rows: dict) -> dict:
+    """幂等写入：目的码与敏感领域码已存在则跳过，不撞唯一约束（真 PG 实测过的那条）。"""
+    goals, domains = await existing_keys(session)
+    skipped: list[str] = []
+
     session.add(rows["slot"])
     session.add(rows["pcp"])
-    session.add(rows["content_goal"])
+    if rows["content_goal"].code in goals:
+        skipped.append(f"content_goals:{rows['content_goal'].code}（已存在，未重复插）")
+    else:
+        session.add(rows["content_goal"])
     for p in rows["packages"]:
         session.add(p)
     for s in rows["sens"]:
+        if s.code.lower() in domains:
+            skipped.append(f"cp_law_sensitive_domains:{s.code}（已有同义行，未重复插）")
+            continue
         session.add(s)
     await session.commit()
+    return {"skipped": skipped}
 
 
-async def _run(dsn: str, cfg: dict) -> int:
+class SchemaMissing(Exception):
+    """目标库不是经迁移建出的 Loom 库。"""
+
+
+async def _run(dsn: str, cfg: dict) -> dict:
     engine = create_async_engine(dsn)
-    await _ensure_tables(engine)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with session_factory() as session:
-        await seed(session, build_rows(cfg))
-        facts = await cmd.collect_facts(session)
-    await engine.dispose()
-    return cmd.evaluate(facts)
+    try:
+        async with session_factory() as session:
+            warnings = await _assert_real_schema(session)
+            outcome = await seed(session, build_rows(cfg))
+            facts = await cmd.collect_facts(session)
+        result = cmd.evaluate(facts)
+        result["seed_outcome"] = outcome
+        result["warnings"] = [*result.get("warnings", []), *warnings]
+        return result
+    finally:
+        await engine.dispose()
 
 
 def _demo_cfg() -> dict:
@@ -247,21 +298,29 @@ def main() -> int:
     if args.demo:
         dsn = "sqlite+aiosqlite:///:memory:"
         # 内存库跨引擎不共享，这里在同一引擎内完成插入与自检。
+        # ⚠ demo 走 create_all，因此库里没有迁移自带的那 5 个目的码／6 个敏感领域，
+        #   也就**测不到"与已播种行撞唯一约束"这条真库必现的路径**——它只验脚本机制。
         engine = create_async_engine(dsn)
-        asyncio.run(_ensure_tables(engine))
+        asyncio.run(_create_tables_for_demo(engine))
         sf = async_sessionmaker(engine, expire_on_commit=False)
         async def _demo_seed_and_check():
             async with sf() as s:
-                await seed(s, rows)
+                outcome = await seed(s, rows)
                 facts = await cmd.collect_facts(s)
-            return cmd.evaluate(facts)
-        result = asyncio.run(_demo_seed_and_check())
+            return cmd.evaluate(facts), outcome
+        result, outcome = asyncio.run(_demo_seed_and_check())
         asyncio.run(engine.dispose())
+        result["seed_outcome"] = outcome
     else:
         dsn = args.dsn or get_settings().database_dsn
-        result = asyncio.run(_run(dsn, cfg))
-
+        try:
+            result = asyncio.run(_run(dsn, cfg))
+        except SchemaMissing as exc:
+            print(f"❌ {exc}", file=sys.stderr)
+            return 2
     print(cmd._format_report(result))
+    for note in result.get("seed_outcome", {}).get("skipped", []) + result.get("warnings", []):
+        print(f"  · {note}")
     return 0 if result["ready"] else 1
 
 

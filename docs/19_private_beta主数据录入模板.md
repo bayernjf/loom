@@ -136,6 +136,9 @@ fit 权重矩阵（缺了只是 `score_incomplete`——Q54 定死评分**仅用
 - 先跑 `python backend/scripts/seed_master_data_template.py --dry-run`：只打印将写入的行、**不落库**，用来核对。
 - 想先看机制是否通，可跑 `--demo`（用示例假值跑通插入＋自检），确认无误后再用真实值：
   `python backend/scripts/seed_master_data_template.py --dsn "$LOOM_DATABASE_DSN"`。
+  - ⚠️ `--demo` 跑在一次性内存库里，**那里没有迁移自带的 5 个目的码与 6 个敏感领域**，所以它只证明"脚本会动"，不证明"在你的库上不会撞已存在的行"。以 `--dsn` 那次为准。
+  - **目的码/敏感领域码若已存在，模板会跳过并逐条说明，不再报错**（Q224 前会抛唯一约束冲突；§0.2 让业务方直选已有的 5 个 active 目的码，那条路此前是坏的）。因此**重复运行同一个 `CONFIG` 是安全的**，不会插出第二行。
+  - **模板不再替空库建表**：连到一个没有 Loom 表结构的库 ⇒ 直接退出码 **2** 并说明"这不是经 `alembic upgrade head` 建出的库"（与 `check_master_data.py` 同口径）。请先跑迁移，再回填。
 - ⚠️ **占位符没改完脚本会自己中止**，防止 `<REPLACE_ME>` 写进库（不臆造业务事实）。
 
 **第 3 步 · 自检齐备**
