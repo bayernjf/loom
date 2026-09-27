@@ -114,19 +114,19 @@ def test_real_infra_gate_is_wired() -> None:
     assert "tests/integration/test_real_infra.py" in runs
 
 
-def _real_infra_run() -> str:
+def _job_run(job_name: str) -> str:
     data = yaml.safe_load(WORKFLOW.read_text())
-    return _steps(data["jobs"]["real-infra"])
+    return _steps(data["jobs"][job_name])
 
 
-def _run_sentinel_block(summary: str, pytest_exit: int = 0) -> int:
+def _run_sentinel_block(job_name: str, summary: str, pytest_exit: int = 0) -> int:
     """把 CI 里那段 step 脚本原样取出来跑一遍，用假 `python` 喂一个 summary 末行。
 
     为什么不只是断言哨兵「文本存在」：env 没设时这一族是「全 skip + exit 0」，
     没有哨兵的 job 会永远绿而从没跑过一行真断言（Q193/Q204 同型教训），而静态
     断言挡不住有人把哨兵改成一句 echo。所以这里喂三种末行真跑它的退出码。
     """
-    run = _real_infra_run()
+    run = _job_run(job_name)
     with tempfile.TemporaryDirectory() as tmp:
         stub = Path(tmp) / "python"
         stub.write_text(
@@ -155,7 +155,50 @@ def _run_sentinel_block(summary: str, pytest_exit: int = 0) -> int:
     ],
 )
 def test_real_infra_skip_sentinel_fires(summary: str, expected_exit: int) -> None:
-    assert _run_sentinel_block(summary) == expected_exit, (
+    assert _run_sentinel_block("real-infra", summary) == expected_exit, (
+        f"哨兵对 summary={summary!r} 的判定不对：expected exit {expected_exit}"
+    )
+
+
+# ---------------------------------------------------------------- Q227 fullchain-e2e
+
+
+def test_fullchain_e2e_gate_is_wired() -> None:
+    """Q227：fullchain-rehearsal（真 PG + alembic + e2e）必须在 CI；job 被删／
+    service 被摘／env 没注入就判红。此前这一套只在手动脚本里跑，CI 绿不证明
+    生产路径（Q224 又一次证实）。
+    """
+    data = yaml.safe_load(WORKFLOW.read_text())
+    jobs = data["jobs"]
+    assert "fullchain-e2e" in jobs, (
+        "fullchain-e2e 门被摘掉了：真 PG + alembic + e2e 全链会退回「只在手动脚本里跑」"
+    )
+    job = jobs["fullchain-e2e"]
+    services = job.get("services") or {}
+    assert services.get("postgres", {}).get("image") == "pgvector/pgvector:pg16", (
+        "e2e 需要带 vector 类型的 PG16（embedding 列在模型网关迁移里）"
+    )
+    env = job.get("env") or {}
+    assert env.get("LOOM_DATABASE_DSN"), "缺 LOOM_DATABASE_DSN ⇒ alembic upgrade 找不到库"
+    assert env.get("LOOM_E2E_PG_DSN"), "缺 LOOM_E2E_PG_DSN ⇒ e2e 用例全 skip"
+    runs = _steps(job)
+    assert "alembic upgrade head" in runs, "缺 alembic upgrade ⇒ 测的是现成库而非全新迁移"
+    assert "tests/e2e" in runs, "e2e 测试路径丢失"
+    assert "-k synthetic" in runs, (
+        "fullchain-e2e 应该只跑 synthetic 变体（不花真 LLM token），real-LLM 留给手动演练"
+    )
+
+
+@pytest.mark.parametrize(
+    "summary,expected_exit",
+    [
+        ("1 skipped in 0.85s", 1),  # env 没生效：skip，必须红
+        ("no tests ran in 0.03s", 1),  # 收集不到：-k synthetic 失效或路径被改
+        ("1 passed, 1 deselected in 0.84s", 0),  # synthetic 跑过、real-LLM deselected：绿
+    ],
+)
+def test_fullchain_e2e_skip_sentinel_fires(summary: str, expected_exit: int) -> None:
+    assert _run_sentinel_block("fullchain-e2e", summary) == expected_exit, (
         f"哨兵对 summary={summary!r} 的判定不对：expected exit {expected_exit}"
     )
 
@@ -195,7 +238,9 @@ def test_every_python_job_installs_from_the_dev_lock() -> None:
     text = WORKFLOW.read_text()
     data = yaml.safe_load(text)
     pinned = {name for name, job in data["jobs"].items() if "pip install" in _steps(job)}
-    assert pinned == {"backend", "migration", "real-infra"}, f"装依赖的 job 集合变了：{sorted(pinned)}"
+    assert pinned == {"backend", "migration", "real-infra", "fullchain-e2e"}, (
+        f"装依赖的 job 集合变了：{sorted(pinned)}"
+    )
     for name in pinned:
         runs = _steps(data["jobs"][name])
         assert "requirements-dev.lock" in runs, f"{name} 未从 dev lock 安装 ⇒ 门与镜像可各自浮动解析"

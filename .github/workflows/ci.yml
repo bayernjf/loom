@@ -179,3 +179,64 @@ jobs:
               exit 1
               ;;
           esac
+
+  # Q227：fullchain-rehearsal 进 CI（带 skip 哨兵）。Q223 登记「CI 常绿的链是 synthetic
+  # 跑的」——此前真 PG + alembic + e2e 全链只在本地 infra/fullchain-rehearsal.sh 手动
+  # 跑，CI 绿不证明生产路径（Q224 又一次证实）。和 real-infra/migration 同型，pgvector
+  # service + 哨兵防静默绿灯。只跑 synthetic 变体（不花真 LLM token），real-LLM 留给
+  # 手动 fullchain-rehearsal.sh LOOM_E2E_REAL_LLM=1。
+  fullchain-e2e:
+    name: "Fullchain e2e (synthetic PG: alembic → golden path)"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: loom
+          POSTGRES_PASSWORD: loom-ci-only
+          POSTGRES_DB: loom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U loom -d loom"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      LOOM_DATABASE_DSN: postgresql+asyncpg://loom:loom-ci-only@localhost:5432/loom
+      LOOM_E2E_PG_DSN: postgresql+asyncpg://loom:loom-ci-only@localhost:5432/loom
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install backend from requirements-dev.lock
+        run: |
+          pip install -r backend/requirements-dev.lock
+          pip install -e ./backend --no-deps
+      - name: Alembic upgrade head on a fresh database
+        working-directory: backend
+        run: alembic upgrade head
+      - name: Fullchain e2e (synthetic only, any skip fails the job)
+        working-directory: backend
+        run: |
+          set -o pipefail
+          python -m pytest tests/e2e -q -rs -k synthetic | tee fullchain-e2e.log
+          summary="$(tail -n 1 fullchain-e2e.log)"
+          echo "pytest summary: ${summary}"
+          case "${summary}" in
+            *"no tests ran"*)
+              echo "::error::fullchain-e2e 一个用例都没收集到，检查路径或 -k synthetic 是否失效"
+              exit 1
+              ;;
+            *skipped*)
+              echo "::error::fullchain-e2e 用例被 skip（通常是 LOOM_E2E_PG_DSN 没生效）——静默绿灯等于没跑"
+              exit 1
+              ;;
+            *passed*) ;;
+            *)
+              echo "::error::fullchain-e2e 没有 passed 用例，summary 无法判定"
+              exit 1
+              ;;
+          esac
