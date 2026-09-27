@@ -227,3 +227,13 @@
   - **阈值一字未升**：docs/16 §4 的 ≥90%/≥70% 仍【建议】；**新增一项等负责人裁决＝覆盖率阈值是否升为阻断门、定在多少、卡核心层还是两层都卡**（AGENTS 待裁项⑤、docs/19_待办清单 清单二第 5 条）。未验证边界：只有一次运行、单副本 sqlite＋Fake 替身，真 PG／多副本形态是否一致未测。
   - **顺手修掉一处上批滚档缺陷**：Q209 那次"滚出"只搬了父条目，**六条 sub-bullets 留在 handoff 里挂在下一个个条目下**。处置顺序＝先 `grep -F` 验归档里确实没有（有两条字符串在旧条目里同名，必须逐条对），逐字 `sed` 追加进第二十六次节并 `cmp` 证字节一致，再从 handoff 删。**规矩：滚档要连子条目一起滚，删前必须验归档里有。**
   - **复判不变**：① 功能覆盖达标／②「核心完全可用」仍未达标（卡点＝三表零行＋一个真产品＋跑链裁决的两个人）／③ 可上线仍未达标——本批只消掉 ③ 里"覆盖率不可判定"这半条测量学原因，**网关/TLS 归属那半条例外状态未变**。
+
+## 滚出条目（2026-09-27 第三十三次续写：Q227 批后按上限滚出 Q222）
+
+> 逐字搬入，一字未改（父条目＋3 条 sub-bullets 共 4 行）；权威逐条台账仍是 docs/02 C1.166。
+
+- **Q222 依赖锁：CI、镜像与开发环境自此是同一套包（2026-09-27；**CI 配置＋Dockerfile＋lock＋测试＋文档，零迁移零新表零新 env**；02 C1.166）**：起因＝Q221 我留下的"本机 72.02%／runner 72.78%，原因未查、不编"。查出来**不是覆盖率问题而是制品问题**——pyproject 只有开放下界且仓内无 lock，CI 三个 Python job 与 `backend/Dockerfile` 各自浮动解析，同一 commit 实测 **58 包里 12 个版本不同**（SQLAlchemy 2.0.52↔2.1.1、Starlette 1.6.0↔1.7.0、uvicorn 0.52.4↔0.54.0 等），93 条语句的差正落在 router/service 层。⇒ **同一 SHA 不同日期 build 出的镜像内容不同**，"CI 绿的依赖集"≠"发出去的"≠"历次彩排跑过的"。
+  - **落法**：新 `backend/requirements.lock`（runtime 43 条 pin、零 dev 工装）＋ `backend/requirements-dev.lock`（58 条，含来源与再生成说明），CI backend／migration／real-infra 装 dev lock、镜像只装 runtime lock，均 ＋ `--no-deps`；三条契约守卫钉住这个不变式。**取舍**：刻意把 CI 拉回彩排用过的 2.0.52（升 2.1 另立一片）。**可证伪判据**：下一跑 runner 的 `app/` 读数应回到 72.02%，否则本解释作废。
+  - **两处过程事实**：① 第一轮"证伪"是假的——pytest 从仓库根跑得到 exit 4（用法错误、根本没收集用例），**exit 非 0 ≠ 测试判红**；加无种植对照组、cwd 改回 `backend/` 后才拿到三个真判红。② **守卫第一次跑就判红在我自己生成的 lock 上**：`uv pip freeze` 把可编辑包写成 `-e file:///本机路径`，`grep -v "^loom-backend"` 滤不掉 ⇒ lock 混进一行本机绝对路径；已删并改再生成命令为 `grep -vE '^(loom-backend|-e )'`。
+  - **边界**：lock 由 uv 约束在 macOS arm64 实测版本上解出（dev lock 与实测集合 58/58 一致、runtime 43 条为子集且零 dev 工装）；Linux **aarch64** 已真建镜像并在容器内测得 `sqlalchemy==2.0.52`／`starlette==1.6.0`、mypy/pytest/ruff/coverage 全部缺失、`import app.main` 通过——**首次建像失败过一次，原因是 pip `ReadTimeoutError`（本机 ~70 kB/s 拉 15.8 MB botocore），不是 lock**，已补 `PIP_RETRIES`／`PIP_DEFAULT_TIMEOUT`；**Linux amd64（CI runner）侧同批已证**：run `36299690229`（`e0aaa6e`）三个 job 都从 dev lock 装、解析到 SQLAlchemy 2.0.52、`996 passed, 10 skipped`、四 job 全绿，且**预测读数成立**——runner `app/` 回到 72.02%。**复判不变**：① 达标／② 未达标（三表＋一个真产品＋两个人）／③ 未达标——本批把 ③ 的"制品不可复现"这一条从隐含变显式并已修，网关/TLS 归属仍未裁。
+
