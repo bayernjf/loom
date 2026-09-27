@@ -10,7 +10,8 @@ import sys
 import uuid
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.db import Base
@@ -124,7 +125,7 @@ def test_not_ready_packages_present_but_goal_not_active():
 
 
 def test_sensitive_domains_zero_flagged_separately():
-    # 零行敏感领域：标记 sensitive_domains_zero，但仍可发证（Guard⑥ 默认放行）。
+    # 零行敏感领域：标记 sensitive_domains_zero，但仍可发证（注意这是**可配置态**——迁移 0007 自带 6 个 active 领域）。
     facts = _facts(
         slots=[("slot-1", "wechat")],
         pcps=[("ps-1", "t-1", "wechat")],
@@ -269,3 +270,90 @@ def test_main_exits_1_when_not_ready(capsys, tmp_path):
     assert parsed["ready"] is False
     assert parsed["missing_required"], "缺项应为非空"
     assert rc == 1
+
+
+# --- Q218：建库方式与只读性（这两条把 Q217 复评踩过的坑钉住）---
+
+
+def test_evaluate_assumes_migration_built_by_default():
+    """既有调用方不传 migration_built ⇒ 视为迁移库，不产生噪声告警。"""
+    result = cmd.evaluate(_facts([("slot-1", "wechat")], [("ps-1", "t-1", "wechat")],
+                                 _three_packages("ps-1", "t-1", "wechat", "EDUCATION"),
+                                 [("EDUCATION",)]))
+    assert result["migration_built"] is True
+    assert result["warnings"] == []
+
+
+def test_evaluate_warns_when_db_is_not_migration_built():
+    """非迁移库的『全零』是建库方式造成的，必须显式说出来，不能伪装成业务未回填。"""
+    facts = _facts([], [], [], [])
+    facts["migration_built"] = False
+    result = cmd.evaluate(facts)
+    assert result["migration_built"] is False
+    assert any("alembic_version" in w for w in result["warnings"])
+
+
+def test_zero_sensitive_domains_on_a_migrated_db_is_flagged_as_deviation():
+    """迁移自带 6 个 active 敏感领域 ⇒ 迁移库里数到 0 说明字典被动过，而不是『默认放行』。"""
+    result = cmd.evaluate(_facts([("slot-1", "wechat")], [("ps-1", "t-1", "wechat")],
+                                 _three_packages("ps-1", "t-1", "wechat", "EDUCATION"),
+                                 [("EDUCATION",)], sens=0))
+    assert result["ready"] is True  # 不影响可发证判定
+    assert any("0007" in w for w in result["warnings"])
+    assert "与迁移 0007 的 6 个种子不符" in cmd._format_report(result)
+
+
+def test_is_migration_built_follows_the_alembic_version_row():
+    async def _go():
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as s:
+            without = await cmd.is_migration_built(s)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all, tables=cmd._REQUIRED_TABLES)
+            await conn.exec_driver_sql(
+                "CREATE TABLE alembic_version (version_num VARCHAR(128) NOT NULL, "
+                "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+            )
+            await conn.exec_driver_sql(
+                "INSERT INTO alembic_version (version_num) VALUES ('0041_discard_retention_seed')"
+            )
+        async with factory() as s:
+            with_row = await cmd.is_migration_built(s)
+        await engine.dispose()
+        return without, with_row
+
+    without, with_row = asyncio.run(_go())
+    assert without is False and with_row is True
+
+
+def test_tool_does_not_create_schema_and_exits_2_on_a_non_loom_db(tmp_path, capsys, monkeypatch):
+    """只读承诺＋退出码 2：空库既不补表，也要与『未回填』（1）区分开。"""
+    db = tmp_path / "empty.db"
+    dsn = f"sqlite+aiosqlite:///{db}"
+    before = _table_names(dsn)
+    monkeypatch.setattr(sys, "argv", ["check_master_data.py", "--dsn", dsn])
+    code = cmd.main()
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "不是经 `alembic upgrade head` 建出的" in out
+    after = _table_names(dsn)
+    assert after == before == set()  # 一个表都没被造出来
+    # 正向对照：同一套计数方式必须能"看得见"表，否则上面的空集断言是空断言。
+    from sqlalchemy import create_engine as _ce
+
+    eng = _ce(dsn.replace("+aiosqlite", ""))
+    Base.metadata.create_all(eng, tables=cmd._REQUIRED_TABLES)
+    eng.dispose()
+    assert len(_table_names(dsn)) == len(cmd._REQUIRED_TABLES)
+
+
+def _table_names(dsn: str) -> set[str]:
+    sync_dsn = dsn.replace("+aiosqlite", "")
+    eng = create_engine(sync_dsn)
+    try:
+        return set(sa_inspect(eng).get_table_names())
+    finally:
+        eng.dispose()

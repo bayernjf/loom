@@ -19,7 +19,7 @@
 
 > **只想打通第一张 `final_id`？看 §0.2「最小可发证清单」**——§0 这张表是完整模板口径，其中若干项（四维分/risk/fit 权重/slot_type_defaults）不参与发证判定，首批不必向业务方索取。
 
-> **怎么确认填够了（Q210，2026-09-26，02 C1.154）**：业务方在真实部署库回填四表后，跑 `python backend/scripts/check_master_data.py`（可加 `--json`）即可看还差哪类 active 数据。脚本**只读**五张表、与发证解析器同口径（只看 `status=="active"`、不看 `gate`），缺任一必填项退出码 1、齐备 0；并单独提示 `cp_law_sensitive_domains` 是否为零行（Guard⑥ 默认放行、可配置非豁免）。它是给人手动跑的工具，**不进 CI**（CI 默认 DSN 是本地库、无真实主数据，跑它只会永远红）。
+> **怎么确认填够了（Q210，2026-09-26，02 C1.154）**：业务方在真实部署库回填四表后，跑 `python backend/scripts/check_master_data.py`（可加 `--json`）即可看还差哪类 active 数据。脚本**只读**五张表（Q218 起连表都不建：必需表缺失即判「这不是 Loom 迁移库」并退出码 2，绝不代建 schema）、与发证解析器同口径（只看 `status=="active"`、不看 `gate`）；**退出码 0＝齐备可发证／1＝仍未回填齐／2＝连的不是迁移库**；脚本另会核对 `alembic_version` 有无行——没有就明说「本库不是 `alembic upgrade head` 建出的，迁移自带的 `content_goals` 5 码与 `cp_law_sensitive_domains` 6 个 active 领域自然都不在，此时的『零』是建库方式造成的」；并单独提示 `cp_law_sensitive_domains` 的 active 行数（**迁移 0007 已播 6 个 active 敏感领域 ⇒ Guard⑥ 默认生效**，产品命中即建 48h 法审待办；该提示不影响"可否发证"的判定）。它是给人手动跑的工具，**不进 CI**（CI 默认 DSN 是本地库、无真实主数据，跑它只会永远红）。
 
 > **怎么填（同生态 Q210 补，02 C1.154）**：`backend/scripts/seed_master_data_template.py` 是与自检器**同 ORM 口径**的回填骨架——顶部 `CONFIG` 全是 `<REPLACE_ME_...>` 占位哨兵，改完真实值再 `--dsn` 跑；**未改完会被脚本中止**（防止占位符写进库，不臆造业务事实）。`--demo` 用示例假值跑通机制、`--dry-run` 只打印将写入的行、填完后跑上面的自检器核对。本模板只覆盖自检器口径的最小集；完整主数据（product_spaces / PWS 冻结 / 合规报告等）才能真跑通段1→6→10 产出 `final_id`，见本模板头部注释与全文 §0。
 
@@ -58,7 +58,9 @@
 | PCP **模板** 4 套（`short_video`/`community`/`photo_text`/`ecommerce`） | 已随种子落地 ⇒ **PCP 实例只是"选一个模板码"**，不是手填 17 项权重 | `app/platform/platform_adaptation/seeds.py`；Q39 |
 | `content_goals` 目的字典 | 已随迁移 0005 播种 ⇒ `goal` 不用业务方发明（现有 5 码见 §3） | `alembic/versions/0005_m5_stage5.py` |
 | 七项 Guard、发证口、内部角色与配置中心 | 全部已落地；且自 Q203 起 `final_id` 唯一出口有运行期守卫（作用域外写入判红） | `fcw_rules.py`；`exit_guard.py`；02 C1.147 |
-| 敏感领域字典 `cp_law_sensitive_domains` | **零行种子**（迁移 0007 只建表）⇒ 首批若不主动启用敏感类目治理，Guard⑥ 走"无法审单即放行"分支 | `compliance_center/service.py:164-196`（命中才建单）、`:603-624`（`law_review_required = 有单`）|
+| 敏感领域字典 `cp_law_sensitive_domains` | **已播种 6 个 active 领域**（迁移 0007 `bulk_insert`：medical 医疗健康／children 儿童／weight_loss 减肥／whitening 美白／medical_device 医疗器械／finance 金融；`status` 列 `server_default=active`）⇒ **Guard⑥ 从第一天起就是生效的，不是先放行**：首批产品的行业标签命中这六个时，`ensure_law_review` 建 48h 法审待办、`gate_view` 的 g6 在结单前不放行 | `alembic/versions/0007_m7_stage10.py:52-70`、`compliance_center/service.py:164-196`（命中才建单）、`:603-624`（`law_review_required = 有单`）|
+
+> **本行是 2026-09-26 Q217 复评的勘误**：原文曾写「零行种子（迁移 0007 只建表）⇒ Guard⑥ 默认放行」。误判成因＝枚举种子时只匹配了 `sa.table(...)` 字面量，漏掉 `op.create_table` 返回变量形式的 `bulk_insert`（同型漏检也让 Q217 一度把 `content_goals` 误报为零种子，它在迁移 0005 有 5 个 active 码）。正确方式见 docs/02 C1.161。
 
 > ⚠️ 最后一行是**可配置项，不是永久豁免**：合规团队一旦填了敏感领域字典，产品命中就转 48h 法审待办（Q49），Guard⑥ 立刻变成真门槛。首批选产品时请有意**避开**打算启用为敏感类目的行业，否则"打通第一张 `final_id`"会挂在等法务上。
 
@@ -140,7 +142,7 @@ fit 权重矩阵（缺了只是 `score_incomplete`——Q54 定死评分**仅用
 - 回填后跑：`python backend/scripts/check_master_data.py`（可加 `--json`）。
   - 退出码 **0** = 四样 active 数据齐备，可以进入跑链。
   - 退出码 **1** = 还差哪类，命令行会直接告诉您（如"缺 PCP""三包不齐"）；补上对应数据重跑即可。
-  - 脚本**单独提示** `cp_law_sensitive_domains` 是否零行（Guard⑥ 默认放行，§0.2 §A 末行）——首批产品请**有意避开**打算启用为敏感类目的行业，否则会卡在等法务。
+  - 脚本**单独提示** `cp_law_sensitive_domains` 的 active 行数：**迁移 0007 已经播了 6 个领域（医疗健康／儿童／减肥／美白／医疗器械／金融），Guard⑥ 从第一天起就是生效的**，不是「等业务方启用才管」。所以首批选品要么**避开这六个行业**，要么**把 48h 法审排进节奏**（`internal_compliance` 出单、结单后 g6 才放行）。
 
 **第 4 步 · 交跑链裁决人（关键，别跳过）**
 - 把 `product_space_id` / `platform` / `slot_id` / `goal` 交给跑链人，按 §0.2 §E.2–3 跑 段1→6→10 并在 Gate 裁决，得到 PWS 冻结 + 合规清洗报告（Guard①②⑦）。
