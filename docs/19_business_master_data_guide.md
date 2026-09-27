@@ -46,7 +46,7 @@
 - After entry, run `check_master_data.py`:
   - Shows **ready** = all four items present; you can proceed to the chain run.
   - Shows **what is missing** (e.g. "missing PCP", "packages incomplete") = fill the gap and re-run.
-  - The script **separately flags** whether the "sensitive-domain dictionary" is empty — for the first batch, **deliberately avoid** industries you intend to manage as sensitive categories, or you'll get stuck waiting on legal review (see Section 5 ⚠️).
+  - The script **separately reports** how many sensitive-domain entries are active — six are seeded out of the box — so a first-batch product matching one of them will wait on legal review (see Section 5).
 
 ### Step 4 · Hand off to the chain-run person (critical, don't skip)
 - Give them **product space id / platform / slot code / goal**; they run the content-production chain and adjudicate at the Gate.
@@ -90,7 +90,7 @@
 ## 5. ⚠️ Two common pitfalls
 
 1. **Don't wait on these**: four-dim scores, risk, source URL, durations, gate, fit-weight matrix, slot_type_defaults — **none of them gate issuance**. Don't solicit scoring from business for the first batch; listing those in the first-batch scope is the most common **false blocker** that keeps master data from arriving.
-2. **Avoid sensitive-category industries**: there is a "sensitive-domain dictionary", currently empty ⇒ first batch passes by default. But once compliance enables a sensitive category, a matched product becomes a 48h legal-review todo. For the first batch, **deliberately avoid** industries you intend to enable as sensitive.
+2. **Avoid sensitive-category industries**: there is a "sensitive-domain dictionary", and it **ships with six active domains** (medical / children / weight-loss / whitening / medical device / finance) - it is not empty and does not need to be switched on first. Any first-batch product matching one of the six is turned into a **48h legal-review todo** and cannot be issued until that ticket closes. So for the first batch either **avoid those six domains** or **schedule the legal sign-off**; compliance may instead deactivate a domain, which is a configuration choice, not the default.
 
 ---
 
