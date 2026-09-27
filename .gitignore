@@ -25,6 +25,9 @@ venv/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+# pytest-cov 读数产物（Q221：CI 每次跑测生成，只报数不入库）
+.coverage
+coverage.json
 
 # Env & secrets
 .env

@@ -175,3 +175,18 @@
 > 补记一处后事：本条的基线 970 与「CI 四 job」为其时状态；其后 Q217 实测 983、Q218 起 **988**（job 数未再变，仍是四个）。
 
 - **Q209 real-infra 真容器集成验证进 CI（2026-09-26；**CI 配置＋契约测试，零生产代码零迁移零前端改动**；基线 966→**970 passed＋10 skipped**（总收集 980；＋4＝接线守卫 1＋哨兵行为 3）、ruff 净、eval 101/101、前端 tsc＋八 checker 全绿；02 C1.153）**：负责人问「有什么能推进的」，本仓「工程侧已推到零」这句话已被自己的扫描推翻过六次，所以没有复述结论而是回代码与原文扫了一遍——扫出这项的**触发点不是新发现，而是 Q207 自己**：Q207 证明了 CI 能起 `pgvector/pgvector:pg16` service，「真容器进不了 CI」这个前提已经被它拆掉，只是没人回头收，于是 docs/20 §9.3 第 4 条与 §10.1 里「real-infra 8 例不在 CI」这半句一直挂着（与五套演练并列）。
+  - **形态**：`.github/workflows/ci.yml` 新增第四个 job `real-infra`（`pgvector/pgvector:pg16` ＋ `redis:7-alpine` 两 service ＋ 两个 `LOOM_TEST_REAL_*` env），本机按 CI 的 service 定义起同款容器原样跑通 **9 例全过、6.5–7.9s**。**CI 侧已读到 step 级结果**：run `36254461661`（`b6768a3`）四 job 全 success，`Real infra gate` 打印 **`9 passed in 4.20s`**（真跑过，非 skip）；同 run backend `970 passed, 10 skipped` 与本地同数。
+  - **skip 哨兵（本批承重设计）**：这一族靠 env 门控，env 没设时 pytest 是「全 skip ＋ exit 0」，**没有哨兵的 job 会永远绿而从没跑过一行真断言**（Q193「看起来在守」/Q204「只在真文件上跑绿的检查等于没有检查」同型教训）。哨兵取 summary 末行，命中 `skipped`／`no tests ran`／无 `passed` 任一情形即 `exit 1`。**刻意不钉用例数**（加一例就假红，与 Q207 不钉表数同理由）。
+  - **契约守卫 ＋4 例**（照 Q207 范式）：`test_real_infra_gate_is_wired` 钉 job/service/env 三件套；`test_real_infra_skip_sentinel_fires` 参数化三例**把 CI 里那段脚本原样取出来真跑**（假 `python` 喂 `9 skipped`／`no tests ran`／`9 passed` 三种末行判退出码）——静态断言挡不住有人把哨兵改成一句 echo。
+  - **证伪**：三种植入缺陷全部判红——哨兵换 echo（2 红）／摘 redis service（1 红）／少注入一个 env（1 红），撤掉全回绿。
+  - **顺带订正一处计数漂移**：Q154 起各处台账写「real-infra 8 例」，Q188 补第 9 例（`stream_depth` 的 XPENDING/XLEN 语义）后**实际是 9 例**（真 PG 4／真 Redis 5；常规 `pytest -q` 的 10 skipped ＝ 9 real-infra ＋ 1 real-LLM e2e）。docs/17 §7 末行「8 passed／8 skipped」已就地订正为 9，docs/20 §9.3·§10.1 与 AGENTS/docs/08 的残留措辞已加追记。
+  - **未结的只剩五套全栈演练**（ha／load／alerting／restore／pitr）：起多容器且断言依赖宿主网络，进 CI 会变 flaky 源——这是代价判断，不是遗忘。**复判不变**：① 达标／② 仍未达标（唯一卡点＝主数据零行）／③ 仍未达标。
+
+## 滚出条目（2026-09-27 第二十七次续写：Q221 批后按上限滚出 Q210）
+
+> 逐字搬入，一字未改；权威逐条台账仍是 docs/02 C1.154。
+
+- **Q210 主数据回填自检器（2026-09-26；**新增脚本＋单测，零生产代码零迁移零新表零新 env 零前端改动**；基线 970→**980 passed＋10 skipped**（总收集 990；＋10＝单测 10）、ruff 净、eval 101/101（golden 21）、前端 tsc＋八 checker 全绿；02 C1.154）**：负责人「开发主数据回填自检器」＝把 Q206 那条「唯一硬阻塞＝主数据零行」从一句话变成**可机读确认**的清单——业务方填完四表后，能自己跑一条命令看还差哪类，而不是等人肉复读 docs/19 §0.2。
+  - **形态**：`backend/scripts/check_master_data.py` 只读五张表 `active` 行（`publish_slots`/`pcp_weight_tables`/`packages`/`content_goals`/`cp_law_sensitive_domains`），纯判定 `evaluate(facts)` 与发证解析器（`service.py` 的 `_resolve_slot`/`_resolve_pcp`/`_resolve_packages`）**同口径——只看 `status=="active"`、不看 `gate`**：slot 取候选 platform → 同平台下找一条 PCP → 对该 (ps,tenant,platform,goal) 查 CSP/CSTP/CEP 三包齐备即"可发证"。**刻意不代填、不臆造**：脚本不写任何业务数据，缺哪类只报 human 文案。
+  - **退出码即契约**：缺任一必填项 ⇒ `exit 1`；齐备 ⇒ `exit 0`；并单独标 `cp_law_sensitive_domains` 零行（Guard⑥ 默认放行、可配置非永久豁免，提示但不影响判定）〔**Q217 勘误**：迁移 0007 已播 6 个 active 敏感领域，故 Guard⑥ 并非「默认放行」，该提示的实际含义是「当前启用几个敏感领域」〕。脚本靠 `LOOM_DATABASE_DSN` 或 `get_settings().database_dsn`，**是给业务方在真实部署库手动跑的工具**（`python scripts/check_master_data.py [--json]`），**不进 CI**（CI 默认 DSN 是本地 postgres、无真实主数据，跑它只会永远红，与 real-infra 同型 env 门控族不同——它就是给人的，不是给门的）。
+  - **测试 10 例·证伪纪律**：纯判定 6（可发证／缺 slot／缺 PCP／平台不匹配／goal 未激活／敏感域零行分离）＋ 采集层 3（sqlite 内存真实 insert→collect→evaluate，含删 CEP 致三包不齐回落）＋ `main` 退出码 2（ready→0 证真、空库→1 证伪）。**为什么必测 exit 1**：空库若仍 exit 0，这脚本就永远绿、从没拦住过"主数据零行"——正是 Q193「守卫不当场植缺陷就只是看起来在守」的同型陷阱；空库证伪用例钉死它。**复判不变**：① 达标／② 仍未达标（本批只给"怎么确认填够"的工具，**不替代两个人回填＋跑链裁决**，唯一卡点仍是主数据零行）／③ 仍未达标。

@@ -22,7 +22,13 @@ jobs:
         run: ruff check .
       - name: Pytest (sqlite, no services)
         working-directory: backend
-        run: python -m pytest -q
+        # --cov adds measurement only; docs/16 §4's coverage thresholds stay 【建议】
+        # and are deliberately not enforced here - turning them into a gate is a ruling.
+        run: python -m pytest -q --cov=app --cov-report=json:coverage.json --cov-report=term
+      - name: Coverage report (measurement only, never a gate)
+        if: always()
+        working-directory: backend
+        run: python scripts/coverage_report.py coverage.json
       - name: Evaluation Dataset / Golden Cases regression (Q77 staging gate)
         run: python eval/runner.py
 
