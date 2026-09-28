@@ -184,6 +184,8 @@ def test_collect_and_evaluate_ready_on_seeded_db():
     assert result["ready"] is True
     assert result["counts"]["publish_slots_active"] == 1
     assert result["counts"]["packages_active"] == 3
+    # Q230：迁移 0042 起已种 6 个最小类目；本夹具走 create_all（不含迁移种子），故如实报 0。
+    assert result["counts"]["g1_categories_active"] == 0
 
 
 def test_collect_reports_not_ready_when_a_package_missing():
@@ -301,6 +303,25 @@ def test_zero_sensitive_domains_on_a_migrated_db_is_flagged_as_deviation():
     assert result["ready"] is True  # 不影响可发证判定
     assert any("0007" in w for w in result["warnings"])
     assert "与迁移 0007 的 6 个种子不符" in cmd._format_report(result)
+
+
+def test_g1_categories_zero_is_advisory_not_a_blocker():
+    """Q229：G1 类目字典为空 ⇒ 段2 CAT-RECOG 候选集合为空（真模型会 502），
+    但发证不需要 G1 类目，故**不影响「可发证」判定**，只作提示。"""
+    facts = _facts([("slot-1", "wechat")], [("ps-1", "t-1", "wechat")],
+                   _three_packages("ps-1", "t-1", "wechat", "EDUCATION"),
+                   [("EDUCATION",)])
+    facts["g1_categories_active"] = 0
+    result = cmd.evaluate(facts)
+    assert result["ready"] is True  # 不因类目为空而判不可发证
+    assert result["g1_categories_zero"] is True
+    assert result["counts"]["g1_categories_active"] == 0
+    assert "g1_categories(active)=0" in cmd._format_report(result)
+
+    facts["g1_categories_active"] = 7
+    result = cmd.evaluate(facts)
+    assert result["g1_categories_zero"] is False
+    assert "g1_categories(active)=7" in cmd._format_report(result)
 
 
 def test_is_migration_built_follows_the_alembic_version_row():

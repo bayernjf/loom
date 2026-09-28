@@ -240,3 +240,63 @@ jobs:
               exit 1
               ;;
           esac
+
+  # Q229（A3 裁「只加廉价等价门」）：六套演练里**不需要多容器／宿主网络**的那一半
+  # 静态化进 CI——搬的是等价断言，不是脚本本体。两件事此前只被本地演练验过：
+  #   1. compose 各 overlay 组合能静态解析（不启动任何容器）。单元测试只断言结构，
+  #      验不了解析与合并；Q185 那两个「project 判 invalid」的缺陷正落在这一层。
+  #   2. promtool check config/rules。告警规则的 PromQL **语法**至今无人守：单元测试
+  #      只用正则抽指标名比对注册表，语法写错会一路绿到生产——规则加载失败＝没有告警。
+  # ha/load/restore/rpo-rto/pitr 要起多容器、断言依赖宿主网络（网络分区、备份异机恢复、
+  # WAL 归档），维持本地手动，是登记的代价判断而非遗漏（BENCHMARK.md / docs/17 §7）。
+  infra-static:
+    name: "Infra static gate (compose resolve + promtool rules)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose overlays resolve statically (no containers)
+        working-directory: infra
+        run: |
+          set -euo pipefail
+          # a) 默认部署路径必须**不注入任何 secret** 就能解析：base 里若有人加
+          #    `${X:?}`，compose 的解析期全局求值会连不开监控的默认路径一起打断
+          #    （Q185 实测踩到，故 Grafana 口令的护栏只许待在 opt-in overlay）。
+          docker compose -f docker-compose.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.staging.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+            -f docker-compose.ha.yml config -q
+          # b) opt-in overlay 叠进来后仍得是一个合法 project：护栏只约束 -f 进来的人，
+          #    故这里按演练口径注入一次性口令，验证合并结果本身可解析。
+          LOOM_GRAFANA_ADMIN_PASSWORD=ci-only docker compose \
+            -f docker-compose.yml -f docker-compose.monitoring.yml \
+            --profile monitoring config -q
+          LOOM_GRAFANA_ADMIN_PASSWORD=ci-only docker compose \
+            -f docker-compose.yml -f docker-compose.staging.yml \
+            -f docker-compose.monitoring.yml -f docker-compose.alerting-rehearsal.yml \
+            -p loom-alerting --profile monitoring config -q
+      - name: Prometheus config and rules validate statically (promtool)
+        working-directory: infra
+        run: |
+          set -eo pipefail
+          # 钉版本而非 :latest：门要可复现，compose 里跑的那个浮动是运行面的事。
+          PROMTOOL=(docker run --rm -v "$PWD/monitoring":/etc/prometheus:ro
+            --entrypoint /bin/promtool quay.io/prometheus/prometheus:v3.14.0)
+          "${PROMTOOL[@]}" check config /etc/prometheus/prometheus.yml | tee promtool-config.log
+          "${PROMTOOL[@]}" check rules /etc/prometheus/alert_rules.yml | tee promtool-rules.log
+          # 哨兵：promtool 对「0 条规则」同样报 SUCCESS，规则文件被清空或挂载路径写错时
+          # 语法检查照绿——不比条数更弱的判据会静默放过「规则根本没装载」。
+          # 刻意不钉死条数（加一条规则不该假红，Q207 不钉表数、real-infra 不钉用例数同理由），
+          # 只判「解析出了 ≥1 条」。
+          summary="$(grep -F 'rules found' promtool-rules.log | tail -n 1 || true)"
+          echo "promtool: ${summary:-<无 rules found 行>}"
+          case "${summary}" in
+            *"SUCCESS: 0 rules found"*)
+              echo "::error::alert_rules.yml 解析出 0 条规则（被清空或挂载路径错）——语法绿不等于规则装载"
+              exit 1
+              ;;
+            *"SUCCESS:"*"rules found"*) ;;
+            *)
+              echo "::error::promtool 未报出规则数，无法判定"
+              exit 1
+              ;;
+          esac

@@ -18,6 +18,12 @@ docs/19 §0.2 与发证解析器（`app/final/final_whitelist/service.py` 的
 默认分支（docs/19 §0.2：**可配置项、非永久豁免**，首批选产品应避开拟启用敏感
 类目的行业）——这是提示，不影响"可发证"判定。
 
+另报 `g1_categories` 的 active 计数（Q229 补，口径同段2 CAT-RECOG 取候选集合的
+`status == "active"`）：为零 ⇒ 段2 的候选集合为空，**真模型**若返回集合外的
+category_id 会被 `ExtractionOutputInvalid` 拒为 502（拒绝本身正确，但此时无类目
+可用，见 docs/20 §14 ②-b）。迁移本就不种子类目，故为 0 是**业务回填缺口**、
+不是建库方式造成的；同理**只是提示，不影响「可发证」判定**（发证不需要 G1 类目）。
+
 **本脚本只读**（Q218 起）：绝不建表、绝不写行；必需表都不在的库直接判「不可用」，不代建 schema。
 另检查目标库有没有 `alembic_version` 行——没有就说明它不是迁移建出来的，迁移自带的种子（`content_goals` 5 码、`cp_law_sensitive_domains` 6 个 active 领域、`pcp_templates` 4 套）自然都不在，此时输出的「零」是**建库方式**造成的、不是业务没回填。
 退出码：齐备 ⇒ 0；缺任一必填项 ⇒ 1；目标库不是 Loom 迁移库（缺必需表）⇒ 2。
@@ -44,6 +50,7 @@ from app.decision.compliance_center.models import CpLawSensitiveDomain
 from app.decision.layer_strategy.models import KIND_CEP, KIND_CSP, KIND_CSTP, Package
 from app.platform.platform_adaptation.models import PcpWeightTable, PublishSlot
 from app.product.condition.models import ContentGoal
+from app.product.modeling.models import G1Category
 
 _PACKAGE_KINDS = (KIND_CSP, KIND_CSTP, KIND_CEP)
 _REQUIRED_TABLES = (
@@ -52,6 +59,10 @@ _REQUIRED_TABLES = (
     Package.__table__,
     ContentGoal.__table__,
     CpLawSensitiveDomain.__table__,
+    # Q229：g1_categories 自迁移 0002 起就在 schema 里，是段2 CAT-RECOG 取候选集合的
+    # 来源表。纳入必需表集合，既让「非 Loom 库」判定更诚实，也让 collect_facts 的
+    # 只读采集在缺表时走既有的 exit 2 分支，而不是抛一个裸的 SQLAlchemyError。
+    G1Category.__table__,
 )
 
 
@@ -69,7 +80,7 @@ async def is_migration_built(session) -> bool:
 
 
 async def collect_facts(session) -> dict:
-    """只读采集五张表的 active 事实（不判定、不写）。"""
+    """只读采集六张表的 active 事实（不判定、不写）。"""
     slots = (
         await session.execute(
             select(PublishSlot.slot_id, PublishSlot.platform).where(
@@ -105,6 +116,13 @@ async def collect_facts(session) -> dict:
     sens_count = (
         await session.execute(select(func.count()).select_from(CpLawSensitiveDomain))
     ).scalar_one()
+    g1_active = (
+        await session.execute(
+            select(func.count())
+            .select_from(G1Category)
+            .where(G1Category.status == "active")
+        )
+    ).scalar_one()
 
     return {
         "slots": slots,
@@ -112,6 +130,7 @@ async def collect_facts(session) -> dict:
         "packages": pkgs,
         "goals": goals,
         "sensitive_domains_count": int(sens_count or 0),
+        "g1_categories_active": int(g1_active or 0),
     }
 
 
@@ -124,6 +143,7 @@ def evaluate(facts: dict) -> dict:
         missing_required: list[str] — 绝对必填项里为零的类别（human 文案）
         gaps: list[str]            — 进一步定位：有平台/PCP 但缺三包的情形
         sensitive_domains_zero: bool
+        g1_categories_zero: bool  — 段2 CAT-RECOG 候选集合为空（advisory，不影响可发证）
         counts: dict               — 各类 active 计数（便于回填方核对）
     """
     slots = facts["slots"]
@@ -131,6 +151,8 @@ def evaluate(facts: dict) -> dict:
     pkgs = facts["packages"]
     goals = {g for (g,) in facts["goals"]}
     sens_zero = facts["sensitive_domains_count"] == 0
+    g1_active = int(facts.get("g1_categories_active", 0) or 0)
+    g1_zero = g1_active == 0
 
     slot_platforms = {p for (_, p) in slots}
     # package 索引：(ps_id, tenant, platform, goal) -> {kind, ...}
@@ -199,12 +221,14 @@ def evaluate(facts: dict) -> dict:
         "migration_built": migration_built,
         "warnings": warnings,
         "sensitive_domains_zero": sens_zero,
+        "g1_categories_zero": g1_zero,
         "counts": {
             "publish_slots_active": len(slots),
             "pcp_weight_tables_active": len(pcps),
             "packages_active": len(pkgs),
             "content_goals_active": len(goals),
             "cp_law_sensitive_domains": facts["sensitive_domains_count"],
+            "g1_categories_active": g1_active,
         },
     }
 
@@ -223,6 +247,12 @@ def _format_report(result: dict) -> str:
         f"  cp_law_sensitive_domains(active)={counts['cp_law_sensitive_domains']}"
         + ("  ⚠ 与迁移 0007 的 6 个种子不符 ⇒ 字典被清空/停用，Guard⑥ 当前不因敏感领域拦人（可配置态，非默认）"
            if result["sensitive_domains_zero"] else "  （Guard⑥ 会对命中的行业建 48h 法审单）")
+    )
+    lines.append(
+        f"  g1_categories(active)={counts['g1_categories_active']}"
+        + ("  ⚠ 类目字典为空 ⇒ 段2 CAT-RECOG 的候选集合为空；真模型若返回集合外 category_id 会被拒为 502"
+           "（拒绝正确，但此时无类目可用）。迁移本就不种子类目 ⇒ 这是业务回填缺口；不影响可发证判定"
+           if result["g1_categories_zero"] else "  （段2 CAT-RECOG 候选集合非空）")
     )
     for w in result.get("warnings", []):
         lines.append(f"  ⚠ {w}")

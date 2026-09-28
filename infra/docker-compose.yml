@@ -175,4 +175,10 @@ services:
 # overlay。原因：compose 的 `${VAR:?}` 插值在**解析期全局求值**、与 profile 是否激活
 # 无关，把 Grafana 管理员口令的必填护栏留在此处会连带打断不开监控的默认部署路径。
 # 告警投递不开独立组件，由 watchdog 轮询 Prometheus 转发（见 monitoring overlay）。
-volumes: {pgdata:, redisdata:, miniodata:, pgbackups:, walarchive:, basebackups:}
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  pgbackups:
+  walarchive:
+  basebackups:

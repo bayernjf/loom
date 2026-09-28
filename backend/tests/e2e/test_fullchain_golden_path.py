@@ -43,6 +43,23 @@ CUSTOMER = {"id": "cust-e2e", "roles": ["customer"]}
 
 RUN_ID = uuid.uuid4().hex[:12]
 
+# 段 1 录入资料：PG 变体上 G2 必填 fid 由迁移种下，缺一个即 422（missing_fids），
+# 故所有建单入口共用这一份（`_drive` 与段2专用用例）。
+PROFILE = {
+    "f_name": "保湿面霜",
+    "f_brand": "示例品牌",
+    "f_intro": "温和修护",
+    "f_selling_points": "保湿、温和、不油腻",
+    "f_seo": "保湿面霜推荐",
+    "f_main_image": "https://example.com/img/main.jpg",
+    "f_packaging_image": "https://example.com/img/pkg.jpg",
+    "f_target_market": "中国大陆",
+    "f_language": "zh-CN",
+    "f_channel": "短视频",
+    "f_audience": "18-35 岁干皮人群",
+    "f_content_usage": "种草",
+}
+
 
 @pytest_asyncio.fixture
 async def session_factory():
@@ -100,9 +117,14 @@ async def client(session_factory):
                 ARTICLE_SEMANTIC_PROMPT_TEMPLATE,
                 ARTICLE_SEMANTIC_PROMPT_VARIABLES,
                 ARTICLE_SEMANTIC_PROMPT_VERSION,
+                CAT_RECOG_PROMPT_ID,
+                CAT_RECOG_PROMPT_TEMPLATE,
+                CAT_RECOG_PROMPT_VARIABLES,
+                CAT_RECOG_PROMPT_VERSION,
                 SCENE_ARTICLE_GEN,
                 SCENE_ARTICLE_QC,
                 SCENE_ARTICLE_SEMANTIC,
+                SCENE_CAT_RECOG,
                 SYNTHETIC_MODEL_ID,
             )
             from app.platform.platform_adaptation.models import GoalFitWeight, PcpTemplate
@@ -113,6 +135,7 @@ async def client(session_factory):
             from app.product.condition import pwc_rules
             from app.product.condition.models import ContentGoal
             from app.product.fieldpool.models import FPSourceRoute
+            from app.product.modeling.models import C1SignalWeight
             from app.product.product_intake.models import G2Field
 
             session.add_all(
@@ -121,6 +144,10 @@ async def client(session_factory):
                  FPSourceRoute(route="user_input", name="用户输入", sort_order=1),
                  ContentLanguage(code="zh-CN", name="简体中文", markets=[])]
                 + [ContentGoal(code=code) for code in pwc_rules.CONTENT_GOALS]
+                + [C1SignalWeight(signal=sig, signal_name=name, enabled=True, weight=w)
+                   for sig, name, w in (("name", "产品名", 0.50),
+                                        ("brief", "简介", 0.33),
+                                        ("sellpoint", "卖点", 0.17))]
             )
 
             def triplet(scene, version, version_id, template, variables):
@@ -135,6 +162,9 @@ async def client(session_factory):
                 model_id=SYNTHETIC_MODEL_ID, model_code="synthetic-deterministic",
                 provider="synthetic", status="active",
             ))
+            # 段 2 CAT-RECOG：迁移 0014 的种子（sqlite 无迁移，这里按同一行补齐）。
+            triplet(SCENE_CAT_RECOG, CAT_RECOG_PROMPT_VERSION, CAT_RECOG_PROMPT_ID,
+                    CAT_RECOG_PROMPT_TEMPLATE, CAT_RECOG_PROMPT_VARIABLES)
             triplet(SCENE_ARTICLE_GEN, ARTICLE_GEN_PROMPT_VERSION,
                     ARTICLE_GEN_PROMPT_ID, ARTICLE_GEN_PROMPT_TEMPLATE,
                     ARTICLE_GEN_PROMPT_VARIABLES)
@@ -181,20 +211,7 @@ async def _drive(client: AsyncClient) -> dict:
     # ---- 段 1：录入 + 15 态推进 ----
     r = await client.post(
         "/api/intakes",
-        json={"tenant_id": tenant_id, "profile": {
-            "f_name": "保湿面霜",
-            "f_brand": "示例品牌",
-            "f_intro": "温和修护",
-            "f_selling_points": "保湿、温和、不油腻",
-            "f_seo": "保湿面霜推荐",
-            "f_main_image": "https://example.com/img/main.jpg",
-            "f_packaging_image": "https://example.com/img/pkg.jpg",
-            "f_target_market": "中国大陆",
-            "f_language": "zh-CN",
-            "f_channel": "短视频",
-            "f_audience": "18-35 岁干皮人群",
-            "f_content_usage": "种草",
-        }},
+        json={"tenant_id": tenant_id, "profile": PROFILE},
     )
     assert r.status_code == 201, r.text
     intake_id = r.json()["intake_id"]
@@ -209,14 +226,16 @@ async def _drive(client: AsyncClient) -> dict:
 
     await fire("submit", CUSTOMER)
 
-    if REAL_LLM:
-        # ---- 段 2 真 LLM：CAT-RECOG 候选 → 运营 Gate ----
-        inv = await client.post(
-            f"/api/intakes/{intake_id}/c1-recognition/llm-invoke",
-            json={"actor": OPS},
-        )
-        assert inv.status_code == 201, inv.text
-        assert inv.json()["output_tokens"] > 0
+    # ---- 段 2：CAT-RECOG 候选 → 运营 Gate ----
+    # Q229：此前这一整块挂在 `if REAL_LLM:` 下，synthetic 链根本不进这段代码
+    # （评审登记的"CI 常绿的链没走段2"）。改为两种模式都走同一条路径：
+    # synthetic 替身按启用类目集合确定性给候选（集合空 → 空候选），真模型同形。
+    inv = await client.post(
+        f"/api/intakes/{intake_id}/c1-recognition/llm-invoke",
+        json={"actor": OPS},
+    )
+    assert inv.status_code == 201, inv.text
+    assert inv.json()["output_tokens"] > 0
 
     for event, actor in [
         ("wf01_confirm", OPS),
@@ -422,6 +441,77 @@ async def _enable_real_llm(client: AsyncClient):
 async def test_fullchain_synthetic_golden_path(client):
     out = await _drive(client)
     assert out["final_id"] and out["content_id"]
+
+
+async def _submit_intake(client: AsyncClient, tag: str) -> str:
+    r = await client.post(
+        "/api/intakes",
+        json={"tenant_id": f"t-e2e-{RUN_ID}",
+              "profile": {**PROFILE, "f_name": f"E2E面霜{tag}"}},
+    )
+    assert r.status_code == 201, r.text
+    intake_id = r.json()["intake_id"]
+    r = await client.post(
+        f"/api/intakes/{intake_id}/transitions",
+        json={"event": "submit", "actor": CUSTOMER},
+    )
+    assert r.status_code == 200, r.text
+    return intake_id
+
+
+async def _invoke_cat_recog(client: AsyncClient, intake_id: str) -> str:
+    r = await client.post(
+        f"/api/intakes/{intake_id}/c1-recognition/llm-invoke",
+        json={"actor": OPS},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["candidates"][0]["candidate_id"]
+
+
+async def test_fullchain_cat_recog_synthetic_rejection_and_option_branches(
+    client, session_factory
+):
+    """段 2 CAT-RECOG 的两条分支在 synthetic 链上都被钉住（Q229）。
+
+    `_drive` 只证明这段代码被走到（201）；本用例把启用类目集合的两种取值分别
+    钉死，覆盖评审登记的 ②-b 场景：
+
+    ① **空集合**：`g1_categories` 无 active 行 ⇒ `category_options` 为空，
+       合成替身给空候选，投递仍成功（真模型在此若臆造集合外 id 会被
+       `ExtractionOutputInvalid` 拒为 502——拒绝本身正确，见 Q228 ②-b）；
+    ② **非空集合**：新增一条 active 类目后，模型给出的候选必须落在集合内。
+    """
+    from sqlalchemy import delete
+
+    from app.core.skill7.models import SkillCandidate
+    from app.product.modeling.models import G1Category
+
+    async def delivered_candidates(candidate_id: str) -> list[dict]:
+        async with session_factory() as session:
+            cand = await session.get(SkillCandidate, candidate_id)
+            return cand.payload["candidates"]
+
+    # ① 空集合：清掉全部类目（不假设库的初始状态，避免受用例顺序影响）。
+    async with session_factory() as session:
+        await session.execute(delete(G1Category))
+        await session.commit()
+    empty_candidates = await delivered_candidates(
+        await _invoke_cat_recog(client, await _submit_intake(client, "空字典"))
+    )
+    assert empty_candidates == []
+
+    # ② 非空集合：入一条 active 类目，候选必须取自该集合。
+    async with session_factory() as session:
+        category = G1Category(name="E2E 护肤面霜", status="active")
+        session.add(category)
+        await session.commit()
+        category_id = category.category_id
+
+    filled_candidates = await delivered_candidates(
+        await _invoke_cat_recog(client, await _submit_intake(client, "满字典"))
+    )
+    assert [c["category_id"] for c in filled_candidates] == [category_id]
+    assert 0.0 <= filled_candidates[0]["conf"] <= 1.0
 
 
 @pytest.mark.skipif(
