@@ -3,6 +3,7 @@
 目标规格＝MCP **2026-07-28** 修订，本文件里用到的规范事实（均取自官方规范页，逐条可回查）：
 
 - 该修订**移除协议级 sessions 与 `Mcp-Session-Id` 头**；
+- 该修订**整体移除 `ping`**（连同 `logging/setLevel`，SEP-2575）；
 - **移除 `initialize`／`notifications/initialized` 握手**，服务端 **MUST** 实现 `server/discover`；
 - 每个请求在 `_meta` 里带协议版本与客户端能力，客户端身份走 `io.modelcontextprotocol/clientInfo`；
 - **所有 result 必带 `resultType`**；`server/discover` 与 `tools/list` 同属可缓存操作，
@@ -104,7 +105,7 @@ def discover_result() -> dict[str, Any]:
     return {
         "resultType": "complete",
         "supportedVersions": SUPPORTED_PROTOCOL_VERSIONS,
-        "capabilities": {"tools": {"listChanged": False}, "prompts": {}, "resources": {}},
+        "capabilities": {"tools": {"listChanged": False}},
         "instructions": "Loom 只暴露 plan 模式工具：不生成正文、不发 final_id、不代替人工 Gate。",
         "_meta": {"io.modelcontextprotocol/serverInfo": SERVER_INFO},
         "ttlMs": _CACHE_TTL_MS,
@@ -194,8 +195,6 @@ def handle(payload: dict[str, Any]) -> dict[str, Any]:
             # 刻意不写 `params.get("arguments") or {}`：`[]`/`0`/`""` 都是假值，会被当"没传"放过去。
             return _error(_ERROR_INVALID_PARAMS, "tools/call params.arguments must be an object")
         return {"result": call_tool(name, arguments)}
-    if method == "ping":
-        return {"result": {"resultType": "complete", "io.modelcontextprotocol/serverInfo": SERVER_INFO}}
     return _error(_ERROR_METHOD_NOT_FOUND, f"method not found: {method}")
 
 
