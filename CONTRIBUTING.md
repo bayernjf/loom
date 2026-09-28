@@ -5,7 +5,7 @@
 ## 前提
 
 - 改动前**先读** [handoff.md](handoff.md)（当前状态/待办）与 [docs/README_文档地图与治理.md](docs/README_文档地图与治理.md)（场景导航 + 治理规则）。
-- **后端依赖一律从锁装**（Q222，2026-09-27）：开发机用 `uv pip install -r backend/requirements-dev.lock`（或 `pip install -r`），再 `pip install -e ./backend --no-deps`。CI 三个 Python job 装同一份 dev lock，**后端镜像只装 `backend/requirements.lock`（runtime 43 条，不含 mypy/pytest/ruff 等工装）**——**pyproject 里的开放下界是库的兼容声明，不是"让构建随机取最新版"的许可**。要升级某个包＝重生成两份 lock ＋ 跑全量门 ＋ 在 02 追加一片说明为什么，三条守卫会钉住任何绕过或两侧版本不一致。
+- **后端依赖一律从锁装**（Q222，2026-09-27）：开发机用 `uv pip install -r backend/requirements-dev.lock`（或 `pip install -r`），再 `pip install -e ./backend --no-deps`。CI 四个 Python job（backend／`Migration gate`／`real-infra`／`fullchain-e2e`〔Q227 起，四者各有一步 `pip install -r backend/requirements-dev.lock`，2026-09-28 按 ci.yml 实测点名〕）装同一份 dev lock，**后端镜像只装 `backend/requirements.lock`（runtime 43 条，不含 mypy/pytest/ruff 等工装）**——**pyproject 里的开放下界是库的兼容声明，不是"让构建随机取最新版"的许可**。要升级某个包＝重生成两份 lock ＋ 跑全量门 ＋ 在 02 追加一片说明为什么，三条守卫会钉住任何绕过或两侧版本不一致。
 
 ## 怎么改文档
 
@@ -24,7 +24,7 @@
 ## 分支与 PR
 
 - 工作分支为 `dev`（跟踪 `origin/dev`）；`main` 为发布基线，合入由负责人操作。
-- PR 必须通过 GitHub Actions CI（**六 job**，迁移门与静态门见 docs/17 §7.7）：后端 `ruff check` + `pytest --cov=app`（Q221 起产**覆盖率读数**，其后一步只报数**不设门**、恒退 0）+ eval runner（101 案），前端 `typecheck` + **八个**契约 checker（`frontend/scripts/check-*.mjs`），迁移 `alembic upgrade head` → 真 PG16 上 ORM⇄DB 列/约束/索引漂移检查 → `downgrade -1` → 再 `upgrade head`，真容器集成 `tests/integration/test_real_infra.py`（真 PG16 ＋ 真 Redis 两 service；**该 job 带 skip 哨兵**：这一族靠 env 门控，env 没生效时 pytest 是「全 skip ＋ exit 0」，故命中 skip 即判红，防静默绿灯）；`next build`/lint 非闸门。测试策略见 docs/16。
+- PR 必须通过 GitHub Actions CI（**六 job**，迁移门与静态门见 docs/17 §7.7）：后端 `ruff check` + `pytest --cov=app`（Q221 起产**覆盖率读数**，其后一步只报数**不设门**、恒退 0）+ eval runner（101 案），前端 `typecheck` + **八个**契约 checker（`frontend/scripts/check-*.mjs`），迁移 `alembic upgrade head` → 真 PG16 上 ORM⇄DB 列/约束/索引漂移检查 → `downgrade -1` → 再 `upgrade head`，真容器集成 `tests/integration/test_real_infra.py`（真 PG16 ＋ 真 Redis 两 service；**该 job 带 skip 哨兵**，这一族靠 env 门控、env 没生效时 pytest 是「全 skip ＋ exit 0」，故命中 skip 即判红，防静默绿灯）；**全链 e2e（Q227）**真 PG16 service 上 `alembic upgrade head` → `pytest tests/e2e -k synthetic`（同样带 skip 哨兵，只跑 synthetic、不花真 LLM token）；**基础设施静态门（Q229）**五份 compose 各过 `docker compose config -q` ＋ `promtool check config/rules`（不起任何容器，Q231 就是这道门抓出 flow 写法空值卷被判红的）；`next build`/lint 非闸门。测试策略见 docs/16。
 
 ## License
 
