@@ -146,4 +146,13 @@ async def test_discovery_reports_the_spec_version_we_read(client, issued, gate_o
     result = resp.json()["result"]
     assert result["supportedVersions"] == ["2026-07-28"]
     assert result["capabilities"]["tools"]["listChanged"] is False
+    assert set(result["capabilities"]) == {"tools"}, "不实现的 prompts/resources 不得声明"
     assert "plan" in result["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_removed_ping_is_a_method_not_found_error(client, issued, gate_open) -> None:
+    resp = await client.post("/mcp", json=_rpc("ping"), headers={"Authorization": f"Bearer {issued}"})
+    assert resp.status_code == 200
+    error = resp.json()["error"]
+    assert error["code"] == -32601 and "ping" in error["message"]

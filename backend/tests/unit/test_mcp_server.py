@@ -99,3 +99,17 @@ def test_discover_result_matches_the_official_2026_07_28_shape() -> None:
     # 已移除的两处：官方 DiscoverResult 无单数 protocolVersion，身份也不再放 result 顶层
     assert "protocolVersion" not in result
     assert "io.modelcontextprotocol/serverInfo" not in result
+
+
+def test_ping_was_removed_in_2026_07_28_and_now_fails_as_method_not_found() -> None:
+    """Q236：`ping` 与 initialize 同属被该修订移除的方法，不应再成功应答。"""
+    response = mcp.handle(_rpc("ping"))
+    assert response["error"]["code"] == -32601
+    assert "ping" in response["error"]["message"]
+
+
+def test_capabilities_only_advertise_tools() -> None:
+    """Q236：capabilities 定义为「服务端支持的能力」，prompts/resources 不实现就不得声明。"""
+    capabilities = mcp.handle(_rpc("server/discover"))["result"]["capabilities"]
+    assert set(capabilities) == {"tools"}
+    assert capabilities["tools"] == {"listChanged": False}
