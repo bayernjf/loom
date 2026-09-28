@@ -79,3 +79,23 @@ def test_supported_protocol_version_is_the_one_we_read_the_spec_at() -> None:
     discover = mcp.handle(_rpc("server/discover"))["result"]
     assert discover["supportedVersions"] == ["2026-07-28"]
     assert discover["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "loom"
+
+
+def test_discover_result_matches_the_official_2026_07_28_shape() -> None:
+    """Q235：`server/discover` 的字段集与官方结构逐项一致（Q234 登记的 4 处出入已对齐）。"""
+    result = mcp.handle(_rpc("server/discover"))["result"]
+    assert set(result) == {
+        "resultType",
+        "supportedVersions",
+        "capabilities",
+        "instructions",
+        "_meta",
+        "ttlMs",
+        "cacheScope",
+    }, "多字段或少字段都是契约漂移"
+    assert result["resultType"] == "complete"
+    assert result["ttlMs"] == 300_000 and result["cacheScope"] == "private"
+    assert result["_meta"]["io.modelcontextprotocol/serverInfo"] == mcp.SERVER_INFO
+    # 已移除的两处：官方 DiscoverResult 无单数 protocolVersion，身份也不再放 result 顶层
+    assert "protocolVersion" not in result
+    assert "io.modelcontextprotocol/serverInfo" not in result
