@@ -18,6 +18,7 @@ from app.core.exports.router import router as exports_router
 from app.core.exports.worker import ExportWorker, build_export_workers
 from app.core.imports.router import router as imports_router
 from app.core.imports.worker import ImportWorker, build_import_workers
+from app.core.mcp.router import router as mcp_router
 from app.core.metrics import MetricsMiddleware
 from app.core.metrics.router import router as metrics_router
 from app.core.model_registry.router import router as model_registry_router
@@ -171,6 +172,7 @@ app.include_router(fieldpool_router)
 app.include_router(wordlist_router)
 app.include_router(config_router)
 app.include_router(a2a_router)
+app.include_router(mcp_router)
 app.include_router(dashboards_router)
 app.include_router(model_registry_router)
 app.include_router(skill7_router)

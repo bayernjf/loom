@@ -120,6 +120,11 @@ class Settings(BaseSettings):
     # 单轮 sweep 最多清理的行数（运维防护参数，非 Q9 业务旋钮），防单事务过大。
     discard_purge_batch: int = 200
 
+    # Q232 MCP 对外面（docs/22）：默认关＝纯加法、可回滚。关闭时 `POST /mcp` 回 404，
+    # 开启后仍需 Q88 Agent Key（缺失/错误/吊销 401），且工具面只有 plan 模式三件：
+    # 不生成正文、不发 final_id、不代替人工 Gate。
+    mcp_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:
