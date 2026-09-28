@@ -58,4 +58,6 @@ services:
     environment:
       PROMETHEUS_ALERTS_URL: http://prometheus:9090/api/v1/alerts
 
-volumes: {prometheusdata:, grafanadata:}
+volumes:
+  prometheusdata:
+  grafanadata:
