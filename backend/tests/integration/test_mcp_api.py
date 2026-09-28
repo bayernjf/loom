@@ -144,6 +144,6 @@ def test_mcp_post_is_on_the_published_api_surface() -> None:
 async def test_discovery_reports_the_spec_version_we_read(client, issued, gate_open) -> None:
     resp = await client.post("/mcp", json=_rpc("server/discover"), headers={"Authorization": f"Bearer {issued}"})
     result = resp.json()["result"]
-    assert result["protocolVersion"] == "2026-07-28"
+    assert result["supportedVersions"] == ["2026-07-28"]
     assert result["capabilities"]["tools"]["listChanged"] is False
     assert "plan" in result["instructions"]

@@ -77,5 +77,5 @@ def test_removed_handshake_and_unsupported_version_and_unknown_method_all_fail_c
 def test_supported_protocol_version_is_the_one_we_read_the_spec_at() -> None:
     assert mcp.PROTOCOL_VERSION == "2026-07-28"
     discover = mcp.handle(_rpc("server/discover"))["result"]
-    assert discover["supportedProtocolVersions"] == ["2026-07-28"]
-    assert discover["io.modelcontextprotocol/serverInfo"]["name"] == "loom"
+    assert discover["supportedVersions"] == ["2026-07-28"]
+    assert discover["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "loom"
