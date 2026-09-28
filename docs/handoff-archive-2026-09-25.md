@@ -275,3 +275,12 @@
   - **另四处订正**：① 文档地图描述 docs/20 那格**内嵌了会过期的基线 966／976**（改为指向 handoff 权威行）＋章节枚举停在 §10（补到 §13）＋状态列把 Q203／Q204 误计为复评、并残留 Q220 早已废止的"四表主数据零行"；② `docs/15` 的 `scripts/` 只列了 4 个脚本里的 1 个（补齐并标调用方；CI 实测只调 `dba_schema_check.py` 与 `coverage_report.py`）；③ `docs/14` §5 自述"实现期落定两项横切选型"，而 Q222 的**依赖锁定**就是第三项，补行并把引导语改三项；④ `docs/19` §0.2 的"怎么填"没跟上 Q224 的模板幂等／拒绝未迁移库／`--demo` 局限。
   - **自伤一处，靠"读回整行"抓回**：改地图那一格时用**长行前缀**做锚点，在句中落点留下一段**重复的旧判定文字**——是"改完把整行读回来"发现的（Q219 同一教训第二次发作）。规矩：**数千字符单行的表格里禁止前缀锚点，要么整格重写、要么读回再改**；随后复核该行竖线数＝5（与相邻行一致）、`达到 MVP` 只出现一次、无残留"四表"。
   - **计数不靠记忆**：本批两次现场重测——"五套"引用数从 29 改口为 22/33（测量口径写明命令），改动文件数从"5 个"改为实测 7 个。理由就是我自己立的规矩：**数字会过期，测量命令才作数**。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。按「最近 5 条」上限滚出 Q221（归档档第三十二次续写）。
+
+## 滚出条目（2026-09-28 第三十八次续写：Q232 批后按上限滚出 Q227）
+
+> 逐字搬入，一字未改（父条目＋其下 sub-bullets 共 4 行）；权威逐条台账仍是 docs/02 C1.171。
+
+- **Q227 fullchain-rehearsal 的等价门进 CI（第 5 个 job，带 skip 哨兵）（2026-09-27；**CI 配置＋契约测试，零生产代码零迁移零前端改动**；基线 999→**1003 passed＋10 skipped**（总收集 1013）、ruff 净、eval 101/101、前端零改动；02 C1.171）**：Q223 登记「CI 常绿的全链是 synthetic 跑的」、Q224 又在真 PG 上抓到四个业务回填缺陷，而这条链此前只在本地手动跑 ⇒ 把它变成每次 push 都跑的门。
+  - **落了什么**：照 `real-infra`／`migration` 同型新增第 5 个 job `fullchain-e2e`——真 `pgvector/pgvector:pg16` service ＋ `alembic upgrade head`（得全新迁移库，非现成库）＋ `python -m pytest tests/e2e -q -rs -k synthetic`，并带 **skip 哨兵**（末行命中 `no tests ran`／`skipped` 即 `exit 1`）。契约守卫 `test_fullchain_e2e_skip_sentinel_fires` 参数化 3 例，把 CI 里那段 step 脚本**原样取出来真跑**（假 `python` 喂三种 summary 末行判退出码）；顺手把 `_run_sentinel_block` 由硬编码 real-infra **参数化为 `job_name`**，两种 job 共用同一套哨兵行为测试。
+  - **实证（run 36315044483／`797fdc6`）**：五个 job 全 success，`Fullchain e2e (synthetic PG: alembic → golden path)` 的 step 打印 `1 passed, 1 deselected in 2.46s` ＋哨兵行 `pytest summary: 1 passed, 1 deselected in 2.46s` ⇒ **真跑过、非 skip 静默绿**；backend job 打印 `1003 passed, 10 skipped`（权威基线，Q226 为 999＋10，本批 +4 与新增 1 gate＋3 哨兵用例吻合）、eval 101/101、ruff 全过。（核实过程一处坑：`gh run list --commit 797fdc6` 返回 `[]` 属过滤行为，改用 `gh run list --limit` 才拿到 run——**别据此判定"没跑"**。）
+  - **边界（措辞别写错）**：进 CI 的是 fullchain 的**等价门**，**不是** `infra/fullchain-rehearsal.sh` 本体——`grep rehearsal .github/workflows/ci.yml` 仍 ＝ **0 命中**，故 Q226 那句「七套本地 harness 脚本全部不在 CI」**仍成立**。只跑 synthetic 变体、**不花真 LLM token**；real-LLM 留手动演练，触发变量为 `LOOM_E2E_REAL_LLM=1`＋`LOOM_E2E_AGNES_KEY`（`tests/e2e/test_fullchain_golden_path.py:427` 的 `skipif`，回代码核实过，非臆造）。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。按「最近 5 条」上限滚出 Q222（归档档第三十三次续写）。

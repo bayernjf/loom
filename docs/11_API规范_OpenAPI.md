@@ -208,6 +208,19 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 
 ---
 
+### 2.9 对外机器面（A2A Q150 ＋ MCP Q232，已落地；接入步骤在 docs/22）
+
+本节只登记**接口形状与鉴权**，字段级依据、状态码表与实测样例统一放在 [docs/22_外部系统接入手册_AgentKey_A2A_MCP.md](22_外部系统接入手册_AgentKey_A2A_MCP.md)，不在此复述。
+
+- **A2A 发现（公开无凭证）**：`GET /api/a2a/agent-card` ＝ `GET /.well-known/agent-card.json` ＝ `GET /.well-known/agent.json`，同一张卡片，`Cache-Control: public, max-age=300`（`app/core/a2a/router.py:52-53,56,61,66`）。⚠️ 卡片 `url` 当前是相对路径 `/api/a2a/tasks`——`build_agent_card()` 依赖的 `public_base_url` 不是 `Settings` 字段（docs/22 §2.1）。
+- **A2A 任务**：`POST /api/a2a/tasks`，JSON-RPC 2.0，方法 `tasks/send`｜`tasks/sendSubscribe`（SSE）｜`tasks/get`｜`tasks/cancel`；任务态 `submitted/working/completed/input-required/failed/canceled`；进程内存 TTL 30min／上限 500（`app/core/a2a/rpc.py:24-25`）。
+- **MCP**：`POST /mcp`，JSON-RPC 2.0，规范版本 `2026-07-28`（无 session／无 `initialize` 握手／`server/discover` 必备／所有 result 带 `resultType`）；方法 `server/discover`｜`tools/list`｜`tools/call`｜`ping`；门控 `LOOM_MCP_ENABLED` **默认关**，关时**有凭证 404／无凭证 401**（凭证先于门控，`app/core/mcp/router.py:39,41`）。
+- **鉴权**：要 Q88 Agent Key `loom_…` Bearer 的入站口**全仓恰三处**＝`POST /api/a2a/tasks`、`POST /mcp`、`POST /api/effect-callback`（`require_agent_key` 调用方 grep 实测，2026-09-28）。未知／吊销／格式错统一 **401** `invalid or revoked agent API key`。
+- **能力边界**：A2A 三件 skill 与 MCP 三件工具是**同一组 plan 执行器**（`app/core/a2a/skills.py`），不生成正文、不花 token、不写业务表、不代替人工 Gate；`final_id` 两口（§2.8）**不接受**机器凭证。红线由 `tests/unit/test_mcp_server.py::test_tools_expose_no_issuance_or_chain_writes` 钉住。
+- **审计**：`a2a.task`（tenant `_platform`，`app/core/a2a/router.py:33-49`）／`mcp.request`（同 tenant，逐请求留痕含错误调用，`app/core/mcp/router.py:52-72`）。
+
+---
+
 ## 3. 通用规范（原文未定义，均为【建议】）
 
 | 项 | 建议 | 依据 |
