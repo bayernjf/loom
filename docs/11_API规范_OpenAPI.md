@@ -15,7 +15,9 @@
 | 白名单消费 | POST /api/product-spaces/{product_space_id}/pwc/consume（业务方参考路径 /api/whitelist/consume 不采用） | Q71 | 🟢 已落地（M5，见 §2.2） |
 | 白名单查询 | GET /api/product-spaces/{product_space_id}/pwcs（租户内池查询，M5）；D9.5 系统后台页面级清单另计 | D9.5 | 🟡 池内组合查询已落地（M5）；中台页面级清单【待补】 |
 | 使用记录上报 | V1 无独立上报端点：consume 取用即写 usage_record 并回带 usage_record_id（M5） | D9.5 / Q71 | 🟡 V1 随消费内联落地；独立上报接口【待补】 |
-| Key 管理 | 入站 POST/GET /api/admin/agent-keys、POST /api/admin/agent-keys/{id}/revoke（Q88）；出站 POST /api/admin/ai-models/{id}/keys（录入/轮换）、GET /api/admin/ai-models/{id}/keys（清单）、POST /api/admin/ai-model-keys/{key_id}/revoke（Q82） | Q60b/Q67/Q82/Q88 | 🟢 治理端点已落地（见 §2.4）；受 Key 保护的 effect-callback 已随 Q126 接入（§2.1）；Q127 孤儿人工认领、Q128 客户回填通道已落地（反哺校准随下一片） |
+| Key 管理 | 入站 POST/GET /api/admin/agent-keys、POST /api/admin/agent-keys/{id}/revoke（Q88）；**内部运营令牌 POST/GET /api/admin/staff-keys ＋ revoke（Q178）**；出站 POST /api/admin/ai-models/{id}/keys（录入/轮换）、GET /api/admin/ai-models/{id}/keys（清单）、POST /api/admin/ai-model-keys/{key_id}/revoke（Q82） | Q60b/Q67/Q82/Q88/Q178 | 🟢 治理端点已落地（见 **§2.7**——本行原指 §2.4，§2.4 现为 Q132 导出任务，指针已于 Q198 在 §5 订正、本行当时漏改，2026-09-28 补齐）；受 Key 保护的 effect-callback 已随 Q126 接入（§2.1）；Q127 孤儿人工认领、Q128 客户回填通道已落地（反哺校准随下一片） |
+| `final_id` 发证（E1.1 publishFCW 唯一出口） | `POST /api/fcw/assemble`（手动单条）、`POST /api/fcw/assembly-tasks`（任务驱动批量） | E1.1 / Q52 / Q55 / Q203 | 🟢 已落地（见 **§2.8**）；两口**只认已验真 staff 令牌** `loom_staff_`（Q203，与 `LOOM_STAFF_AUTH_ENABLED` 无关），机器 Agent Key／客户口凭证一律 401；唯一出口由 `exit_guard` 运行期强制（作用域外 INSERT 抛 `OutsidePublishFCW`，边界只到 ORM flush） |
+| 对外机器面（A2A ＋ MCP） | 公开发现：`GET /api/a2a/agent-card`、`GET /.well-known/agent-card.json`、`GET /.well-known/agent.json`；任务：`POST /api/a2a/tasks`（Q150，JSON-RPC）；工具面：`POST /mcp`（Q232，规范 `2026-07-28`，门控 `LOOM_MCP_ENABLED` 默认关） | Q88 / Q150 / Q232 | 🟢 已落地（形状见 **§2.9**，接入步骤与真进程实测样例见 [docs/22](22_外部系统接入手册_AgentKey_A2A_MCP.md)）；两面共用同一组 plan 三件、不发证／不花 token／不越 Gate；⚠️ 卡片 `url` 恒为相对路径，接入方须自行补全部署域名（§2.9） |
 | DB 浏览 / AI 调试台 / 调用日志 / 配额 | 后台内部；其中 **2 个驾驶舱只读聚合已落地**：GET /api/admin/dashboards/token-cost、GET /api/admin/dashboards/review-workload（Q92） | D9.5 / Q92 | 🟡 驾驶舱两读口已落地（platform_admin，见 05 §1.4）；DB 浏览 / AI 调试台 / 配额【待补】 |
 | 中台对接 API + Webhook 回流 | 中台 | D4 | 🔶 V2 项【待补】 |
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
@@ -205,6 +207,19 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 **错误码**（两口一致；`router.py` 局部映射 ＋ `app/main.py:158/163` 全局兜底）：401 无有效凭证、403 角色不足、404 PWS／slot／goal 未知、409 Guard 败（回带逐项明细，失败尝试仍写 `fcw.assembly_blocked` 审计并提交）、409 同键重复发证、409 材料缺失、422 入参非法；异步门控开时入流失败 fail-closed → **503** 且不留半完成任务。
 
 **审计**：成功 `fcw.issued`（六路材料＋Guard 结果＋`E1_owner=publishFCW`），失败 `fcw.assembly_blocked`。零迁移、无新增表。
+
+---
+
+### 2.9 对外机器面（A2A Q150 ＋ MCP Q232，已落地；接入步骤在 docs/22）
+
+本节只登记**接口形状与鉴权**，字段级依据、状态码表与实测样例统一放在 [docs/22_外部系统接入手册_AgentKey_A2A_MCP.md](22_外部系统接入手册_AgentKey_A2A_MCP.md)，不在此复述。
+
+- **A2A 发现（公开无凭证）**：`GET /api/a2a/agent-card` ＝ `GET /.well-known/agent-card.json` ＝ `GET /.well-known/agent.json`，同一张卡片，`Cache-Control: public, max-age=300`（`app/core/a2a/router.py:52-53,56,61,66`）。⚠️ 卡片 `url` 当前是相对路径 `/api/a2a/tasks`——`build_agent_card()` 依赖的 `public_base_url` 不是 `Settings` 字段（docs/22 §2.1）。
+- **A2A 任务**：`POST /api/a2a/tasks`，JSON-RPC 2.0，方法 `tasks/send`｜`tasks/sendSubscribe`（SSE）｜`tasks/get`｜`tasks/cancel`；任务态 `submitted/working/completed/input-required/failed/canceled`；进程内存 TTL 30min／上限 500（`app/core/a2a/rpc.py:24-25`）。
+- **MCP**：`POST /mcp`，JSON-RPC 2.0，规范版本 `2026-07-28`（无 session／无 `initialize` 握手／`server/discover` 必备／所有 result 带 `resultType`）；方法 `server/discover`｜`tools/list`｜`tools/call`｜`ping`；门控 `LOOM_MCP_ENABLED` **默认关**，关时**有凭证 404／无凭证 401**（凭证先于门控，`app/core/mcp/router.py:39,41`）。
+- **鉴权**：要 Q88 Agent Key `loom_…` Bearer 的入站口**全仓恰三处**＝`POST /api/a2a/tasks`、`POST /mcp`、`POST /api/effect-callback`（`require_agent_key` 调用方 grep 实测，2026-09-28）。未知／吊销／格式错统一 **401** `invalid or revoked agent API key`。
+- **能力边界**：A2A 三件 skill 与 MCP 三件工具是**同一组 plan 执行器**（`app/core/a2a/skills.py`），不生成正文、不花 token、不写业务表、不代替人工 Gate；`final_id` 两口（§2.8）**不接受**机器凭证。红线由 `tests/unit/test_mcp_server.py::test_tools_expose_no_issuance_or_chain_writes` 钉住。
+- **审计**：`a2a.task`（tenant `_platform`，`app/core/a2a/router.py:33-49`）／`mcp.request`（同 tenant，逐请求留痕含错误调用，`app/core/mcp/router.py:52-72`）。
 
 ---
 
