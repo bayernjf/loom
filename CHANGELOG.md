@@ -3,6 +3,10 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q239 `.env` 载体契约：只承载 `Settings` 字段，其余走可 source 的 shell 载体（2026-09-30，**测试＋文档**，零迁移零新表零生产代码）**
+  - **实测硬约束**：pydantic-settings 默认 `extra="forbid"` ⇒ 往 `.env` 放一个 `Settings` 不认识的名字（如 `LOOM_LLM_BASE_URL_AGNES`）会让 `Settings()` 抛 `ValidationError`、**进程直接起不来**，不是"静默无效"。
+  - **另一半**：本仓没有 `load_dotenv`，pydantic-settings 也只把 `.env` 读进 `Settings`、**不写 `os.environ`**；而 `drivers.py` 直接读 `os.environ["LOOM_LLM_BASE_URL_<PROVIDER>"]` ⇒ 那类变量须走 `backend/.env.shell`（`set -a; source …; set +a`）。
+  - **新增契约测试** `backend/tests/unit/test_env_carrier_contract.py` 3 例（含正向对照与 `extra="forbid"` 前提）；基线 1038→**1041 passed＋10 skipped**（总收集 1051）。不改任何密钥纪律：出站供应商 Key 仍 Fernet 加密落库（Q82/Q148）。
 - **Q238 A2A Agent Card `url` 基址落成真 env `LOOM_PUBLIC_BASE_URL`（2026-09-29，**代码＋测试＋文档**，零迁移零新表；改 `backend/app/core/config.py` ＋ `backend/app/core/a2a/card.py` ＋ `tests/unit/test_a2a_vassal.py` ＋ `tests/integration/test_a2a_vassal_api.py`；基线 1032→**1038 passed＋10 skipped**（总收集 1048；＋6＝单测 5＋集成 1）；02 C1.182）**——销 Q233 登记、Q237 复评仍列为「须点工」的那条：`build_agent_card()` 读的 `settings.public_base_url` 原本**不是 `Settings` 字段**（`getattr` 兜底永远落空）⇒ 出厂卡片 `url` 恒为相对路径 `/api/a2a/tasks`。现为真字段并绑 env，**默认空 ⇒ 输出与改前逐字节相同（纯加法）**，设为实例对外域名即输出绝对地址（首尾空白/尾斜杠归一）。**取值＝实例公网域名，取决于待裁项①「网关与 TLS 归属」**，本片只提供机制；按 Q135 先例不入 `backend/.env.example`。
   - **承重断言是「env 名 → 字段」的绑定**（`test_the_env_var_binds_to_the_setting`）——Q233 的失效模式正是「运营设了一个不起作用的变量并以为设好了」；集成一条把两态断言放同用例，兼钉「卡片每请求现建」。
   - **先红后绿含一次自我纠正**：首次植入「卡片进程内快照」写在 `return` 之后＝不可达 no-op，**那次「绿」不构成证据**；重写植入并加正向对照探针（改设置两次拿到同一 url 证明快照确实命中）后判红，按 sha256（`42bfdda3…`）还原。
