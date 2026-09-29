@@ -45,7 +45,9 @@ FEALTY: dict = {
 
 def build_agent_card() -> dict:
     settings = get_settings()
-    base = str(settings.public_base_url).rstrip("/") if getattr(settings, "public_base_url", None) else ""
+    # Q238：`public_base_url` 已是 Settings 的真字段（Q233 时还不是，故此处原用
+    # getattr 兜底、永远落空 ⇒ url 恒为相对路径）。默认空串产出相对路径，不变。
+    base = settings.public_base_url.strip().rstrip("/")
     return {
         "name": "loom",
         "description": (
