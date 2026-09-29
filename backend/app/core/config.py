@@ -125,6 +125,14 @@ class Settings(BaseSettings):
     # 不生成正文、不发 final_id、不代替人工 Gate。
     mcp_enabled: bool = False
 
+    # Q238 对外发现面的基址（部署形态参数，非 Q9 业务旋钮）：A2A Agent Card 的
+    # `url` 需要绝对地址接入方才能直连（Q233 实测其恒为相对路径 `/api/a2a/tasks`
+    # ——`build_agent_card()` 读的 `settings.public_base_url` 当时根本不是字段）。
+    # 默认空＝输出相对路径，V1 行为一字不变；部署时设为该实例对外的公网域名
+    # （含 scheme，可带尾斜杠）即输出绝对地址。**值取决于「网关与 TLS 归属」裁决**
+    # （AGENTS 待裁项①），本字段只提供机制。
+    public_base_url: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
