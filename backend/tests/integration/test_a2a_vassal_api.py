@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.a2a import rpc
 from app.core.actor import Actor
 from app.core.api_keys import service
+from app.core.config import get_settings
 from app.core.db import Base, get_session
 from app.core.models import AuditLog
 from app.main import app
@@ -92,6 +93,23 @@ async def test_agent_card_public_three_paths(client, path):
     assert fealty["swornTo"] == "zeus"
     assert fealty["dataPolicy"] == "read-task-scope"
     assert card["authentication"]["schemes"] == ["bearer"]
+
+
+async def test_agent_card_url_follows_the_public_base_url_setting(client, monkeypatch):
+    """Q238：对外发现面给的地址得是能直连的绝对地址。
+
+    两个断言刻意放在同一条用例里：换设置后第二次请求必须跟着变，这一半同时钉住
+    「卡片是每次请求现建的」——若将来有人在 import 期快照卡片，这里会红（那正是
+    接入方拿到过期/相对地址的方式）。分开写会变成顺序相关，快照时可能一条绿一条红。
+    """
+    monkeypatch.setattr(get_settings(), "public_base_url", "https://loom.example.com")
+    resp = await client.get("/api/a2a/agent-card")
+    assert resp.status_code == 200
+    assert resp.json()["url"] == "https://loom.example.com/api/a2a/tasks"
+
+    monkeypatch.setattr(get_settings(), "public_base_url", "")
+    resp = await client.get("/api/a2a/agent-card")
+    assert resp.json()["url"] == "/api/a2a/tasks"
 
 
 # ---------- 任务端点鉴权 ----------

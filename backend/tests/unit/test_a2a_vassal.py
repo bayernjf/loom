@@ -7,6 +7,7 @@ import pytest
 from app.core.a2a import rpc
 from app.core.a2a.card import FEALTY, SKILLS, build_agent_card
 from app.core.a2a.skills import list_skill_ids, run_plan_skill
+from app.core.config import Settings, get_settings
 
 
 def user_message(skill: str, params: dict, run_id: str | None = None) -> dict:
@@ -38,6 +39,35 @@ class TestCard:
 
     def test_plan_only_promise_is_in_fealty_notes(self):
         assert "never" in FEALTY["notes"] and "human gate" in FEALTY["notes"]
+
+
+class TestCardBaseUrl:
+    """Q238：卡片 url 的绝对基址来自真 env `LOOM_PUBLIC_BASE_URL`。
+
+    Q233 抓到的是「运营会去设一个不起作用的变量并以为设好了」——所以承重的一条
+    是 env 名到字段的绑定（`test_the_env_var_binds_to_the_setting`），而不只是
+    「属性改了卡片会跟着变」。
+    """
+
+    def test_url_is_relative_when_the_base_url_is_unset(self, monkeypatch):
+        monkeypatch.setattr(get_settings(), "public_base_url", "")
+        assert build_agent_card()["url"] == "/api/a2a/tasks"
+
+    def test_url_is_absolute_when_the_base_url_is_set(self, monkeypatch):
+        monkeypatch.setattr(get_settings(), "public_base_url", "https://loom.example.com")
+        assert build_agent_card()["url"] == "https://loom.example.com/api/a2a/tasks"
+
+    def test_trailing_slash_and_surrounding_space_are_collapsed(self, monkeypatch):
+        monkeypatch.setattr(get_settings(), "public_base_url", " https://loom.example.com/ ")
+        assert build_agent_card()["url"] == "https://loom.example.com/api/a2a/tasks"
+
+    def test_the_env_var_binds_to_the_setting(self, monkeypatch):
+        monkeypatch.setenv("LOOM_PUBLIC_BASE_URL", "https://loom.example.com")
+        assert Settings().public_base_url == "https://loom.example.com"
+
+    def test_the_setting_defaults_to_empty(self, monkeypatch):
+        monkeypatch.delenv("LOOM_PUBLIC_BASE_URL", raising=False)
+        assert Settings().public_base_url == ""
 
 
 class TestSkills:
