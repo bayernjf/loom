@@ -65,7 +65,7 @@
 
 关键字段（实测 §5）：`name=loom`、`version=0.1.0`、`capabilities={streaming:true, pushNotifications:false, stateTransitionHistory:true}`、`defaultInputModes/OutputModes=["application/json"]`、`preferredTransport="JSONRPC"`、`authentication={schemes:["bearer"]}`、`skills[]`（三件，见 2.3）、`x-zeus-fealty`（**上游归属声明**：`swornTo=zeus`、`dataPolicy=read-task-scope`、`sla.ackSeconds=10`；键名与取值是 Q150 定下的对外契约，**不改名**）。
 
-⚠️ **`url` 字段是相对路径 `/api/a2a/tasks`**：`build_agent_card()` 只在 `settings.public_base_url` 存在时拼绝对地址（`card.py:47-48,55`），而 `public_base_url` **不是 `Settings` 的字段**（2026-09-28 grep `app/core/config.py` 零命中），所以当前出厂卡片 `url` 恒为相对值。**接入方须自行以部署域名补全**；这属可改进项，登记在 §6。
+**`url` 字段 ＝ `{public_base_url}/api/a2a/tasks`**（`card.py:50,57`）。**Q238 起** `public_base_url` 是 `Settings` 的真字段、绑 env **`LOOM_PUBLIC_BASE_URL`**（`app/core/config.py`，默认 `""`）：**未设 ⇒ 出厂卡片 `url` 仍是相对路径 `/api/a2a/tasks`（与 Q238 前逐字节相同）**；**设为实例对外的公网域名（含 scheme；首尾空白与尾斜杠自动归一）⇒ 输出可直连的绝对地址**。**该 env 的取值＝实例对外域名，取决于「网关与 TLS 归属」裁决**（AGENTS 待裁项①）——本面只提供机制、不代裁取值。按 Q135 起先例，此部署参数**不入 `backend/.env.example`**（该文件只保留本机非 compose 开发路径所需项，那里相对路径本就正确）。⚠️ 未设该 env 时，**接入方仍须自行以部署域名补全**（原「须点工」口径已销账，见 §6）。
 
 ### 2.2 任务端点
 
@@ -260,7 +260,7 @@ curl -s -X POST $B/mcp -H "authorization: Bearer $KEY" -H 'content-type: applica
 | A2A 任务持久化跨实例、真 LLM 与链路执行、Zeus↔Loom 真机联调 | ⬜ 第二阶段，随 V2，须点工（02 C1.94；docs/design-a2a-vassal.md「明确不做」条） |
 | MCP 的 `prompts`／`resources`／sampling／客户端侧工具 | ⬜ 不做：Loom 只暴露 plan 工具，`server/discover` 里声明的能力集就是 `server.py:101` |
 | Agent 侧 OAuth／per-key 作用域／速率限制 | ⬜ 未实现（Q88 只有 active/revoked 两态），`_PREFIX_SHOWN` 仅用于展示 |
-| 卡片 `url` 为相对路径 | 🟡 见 §2.1：要么加 `Settings.public_base_url` 字段（env `LOOM_PUBLIC_BASE_URL`，属新旋钮，需点工），要么接入方自行补全。**当前文档按"接入方补全"口径** |
+| ~~卡片 `url` 为相对路径（须加 `Settings.public_base_url` 字段／env `LOOM_PUBLIC_BASE_URL`，属新旋钮、需点工）~~ | ✅ **已销账**：2026-09-29 由 **Q238**（02 C1.182）落成真 env `LOOM_PUBLIC_BASE_URL`——**默认空＝相对路径（行为不变）**，设为实例对外域名即输出绝对地址。**取值仍取决于「网关与 TLS 归属」裁决**（待裁项①） |
 | ~~`server/discover` 响应与官方 `2026-07-28` 结构的 4 处出入（字段名／`serverInfo` 位置／缺 `ttlMs`+`cacheScope`／多余 `protocolVersion`）~~ | ✅ **已销账**：2026-09-29 由 **Q235**（02 C1.179）4 处全对齐，单测逐项钉字段集、真进程重测（§3.6／§5）。**契约变更**：`supportedVersions` 取代 `supportedProtocolVersions`、身份移到 `_meta` |
 | ~~`capabilities` 声明了 `prompts`／`resources`，而两者一律 `-32601`~~ | ✅ **已销账**：2026-09-29 由 **Q236**（02 C1.180）按甲案只留 tools 声明，单测 `test_capabilities_only_advertise_tools` 钉住 |
 | ~~`ping` 应答与官方结构~~ | ✅ **已销账**：2026-09-29 由 **Q236** 查实 `ping` 已被 2026-07-28 修订整体移除（changelog 第 5 条，SEP-2575），分支已删，调用回 `-32601`；不再有"结构未验证"问题 |
