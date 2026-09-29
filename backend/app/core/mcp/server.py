@@ -3,15 +3,16 @@
 目标规格＝MCP **2026-07-28** 修订，本文件里用到的规范事实（均取自官方规范页，逐条可回查）：
 
 - 该修订**移除协议级 sessions 与 `Mcp-Session-Id` 头**；
+- 该修订**整体移除 `ping`**（连同 `logging/setLevel`，SEP-2575）；
 - **移除 `initialize`／`notifications/initialized` 握手**，服务端 **MUST** 实现 `server/discover`；
 - 每个请求在 `_meta` 里带协议版本与客户端能力，客户端身份走 `io.modelcontextprotocol/clientInfo`；
-- **所有 result 必带 `resultType`**；`tools/list` 结果必带 `ttlMs` 与 `cacheScope`；
+- **所有 result 必带 `resultType`**；`server/discover` 与 `tools/list` 同属可缓存操作，
+  其 `complete` 结果 **MUST** 带 `ttlMs`（`>=0`）与 `cacheScope`；
 - 工具执行可返回 `input_required`（配 `inputRequests`），客户端补参数后重试；
 - 版本不支持时的错误码 `-32022`。
 
-**刻意边界**（与 Q150 A2A 第一阶段同口径）：只做 plan，不发证、不花真 token、不越人工 Gate；
-`server/discover` 的**完整响应 schema 官方页未给出**，本仓字段集见 `discover_result()`，
-标【原文未取到，待补】于 docs/22，不冒充已符合规范全文。
+**刻意边界**（与 Q150 A2A 第一阶段同口径）：只做 plan，不发证、不花真 token、不越人工 Gate。
+`server/discover` 的字段集按官方结构对齐（Q235，见 `discover_result()`）。
 """
 
 from __future__ import annotations
@@ -28,8 +29,9 @@ _ERROR_METHOD_NOT_FOUND = -32601
 _ERROR_INVALID_PARAMS = -32602
 _ERROR_VERSION_UNSUPPORTED = -32022
 
-# 工具 id 用下划线名（官方页只说"标识符须遵循严格的大小写与字符约束"，未给正则；
-# 取最保守的 [a-z0-9_] 子集，并在 docs/22 里写明与 A2A skill id 的对应关系）。
+# 工具 id 用下划线名。官方约束为 **SHOULD** 级：长度 1–128、大小写敏感、仅允许
+# `A-Z a-z 0-9 _ - .`、服务端内唯一（`server/tools#tool-names`，Q234 取回）。本仓的
+# `[a-z0-9_]` 是其严格子集 ⇒ 合规；与 A2A skill id 的对应关系见 docs/22 §3.3。
 _TOOLS: tuple[dict[str, Any], ...] = (
     {
         "name": "loom_plan_generate_content",
@@ -81,10 +83,10 @@ _TOOLS: tuple[dict[str, Any], ...] = (
 _SKILL_BY_TOOL = {t["name"]: t["skill"] for t in _TOOLS}
 _PUBLIC_TOOLS = [{k: v for k, v in t.items() if k != "skill"} for t in _TOOLS]
 
-# 工具是静态表 ⇒ 允许客户端缓存；5 分钟与 A2A 卡片 `Cache-Control: max-age=300` 同值。
-_TOOLS_TTL_MS = 300_000
-# 工具表对所有通过 Q88 Agent Key 的调用方一致，但面本身在鉴权之后 ⇒ 取 private 而非 public。
-_TOOLS_CACHE_SCOPE = "private"
+# 两张表都是静态的 ⇒ 允许客户端缓存；5 分钟与 A2A 卡片 `Cache-Control: max-age=300` 同值。
+_CACHE_TTL_MS = 300_000
+# 两表对所有通过 Q88 Agent Key 的调用方一致，但面本身在鉴权之后 ⇒ 取 private 而非 public。
+_CACHE_SCOPE = "private"
 
 
 def tool_names() -> list[str]:
@@ -92,14 +94,22 @@ def tool_names() -> list[str]:
 
 
 def discover_result() -> dict[str, Any]:
-    """`server/discover` 响应。字段集为本仓实现，官方完整 schema【原文未取到，待补】。"""
+    """`server/discover` 响应，字段集按官方 2026-07-28 结构（Q235 对齐）。
+
+    官方结构（`server/discover` 页）：`resultType` ＋ `supportedVersions`（数组）＋
+    `capabilities` ＋ `_meta["io.modelcontextprotocol/serverInfo"]`（`{name,version}`）＋
+    `instructions`（可选）＋ `ttlMs` ＋ `cacheScope`。caching 页另规定：本操作与
+    `tools/list` 同属可缓存操作，`resultType:"complete"` 的结果 **MUST** 带
+    `ttlMs`（`>=0`）与 `cacheScope`。
+    """
     return {
         "resultType": "complete",
-        "protocolVersion": PROTOCOL_VERSION,
-        "supportedProtocolVersions": SUPPORTED_PROTOCOL_VERSIONS,
-        "io.modelcontextprotocol/serverInfo": SERVER_INFO,
-        "capabilities": {"tools": {"listChanged": False}, "prompts": {}, "resources": {}},
+        "supportedVersions": SUPPORTED_PROTOCOL_VERSIONS,
+        "capabilities": {"tools": {"listChanged": False}},
         "instructions": "Loom 只暴露 plan 模式工具：不生成正文、不发 final_id、不代替人工 Gate。",
+        "_meta": {"io.modelcontextprotocol/serverInfo": SERVER_INFO},
+        "ttlMs": _CACHE_TTL_MS,
+        "cacheScope": _CACHE_SCOPE,
     }
 
 
@@ -108,8 +118,8 @@ def tools_list_result() -> dict[str, Any]:
         "resultType": "complete",
         "tools": _PUBLIC_TOOLS,
         "nextCursor": None,
-        "ttlMs": _TOOLS_TTL_MS,
-        "cacheScope": _TOOLS_CACHE_SCOPE,
+        "ttlMs": _CACHE_TTL_MS,
+        "cacheScope": _CACHE_SCOPE,
     }
 
 
@@ -185,8 +195,6 @@ def handle(payload: dict[str, Any]) -> dict[str, Any]:
             # 刻意不写 `params.get("arguments") or {}`：`[]`/`0`/`""` 都是假值，会被当"没传"放过去。
             return _error(_ERROR_INVALID_PARAMS, "tools/call params.arguments must be an object")
         return {"result": call_tool(name, arguments)}
-    if method == "ping":
-        return {"result": {"resultType": "complete", "io.modelcontextprotocol/serverInfo": SERVER_INFO}}
     return _error(_ERROR_METHOD_NOT_FOUND, f"method not found: {method}")
 
 

@@ -118,16 +118,16 @@
 
 - **移除协议级 sessions 与 `Mcp-Session-Id` 头** ⇒ 本面无状态，不需要 sticky routing；
 - **移除 `initialize`／`notifications/initialized` 握手**，服务端 **MUST** 实现 `server/discover` ⇒ 调 `initialize` 得 `-32601` 并在 message 里指明改用 `server/discover`；
-- 每个请求在 `_meta` 带 `protocolVersion`（`params._meta` 或顶层 `_meta` 都接受，`server.py:163`）；版本不认识 ⇒ **`-32022`**；
+- 每个请求在 `_meta` 带 `protocolVersion`（`params._meta` 或顶层 `_meta` 都接受，`server.py:172-175`）；版本不认识 ⇒ **`-32022`**；
 - **所有 result 必带 `resultType`**（`complete` / `input_required`）；
-- `tools/list` 结果必带 `ttlMs`（=300000，与 A2A 卡片 300s 同值）与 `cacheScope`（=`private`，面在鉴权之后）与 `nextCursor`（=`null`，工具表静态）（`server.py:85-87,106-113`）；
-- `tools/call` 结果＝`{resultType, content:[{type:"text",…}], isError}`，成功时另带 `structuredContent`（`server.py:124-153`）。
+- `tools/list` 与 `server/discover` 同属可缓存操作，结果必带 `ttlMs`（=300000，与 A2A 卡片 300s 同值）与 `cacheScope`（=`private`，面在鉴权之后）；`tools/list` 另带 `nextCursor`（=`null`，工具表静态）（常量 `server.py:85-88`，两函数 `server.py:95-122`）；
+- `tools/call` 结果＝`{resultType, content:[{type:"text",…}], isError}`，成功时另带 `structuredContent`（`server.py:133-162`）。
 
-支持的方法：`server/discover`、`tools/list`、`tools/call`、`ping`；其余（含 `resources/list`、`prompts/list`）一律 `-32601`。
+支持的方法：`server/discover`、`tools/list`、`tools/call`；其余（含 **`ping`**、`resources/list`、`prompts/list`）一律 `-32601`——**`ping` 已被该修订整体移除**（Q236 取回，见 §3.6）。
 
 ### 3.3 三个工具 ↔ skill 映射
 
-`server.py:33-79`。工具名是 skill id 的下划线化，内部 `skill` 键不外泄（`server.py:82`）。
+`server.py:34-80`。工具名是 skill id 的下划线化，内部 `skill` 键不外泄（`server.py:82`）。
 
 | MCP 工具 | A2A skill | 必填 arguments |
 |---|---|---|
@@ -140,7 +140,7 @@
 ### 3.4 参数与重试语义
 
 - 缺必填 ⇒ `resultType: "input_required"` ＋ `inputRequests[]`（每项 `name`/`reason`/`required`），**这不是错误**（`isError:false`）；补全 `arguments` 后重发同一 `tools/call` 即可（无状态，无需 session）。
-- `arguments` 传了非对象（数组/字符串/数字）⇒ `-32602`。**注意别写 `params.get("arguments") or {}`**：`[]`／`0`／`""` 都是假值会被当"没传"放过，代码里已按 `is None` 判（`server.py:181-186`，2026-09-28 实测红→修→绿）。
+- `arguments` 传了非对象（数组/字符串/数字）⇒ `-32602`。**注意别写 `params.get("arguments") or {}`**：`[]`／`0`／`""` 都是假值会被当"没传"放过，代码里已按 `is None` 判（`server.py:192-197`，2026-09-28 实测红→修→绿）。
 - 未知工具名 ⇒ 工具级错误（`resultType:"complete"`, `isError:true`, 文本列出可用工具），不是协议错误。
 
 ### 3.5 审计
@@ -149,30 +149,33 @@
 
 ### 3.6 与 `2026-07-28` 规范的符合度自评
 
-**规范出处**：以下判断取自官方规范页（**2026-09-28 访问**）——`modelcontextprotocol.io/specification/2026-07-28/` 下的 `server/discover`、`server/tools#tool-names`、`server/utilities/caching` 三页。
+**规范出处**：以下判断取自官方规范页（**2026-09-29 复访**）——`modelcontextprotocol.io/specification/2026-07-28/` 下的 `server/discover`、`server/tools#tool-names`、`server/utilities/caching` 与 `changelog`（ping 移除事实）四页。
 
 | 项 | 状态 |
 |---|---|
 | 无 session／无握手／`server/discover` 在位 | ✅ 按官方规范事实实现 |
 | `resultType`、`tools/list` 的 `ttlMs`＋`cacheScope`、`-32022`、`input_required` | ✅ 已实现并有单测钉字段 |
-| `server/discover` 响应结构 | 🟡 官方结构**已取到**（见下"四处出入"）；本仓 `discover_result()`（`server.py:94-103`）与之不符，**不得对外宣称"完全符合规范"** |
+| `server/discover` 响应结构 | ✅ **已按官方结构对齐**（Q235，2026-09-29；4 处出入见下）。`discover_result()`（`app/core/mcp/server.py:95-112`）字段集＝`resultType`／`supportedVersions`／`capabilities`／`instructions`／`_meta.serverInfo`／`ttlMs`／`cacheScope` |
 | 工具 id 字符约束 | ✅ **符合**：官方为 **SHOULD** 级——长度 1–128、大小写敏感、仅允许 `A-Z a-z 0-9 _ - .`、不含空格/逗号/其他特殊字符、服务端内唯一（`server/tools#tool-names`）。本仓三个工具名 `loom_plan_*` 全为小写字母＋下划线，落在其允许集内、长度合规、服务端内唯一 |
 | Streamable HTTP 之外的传输 | ⬜ 不做（旧 HTTP+SSE 传输已被该修订废弃；本面只有一条 `POST /mcp`） |
-| prompts / resources / sampling | ⬜ 不做（无对应能力，§6） |
+| prompts / resources / sampling | ⬜ 不做（无对应能力、capabilities 也不声明，Q236；§6） |
+| `ping` 方法 | ⬜ **不做**：该修订已整体移除 `ping`（changelog 第 5 条，SEP-2575；Q236 取回），调用回 `-32601` |
 
 **官方 `server/discover` 结构**（`server/discover` 页，2026-09-28 访问）：`result` ＝ `resultType` ＋ `supportedVersions`（**数组**）＋ `capabilities` ＋ `_meta["io.modelcontextprotocol/serverInfo"]`（`{name,version}`，**SHOULD** 带）＋ `instructions`（可选）＋ `ttlMs` ＋ `cacheScope`；`DiscoverResult` 的数据类型说明只列 `supportedVersions`／`capabilities`／`_meta.serverInfo`／`instructions` 四项。caching 页另规定：`server/discover` 与 `tools/list` 同属**可缓存操作**，其 `resultType:"complete"` 结果 **MUST** 带 `ttlMs`（`>=0`）与 `cacheScope`。
 
-**本仓与之的出入**（实测 `server.py:94-103`，2026-09-28 读码）：
+**本仓曾与之的 4 处出入**（Q234 实测 `server.py:94-103`，2026-09-28 读码）——**均已于 2026-09-29 由 Q235 对齐**（02 C1.179），下表按"当时登记"保留：
 
-| # | 官方 | 本仓 | 级别 |
-|---|---|---|---|
-| 1 | 字段名 `supportedVersions` | 用 `supportedProtocolVersions` | 命名不符 |
-| 2 | 服务器身份在 `_meta["io.modelcontextprotocol/serverInfo"]` | 放在 `result` **顶层** `io.modelcontextprotocol/serverInfo` | 位置不符 |
-| 3 | `complete` 结果 **MUST** 带 `ttlMs`＋`cacheScope` | **两者都缺** | **MUST 缺项** |
-| 4 | `DiscoverResult` 无单数 `protocolVersion` 字段 | 多出一个 `protocolVersion` | 多余字段 |
-| 5（附） | `capabilities` 应只声明服务端**支持**的能力（discover 页：capabilities = "Capabilities the server supports"） | 声明了 `prompts`／`resources`，而这两个方法一律 `-32601`（§3.2） | 声明与实现不一致（观察项） |
+| # | 官方 | 对齐前的本仓 | 级别 | 现状 |
+|---|---|---|---|---|
+| 1 | 字段名 `supportedVersions` | 用 `supportedProtocolVersions` | 命名不符 | ✅ 已改 |
+| 2 | 服务器身份在 `_meta["io.modelcontextprotocol/serverInfo"]` | 放在 `result` **顶层** `io.modelcontextprotocol/serverInfo` | 位置不符 | ✅ 已改 |
+| 3 | `complete` 结果 **MUST** 带 `ttlMs`＋`cacheScope` | **两者都缺** | **MUST 缺项** | ✅ 已补（`300000`／`private`） |
+| 4 | `DiscoverResult` 无单数 `protocolVersion` 字段 | 多出一个 `protocolVersion` | 多余字段 | ✅ 已删 |
+| 5（附，**Q236 已收口**） | `capabilities` 应只声明服务端**支持**的能力（discover 页：capabilities = "Capabilities the server supports (tools, resources, prompts, etc.)"） | 曾声明 `prompts`／`resources`，而这两个方法一律 `-32601`（§3.2） | 声明与实现不一致 | ✅ **已改**：2026-09-29 Q236 按甲案只留 tools |
 
-**是否对齐＝待裁决**：修上述出入＝改**对外契约**（`tests/unit/test_mcp_server.py:80-81` 正钉着 `supportedProtocolVersions` 与顶层 `serverInfo`），须同步改单测，属行为变更 ⇒ **本批只登记、不动代码**，登记在 §6。
+**Q236 收口（2026-09-29）**：复访官方页确认两件事——① `ping` 在该修订被**整体移除**（changelog：Remove `ping`, `logging/setLevel`, and `notifications/roots/list_changed`，SEP-2575），故不再应答、落到 `-32601`；② discover 页把 capabilities 定义为「Capabilities the server supports (tools, resources, prompts, etc.)」，不实现的 prompts/resources 不得声明。负责人拍板甲案两处一次对齐，新增单测 2＋集成 1（植缺陷验过 3 红）。
+
+**对齐结果**：Q235 把上述 1–4 全改到官方结构；单测 `test_discover_result_matches_the_official_2026_07_28_shape`（`tests/unit/test_mcp_server.py`）逐项钉死字段集（多一个少一个都判红，已按旧形状验过判红），真进程重测输出见 §5。**契约变更提示**：接入方拿到的 `server/discover` 字段名与位置变了（`supportedVersions` 取代 `supportedProtocolVersions`、身份移到 `_meta`），按旧字段名解析的客户端需同步。
 
 ---
 
@@ -184,9 +187,9 @@
 
 ---
 
-## 5. 端到端联调（2026-09-28 真进程实测输出）
+## 5. 端到端联调（2026-09-28 真进程实测输出；`server/discover` 样例于 2026-09-29 Q235 对齐后重测）
 
-**环境**：一次性容器 `pgvector/pgvector:pg16`（宿主 55455）＋ `redis:7-alpine`（宿主 6399）→ `alembic upgrade head` 到 `0042_g1_category_seed` → `LOOM_MCP_ENABLED=true` 起真 uvicorn（127.0.0.1:8123）。以下每条都是**当时终端上的实际输出**，不是设想；样例里的路径不含真实域名，接入方替换成自己的 base URL。
+**环境**：一次性容器 `pgvector/pgvector:pg16`（宿主 55455）＋ `redis:7-alpine`（宿主 6399）→ `alembic upgrade head` 到 `0042_g1_category_seed` → `LOOM_MCP_ENABLED=true` 起真 uvicorn（127.0.0.1:8123）。以下每条都是**当时终端上的实际输出**，不是设想；样例里的路径不含真实域名，接入方替换成自己的 base URL。Q235 重测用同型栈（pg16 宿主 55460／redis 6401／uvicorn 8124，同样 `alembic upgrade head` 到 `0042`）。
 
 ```bash
 B=http://<loom-host>                       # 实测用的是 http://127.0.0.1:8123
@@ -227,7 +230,15 @@ curl -s -X POST $B/mcp -H "authorization: Bearer $KEY" -H 'content-type: applica
 
 curl -s -X POST $B/mcp -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":3,"method":"server/discover","params":{}}'
-# → protocolVersion=2026-07-28
+# → resultType=complete  supportedVersions=["2026-07-28"]
+#   capabilities={tools:{listChanged:false}}
+#   _meta["io.modelcontextprotocol/serverInfo"]={name:"loom", version:"0.1"}
+#   ttlMs=300000  cacheScope=private        ← Q235 对齐后重测（旧样例此行为 protocolVersion=2026-07-28）
+
+curl -s -X POST $B/mcp -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":4,"method":"ping","params":{}}'
+# → HTTP 200  error={code:-32601, message:"method not found: ping"}
+#   `ping` 已被 2026-07-28 修订整体移除（changelog 第 5 条，SEP-2575；Q236）
 
 # 6) 三类被拒（都是实测）
 #   无 Key / 错 Key / 已吊销 Key          → HTTP 401（A2A 与 MCP 同）
@@ -238,7 +249,7 @@ curl -s -X POST $B/mcp -H "authorization: Bearer $KEY" -H 'content-type: applica
 #   同一关闭状态下不带 Key 调 /mcp          → HTTP 401（凭证先于门控）
 ```
 
-**落库核对**（同一库）：`select action, tenant_id, actor_id, detail->>'tool', detail->>'method' from audit_logs where action in ('a2a.task','mcp.request');` → 实测 **1 条 `a2a.task` ＋ 6 条 `mcp.request`**，`tenant_id` 均 `_platform`，`actor_id` 均为该 Key 的 `key_id`，且 `initialize`/`-32022` 这类**错误调用也在留痕里**。
+**落库核对**（同一库）：`select action, tenant_id, actor_id, detail->>'tool', detail->>'method' from audit_logs where action in ('a2a.task','mcp.request');` → 实测 **1 条 `a2a.task` ＋ 6 条 `mcp.request`**，`tenant_id` 均 `_platform`，`actor_id` 均为该 Key 的 `key_id`，且 `initialize`/`-32022` 这类**错误调用也在留痕里**。Q235 重测按 7 次 MCP 调用（discover／tools/list／ping／initialize／坏版本／resources/list／input_required）得 **7 条 `mcp.request`**——**条数＝调用次数，不随对齐变**，此处只记该次运行的实测值。Q236 真进程（一次性 pg16，2026-09-29）按同一 7 法再跑仍 **7 条**：`ping` 此轮回 `-32601` 但**错误调用同样留痕**，故删分支不改审计条数。
 
 ---
 
@@ -250,6 +261,8 @@ curl -s -X POST $B/mcp -H "authorization: Bearer $KEY" -H 'content-type: applica
 | MCP 的 `prompts`／`resources`／sampling／客户端侧工具 | ⬜ 不做：Loom 只暴露 plan 工具，`server/discover` 里声明的能力集就是 `server.py:101` |
 | Agent 侧 OAuth／per-key 作用域／速率限制 | ⬜ 未实现（Q88 只有 active/revoked 两态），`_PREFIX_SHOWN` 仅用于展示 |
 | 卡片 `url` 为相对路径 | 🟡 见 §2.1：要么加 `Settings.public_base_url` 字段（env `LOOM_PUBLIC_BASE_URL`，属新旋钮，需点工），要么接入方自行补全。**当前文档按"接入方补全"口径** |
-| `server/discover` 响应与官方 `2026-07-28` 结构的 4 处出入（字段名／`serverInfo` 位置／缺 `ttlMs`+`cacheScope`／多余 `protocolVersion`） | 🟡 官方结构**已取到**（§3.6，2026-09-28 访问）；**对齐＝改对外契约＋改单测（行为变更），待裁决，本批不动代码** |
+| ~~`server/discover` 响应与官方 `2026-07-28` 结构的 4 处出入（字段名／`serverInfo` 位置／缺 `ttlMs`+`cacheScope`／多余 `protocolVersion`）~~ | ✅ **已销账**：2026-09-29 由 **Q235**（02 C1.179）4 处全对齐，单测逐项钉字段集、真进程重测（§3.6／§5）。**契约变更**：`supportedVersions` 取代 `supportedProtocolVersions`、身份移到 `_meta` |
+| ~~`capabilities` 声明了 `prompts`／`resources`，而两者一律 `-32601`~~ | ✅ **已销账**：2026-09-29 由 **Q236**（02 C1.180）按甲案只留 tools 声明，单测 `test_capabilities_only_advertise_tools` 钉住 |
+| ~~`ping` 应答与官方结构~~ | ✅ **已销账**：2026-09-29 由 **Q236** 查实 `ping` 已被 2026-07-28 修订整体移除（changelog 第 5 条，SEP-2575），分支已删，调用回 `-32601`；不再有"结构未验证"问题 |
 | MCP 面在真实多副本下的行为 | ⬜ 只验过单进程真 uvicorn（§5）；无 session ⇒ 理论可水平扩，未做 HA 演练（七套 harness 里不含本面） |
 | 网关与 TLS 归属、首批主数据、V2 客户侧认证、docs/08 排期三列、覆盖率阈值是否成门 | ⬜ **等负责人／业务方，不得代裁**（AGENTS.md 待裁决五项，2026-09-27 复扫口径） |
