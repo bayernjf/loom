@@ -15,9 +15,9 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from fastapi.routing import APIRoute  # noqa: E402
+from fastapi.routing import APIRoute
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 SKIP = {"get_session", "MetricsMiddleware"}
 CRED_MARKERS = ("require_agent_key", "verify_key", "get_current_staff", "require_internal_actor", "staff_auth_context")

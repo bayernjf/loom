@@ -16,9 +16,9 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from fastapi.routing import APIRoute  # noqa: E402
+from fastapi.routing import APIRoute
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 APP = pathlib.Path(__file__).resolve().parents[1] / "app"
 
