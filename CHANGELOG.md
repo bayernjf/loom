@@ -3,6 +3,20 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q240 LLM 出站调用加有限重试：driver 层吸收传输层瞬断与 429/5xx（2026-09-30，**代码＋测试＋文档**，零迁移零新表零新 env 字段）**
+  - **来由**：真模型全链演练首跑一次 `httpx.RemoteProtocolError: Server disconnected without sending a response.`（卡在 `drivers.py` 的 httpx POST 约 140s 后被切断）；随后对同一把 key 的 curl 复探两次 200、演练重跑 3 PASS／0 FAIL ⇒ 判定**上游瞬断，不是本仓缺陷**。当时未为这次失败改任何代码。
+  - **为什么重试落在 driver 层**（决定性论据）：`gateway.invoke`／`gateway.embed` 全仓共 **9 个调用点**，今天**唯一**会重试的消费者是 restock worker ⇒ 其余 8 点零重试。放 driver 层 9 点一次覆盖；放任何调用方只覆盖一个。
+  - **改动**：`backend/app/core/model_registry/drivers.py` 把 `generate`／`embed` 两段逐字节同构的裸 httpx POST 抽成模块级 `_post_json()`（自己拥有状态码判定与 `resp.json()`；`base_url` 解析留在调用方，使 `ModelEndpointNotConfigured` 不被吞）。重试 `httpx.TransportError`（httpx 0.28.1 实测覆盖 `RemoteProtocolError`、连接错误与**全部**超时类）与 HTTP **429／5xx**；其余 4xx 立即失败。退避照 Q140 形状 `min(cap, base * 2 ** (attempt - 1))`（base 0.5／cap 30 为模块常量）；次数耗尽抛 `DriverError` 并 `from` 链上最后一次原因 ⇒ `gateway` 既有的 `DriverError → GenerationUpstreamError` 映射**一字不改**。
+  - **旋钮只有一个**：`LOOM_LLM_MAX_ATTEMPTS`（默认 **3**），`os.environ` 直读（同 `_http_timeout()` 先例），**不入** `backend/.env` / `.env.example`（Q239 载体契约：pydantic `extra="forbid"` 会让进程起不来），也不入 `.env.shell`（它有可用默认值）。`max(1, int(...))` 使 `0`/`1` 都表示"不重试"（安全方向）。
+  - **新增单测** `backend/tests/unit/test_llm_driver_retry.py` **15 例**（monkeypatch `drivers.httpx.AsyncClient` 为脚本化 fake，不加新依赖；含正向对照与"4xx 不重试"守卫）；先红后绿含一次诚实发现：**去掉退避 sleep 首轮 0 红** ⇒ 补守卫后才判红。基线 1041→**1056 passed＋10 skipped**（总收集 1066）。
+  - **端到端**：真 agnes 全链演练 `infra/fullchain-rehearsal.sh` **3 PASS／0 FAIL**（36.73s），证 `_post_json` 抽取对真供应商无回归。该演练不进 CI、本地手动跑。
+  - **四条边界只登记、不修**：(a) 重试对指标不可见（`observe_llm_call` 包住整个调用 ⇒ "重试后成功"是一次 `ok` 观测、只抬高时长）；(b) 最坏 in-call 延迟 = `MAX_ATTEMPTS × LOOM_LLM_HTTP_TIMEOUT_SECONDS`（默认 180s）；(c) 可能双计费（上游已算完而连接断，重试付两次，`spend_today` 少计；`temperature=0` 使内容层重复无害）；(d) 相邻既有缺口保持原样（200 但响应体非 JSON 抛裸 `json.JSONDecodeError`；`httpx.InvalidURL` 非 `TransportError` 不映射为 `DriverError`）。
+  - **与 restock worker 自带重试是有意分层**：driver 层吸收"调用内亚秒级抖动"，worker 层（持久游标 + 升级为终态）负责"分钟级上游宕机"；driver 次数耗尽后 `GenerationUpstreamError` 照旧逃逸 ⇒ worker 升级判据行为不变。
+  - **工程接缝**（默认 3／base 0.5／cap 30 是工程默认、非业务裁决）按本仓近期惯例记为**待负责人追认**。范围事实：`drivers.py` 是**全 `app/` 唯一**出站 HTTP 点（唯一 `import httpx`）。02 C1.184。
+- **Q239 `.env` 载体契约：只承载 `Settings` 字段，其余走可 source 的 shell 载体（2026-09-30，**测试＋文档**，零迁移零新表零生产代码）**
+  - **实测硬约束**：pydantic-settings 默认 `extra="forbid"` ⇒ 往 `.env` 放一个 `Settings` 不认识的名字（如 `LOOM_LLM_BASE_URL_AGNES`）会让 `Settings()` 抛 `ValidationError`、**进程直接起不来**，不是"静默无效"。
+  - **另一半**：本仓没有 `load_dotenv`，pydantic-settings 也只把 `.env` 读进 `Settings`、**不写 `os.environ`**；而 `drivers.py` 直接读 `os.environ["LOOM_LLM_BASE_URL_<PROVIDER>"]` ⇒ 那类变量须走 `backend/.env.shell`（`set -a; source …; set +a`）。
+  - **新增契约测试** `backend/tests/unit/test_env_carrier_contract.py` 3 例（含正向对照与 `extra="forbid"` 前提）；基线 1038→**1041 passed＋10 skipped**（总收集 1051）。不改任何密钥纪律：出站供应商 Key 仍 Fernet 加密落库（Q82/Q148）。
 - **Q238 A2A Agent Card `url` 基址落成真 env `LOOM_PUBLIC_BASE_URL`（2026-09-29，**代码＋测试＋文档**，零迁移零新表；改 `backend/app/core/config.py` ＋ `backend/app/core/a2a/card.py` ＋ `tests/unit/test_a2a_vassal.py` ＋ `tests/integration/test_a2a_vassal_api.py`；基线 1032→**1038 passed＋10 skipped**（总收集 1048；＋6＝单测 5＋集成 1）；02 C1.182）**——销 Q233 登记、Q237 复评仍列为「须点工」的那条：`build_agent_card()` 读的 `settings.public_base_url` 原本**不是 `Settings` 字段**（`getattr` 兜底永远落空）⇒ 出厂卡片 `url` 恒为相对路径 `/api/a2a/tasks`。现为真字段并绑 env，**默认空 ⇒ 输出与改前逐字节相同（纯加法）**，设为实例对外域名即输出绝对地址（首尾空白/尾斜杠归一）。**取值＝实例公网域名，取决于待裁项①「网关与 TLS 归属」**，本片只提供机制；按 Q135 先例不入 `backend/.env.example`。
   - **承重断言是「env 名 → 字段」的绑定**（`test_the_env_var_binds_to_the_setting`）——Q233 的失效模式正是「运营设了一个不起作用的变量并以为设好了」；集成一条把两态断言放同用例，兼钉「卡片每请求现建」。
   - **先红后绿含一次自我纠正**：首次植入「卡片进程内快照」写在 `return` 之后＝不可达 no-op，**那次「绿」不构成证据**；重写植入并加正向对照探针（改设置两次拿到同一 url 证明快照确实命中）后判红，按 sha256（`42bfdda3…`）还原。
