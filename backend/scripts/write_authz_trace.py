@@ -84,7 +84,7 @@ def scan(node, depth=0, seen=None):
 
 rows = []
 for r in collect_routes(list(app.routes), []):
-    for verb in sorted(x for x in (r.methods or set()) if x in ("post", "put", "patch", "delete")):
+    for verb in sorted(x for x in (r.methods or set()) if x.lower() in ("post", "put", "patch", "delete")):
         handler = r.endpoint
         try:
             src = inspect.getsource(handler)
