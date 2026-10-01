@@ -162,7 +162,7 @@
 - `GET /api/admin/fcw/{final_id}/material`：同款 query 读闸（缺 actor 422/越权 403），返回与 §2.5 **同一** `build_material_pack` 六层包（schema `loom.fcw.material-pack.v1`），但为**内嵌 JSON、不带 `Content-Disposition` 头**（供页面岛直接渲染，不触发下载）；未知 final_id 404，引用缺失同样回 `available:false`+warning 不 500。
 - **两口关系**：内嵌面（本节，过读闸、无 attachment）与 Q155 导出口（§2.5，attachment、无闸、保 V1）共用 `build_material_pack` 但分两口，互不改变对方行为。
 - 前端 `app/[locale]/admin/fcw/`（`page.tsx` force-dynamic 只读 RSC 跨租户列表＋租户过滤＋分页、`actions.ts` Server Action 本地角色闸与 403/404/409/422 映射、`material-island.tsx` client 岛点击才拉六层 details/pre 展示），管理端 sidebar **第 11 项** /admin/fcw；枚举 platform/goal/publish_status 原样直出。
-- **接缝甲案三项（待负责人追认，02 C1.121）**：①入口落管理端运营台 /admin/fcw（读 operations|platform_admin），客户卡片视图随 D3.5 菜单另点；②新增跨租户只读列表口（区别于按产品空间的列表）；③六层内嵌面与 Q155 导出口共用 build_material_pack 但分两口（内嵌过读闸无 attachment／导出带 attachment 无闸保 V1）。
+- **接缝甲案三项（已经负责人 2026-09-24 追认销账，02 C1.121）**：①入口落管理端运营台 /admin/fcw（读 operations|platform_admin），客户卡片视图随 D3.5 菜单另点；②新增跨租户只读列表口（区别于按产品空间的列表）；③六层内嵌面与 Q155 导出口共用 build_material_pack 但分两口（内嵌过读闸无 attachment／导出带 attachment 无闸保 V1）。
 
 ### 2.7 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
 
