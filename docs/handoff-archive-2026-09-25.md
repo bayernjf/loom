@@ -361,3 +361,12 @@
   - **顺带订正**：docs/22 内引用 `server.py` 的 6 处行号随本批编辑漂移，已按实测行号更新（`172-175`／`85-88`／`95-122`／`133-162`／`34-80`／`192-197`）。**复判不变**：① 功能覆盖达标／② 「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）——本批只在工程侧把一处**可证伪的契约缺陷**（含 MUST 违规）从「登记待裁」推到「已对齐且有单测与真进程双重证据」。按「最近 5 条」上限滚出 Q229（归档档第四十次续写）。
 
 > 本块为 `handoff.md`「最近进度」两条条目的**逐字原文**（Q236 6 行＋Q235 6 行，共 12 行；`cmp` 证与原 handoff 第 104–115 行字节一致〔6463 字节〕，块内 12 行在档内各出现 1 次、在 handoff 出现 0 次）。Q235 另有一份**摘要形态**副本在第四十五次续写（Q240 批搬入、非原文）——**以本块原文为准**。
+
+## 第四十七次续写（2026-10-01，Q242 批滚出 Q237 条目原文）
+
+- **Q237 第六次项目级 MVP 复评（2026-09-29；**纯评审，零代码零迁移零测试变化**；基线沿用 **1032 passed＋10 skipped**（总收集 1042）；同步 docs/02、docs/20 §15、本表、AGENTS、docs/README·08；02 C1.181）**：负责人要求评审必须能达到「产品核心完全可用的 MVP」。
+  - **做法**：不复述 docs/20 §7–§14：与 git 对账（HEAD＝`c33c244`）→ 新建一次性真 pg16 库 loom-mvp5-pg（宿主 55455，0 表）→ `alembic upgrade head` 到 0042 → 在迁移产物库上跑自检器与真 uvicorn（8126）探针。证据分级＝〔执行〕当场跑出／〔代码级〕回源码读。
+  - **三层判定（不可合并）**：① 功能覆盖**达标**——真新库实测迁移自带 `content_goals=5`／`cp_law_sensitive_domains=6`／`g1_categories=6`；②「核心完全可用」**未达标**〔执行〕——`scripts/check_master_data.py` 实测 **exit 1**：`publish_slots`／`pcp_weight_tables`／`packages` 三表 0 行，发证另需 PWS 冻结＋合规报告与 Gate 裁决 ⇒ **仍要两个人**；ATOM-AFFINITY 出厂仍只挂 `synthetic-embedding`（`seeds.py:12`，代码级）；③ 可上线**未达标**——网关/TLS 仓内零产物（`nginx|traefik|caddy|certbot|letsencrypt|acme|ssl_certificate` 全仓零命中，待裁项①）、七套本地 harness 不进 CI、告警阈值与 180 天窗口待校准。
+  - **探针**：`healthz` 200；`POST /api/fcw/assemble` 无 staff Bearer（body 自报 operations）→ **401**，与 Q203 `require_internal_actor(OPERATIONS)` 一致（`router.py:64,106`）；`issue_scope`/`OutsidePublishFCW` 出口守卫仍装载。**本轮未查出新的工程缺陷，工程侧可自推项为零。**
+  - **裁决**：**未达到「产品核心完全可用」的 MVP**——卡点全部外部（业务方三表回填＋一个真产品＋跑链裁决的第二个人；负责人网关/TLS 裁决）。按「最近 5 条」上限滚出 Q231（归档档第四十二次续写，逐字搬入 2924 字节（cmp 字节核对通过））。
+

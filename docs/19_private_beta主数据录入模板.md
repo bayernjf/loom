@@ -36,12 +36,18 @@
 `id` 为操作人标识（溯源用）；写口要求 `operations` 角色。
 
 > **Q204 订正（2026-09-26，02 C1.148）——两类写口的口径不同，别混**：
-> ① **本模板的录入写口**（publish-slots / PCP / 三包 / fit 权重 / slot-type-defaults）沿用 Q178：
->    `LOOM_STAFF_AUTH_ENABLED` 关闭时接受上面的自报 `actor`，开启后必须有 staff 令牌且角色够。
+> ① ~~**本模板的录入写口**（publish-slots / PCP / 三包 / fit 权重 / slot-type-defaults）沿用 Q178：
+>    `LOOM_STAFF_AUTH_ENABLED` 关闭时接受上面的自报 `actor`，开启后必须有 staff 令牌且角色够。~~
 > ② **发证口**（`POST /api/fcw/assemble`、`POST /api/fcw/assembly-tasks`）自 **Q203** 起**无条件**要求已验真的
 >    `loom_staff_` Bearer：缺/坏/吊销 → 401，令牌角色不含 `operations` → 403，上面这个 `actor` 字段被令牌身份覆盖。
 >    ⇒ 跑 §5 验收第③步（全链出真 `final_id`）**之前**必须先按 Q178 引导流程签一枚 operations 令牌，
 >    否则门控关着也会撞 401。引导：门控关下自报 `platform_admin` 调 `POST /api/admin/staff-keys`，明文只回一次。
+>
+> **Q242 订正（2026-10-01，02 C1.186）——上面 ① 已作废，两类写口现在同口径**：publish-slots（POST/PUT/DELETE）、
+> PCP（POST/PUT）、三包（POST/PUT/DELETE）、fit 权重、platform-rules、slot-type-defaults **全部**已统一到
+> `require_internal_actor(OPERATIONS)`，与发证口一样**门控关着也自行验真** ⇒ 上面的自报 `actor` 在**录入阶段**
+> 也不再算身份：无令牌 401、令牌无 `operations` 403。**⇒ 引导签发令牌是录入的第一步，不是发证前才做**；
+> 令牌的 `actor` 字段仍收但被覆盖（Q196 降级存证）。
 
 
 ## 0.2 最小可发证清单（2026-09-26，据代码反推，不是照本文件 §1-§5 抄）
@@ -116,7 +122,7 @@ fit 权重矩阵（缺了只是 `score_incomplete`——Q54 定死评分**仅用
 ### 前置条件
 1. 一个正在运行的 staging / 真部署后端，连着**真实的** PostgreSQL（`check_master_data.py` 与 seed 脚本都连真实库，不连本地测试库）。
 2. 该库连接串 `LOOM_DATABASE_DSN`（或 seed 脚本的 `--dsn` 参数）。
-3. 一枚 `operations` 的 staff 令牌——**仅发证那一步要**（Q203，§0.1、§0.2 §E.1）；录入写口在门控关时按自报 `actor` 即可。
+3. 一枚 `operations` 的 staff 令牌——**从 Q242（2026-10-01）起，录入主数据的写口也要它了**：发布位（`POST/PUT/DELETE /api/admin/publish-slots`）、PCP（`POST /api/product-spaces/{ps}/pcp`）、三包（`POST /api/product-spaces/{ps}/packages`）三族写口已统一到 `require_internal_actor`，**门控关着也自行验真** ⇒ 无令牌 401、令牌无 `operations` 403，自报 `actor` 不再算身份（§0.1、§0.2 §E.1）。发证那一步同样要（Q203）。
 4. 一个您自己定义的**平台码**（英文大写短码，全库一致，如 `EXAMPLE`）；原 13 类目录已丢失，类型码由您定（§1、§0.2 §B.2）。
 
 ### 步骤

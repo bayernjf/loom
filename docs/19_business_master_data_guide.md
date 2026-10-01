@@ -20,7 +20,7 @@
 
 1. A running environment (staging / real deployment) connected to a **real database**.
 2. Database connection string (provided by engineers): `LOOM_DATABASE_DSN`.
-3. An `operations` access token — **only needed for the final issuance step** (prepared by the chain-run person).
+3. An `operations` access token — **needed from the moment you start entering data** (prepared by the chain-run person). It used to be required only for the final issuance step; as of 2026-10-01 (Q242), the **data-entry endpoints (publish slots, PCP, three packages) require it too**: no token is rejected 401, and a token without the right permission is rejected 403. **So get the token ready before you start filling in data** — don't wait until issuance to discover it's missing.
 4. A **platform code** you define yourself (uppercase short code, e.g. `EXAMPLE`), used consistently across the system. The original platform catalog is lost; you define the type names.
 
 ---

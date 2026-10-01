@@ -3,6 +3,16 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q242 三族写口统一到 `require_internal_actor`（段4 原子／段9-10 策略包／段7-8 平台适配，2026-10-01，**代码＋测试＋文档**，零迁移零新表零新 env；基线 1056→**1057 passed＋10 skipped**（总收集 1067；＋2 新守卫 −1 被接替的旧守卫））**
+  - **来由与拍板**：Q241 §4.2 复核出四条「写口自判角色、路由层无凭证闸」的成立项，并把「是否统一」列为待裁项⑥；负责人 2026-10-01 **「开搞吧，按甲案推进」**拍板甲案。
+  - **落地范围＝三族 25 个写端点**：段4 原子 **13**（`llm-expand`／`approve`／`batch-approve`／`reject`／`resolve`／`risk-override`／`freeze`／`unfreeze`／`compliance-suspend`／`compliance-resume`／`deprecate`／`archive`／`reject_atom`）、段9/10 策略包 **3**、段7/8 平台适配 **9**。加既有段11 发证两口（Q203），全仓受凭证保护的写口共 **27**。GET 口不动（仍走 Q118 query actor 闸）。角色分配沿用各 service 既有自判口径，不新造：审核类 `PRODUCT_REVIEWER`／运营类 `OPERATIONS`／合规暂停恢复 `INTERNAL_COMPLIANCE`。
+  - **排除项①（须负责人知悉）**：`product/whitelist_center` 冻结/吊销两写口**未转换**——该族要求 `whitelist_owner`，而 `staff_auth.INTERNAL_STAFF_ROLES` 与 `rbac.INTERNAL_ROLES` 均**刻意排除**该角色（Q178）⇒ 加闸会让两口**永久 403**。本族排除，与 V2 第一项「客户侧真实认证与 actor↔tenant 绑定」（待裁项③）合并处理。
+  - **排除项②**：段4 的 `submit_batch`／`supplement_evidence`（docs/05 无角色规定）与 `revive_candidate`（Q75 有意不设角色闸）保持原样，**由新守卫的反向对照钉住**——有意不加闸是可被检查的现状，不是遗漏。
+  - **契约变更（与 Q203 同类，本批第二次）**：`require_internal_actor` **忽略全局门控**，门控关着也自行验真 Bearer，缺/坏/吊销令牌 401、令牌缺角色 403 ⇒ **外部自动化打这些写口必须先按 Q178 引导签发 `loom_staff_` 令牌**；请求体自报 `actor` 降级为兼容形状并被令牌身份覆盖（Q196 存证口径不变）。service 层自判守卫保留作 worker 兜底。
+  - **新增接线守卫** `backend/tests/integration/test_write_gate_wiring.py`（接替 Q203 在 `test_fcw_api.py` 的同型检查，那份已删）：27 个受闸写口逐路由断言**恰挂 1 个**带 `loom_requires_internal_credential` 标记的依赖且角色相符；**反向对照 7 条**必须零标记。
+  - **植缺陷自检三轮全判红**（本仓硬规矩「守卫不当场植缺陷，就只是看起来在守」）：① 摘掉 `freeze_atom` 的 gate ⇒ 报「挂着 0 个凭证依赖」；② 改 `_compliance_gate` 角色 ⇒ 报角色 diff；③ 给有意不加闸的 `revive_candidate` 加闸 ⇒ 反向对照判红。三轮后按字节还原（`git diff` 对三个 router 为空）。
+  - **顺带修掉两处（均非本批引入）**：① `staff_auth_context` 未清 `current_staff` contextvar ⇒ 同一 asyncio context 复用时会读到上一请求身份（httpx `ASGITransport` 实测复现）；生产 uvicorn 不受影响，但按该依赖自己声明的「每请求隔离」契约补齐（`9540ff9`）。② `test_effect_claims_api.py` 时间炸弹：断言 `claimed_at.startswith("2026-09")`，跨月首日必假红，改为与当前时刻比对（<300s）；**经 `git stash` 隔离三 router 后仍复现，确认改动前既有**。
+  - **前端零改动且已实测**：`frontend` 下 130 个 TS/TSX 文件对这批端点路径 grep **零命中**，前端从不调用它们。**工程接缝（角色分配／排除范围／service 兜底保留）待负责人追认**。02 C1.186。
 - **Q241 项目级代码审计报告（docs/23）登记进治理体系＋审计结论逐条回代码复核（2026-10-01，**纯文档＋复核**，零生产代码零迁移零新表零新 env；基线沿用 1056 passed＋10 skipped）**
   - **来由**：`docs/23_项目级代码审计报告与功能点梳理.md`（2026-09-30 只读审计，基准 `origin/dev` @ `a915862`）已于 `e68ac72` 提交，但**从未登记进治理体系**（不在 README 文档地图、无 docs/02 Q 条目、handoff/CHANGELOG/AGENTS 皆无）⇒ 本批补登记为 **Q241 / docs/02 C1.185**，并把报告结论**回代码逐条复测**（不复述其自我声明）。
   - **§4.2「五处写口绕过 `require_any_role` 自判角色」复核＝4 成立／1 不成立**：段11 终稿白名单一条**不成立**——`final/final_whitelist/router.py` 只有 **2 个**写端点（`:60` assemble／`:102` assembly-tasks），两个都带 Q203 的 `require_internal_actor(OPERATIONS)`（`:64`／`:106`），service 内 `_require_ops` 只是 worker 兜底；已就地订正报告 §0 摘要与 §4.2 表（加删除线）并新增 §10 复核节。其余四族经逐条复核**成立**：atom Gate（`product/atom/router.py` 16 个写端点）／段9-10 策略包（`layer_strategy/router.py:49,71,87`）／段7-8 平台适配（`platform_adaptation/router.py` 9 个写端点）／PWS 冻结吊销（`whitelist_center/router.py:78,109`）。
