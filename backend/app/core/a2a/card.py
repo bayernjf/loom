@@ -35,7 +35,7 @@ FEALTY: dict = {
     "escalationPolicy": "auto",
     "sla": {"ackSeconds": 10},
     "notes": (
-        "Plan-mode vassal: every skill returns an advisory plan artifact and never "
+        "Plan-mode executor: every skill returns an advisory plan artifact and never "
         "touches the 13-segment chain, spends tokens, or bypasses a human gate. "
         "Task execution is JSON-RPC at POST /api/a2a/tasks protected by a Q88 "
         "agent API key. Task storage is in-memory per process."
@@ -52,7 +52,7 @@ def build_agent_card() -> dict:
         "name": "loom",
         "description": (
             "Private-domain content production whitelist platform (CHAIN_13). "
-            "Vassal skills are plan-only: candidates and plans, human gates decide."
+            "Executor skills are plan-only: candidates and plans, human gates decide."
         ),
         "url": f"{base}/api/a2a/tasks",
         "version": CARD_VERSION,
