@@ -699,7 +699,7 @@
       "intro": "管理外部 Agent 回传效果数据所用的入站密钥（Q88）。明文密钥仅在签发时显示一次；吊销即时生效。",
       "issueTitle": "签发新密钥",
       "nameLabel": "密钥名称",
-      "namePlaceholder": "例如：效果回流 Agent / Zeus",
+      "namePlaceholder": "例如：效果回流 Agent / 上游编排系统",
       "issueSubmit": "签发",
       "secretOnceWarning": "请立即复制并妥善保存明文密钥，它只会显示这一次，离开页面后无法再次查看。",
       "copySecret": "复制密钥",

@@ -1,4 +1,4 @@
-"""Q150 集成测试：A2A 封臣端点（Zeus 联邦 plan 模式第一阶段）。
+"""Q150 集成测试：A2A 执行器端点（Zeus 联邦 plan 模式第一阶段）。
 
 口径（02 C1.94 / docs/design-a2a-vassal.md，四项裁决均按草案）：
 - Agent Card 三发现路径公开（无 Key），fealty + 三件 plan skills；

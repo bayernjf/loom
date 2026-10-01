@@ -1,6 +1,6 @@
 """Q126（段13/Q60）集成测试：POST /api/effect-callback + 运营只读队列。
 
-口径（02 新 Q，接缝按推荐甲拍板）：
+口径（02 新 Q，接缝按推荐甲决策）：
 - 鉴权复用 Q88 一 Agent 一 Key（Bearer，缺失/错误/吊销统一 401）；
 - 推送 content_id 命中有效成品→matched 并回填 tenant；对不上或命中
   discarded→orphan 孤儿队列；(content_id,captured_at) 幂等覆盖、新采集点追加；

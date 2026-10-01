@@ -173,7 +173,7 @@
 | 4 | `DiscoverResult` 无单数 `protocolVersion` 字段 | 多出一个 `protocolVersion` | 多余字段 | ✅ 已删 |
 | 5（附，**Q236 已收口**） | `capabilities` 应只声明服务端**支持**的能力（discover 页：capabilities = "Capabilities the server supports (tools, resources, prompts, etc.)"） | 曾声明 `prompts`／`resources`，而这两个方法一律 `-32601`（§3.2） | 声明与实现不一致 | ✅ **已改**：2026-09-29 Q236 按甲案只留 tools |
 
-**Q236 收口（2026-09-29）**：复访官方页确认两件事——① `ping` 在该修订被**整体移除**（changelog：Remove `ping`, `logging/setLevel`, and `notifications/roots/list_changed`，SEP-2575），故不再应答、落到 `-32601`；② discover 页把 capabilities 定义为「Capabilities the server supports (tools, resources, prompts, etc.)」，不实现的 prompts/resources 不得声明。负责人拍板甲案两处一次对齐，新增单测 2＋集成 1（植缺陷验过 3 红）。
+**Q236 收口（2026-09-29）**：复访官方页确认两件事——① `ping` 在该修订被**整体移除**（changelog：Remove `ping`, `logging/setLevel`, and `notifications/roots/list_changed`，SEP-2575），故不再应答、落到 `-32601`；② discover 页把 capabilities 定义为「Capabilities the server supports (tools, resources, prompts, etc.)」，不实现的 prompts/resources 不得声明。负责人决策甲案两处一次对齐，新增单测 2＋集成 1（植缺陷验过 3 红）。
 
 **对齐结果**：Q235 把上述 1–4 全改到官方结构；单测 `test_discover_result_matches_the_official_2026_07_28_shape`（`tests/unit/test_mcp_server.py`）逐项钉死字段集（多一个少一个都判红，已按旧形状验过判红），真进程重测输出见 §5。**契约变更提示**：接入方拿到的 `server/discover` 字段名与位置变了（`supportedVersions` 取代 `supportedProtocolVersions`、身份移到 `_meta`），按旧字段名解析的客户端需同步。
 

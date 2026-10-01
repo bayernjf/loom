@@ -11,7 +11,7 @@ WF-03 四个 Skill（ATOM-EXPAND/CANON/AFFINITY/CONFLICT-PRECHECK）的 AI 产�
 Q86 起 AFFINITY 的 affinity/cluster 由 embedding 向量在本地确定性算出
 （成簇线 atom.cluster_line 借 Q10 0.9，原文未给【待补】）。
 
-拍板值经配置中心热更（02 §C2 已登记 20/50、0.5、7 天、15-30；M10c 接入）。
+决策值经配置中心热更（02 §C2 已登记 20/50、0.5、7 天、15-30；M10c 接入）。
 """
 
 import math
@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from app.core.config_center.knobs import knob
 
 
-# Q14/Q16/Q18 拍板值经配置中心热更（02 §C2）。
+# Q14/Q16/Q18 决策值经配置中心热更（02 §C2）。
 def batch_size_sensitive() -> int:
     return knob("atom.batch_size_sensitive")
 

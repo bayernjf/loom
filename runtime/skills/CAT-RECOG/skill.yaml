@@ -10,7 +10,7 @@ knowledge_deps:
   - G1 类目树
 model_tier: ""
 thresholds:
-  cold_start_floor_config: c1.cold_start_floor     # Q1 拍板 0.6
+  cold_start_floor_config: c1.cold_start_floor     # Q1 决策 0.6
   contradiction_gap_config: c1.mid_confidence_top_gap  # Q3 Top1-Top2<0.1
 failure_policy: produce_candidates_only            # Q79：仅产候选，不直接写 C1Record
 review_rule: skill7 candidate gate → operations（Q79-3）；准入后三分支机械裁决

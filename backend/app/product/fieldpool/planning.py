@@ -4,7 +4,7 @@
 AI 不在本模块：WF-02（FIELDPOOL-PLAN→DIM-SOURCE→DIM-MERGE）候选由 M10 接入，
 M3 接收结构化维度候选后做确定性的结构校验、越界处置与细看/疑似重复标记。
 
-拍板值经配置中心热更（02 §C2 已登记 0.85 细看线/3-8 维度/0.9 重复线；M10c 接入）。
+决策值经配置中心热更（02 §C2 已登记 0.85 细看线/3-8 维度/0.9 重复线；M10c 接入）。
 """
 
 from dataclasses import dataclass, field

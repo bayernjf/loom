@@ -1,6 +1,6 @@
 """Q124（Q56-b）集成测试：运营作废骨架回池 + 记难产原因。
 
-口径（02 C1.68，接缝按推荐甲拍板）：
+口径（02 C1.68，接缝按推荐甲决策）：
 - POST /api/content/{id}/discard 为 operations 动作（客户 roles=[] 403），
   body.reason 必填非空白（1..500，空白 422）；
 - 仅 review/revising/rejected 可作废（404 未知、其余态 409），成功后 status=

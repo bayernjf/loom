@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from app.core.config_center.knobs import knob
 
 
-# Q1/Q3 拍板值经配置中心热更（02 §C2；M10c 接入）。
+# Q1/Q3 决策值经配置中心热更（02 §C2；M10c 接入）。
 def cold_start_floor() -> float:
     return knob("c1.cold_start_floor")
 

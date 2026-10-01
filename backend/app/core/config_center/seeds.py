@@ -1,8 +1,8 @@
 """§C2 标量配置项种子（迁移与测试单一事实源）。
 
-只收"标量拍板值"；自带 CRUD 表的 C2 项不收（行业阈值/信号权重/Q48 词库/
+只收"标量决策值"；自带 CRUD 表的 C2 项不收（行业阈值/信号权重/Q48 词库/
 CP-LAW/contentGoals/发布位/PCP 模板/slotType 默认值/模型注册表/套餐/语言清单/
-降级动作字典/17 池选项字典）。段 12/13 与 Agent 等尚未落地的段，C2 已拍板的
+降级动作字典/17 池选项字典）。段 12/13 与 Agent 等尚未落地的段，C2 已决策的
 数值也先登记（Q56 明确要求配置页面先行），出处逐条可溯。
 """
 
@@ -83,7 +83,7 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("agent.support_max_tokens", "agent", "int", 4000, "line2119", {"min": 1}),
     # ---- M12 统一审核工作台（Q70 一期③批量通过阈值；Q93 不挪用 fieldpool 命名空间）----
     ("review.batch_pass_confidence", "review", "float", 0.85, "Q70/Q9", {"min": 0.0, "max": 1.0}),
-    # ---- M12 统一审核工作台（Q70②各审核类型挂通用 SLA；五型小时数 Q114 拍板 V1 统一 72h 占位，业务方给数后热更）----
+    # ---- M12 统一审核工作台（Q70②各审核类型挂通用 SLA；五型小时数 Q114 决策 V1 统一 72h 占位，业务方给数后热更）----
     ("review.sla_hours.pwc_combo", "review", "float", 72, "Q70②/Q114", {"min": 1}),
     ("review.sla_hours.field_plan", "review", "float", 72, "Q70②/Q114", {"min": 1}),
     ("review.sla_hours.c1_recognition", "review", "float", 72, "Q70②/Q114", {"min": 1}),

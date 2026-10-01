@@ -9,7 +9,7 @@ knowledge_deps:
   - C7 四层兜底（Q6/Q68）
 model_tier: ""
 thresholds:
-  l3_coverage_floor_config: c7.layer3_coverage_floor   # Q6 拍板 0.6
+  l3_coverage_floor_config: c7.layer3_coverage_floor   # Q6 决策 0.6
 failure_policy: fallback_to_c7                         # 无匹配走 C7 Layer2/3/4
 review_rule: skill7 候选 Gate → operations（Q81-3）；新字段转正另走 Q13 dictionary_admin
 cost_limit: null

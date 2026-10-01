@@ -11,8 +11,8 @@ knowledge_deps:
   - line 11189 产品事实原子跨产品全局唯一
 model_tier: ""
 thresholds:
-  batch_size_sensitive_config: atom.batch_size_sensitive   # Q14 拍板 20
-  batch_size_default_config: atom.batch_size_default       # Q14 拍板 50
+  batch_size_sensitive_config: atom.batch_size_sensitive   # Q14 决策 20
+  batch_size_default_config: atom.batch_size_default       # Q14 决策 50
 failure_policy: stop_at_target                            # Q15：409 停拓，候选留 pending 可改后重裁
 review_rule: 本步不直接投递；整批经 CANON/AFFINITY/PRECHECK 后由末步统一走 skill7 gate（Q80-3）
 cost_limit: null

@@ -1,12 +1,12 @@
 # Golden Cases — TYPE-MATCH（WF-01 C7 兜底，Q81 切片，Q77 模式人工精选）
 # 从回归矩阵精选防 C7 机械口径被静默改动的关键裁决：
-# 0.6 地板拍板值、地板下方必降 Layer4、兄弟继承只认 approved。
+# 0.6 地板决策值、地板下方必降 Layer4、兄弟继承只认 approved。
 # 案例与 datasets 同 schema、同源 refs，数据为合成数据。
 skill_id: TYPE-MATCH
 wf_id: WF-01
 cases:
   - id: golden-tm-001
-    title: Layer3 覆盖率地板必须是 Q6 拍板 0.6（配置种子，热更不改默认）
+    title: Layer3 覆盖率地板必须是 Q6 决策 0.6（配置种子，热更不改默认）
     target: c7_layer3_floor
     input: {}
     expected: 0.6

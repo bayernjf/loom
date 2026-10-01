@@ -4,7 +4,7 @@
 Q116 仅落词库扫描，Q121 落第②项（模型网关第 9 场景 ARTICLE-SEMANTIC-CHECK，
 与 ARTICLE-QC 同构的只读 LLM 检测）。
 
-Q121 定稿（02 C1.65，负责人拍板「纯 advisory」）：
+Q121 定稿（02 C1.65，负责人决策「纯 advisory」）：
 - 语义发现落 ``review_hits["semantic"]``，供客户审阅 / 运营清洗参考；
 - 不自动发证 / 驳回、不阻断 approve、不改动词库 ban 的 ``block_required``
   硬阻断（与 Q57 质量分降级、Q66「AI 不持审批 / 否决角色」一致）；

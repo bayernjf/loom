@@ -1,6 +1,6 @@
 """Q128（段13/Q60）集成测试：客户效果回填 POST /api/effects/backfill。
 
-口径（02 C1.72，接缝按推荐甲拍板）：
+口径（02 C1.72，接缝按推荐甲决策）：
 - 客户专用通道，无 Agent Key（与 Q122 客户写口同构：actor 在体、roles 恒空）；
 - body {tenant_id, records[], actor}，source 服务端固定 customer-backfill
   （不接受客户端传入任意 source）；

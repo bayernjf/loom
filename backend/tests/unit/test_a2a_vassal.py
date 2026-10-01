@@ -1,4 +1,4 @@
-"""Q150 A2A 封臣端点单测：卡片、plan skills、JSON-RPC 生命周期（纯内存层）。"""
+"""Q150 A2A 执行器端点单测：卡片、plan skills、JSON-RPC 生命周期（纯内存层）。"""
 
 from __future__ import annotations
 

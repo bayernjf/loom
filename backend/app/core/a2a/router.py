@@ -1,4 +1,4 @@
-"""A2A 封臣路由（Q150）：卡片发现（公开）+ 任务端点（Q88 Agent Key 保护 + 审计）。"""
+"""A2A 对接路由（Q150）：卡片发现（公开）+ 任务端点（Q88 Agent Key 保护 + 审计）。"""
 
 from __future__ import annotations
 

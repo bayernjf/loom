@@ -1,6 +1,6 @@
 """Q122 集成测试：客户内容页只读列表/详情 + Q56-a 人工编辑正文。
 
-口径（02 C1.66，接缝按推荐甲拍板）：
+口径（02 C1.66，接缝按推荐甲决策）：
 - GET /api/content?tenant_id= 与 GET /api/content/{id} 为客户只读口，无 query actor 闸
   （同 Q101 compliance/overview），列表项不带 body；
 - PATCH /api/content/{id}/body 为客户口径（roles 恒空可调），仅 revising 态允许，
