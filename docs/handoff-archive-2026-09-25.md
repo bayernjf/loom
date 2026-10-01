@@ -344,3 +344,40 @@
 
 - **Q235（2026-09-29）`server/discover` 按官方 `2026-07-28` 结构全量对齐（**代码＋测试＋文档**，零迁移零新表零新 env；基线 1028→1029 passed＋10 skipped；02 C1.179）**：Q234 登记的 4 处出入（含**一处 MUST 违规**）按负责人选定的甲案「全量对齐」一次改到位：① `supportedProtocolVersions` → **`supportedVersions`**；② 服务器身份从 `result` 顶层 → **`_meta` 内的 `io.modelcontextprotocol/serverInfo`**；③ 补 **`ttlMs`＝300000 ＋ `cacheScope`＝`private`**；④ 删掉多余的单数 `protocolVersion`。**契约变更**：按旧字段名解析 `server/discover` 的接入方需同步。
   - 按「最近 5 条」上限滚出 **Q235**（Q209 为常驻锚点、不参与滚动）。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
+
+## 第四十六次续写（2026-10-01，Q241 批滚出 Q236／Q235 条目原文）
+
+- **Q236 MCP `ping` 移除＋`capabilities` 只留 tools 两处一次对齐（2026-09-29；**代码＋测试＋文档**，零迁移零新表零新 env；改 `backend/app/core/mcp/server.py` ＋ `tests/unit/test_mcp_server.py` ＋ `tests/integration/test_mcp_api.py`，同步 docs/22 §3.2/§3.6/§5/§6、docs/11 §2.9、docs/02、CHANGELOG、本表、AGENTS；基线 1029→**1032 passed＋10 skipped**（总收集 1042；＋3＝单测 2＋集成 1）、ruff 净、前端零改动未重跑；02 C1.180）**：负责人 2026-09-29 在两个选项中选**甲：两处一次对齐（推荐）**。
+  - **grounding（curl 取回，WebFetch 对该域被挡）**：官方 changelog（`/specification/2026-07-28/changelog.md`）第 5 条＝**Remove `ping`, `logging/setLevel`, and `notifications/roots/list_changed`（SEP-2575）**；ping 规范页 **404** ⇒ ping 是整体移除而非改语义。discover 页把 capabilities 定义为「Capabilities the server supports (tools, resources, prompts, etc.)」；`listChanged` 仍是合法可选布尔，静态工具表保留 `{"listChanged": false}`。
+  - **落地**：`handle()` 里的 `if method == "ping"` 分支删除 ⇒ 落到既有的默认兜底 `_error(-32601, f"method not found: {method}")`；`discover_result()` 的 capabilities 由 `{tools,prompts,resources}` 改为 **`{"tools": {"listChanged": False}}`**（`server.py:108`）。模块 docstring 补「该修订整体移除 `ping`（连同 `logging/setLevel`，SEP-2575）」。
+  - **测试（先红后绿）**：单测加 `test_ping_was_removed_in_2026_07_28_and_now_fails_as_method_not_found`（钉 `-32601` 且 message 含 ping）、`test_capabilities_only_advertise_tools`（钉 `set(capabilities) == {"tools"}`）；集成 discover 用例加 `set(result["capabilities"]) == {"tools"}` 并新增 `test_removed_ping_is_a_method_not_found_error`。**植缺陷实测**：把 capabilities 注回旧声明＋重新加回 ping 分支 ⇒ 新 3 例全红，按字节复原后回绿。
+  - **真进程重测**：一次性 pg16（`loom-q236-pg`，宿主 55450，`alembic upgrade head` 到 0042）＋真 uvicorn 8125 （`LOOM_MCP_ENABLED=true`，闸开）实测：discover capabilities 恰为 `{tools:{listChanged:false}}`；ping 回 `{code:-32601, message:"method not found: ping"}`；按文档同一 7 法序列（discover／tools/list／ping／initialize／坏版本／resources/list／input_required）跑完查审计仍 **7 条 `mcp.request`**——**错误调用同样留痕，删分支不改审计条数**。
+  - **收口**：Q235 刻意未动的两处（capabilities 空声明／ping 结构未验证）随本批全部销账（docs/22 §6 两行加删除线标 Q236）。**契约变更**：`ping` 不再应答、接入方收到的 discover capabilities 变窄。**复判不变**：① 功能覆盖达标／② 「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。按「最近 5 条」上限滚出 Q230（归档档第四十一次续写，`cmp` 证字节一致）。
+- **Q235 `server/discover` 按官方 `2026-07-28` 结构全量对齐（2026-09-29；**代码＋测试＋文档**，零迁移零新表零新 env；改 `backend/app/core/mcp/server.py` ＋ `tests/unit/test_mcp_server.py` ＋ `tests/integration/test_mcp_api.py`，同步 docs/22 §3.2/§3.3/§3.4/§3.6/§5/§6、docs/11 §2.9、docs/02、CHANGELOG、本表、AGENTS；基线 1028→**1029 passed＋10 skipped**（总收集 1039；＋1＝新形状用例）、ruff 净、前端零改动未重跑；02 C1.179）**：负责人 2026-09-29 在 Q234 登记的两个选项中选**甲：全量对齐**。
+  - **落地（4 处，`discover_result()`，`server.py:95-112`）**：① `supportedProtocolVersions` → **`supportedVersions`**；② 服务器身份从 `result` 顶层 → **`_meta["io.modelcontextprotocol/serverInfo"]`**；③ 补 **`ttlMs`＝300000 ＋ `cacheScope`＝`private`**（此条是 Q234 判定的 **MUST 缺项**；值取与 A2A 卡片 `Cache-Control: max-age=300` 同值、scope 取 `private` 因该面在鉴权之后）；④ 删掉多余的**单数 `protocolVersion`**。`tools/list` 与 `server/discover` 同属可缓存操作，两者共用一对常量（`_CACHE_TTL_MS`／`_CACHE_SCOPE`，`server.py:85-88`，原 `_TOOLS_*` 前缀改名以反映共用）。
+  - **测试（含先红后绿实证）**：新增 `test_discover_result_matches_the_official_2026_07_28_shape` **按字段集整体断言**（`set(result) == {7 个键}`——多一个少一个都判红），并单独钉两处移除；旧钉法随本批改为新形状。**把旧形状注回 `discover_result` 后逐条断言判红**（字段集不符／缺 `ttlMs`／残留单数 `protocolVersion`／身份仍在顶层 四条全中），复原回绿——**不靠「看起来在守」**（Q196/Q203 纪律）。
+  - **真进程重测**：同型一次性栈（pg16 宿主 55460／redis 6401／uvicorn 8124，`alembic upgrade head` 到 `0042`）实测 `server/discover` 返回 7 字段与官方结构逐项一致；`tools/list`／`ping`／`initialize→-32601`／坏版本 `→-32022`／`resources/list→-32601`／`input_required` 均如文档；审计 7 次调用得 7 条 `mcp.request`（条数＝调用次数）。docs/22 §5 旧样例那行 `# → protocolVersion=2026-07-28` 已换成实测新输出。
+  - **刻意不动（两处，均已登记 docs/22 §6）**：① `capabilities` 仍声明 `prompts`／`resources` 而两者一律 `-32601`（Q234 的**第 5 条观察项**）——**不在登记的 4 处之内**，改它＝缩能力声明、属行为变更，扩范围须另裁；② `ping` 的 `result` 仍把 `serverInfo` 放顶层（与对齐前的 `server.discover` 同型），但**官方 `ping` 的 `result` 结构未取到**，故这一处**既不能判符合也不能判不符**，据实登记为未验证。
+  - **顺带订正**：docs/22 内引用 `server.py` 的 6 处行号随本批编辑漂移，已按实测行号更新（`172-175`／`85-88`／`95-122`／`133-162`／`34-80`／`192-197`）。**复判不变**：① 功能覆盖达标／② 「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）——本批只在工程侧把一处**可证伪的契约缺陷**（含 MUST 违规）从「登记待裁」推到「已对齐且有单测与真进程双重证据」。按「最近 5 条」上限滚出 Q229（归档档第四十次续写）。
+
+> 本块为 `handoff.md`「最近进度」两条条目的**逐字原文**（Q236 6 行＋Q235 6 行，共 12 行；`cmp` 证与原 handoff 第 104–115 行字节一致〔6463 字节〕，块内 12 行在档内各出现 1 次、在 handoff 出现 0 次）。Q235 另有一份**摘要形态**副本在第四十五次续写（Q240 批搬入、非原文）——**以本块原文为准**。
+
+## 第四十七次续写（2026-10-01，Q242 批滚出 Q237 条目原文）
+
+- **Q237 第六次项目级 MVP 复评（2026-09-29；**纯评审，零代码零迁移零测试变化**；基线沿用 **1032 passed＋10 skipped**（总收集 1042）；同步 docs/02、docs/20 §15、本表、AGENTS、docs/README·08；02 C1.181）**：负责人要求评审必须能达到「产品核心完全可用的 MVP」。
+  - **做法**：不复述 docs/20 §7–§14：与 git 对账（HEAD＝`c33c244`）→ 新建一次性真 pg16 库 loom-mvp5-pg（宿主 55455，0 表）→ `alembic upgrade head` 到 0042 → 在迁移产物库上跑自检器与真 uvicorn（8126）探针。证据分级＝〔执行〕当场跑出／〔代码级〕回源码读。
+  - **三层判定（不可合并）**：① 功能覆盖**达标**——真新库实测迁移自带 `content_goals=5`／`cp_law_sensitive_domains=6`／`g1_categories=6`；②「核心完全可用」**未达标**〔执行〕——`scripts/check_master_data.py` 实测 **exit 1**：`publish_slots`／`pcp_weight_tables`／`packages` 三表 0 行，发证另需 PWS 冻结＋合规报告与 Gate 裁决 ⇒ **仍要两个人**；ATOM-AFFINITY 出厂仍只挂 `synthetic-embedding`（`seeds.py:12`，代码级）；③ 可上线**未达标**——网关/TLS 仓内零产物（`nginx|traefik|caddy|certbot|letsencrypt|acme|ssl_certificate` 全仓零命中，待裁项①）、七套本地 harness 不进 CI、告警阈值与 180 天窗口待校准。
+  - **探针**：`healthz` 200；`POST /api/fcw/assemble` 无 staff Bearer（body 自报 operations）→ **401**，与 Q203 `require_internal_actor(OPERATIONS)` 一致（`router.py:64,106`）；`issue_scope`/`OutsidePublishFCW` 出口守卫仍装载。**本轮未查出新的工程缺陷，工程侧可自推项为零。**
+  - **裁决**：**未达到「产品核心完全可用」的 MVP**——卡点全部外部（业务方三表回填＋一个真产品＋跑链裁决的第二个人；负责人网关/TLS 裁决）。按「最近 5 条」上限滚出 Q231（归档档第四十二次续写，逐字搬入 2924 字节（cmp 字节核对通过））。
+
+
+## 第四十八次续写（2026-10-01，Q243 批滚出 Q238 条目原文）
+
+- **Q238 A2A Agent Card `url` 基址落成真 env `LOOM_PUBLIC_BASE_URL`（2026-09-29；**代码＋测试＋文档**，零迁移零新表；改 `backend/app/core/config.py` ＋ `backend/app/core/a2a/card.py` ＋ `tests/unit/test_a2a_vassal.py` ＋ `tests/integration/test_a2a_vassal_api.py`，同步 docs/11·22·17·15·08·16·README、本表、AGENTS、CHANGELOG；基线 1032→**1038 passed＋10 skipped**（总收集 1048；＋6＝单测 5＋集成 1）；02 C1.182）**：负责人点工「先把 A2A 卡片那个 env 做了」。
+  - **修的是 Q233 登记、Q237 复评仍列为「须点工」的那条**：`build_agent_card()` 读 `settings.public_base_url`，而该名**不是 `Settings` 字段**（`getattr(..., None)` 永远落空）⇒ 出厂卡片 `url` 恒为相对路径 `/api/a2a/tasks`。
+  - **落法＝纯加法**：`Settings.public_base_url: str = ""` ＋ `card.py` 去掉 `getattr` 兜底改读真字段并 `.strip().rstrip("/")`。**默认空串 ⇒ 输出与改前逐字节相同**；设为实例对外域名即输出绝对地址。
+  - **承重断言＝「env 名 → 字段」的绑定**（`test_the_env_var_binds_to_the_setting`）——Q233 的失效模式正是「运营设了一个不起作用的变量并以为设好了」；集成一条把两态断言放同用例，兼钉「卡片每请求现建」（快照时第二次断言必红）。
+  - **先红后绿含一次自我纠正**：首次植入「卡片进程内快照」写在 `return` 之后＝不可达 no-op，**那次「绿」不构成证据**；重写植入并加正向对照探针（改设置两次拿到同一 url）后集成用例判红，按 sha256（`42bfdda3…`）还原。
+  - **取值不属本片**：该 env 的值＝实例对外公网域名，取决于**待裁项①「网关与 TLS 归属」**；按 Q135 先例不入 `backend/.env.example`。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。按「最近 5 条」上限滚出 Q232（归档档第四十三次续写，逐字搬入）。
+
+> 本块为 `handoff.md`「最近进度」Q238 一条条目的**逐字原文**（6 行＝父条目＋5 条 sub-bullets，2065 字节；`cmp` 证字节一致，sha256 前缀 `d674ec0b`）；块内 6 行在档内出现 1 次、在 handoff「最近进度」区出现 0 次。

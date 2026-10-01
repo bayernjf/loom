@@ -162,7 +162,7 @@
 - `GET /api/admin/fcw/{final_id}/material`：同款 query 读闸（缺 actor 422/越权 403），返回与 §2.5 **同一** `build_material_pack` 六层包（schema `loom.fcw.material-pack.v1`），但为**内嵌 JSON、不带 `Content-Disposition` 头**（供页面岛直接渲染，不触发下载）；未知 final_id 404，引用缺失同样回 `available:false`+warning 不 500。
 - **两口关系**：内嵌面（本节，过读闸、无 attachment）与 Q155 导出口（§2.5，attachment、无闸、保 V1）共用 `build_material_pack` 但分两口，互不改变对方行为。
 - 前端 `app/[locale]/admin/fcw/`（`page.tsx` force-dynamic 只读 RSC 跨租户列表＋租户过滤＋分页、`actions.ts` Server Action 本地角色闸与 403/404/409/422 映射、`material-island.tsx` client 岛点击才拉六层 details/pre 展示），管理端 sidebar **第 11 项** /admin/fcw；枚举 platform/goal/publish_status 原样直出。
-- **接缝甲案三项（待负责人追认，02 C1.121）**：①入口落管理端运营台 /admin/fcw（读 operations|platform_admin），客户卡片视图随 D3.5 菜单另点；②新增跨租户只读列表口（区别于按产品空间的列表）；③六层内嵌面与 Q155 导出口共用 build_material_pack 但分两口（内嵌过读闸无 attachment／导出带 attachment 无闸保 V1）。
+- **接缝甲案三项（已经负责人 2026-09-24 追认销账，02 C1.121）**：①入口落管理端运营台 /admin/fcw（读 operations|platform_admin），客户卡片视图随 D3.5 菜单另点；②新增跨租户只读列表口（区别于按产品空间的列表）；③六层内嵌面与 Q155 导出口共用 build_material_pack 但分两口（内嵌过读闸无 attachment／导出带 attachment 无闸保 V1）。
 
 ### 2.7 API Key 治理端点（Q88 入站 / Q82 出站，已落地）
 
@@ -199,7 +199,7 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 - 必须有**已验真的内部令牌** `Authorization: Bearer loom_staff_…`（Q178 PAT）。依赖为 `app/core/staff_auth/deps.py:96` 的 `require_internal_actor(OPERATIONS)`，**与 `LOOM_STAFF_AUTH_ENABLED` 无关**：门控关闭时它自行验真，因此「正文自报 `operations`」在默认部署形态下也不足以发证。
 - 缺失／格式不符／已吊销 → **401**；令牌角色不含 `operations` → **403**。
 - 进服务层的 actor 是**令牌持有人**；body 的 `actor` 字段仍接受但被覆盖（Q196 口径：被推翻的自报值在审计里降级存证）。
-- 对照其余各面：其他内部口仍按 Q178（门控开才强制）；客户口按 `tenant_id` 归属校验（Q200，跨租户与不存在同回 404）；机器口按 Q88 Agent Key。
+- 对照其余各面：**Q242 起**，段4 原子（13 个写端点）、段9/10 策略包（3 个）、段7/8 平台适配（9 个）三族写口也统一到 `require_internal_actor`，与本节两口同口径（门控关着也自行验真；全仓受凭证保护的写口共 **27** 个）；其余内部口仍按 Q178（门控开才强制）；客户口按 `tenant_id` 归属校验（Q200，跨租户与不存在同回 404）；机器口按 Q88 Agent Key。**未**统一的两族：`product/whitelist_center` 冻结/吊销（该族要求 `whitelist_owner`，而该角色不可签发为 staff 令牌，Q242 改判归 V2 第一项）与段4 的 `submit_batch`／`supplement_evidence`／`revive_candidate`（docs/05 未给角色／Q75 有意不加闸）——两者均**刻意保持原样**，由 `tests/integration/test_write_gate_wiring.py` 的反向对照钉住。
 - **引导签发**（上线第一步）：门控关下自报 `platform_admin` 调 `POST /api/admin/staff-keys`，明文只回一次；见 docs/21 §2 与 docs/19 §0.1。
 
 **唯一出口是运行期事实，不是注释（Q203）**：`final_content_whitelists` 的 mapper `before_insert` 要求当前处于 `service.assemble_one` 打开的签发作用域（`exit_guard.py:33` 作用域、`:42` 装载实现、装载调用 `models.py:80`），作用域外 INSERT 抛 `OutsidePublishFCW`。边界：只覆盖 ORM flush，Core `insert()`／裸 SQL 不经 mapper 事件——由 `test_core_insert_bypasses_the_mapper_guard` 钉成实测事实；全仓今日对该表无 Core 写入。

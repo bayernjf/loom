@@ -334,7 +334,7 @@ export async function getComplianceWordlist(
 }
 
 // Q114：settings 只读账户面板——客户侧租户读口（无 admin 闸，复用 Q95 租户注册表）。
-// Q163：追加派生 onboarding 进度（接缝甲案，待负责人追认；复用既有 TenantOnboarding）。
+// Q163：追加派生 onboarding 进度（接缝甲案，已经负责人 2026-09-22 追认，02 C1.107；复用既有 TenantOnboarding）。
 export interface CustomerTenantView {
   tenant_id: string;
   name: string | null;

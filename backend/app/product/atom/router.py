@@ -1,10 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import atom_expand, gateway
 from app.core.model_registry.schemas import AtomExpandInvokeRequest
-from app.core.rbac import PermissionDenied
+from app.core.rbac import (
+    INTERNAL_COMPLIANCE,
+    OPERATIONS,
+    PRODUCT_REVIEWER,
+    PermissionDenied,
+)
+from app.core.staff_auth.deps import require_internal_actor
 from app.product.atom import service
 from app.product.atom.models import AtomCandidate, AtomConflict, ProductAtomInstance
 from app.product.atom.schemas import (
@@ -18,6 +25,12 @@ from app.product.atom.schemas import (
 )
 
 router = APIRouter(prefix="/api", tags=["atom"])
+
+# Q242：写口只认已验真 staff 令牌（门控关着也自行验真），请求体自报的 actor
+# 只作兼容形状、不再参与角色判定；service 层 _require_role 保留作非 HTTP 调用方兜底。
+_reviewer_gate = require_internal_actor(PRODUCT_REVIEWER)
+_ops_gate = require_internal_actor(OPERATIONS)
+_compliance_gate = require_internal_actor(INTERNAL_COMPLIANCE)
 
 
 def _conflict_view(c: AtomConflict) -> dict:
@@ -135,6 +148,7 @@ async def llm_expand(
     product_space_id: str,
     body: AtomExpandInvokeRequest,
     session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     """Q86：operations 显式触发 CONFLICT-PRECHECK + ATOM-AFFINITY 双调用补池。
 
@@ -142,7 +156,7 @@ async def llm_expand(
     """
     try:
         run, candidates = await atom_expand.invoke_atom_expand(
-            session, product_space_id, body, body.actor
+            session, product_space_id, body, verified
         )
     except PermissionDenied as exc:
         await session.rollback()
@@ -207,10 +221,13 @@ async def list_atoms(
 
 @router.post("/atom-candidates/{candidate_id}/approve")
 async def approve_candidate(
-    candidate_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
+    candidate_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_reviewer_gate),
 ) -> dict:
     try:
-        atom = await service.approve_candidate(session, candidate_id, body.actor)
+        atom = await service.approve_candidate(session, candidate_id, verified)
         await session.commit()
     except service.CandidateNotFound as exc:
         await session.rollback()
@@ -226,10 +243,12 @@ async def approve_candidate(
 
 @router.post("/atom-candidates/batch-approve")
 async def batch_approve(
-    body: BatchApproveRequest, session: AsyncSession = Depends(get_session)
+    body: BatchApproveRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_reviewer_gate),
 ) -> list[dict]:
     try:
-        atoms = await service.approve_batch(session, body.candidate_ids, body.actor)
+        atoms = await service.approve_batch(session, body.candidate_ids, verified)
         await session.commit()
     except service.CandidateNotFound as exc:
         await session.rollback()
@@ -245,10 +264,13 @@ async def batch_approve(
 
 @router.post("/atom-candidates/{candidate_id}/reject")
 async def reject_candidate(
-    candidate_id: str, body: RejectRequest, session: AsyncSession = Depends(get_session)
+    candidate_id: str,
+    body: RejectRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_reviewer_gate),
 ) -> dict:
     try:
-        cand = await service.reject_candidate(session, candidate_id, body.reason, body.actor)
+        cand = await service.reject_candidate(session, candidate_id, body.reason, verified)
         await session.commit()
     except service.CandidateNotFound as exc:
         await session.rollback()
@@ -303,11 +325,14 @@ async def revive_candidate(
 
 @router.post("/atom-clusters/{cluster_id}/resolve")
 async def resolve_cluster(
-    cluster_id: str, body: ClusterResolveRequest, session: AsyncSession = Depends(get_session)
+    cluster_id: str,
+    body: ClusterResolveRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_reviewer_gate),
 ) -> dict:
     try:
         merged = await service.resolve_cluster(
-            session, cluster_id, body.keeper_candidate_id, body.actor
+            session, cluster_id, body.keeper_candidate_id, verified
         )
         await session.commit()
     except service.CandidateNotFound as exc:
@@ -324,11 +349,14 @@ async def resolve_cluster(
 
 @router.post("/atom-candidates/{candidate_id}/risk-override")
 async def override_risk(
-    candidate_id: str, body: RiskOverrideRequest, session: AsyncSession = Depends(get_session)
+    candidate_id: str,
+    body: RiskOverrideRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_reviewer_gate),
 ) -> dict:
     try:
         cand = await service.override_risk(
-            session, candidate_id, body.level, body.reason, body.actor
+            session, candidate_id, body.level, body.reason, verified
         )
         await session.commit()
     except service.CandidateNotFound as exc:
@@ -347,10 +375,13 @@ async def override_risk(
 
 @router.post("/atoms/{atom_id}/freeze")
 async def freeze_atom(
-    atom_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
+    atom_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        atom = await service.freeze_atom(session, atom_id, body.actor)
+        atom = await service.freeze_atom(session, atom_id, verified)
         await session.commit()
     except service.AtomNotFound as exc:
         await session.rollback()
@@ -366,10 +397,13 @@ async def freeze_atom(
 
 @router.post("/atoms/{atom_id}/unfreeze")
 async def unfreeze_atom(
-    atom_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
+    atom_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        atom = await service.unfreeze_atom(session, atom_id, body.actor)
+        atom = await service.unfreeze_atom(session, atom_id, verified)
         await session.commit()
     except service.AtomNotFound as exc:
         await session.rollback()
@@ -385,10 +419,13 @@ async def unfreeze_atom(
 
 @router.post("/atoms/{atom_id}/compliance-suspend")
 async def suspend_atom(
-    atom_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
+    atom_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_compliance_gate),
 ) -> dict:
     try:
-        atom = await service.suspend_atom(session, atom_id, body.actor)
+        atom = await service.suspend_atom(session, atom_id, verified)
         await session.commit()
     except service.AtomNotFound as exc:
         await session.rollback()
@@ -404,10 +441,13 @@ async def suspend_atom(
 
 @router.post("/atoms/{atom_id}/compliance-resume")
 async def resume_atom(
-    atom_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
+    atom_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_compliance_gate),
 ) -> dict:
     try:
-        atom = await service.resume_atom(session, atom_id, body.actor)
+        atom = await service.resume_atom(session, atom_id, verified)
         await session.commit()
     except service.AtomNotFound as exc:
         await session.rollback()
@@ -423,10 +463,13 @@ async def resume_atom(
 
 @router.post("/atoms/{atom_id}/deprecate")
 async def deprecate_atom(
-    atom_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
+    atom_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        atom = await service.deprecate_atom(session, atom_id, body.actor)
+        atom = await service.deprecate_atom(session, atom_id, verified)
         await session.commit()
     except service.AtomNotFound as exc:
         await session.rollback()
@@ -442,10 +485,13 @@ async def deprecate_atom(
 
 @router.post("/atoms/{atom_id}/archive")
 async def archive_atom(
-    atom_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
+    atom_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        atom = await service.archive_atom(session, atom_id, body.actor)
+        atom = await service.archive_atom(session, atom_id, verified)
         await session.commit()
     except service.AtomNotFound as exc:
         await session.rollback()
@@ -461,10 +507,13 @@ async def archive_atom(
 
 @router.post("/atoms/{atom_id}/reject")
 async def reject_atom(
-    atom_id: str, body: RejectRequest, session: AsyncSession = Depends(get_session)
+    atom_id: str,
+    body: RejectRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_reviewer_gate),
 ) -> dict:
     try:
-        atom = await service.reject_atom(session, atom_id, body.reason, body.actor)
+        atom = await service.reject_atom(session, atom_id, body.reason, verified)
         await session.commit()
     except service.AtomNotFound as exc:
         await session.rollback()

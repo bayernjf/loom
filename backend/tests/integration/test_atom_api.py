@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
+from app.core.staff_auth.deps import get_auth_session
 from app.main import app
 from app.product.atom import service as atom_service
 from app.product.fieldpool.models import FPSourceRoute
@@ -21,6 +22,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
+from tests.integration.staff_tokens import acting_as, bearer, issue_write_token
 
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
 OPS = {"id": "ops-1", "roles": ["operations"]}
@@ -40,6 +42,9 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # Q242：写口在门控关下也自行验真，走的是 get_auth_session 这条缝，
+    # 不一起覆盖就会去连应用真实的 SessionLocal（与测试内存库不是同一个库）。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -61,6 +66,9 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Q242：段4/7/8/10 写口只认已验真 staff 令牌（门控关着也验），默认带一枚
+        # 覆盖 operations / product_reviewer / internal_compliance 的令牌。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 
@@ -444,15 +452,17 @@ async def test_atom_lifecycle_roles_and_transitions(client, session_factory):
         await client.post(f"/api/atom-candidates/{cid}/approve", json={"actor": REVIEWER})
     ).json()["atom_id"]
 
-    # 冻结=运营；审核员无权。
-    assert (await client.post(f"/api/atoms/{atom_id}/freeze", json={"actor": REVIEWER})).status_code == 403
+    # 冻结=运营；审核员无权（Q242：越权＝换一枚没有 operations 的令牌）。
+    async with acting_as(client, ["product_reviewer"], staff_id="s-rev"):
+        assert (await client.post(f"/api/atoms/{atom_id}/freeze", json={"actor": REVIEWER})).status_code == 403
     frozen = await client.post(f"/api/atoms/{atom_id}/freeze", json={"actor": OPS})
     assert frozen.json()["status"] == "frozen"
     # 解冻不重审，直接回 approved（Q20）。
     assert (await client.post(f"/api/atoms/{atom_id}/unfreeze", json={"actor": OPS})).json()["status"] == "approved"
 
-    # 合规暂停/恢复=internal_compliance。
-    assert (await client.post(f"/api/atoms/{atom_id}/compliance-suspend", json={"actor": OPS})).status_code == 403
+    # 合规暂停/恢复=internal_compliance（越权＝换一枚没有该角色的令牌）。
+    async with acting_as(client, ["operations"], staff_id="s-ops2"):
+        assert (await client.post(f"/api/atoms/{atom_id}/compliance-suspend", json={"actor": OPS})).status_code == 403
     await client.post(f"/api/atoms/{atom_id}/compliance-suspend", json={"actor": COMPLIANCE})
     assert (await client.post(f"/api/atoms/{atom_id}/compliance-resume", json={"actor": COMPLIANCE})).json()["status"] == "approved"
 

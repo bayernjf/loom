@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.rbac import OPERATIONS, PermissionDenied, require_any_role
+from app.core.staff_auth.deps import require_internal_actor
 from app.platform.platform_adaptation import service
 from app.platform.platform_adaptation.schemas import (
     ActorOnly,
@@ -18,6 +19,10 @@ from app.platform.platform_adaptation.schemas import (
 )
 
 router = APIRouter(tags=["platform-adaptation"])
+
+# Q242：段7/8 底表写口只认已验真 staff 令牌；读口仍走 query actor 的
+# require_operations_view（Q118 口径，门控关时不强求凭证）。
+_ops_gate = require_internal_actor(OPERATIONS)
 
 
 def require_operations_view(
@@ -95,9 +100,13 @@ async def list_slots(
 
 
 @router.post("/api/admin/publish-slots", status_code=201)
-async def create_slot(body: SlotUpsert, session: AsyncSession = Depends(get_session)) -> dict:
+async def create_slot(
+    body: SlotUpsert,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
     try:
-        slot = await service.create_slot(session, body, body.actor)
+        slot = await service.create_slot(session, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.SlotCodeTaken as exc:
@@ -108,10 +117,13 @@ async def create_slot(body: SlotUpsert, session: AsyncSession = Depends(get_sess
 
 @router.put("/api/admin/publish-slots/{slot_id}")
 async def update_slot(
-    slot_id: str, body: SlotUpsert, session: AsyncSession = Depends(get_session)
+    slot_id: str,
+    body: SlotUpsert,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        slot = await service.update_slot(session, slot_id, body, body.actor)
+        slot = await service.update_slot(session, slot_id, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.SlotNotFound as exc:
@@ -124,10 +136,13 @@ async def update_slot(
 
 @router.delete("/api/admin/publish-slots/{slot_id}", status_code=204)
 async def archive_slot(
-    slot_id: str, body: ActorOnly, session: AsyncSession = Depends(get_session)
+    slot_id: str,
+    body: ActorOnly,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> None:
     try:
-        await service.archive_slot(session, slot_id, body.actor)
+        await service.archive_slot(session, slot_id, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.SlotNotFound as exc:
@@ -159,9 +174,13 @@ async def list_fit_weights(
 
 
 @router.put("/api/admin/fit-weights")
-async def put_fit_weights(body: FitWeightPut, session: AsyncSession = Depends(get_session)) -> dict:
+async def put_fit_weights(
+    body: FitWeightPut,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
     try:
-        row = await service.put_fit_weights(session, body, body.actor)
+        row = await service.put_fit_weights(session, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.GoalNotFound as exc:
@@ -188,9 +207,13 @@ async def list_rules(
 
 
 @router.post("/api/admin/platform-rules", status_code=201)
-async def create_rule(body: RuleCreate, session: AsyncSession = Depends(get_session)) -> dict:
+async def create_rule(
+    body: RuleCreate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
     try:
-        rule = await service.create_rule(session, body, body.actor)
+        rule = await service.create_rule(session, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.ValidationFailed as exc:
@@ -209,10 +232,13 @@ async def create_rule(body: RuleCreate, session: AsyncSession = Depends(get_sess
 
 @router.delete("/api/admin/platform-rules/{rule_id}", status_code=204)
 async def archive_rule(
-    rule_id: str, body: ActorOnly, session: AsyncSession = Depends(get_session)
+    rule_id: str,
+    body: ActorOnly,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> None:
     try:
-        await service.archive_rule(session, rule_id, body.actor)
+        await service.archive_rule(session, rule_id, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.RuleNotFound as exc:
@@ -253,10 +279,12 @@ async def list_slot_type_defaults(
 
 @router.put("/api/admin/slot-type-defaults")
 async def put_slot_type_default(
-    body: SlotTypeDefaultPut, session: AsyncSession = Depends(get_session)
+    body: SlotTypeDefaultPut,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        row = await service.put_slot_type_default(session, body, body.actor)
+        row = await service.put_slot_type_default(session, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.ValidationFailed as exc:
@@ -289,10 +317,13 @@ async def list_pcps(
 
 @router.post("/api/product-spaces/{product_space_id}/pcp", status_code=201)
 async def create_pcp(
-    product_space_id: str, body: PcpCreate, session: AsyncSession = Depends(get_session)
+    product_space_id: str,
+    body: PcpCreate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        pcp = await service.create_pcp(session, product_space_id, body, body.actor)
+        pcp = await service.create_pcp(session, product_space_id, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PcpNotFound as exc:
@@ -309,10 +340,13 @@ async def create_pcp(
 
 @router.put("/api/pcp/{pcp_id}")
 async def update_pcp(
-    pcp_id: str, body: PcpUpdate, session: AsyncSession = Depends(get_session)
+    pcp_id: str,
+    body: PcpUpdate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        pcp = await service.update_pcp(session, pcp_id, body, body.actor)
+        pcp = await service.update_pcp(session, pcp_id, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PcpNotFound as exc:

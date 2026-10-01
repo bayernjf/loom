@@ -18,7 +18,7 @@
 | `platform_admin` | 租户、Agent Key、运营人员令牌、AI 模型与场景路由、字典管理、导出任务 | /admin/tenants、/admin/agent-keys、/admin/staff-keys、/admin/token-cost、/admin/exports |
 | `dictionary_admin` | 内容语言清单等字典维护 | API（语言清单管理） |
 
-> **身份（Q178，2026-09-24 起）**：内部运营管理端已有可选的个人访问令牌（staff PAT）认证层，门控 `LOOM_STAFF_AUTH_ENABLED` **默认关**——门控关时 Actor 仍为请求体内 `{"id","roles"}` 自报（private beta 由平台内控保证）；门控开后管理口必须持 staff 令牌、自报 actor 被令牌身份覆盖（防提权）。开通与登录操作见 **§0.1**。客户侧真实认证仍为 V2（Q196 口径 C 甲＝private beta 维持平台代运营、不做客户登录）。**Q196 起审计身份由服务端定**：写审计的唯一口按「已验真凭证 > 请求自报」取值，带 staff PAT 或 Agent Key 打的口，审计记的是凭证持有人，body/query 里自报的 id/roles 只作备查证据（`detail.declared_actor`），来源看 `detail._actor_via`∈{`staff_token`,`agent_key`,`declared`}；无凭证的客户口仍记自报并标 `declared`——**读到 `declared` 就等于「身份未经证实」**。中台导出任务状态口与下载口（见 §1 段 11 末「异步导出经 `/api/exports/jobs`」与 §3 的 404/422 行）现须带 `tenant_id` 且只能读本租户任务。
+> **身份（Q178，2026-09-24 起）**：内部运营管理端已有可选的个人访问令牌（staff PAT）认证层，门控 `LOOM_STAFF_AUTH_ENABLED` **默认关**——门控关时 Actor 仍为请求体内 `{"id","roles"}` 自报（private beta 由平台内控保证）；门控开后管理口必须持 staff 令牌、自报 actor 被令牌身份覆盖（防提权）。开通与登录操作见 **§0.1**。客户侧真实认证仍为 V2（Q196 口径 C 甲＝private beta 维持平台代运营、不做客户登录）。**Q196 起审计身份由服务端定**：写审计的唯一口按「已验真凭证 > 请求自报」取值，带 staff PAT 或 Agent Key 打的口，审计记的是凭证持有人，body/query 里自报的 id/roles 只作备查证据（`detail.declared_actor`），来源看 `detail._actor_via`∈{`staff_token`,`agent_key`,`declared`}；无凭证的客户口仍记自报并标 `declared`——**读到 `declared` 就等于「身份未经证实」**。中台导出任务状态口与下载口（见 §1 段 11 末「异步导出经 `/api/exports/jobs`」与 §3 的 404/422 行）现须带 `tenant_id` 且只能读本租户任务。**Q242（2026-10-01）例外说明**：段4 atom Gate、段7/8 平台适配、段9 策略包、段10 三包/规则等 **25 个写口**已统一到 `require_internal_actor`，它们与段11 发证两口一样**无视全局门控、无条件验真令牌**（详见 §1 段7/8/9 的 Q242 注）——上面「门控关时 Actor 仍自报」只对**未受闸的写口**成立。
 
 ### 0.1 运营登录与身份（Q178 staff PAT，门控默认关）
 
@@ -75,6 +75,8 @@
 2. PCP：`POST /api/product-spaces/{ps}/pcp`（platform + template_code）。
 3. 三包：`POST /api/product-spaces/{ps}/packages` 逐条建 csp / cstp / cep，`{kind, platform, goal, payload, conf}`。
 
+> **Q242（2026-10-01）起这三族写口也要 staff 令牌**：发布位（POST/PUT/DELETE `/api/admin/publish-slots`）、PCP（POST `/api/product-spaces/{ps}/pcp` 与 PUT `/api/pcp/{id}`）、三包（POST/PUT/DELETE `/api/product-spaces/{ps}/packages`）以及 `PUT /api/admin/fit-weights`、`PUT /api/admin/slot-type-defaults`、`POST/DELETE /api/admin/platform-rules` **全部**统一到 `require_internal_actor(OPERATIONS)`——与段11 发证口同口径，**门控关着也自行验真**：无/坏/吊销令牌 401、令牌角色不含 operations 403，body 自报 `actor` 被令牌身份覆盖。**故 §0.1 的引导签发令牌是走段7/8/9 的第 0 步**，不是发证前才做。段9 策略包（`POST/PUT/DELETE /api/layer-strategies`）同口径；段4 atom Gate 的审核/运营/合规写口也已统一（三个无角色规定的口 `submit_batch`/`supplement_evidence`/`revive_candidate` 刻意不加闸）。
+
 ### 段 6 — PWS 冻结
 
 - **whitelist_owner**：`POST /api/product-spaces/{ps}/pws/freeze`。冻结即 5 门 readiness 校验，任一不过返回未就绪原因；冻结后如需变更走重冻/版本/revoke 流程。
@@ -119,7 +121,7 @@
 
 | 码 | 典型含义 | 处置 |
 |---|---|---|
-| 401 | Agent Key 缺失/无效/停用（effect-callback、A2A tasks）；或门控开后管理口 staff 令牌缺失/损坏/吊销（Q178） | 机器口核对 `loom_` secret 与 Key 状态；人员口在 /admin/login 重新录入有效的 `loom_staff_` 令牌 |
+| 401 | Agent Key 缺失/无效/停用（effect-callback、A2A tasks）；或门控开后管理口 staff 令牌缺失/损坏/吊销（Q178）；或打**无条件验真口**——发证两口（Q203）与段4/7/8/9/10 各受闸写口（Q242）——时无/坏/吊销令牌，**门控关着也 401** | 机器口核对 `loom_` secret 与 Key 状态；人员口在 /admin/login 重新录入有效的 `loom_staff_` 令牌（未签发过则先按 §0.1 引导） |
 | 403（PermissionDenied） | actor.roles 不含该口所需角色 | 换正确角色账号；勿在业务流程中提权 |
 | 404 | 资源不存在（intake/ps/pws/fcw/content）；**导出任务口跨租户也回 404**（Q196）、**内容口与 intake 语言口同**（Q200，与不存在同码，不做存在性探针） | 核对 ID 与 `tenant_id` 是否同一租户；FCW 未签发前段12 各口必 404；Q200 起五个内容口与 intake 语言口缺 `tenant_id` 即 422、跨租户即 404 |
 | 409 状态机冲突 | 事件在当前态非法 / 重复发证 / FCW 已签发 / 材料缺失 / 下载口对 queued·running 作业 | 查当前状态再决定下一步；assemble 的 409 看 `detail.guards` |

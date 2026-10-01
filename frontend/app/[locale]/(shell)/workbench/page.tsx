@@ -44,7 +44,7 @@ interface OnboardingStep {
 }
 
 // Q163：四步进度由 onboarding 派生（注册恒完成；建模=intakes>0；AI拆解=product_spaces>0；
-// 内容上线=product_spaces>0 近似为进行中，待 FCW 成品精确判断随 V2，甲案待追认）。
+// 内容上线=product_spaces>0 近似为进行中，待 FCW 成品精确判断随 V2，甲案已经负责人 2026-09-22 追认，02 C1.107）。
 function deriveSteps(onboarding: TenantOnboarding): OnboardingStep[] {
   const hasIntakes = onboarding.intakes > 0;
   const hasSpaces = onboarding.product_spaces > 0;
