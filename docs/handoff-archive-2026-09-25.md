@@ -390,3 +390,18 @@
   - **承重断言＋先红后绿**：3 例（`.env.example` 只含 `Settings` 字段／**正向对照**"只在真文件上跑绿的检查等于没有检查"／`extra="forbid"` 前提确实成立——否则契约退化成"静默无效"）。植入 `LOOM_LLM_BASE_URL_AGNES=` → 1 failed / 2 passed → 按字节还原 → 3 passed。**不放松密钥纪律**：出站供应商 Key 仍走模型注册表登记、`LOOM_MASTER_KEY` Fernet 加密落 `ai_model_keys`（Q82/Q148），不入任何 env 载体。
 
 > 本块为 `handoff.md`「最近进度」Q239 一条条目的**逐字原文**（4 行＝父条目＋3 条 sub-bullets，2135 字节；`cmp` 证字节一致，sha256 前缀 `97be7ce2`）；块内 4 行在档内出现 1 次、在 handoff「最近进度」区出现 0 次。
+
+## 第五十次续写（2026-10-01，Q245 批滚出 Q240 条目原文）
+
+- **Q240 LLM 出站调用加有限重试＝driver 层吸收传输层瞬断与 429/5xx（2026-09-30；**代码＋测试＋文档**，零迁移零新表零新 env 字段；基线 1041→**1056 passed＋10 skipped**〔总收集 1066〕；02 C1.184）**〔本条为 Q241 批补录——Q240 批只更新了本页顶部 banner、漏了本列表，见第二十九次进度归档注记〕**
+  - **来由**：真模型全链演练首跑一次 `httpx.RemoteProtocolError: Server disconnected without sending a response.` 瞬断（curl 复探同一 key 两次 200、重跑 3 PASS／0 FAIL）⇒ 判定上游瞬断而非本仓缺陷；负责人要求「登记成 Q 记录，加上重试」。
+  - **落点＝driver 层**（决定性论据：`gateway.invoke`／`embed` 全仓 **9 个调用点**，今天**唯一**会重试的消费者是 restock worker ⇒ 其余 8 点零重试）：`drivers.py` 两段逐字节同构的裸 httpx POST 抽成 `_post_json`，重试 `httpx.TransportError`（覆盖 `RemoteProtocolError`／连接错误／全部超时类）与 HTTP 429／5xx，其余 4xx 立即失败；退避照 Q140 指数退避（base 0.5／cap 30 常量），次数耗尽抛 `DriverError` 并 `from` 链上原因 ⇒ `gateway` 既有的 `DriverError → GenerationUpstreamError` 映射一字不改。旋钮 `LOOM_LLM_MAX_ATTEMPTS` 默认 3，`os.environ` 直读，**不入 `.env`/`.env.example`**（Q239 载体契约）。
+  - **测试与演练**：新单测 15 例（先红后绿含一次诚实发现：去掉退避 sleep 首轮 0 红 ⇒ 补守卫）；真 agnes 全链演练 `infra/fullchain-rehearsal.sh` **3 PASS／0 FAIL**（36.73s）证无回归。四条边界只登记不修（重试对指标不可见／最坏 in-call 延迟 3×timeout／可能双计费／裸 JSONDecodeError 与 InvalidURL）。工程接缝（默认 3／base 0.5／cap 30）**已经负责人 2026-10-01「追认 Q232 和 Q240 的接缝」追认销账**（追认只结设计选择、不结数值校准——结的是「重试落点／触发集合／退避形制／单旋钮／三个出厂默认值」这一组设计选择；`3`／`0.5`／`30` 对真上游是否合适属**校准**，本仓今天无数据，待首批主数据落地后随真流量重看）。
+
+> 本块为 `handoff.md`「最近进度」Q240 一条条目的**逐字原文**（4 行＝父条目＋3 条 sub-bullets，2225 字节，sha256 前缀 `e5b0a5f0`）；**搬入后实测**：块内 4 行在档内出现 **1** 次、在 handoff「最近进度」区出现 **0** 次（后者为从 handoff 删除后计数）；注记行置于块后，故 `archive.endswith(block+\n)` 不成立（前几批注记同此形制），字节一致性以「档内 1 次＋handoff 0 次」为准。
+
+## 第五十一次续写（2026-10-02，Q246 批滚出 Q241 条目原文）
+
+> **历史快照（2026-10-01）：Q241 项目级代码审计报告（docs/23）登记进治理体系＋审计结论逐条回代码复核（**纯文档＋复核**，零生产代码零迁移零新表零新 env；基线沿用 **1056 passed＋10 skipped**〔总收集 1066〕；02 C1.185）**——`docs/23_项目级代码审计报告与功能点梳理.md` 已于 `e68ac72` 提交但**从未登记**（不在 README 地图、无 02 Q 条目、handoff/CHANGELOG/AGENTS 皆无）⇒ 本批补登记并把它的结论**回代码逐条复测**。§4.2「五处写口自判角色」**4 成立／1 不成立**：段11 终稿白名单**不成立**（该模块只有 2 个写端点，**两个都带** Q203 的 `require_internal_actor(OPERATIONS)`，service 内 `_require_ops` 只是 worker 兜底）——已就地订正 §0/§4.2 并新增 §10 复核节；其余四族（atom Gate 16 端点／段9-10 策略包 3／段7-8 平台适配 9／PWS 冻结吊销 2）经逐条复核**成立**，仍是未闭合缺口。两个取证工具缺陷随本批修掉：`write_authz_trace.py` 写动词大小写不匹配致**输出 0 写操作**（`9419805`）、两脚本 4 处 `# noqa: E402` 未被 ruff 报 unused（`7ec233b`）；修后输出 **117 写操作／24 个「从 handler 不可达 gate」**，与 `route_auth_matrix.py` 的 117 写口一致。**四族是否统一到 `require_internal_actor` 属破坏性契约变更（同 Q203 一类），本批只登记、不裁决**。
+
+> 本块为 `handoff.md`「最近进度」Q241 一条条目的**逐字原文**（1 行＝整条 banner 条目，1462 字节，sha256 前缀 `3cc1dc06`）；**搬入后实测**：块内 1 行在档内出现 **1** 次、在 handoff「最近进度」区出现 **0** 次（已从 banner 删除后计数）；注记行置于块后，故 `archive.endswith(block+\n)` 不成立（前几批注记同此形制），字节一致性以「档内 1 次＋handoff 0 次」为准。
