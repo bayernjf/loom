@@ -3,7 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
+from app.core.rbac import OPERATIONS
+from app.core.staff_auth.deps import require_internal_actor
 from app.decision.layer_strategy import service
 from app.decision.layer_strategy.schemas import (
     ActorOnly,
@@ -12,6 +15,9 @@ from app.decision.layer_strategy.schemas import (
 )
 
 router = APIRouter(tags=["layer-strategy"])
+
+# Q242：三包写口只认已验真 staff 令牌；service 层 _require_ops 保留作兜底。
+_ops_gate = require_internal_actor(OPERATIONS)
 
 
 def _package_view(p) -> dict:
@@ -51,9 +57,10 @@ async def create_package(
     product_space_id: str,
     body: PackageCreate,
     session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        package = await service.create_package(session, product_space_id, body, body.actor)
+        package = await service.create_package(session, product_space_id, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PsNotFound as exc:
@@ -70,10 +77,13 @@ async def create_package(
 
 @router.put("/api/packages/{package_id}")
 async def update_package(
-    package_id: str, body: PackageUpdate, session: AsyncSession = Depends(get_session)
+    package_id: str,
+    body: PackageUpdate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> dict:
     try:
-        package = await service.update_package(session, package_id, body, body.actor)
+        package = await service.update_package(session, package_id, body, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PackageNotFound as exc:
@@ -86,10 +96,13 @@ async def update_package(
 
 @router.delete("/api/packages/{package_id}", status_code=204)
 async def archive_package(
-    package_id: str, body: ActorOnly, session: AsyncSession = Depends(get_session)
+    package_id: str,
+    body: ActorOnly,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
 ) -> None:
     try:
-        await service.archive_package(session, package_id, body.actor)
+        await service.archive_package(session, package_id, verified)
     except service.RoleNotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
     except service.PackageNotFound as exc:
