@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
+from app.core.staff_auth.deps import get_auth_session
 from app.main import app
 from app.product.condition import pwc_rules
 from app.product.condition import service as pwc_service
@@ -23,6 +24,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
 OPS = {"id": "ops-1", "roles": ["operations"]}
@@ -43,6 +45,9 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # Q242：写口在门控关下也自行验真，走的是 get_auth_session 这条缝，
+    # 不一起覆盖就会去连应用真实的 SessionLocal（与测试内存库不是同一个库）。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -63,6 +68,9 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Q242：段4/7/8/10 写口只认已验真 staff 令牌（门控关着也验），默认带一枚
+        # 覆盖 operations / product_reviewer / internal_compliance 的令牌。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 

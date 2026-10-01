@@ -38,6 +38,7 @@ from app.core.model_registry.seeds import (
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillCandidate, SkillRun
+from app.core.staff_auth.deps import get_auth_session
 from app.main import app
 from app.product.atom.models import (
     EMBEDDING_DIM,
@@ -50,6 +51,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
+from tests.integration.staff_tokens import acting_as, bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
@@ -69,6 +71,9 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # Q242：写口在门控关下也自行验真，走的是 get_auth_session 这条缝，
+    # 不一起覆盖就会去连应用真实的 SessionLocal（与测试内存库不是同一个库）。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -108,6 +113,9 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Q242：段4/7/8/10 写口只认已验真 staff 令牌（门控关着也验），默认带一枚
+        # 覆盖 operations / product_reviewer / internal_compliance 的令牌。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 
@@ -505,12 +513,14 @@ async def test_ai_risk_passthrough_and_wordlist_forces_override(
 
 async def test_rbac_and_pre_gates(client, session_factory):
     ps_id = await _make_ps(session_factory)
-    for actor in (REVIEWER, CUSTOMER):
-        r = await client.post(
-            f"/api/product-spaces/{ps_id}/atom-batches/llm-expand",
-            json=_expand_body(actor=actor),
-        )
-        assert r.status_code == 403
+    # Q242：越权＝换一枚没有 operations 的令牌（正文自报不再是身份）。
+    async with acting_as(client, ["product_reviewer"], staff_id="s-rev"):
+        for actor in (REVIEWER, CUSTOMER):
+            r = await client.post(
+                f"/api/product-spaces/{ps_id}/atom-batches/llm-expand",
+                json=_expand_body(actor=actor),
+            )
+            assert r.status_code == 403
 
     r = await client.post(
         "/api/product-spaces/no-such-ps/atom-batches/llm-expand", json=_expand_body()

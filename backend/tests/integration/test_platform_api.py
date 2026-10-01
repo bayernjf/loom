@@ -7,11 +7,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
+from app.core.staff_auth.deps import get_auth_session
 from app.main import app
 from app.platform.platform_adaptation.pa_rules import WEIGHT_KEYS_17
 from app.product.condition import pwc_rules
 from app.product.condition.models import ContentGoal
 from app.product.product_intake.models import ProductIntakeApplication, ProductSpace
+from tests.integration.staff_tokens import acting_as, bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 NOBODY = {"id": "nobody-1", "roles": []}
@@ -42,6 +44,9 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # Q242：写口在门控关下也自行验真，走的是 get_auth_session 这条缝，
+    # 不一起覆盖就会去连应用真实的 SessionLocal（与测试内存库不是同一个库）。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -74,6 +79,9 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Q242：段4/7/8/10 写口只认已验真 staff 令牌（门控关着也验），默认带一枚
+        # 覆盖 operations / product_reviewer / internal_compliance 的令牌。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 
@@ -98,10 +106,12 @@ async def _make_ps(session_factory, *, tenant="t1"):
 # ---------- 发布位档案（Q35） ----------
 
 async def test_slot_crud_role_code_and_fit_score(client):
-    forbidden = await client.post(
-        "/api/admin/publish-slots", json={"item": SLOT, "actor": NOBODY}
-    )
-    assert forbidden.status_code == 403
+    # Q242：写口只认已验真令牌 ⇒ 越权＝换一枚没有 operations 的令牌，正文自报无效。
+    async with acting_as(client, ["product_reviewer"], staff_id="s-rev"):
+        forbidden = await client.post(
+            "/api/admin/publish-slots", json={"item": SLOT, "actor": NOBODY}
+        )
+        assert forbidden.status_code == 403
 
     resp = await client.post(
         "/api/admin/publish-slots", json={"item": SLOT, "actor": OPS}
@@ -362,10 +372,12 @@ async def test_packages_triple_unique_and_payload_validation(session_factory, cl
         json={"item": {**csp, "goal": "NOPE"}, "actor": OPS},
     )
     assert bad_goal.status_code == 404
-    forbidden = await client.post(
-        f"/api/product-spaces/{ps_id}/packages", json={"item": csp, "actor": NOBODY}
-    )
-    assert forbidden.status_code == 403
+    # Q242：越权＝换一枚没有 operations 的令牌（正文自报不再是身份）。
+    async with acting_as(client, ["product_reviewer"], staff_id="s-rev"):
+        forbidden = await client.post(
+            f"/api/product-spaces/{ps_id}/packages", json={"item": csp, "actor": NOBODY}
+        )
+        assert forbidden.status_code == 403
 
     # 更新与软归档
     updated = await client.put(

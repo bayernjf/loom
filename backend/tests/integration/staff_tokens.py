@@ -10,11 +10,18 @@ E1.1 两个发证写口自 Q203 起只认已验真令牌：门控关闭时它们
 否则验真会去连应用真实的 SessionLocal，与测试内存库不是同一个库。
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from httpx import AsyncClient
 
 BOOTSTRAP_ADMIN: dict[str, Any] = {"id": "pa-bootstrap", "roles": ["platform_admin"]}
+
+# Q242：段4/7/8/10 的写口各自要求 operations / product_reviewer / internal_compliance
+# 之一。集成测试多半要跑完整条链（建池→审原子→发证），逐口换令牌只是噪音，
+# 故给这些文件的默认 client 一枚同时覆盖三口的令牌。
+DEFAULT_WRITE_ROLES = ["operations", "product_reviewer", "internal_compliance"]
 
 
 async def issue_staff_token(
@@ -40,3 +47,30 @@ async def issue_staff_token(
 
 def bearer(secret: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {secret}"}
+
+
+async def issue_write_token(client: AsyncClient, *, staff_id: str = "s-writer") -> str:
+    """一枚同时具备三个内部写口角色的令牌（Q242 默认身份）。"""
+    return await issue_staff_token(
+        client, DEFAULT_WRITE_ROLES, staff_id=staff_id, staff_name="写口值班"
+    )
+
+
+@asynccontextmanager
+async def acting_as(
+    client: AsyncClient, roles: list[str], *, staff_id: str = "s-alt"
+) -> AsyncIterator[None]:
+    """临时换一枚角色不同的令牌打单个口，退出时还原原来的 Authorization 头。
+
+    Q242 起「越权」不再是正文自报一个没角色的 actor（那已不是身份），而是换一枚
+    真的缺该角色的令牌，故负向用例要用它包住那一次调用。
+    """
+    saved = client.headers.get("Authorization")
+    client.headers.update(bearer(await issue_staff_token(client, roles, staff_id=staff_id)))
+    try:
+        yield
+    finally:
+        if saved is None:
+            client.headers.pop("Authorization", None)
+        else:
+            client.headers.update({"Authorization": saved})

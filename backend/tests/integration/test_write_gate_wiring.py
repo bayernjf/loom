@@ -1,0 +1,104 @@
+"""写口凭证接线自检（Q242，接替 Q203 在 test_fcw_api 里的那份同型检查）。
+
+行为用例已经钉住「无令牌 401 / 角色不足 403」，但那条判红只会说"状态码不对"，
+看不出是 `Depends` 被摘了。这条把接线本身钉住：逐个路由数**标记过的依赖**
+（`require_internal_actor` 在闭包上留的 `loom_requires_internal_credential`），
+少一个即判红，报错直接指向路由。
+
+反向对照同样重要：只读口与**有意不加闸**的写口必须一个标记都没有，否则这条
+检查会退化成"逢路由就说有"。
+"""
+
+from fastapi.routing import APIRoute
+
+from app.main import app
+
+OPS = ("operations",)
+REVIEWER = ("product_reviewer",)
+COMPLIANCE = ("internal_compliance",)
+
+# 全部挂了 require_internal_actor 的写口 → 期望角色。
+GATED: dict[tuple[str, str], tuple[str, ...]] = {
+    # 段4 原子（Q242）
+    ("/api/product-spaces/{product_space_id}/atom-batches/llm-expand", "POST"): OPS,
+    ("/api/atom-candidates/{candidate_id}/approve", "POST"): REVIEWER,
+    ("/api/atom-candidates/batch-approve", "POST"): REVIEWER,
+    ("/api/atom-candidates/{candidate_id}/reject", "POST"): REVIEWER,
+    ("/api/atom-clusters/{cluster_id}/resolve", "POST"): REVIEWER,
+    ("/api/atom-candidates/{candidate_id}/risk-override", "POST"): REVIEWER,
+    ("/api/atoms/{atom_id}/freeze", "POST"): OPS,
+    ("/api/atoms/{atom_id}/unfreeze", "POST"): OPS,
+    ("/api/atoms/{atom_id}/compliance-suspend", "POST"): COMPLIANCE,
+    ("/api/atoms/{atom_id}/compliance-resume", "POST"): COMPLIANCE,
+    ("/api/atoms/{atom_id}/deprecate", "POST"): OPS,
+    ("/api/atoms/{atom_id}/archive", "POST"): OPS,
+    ("/api/atoms/{atom_id}/reject", "POST"): REVIEWER,
+    # 段10 三包（Q242）
+    ("/api/product-spaces/{product_space_id}/packages", "POST"): OPS,
+    ("/api/packages/{package_id}", "PUT"): OPS,
+    ("/api/packages/{package_id}", "DELETE"): OPS,
+    # 段7/8 平台底表（Q242）
+    ("/api/admin/publish-slots", "POST"): OPS,
+    ("/api/admin/publish-slots/{slot_id}", "PUT"): OPS,
+    ("/api/admin/publish-slots/{slot_id}", "DELETE"): OPS,
+    ("/api/admin/fit-weights", "PUT"): OPS,
+    ("/api/admin/platform-rules", "POST"): OPS,
+    ("/api/admin/platform-rules/{rule_id}", "DELETE"): OPS,
+    ("/api/admin/slot-type-defaults", "PUT"): OPS,
+    ("/api/product-spaces/{product_space_id}/pcp", "POST"): OPS,
+    ("/api/pcp/{pcp_id}", "PUT"): OPS,
+    # 段11 E1.1 发证（Q203）
+    ("/api/fcw/assemble", "POST"): OPS,
+    ("/api/fcw/assembly-tasks", "POST"): OPS,
+}
+
+# 必须一个标记都没有：只读口，以及有意不加闸的写口。
+UNGATED: tuple[tuple[str, str], ...] = (
+    ("/api/fcw/assembly-tasks/{task_id}", "GET"),
+    ("/api/product-spaces/{product_space_id}/packages", "GET"),
+    ("/api/admin/publish-slots", "GET"),
+    ("/api/admin/fit-weights", "GET"),
+    # Q75：前置状态即闸，revive 有意不设角色闸。
+    ("/api/atom-candidates/{candidate_id}/revive", "POST"),
+    # 段4 的这两口 docs/05 未给角色，Q242 刻意不动。
+    ("/api/product-spaces/{product_space_id}/atom-batches", "POST"),
+    ("/api/atom-candidates/{candidate_id}/evidence", "POST"),
+)
+
+
+def _find_route(path: str, method: str) -> APIRoute:
+    # 本仓 FastAPI 用 `_IncludedRouter` 懒包含，故要顺着 original_router 找。
+    stack = list(app.routes)
+    while stack:
+        node = stack.pop()
+        sub = getattr(node, "original_router", None)
+        if sub is not None:
+            stack.extend(sub.routes)
+        elif (
+            isinstance(node, APIRoute) and node.path == path and method in node.methods
+        ):
+            return node
+    raise AssertionError(f"找不到 {method} {path}")
+
+
+def _marked_calls(route: APIRoute) -> list:
+    return [
+        d.call
+        for d in route.dependant.dependencies
+        if getattr(d.call, "loom_requires_internal_credential", None) is not None
+    ]
+
+
+def test_every_gated_write_route_carries_the_credential_dependency():
+    for (path, method), roles in GATED.items():
+        route = _find_route(path, method)
+        marked = _marked_calls(route)
+        assert len(marked) == 1, f"{method} {path} 上挂着 {len(marked)} 个凭证依赖"
+        assert tuple(marked[0].loom_requires_internal_credential) == roles, (
+            f"{method} {path} 要求的角色不是 {roles}"
+        )
+
+
+def test_read_and_deliberately_ungated_routes_have_no_credential_dependency():
+    for path, method in UNGATED:
+        assert _marked_calls(_find_route(path, method)) == [], f"{method} {path}"

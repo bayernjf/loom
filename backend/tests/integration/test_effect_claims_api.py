@@ -13,6 +13,7 @@ create_all 不跑迁移种子；成品由本文件 fixture 自插，Agent Key �
 """
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -140,7 +141,10 @@ async def test_claim_binds_orphan_and_clears_queue(client, session_factory):
         "claimed_at": view["claimed_at"],
         "updated_rows": 1,
     }
-    assert view["claimed_at"].startswith("2026-09-")
+    # 认领时间戳是「刚刚」。原先断言 startswith("2026-09-")，跨月那天必假红
+    # （2026-10-01 实测），改成与当前时刻比对（Q242 顺手修掉的时间炸弹）。
+    claimed_at = datetime.fromisoformat(view["claimed_at"])
+    assert abs((datetime.now(UTC) - claimed_at).total_seconds()) < 300
 
     # 孤儿队列清空；c1 时序出现该行且带认领溯源。
     r = await ac.get("/api/admin/effects/orphans", params=OPS_Q)

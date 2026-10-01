@@ -30,7 +30,11 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
-from tests.integration.staff_tokens import bearer, issue_staff_token
+from tests.integration.staff_tokens import (
+    bearer,
+    issue_staff_token,
+    issue_write_token,
+)
 
 OWNER = {"id": "owner-1", "roles": ["whitelist_owner"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
@@ -86,12 +90,11 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        # Q203 #34：E1.1 两个写口只认已验真令牌（门控关也验）。本文件绝大多数用例
-        # 的目的是发证/测 Guard，故在 client 上默认带一枚 operations 令牌；要测
-        # 「无令牌 / 令牌角色不足 / 自报不能提权」的用例自己换头，见文件末尾那组。
-        ac.headers.update(
-            bearer(await issue_staff_token(client=ac, roles=["operations"]))
-        )
+        # Q203 #34 / Q242：发证写口与段4/7/8/10 写口只认已验真令牌（门控关也验）。
+        # 本文件绝大多数用例的目的是发证/测 Guard，故在 client 上默认带一枚覆盖
+        # operations / product_reviewer / internal_compliance 的令牌；要测「无令牌 /
+        # 令牌角色不足 / 自报不能提权」的用例自己换头，见文件末尾那组。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 
@@ -420,7 +423,7 @@ async def test_q55_task_driven_batch_with_per_item_failures(client, session_fact
         },
     )
     assert ignored.status_code == 201, ignored.text
-    assert ignored.json()["created_by"] == "s-ops"
+    assert ignored.json()["created_by"] == "s-writer"
 
     # 403 只来自令牌角色不足——把令牌换成无 operations 的一枚。
     secret = await issue_staff_token(client, ["dictionary_admin"], staff_id="s-dict")
@@ -576,7 +579,7 @@ async def test_verified_token_identity_overrides_the_declared_actor(
         json=_assemble_body(ps_id, slot_id, actor=NOBODY),
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["issued_by"] == "s-ops"  # staff_tokens 的引导 staff_id，不是 nobody-1
+    assert resp.json()["issued_by"] == "s-writer"  # issue_write_token 的引导 staff_id，不是 nobody-1
 
 
 async def test_token_without_operations_role_is_403(client, session_factory):
@@ -585,48 +588,3 @@ async def test_token_without_operations_role_is_403(client, session_factory):
     client.headers.update(bearer(secret))
     resp = await client.post("/api/fcw/assemble", json=_assemble_body(ps_id, slot_id))
     assert resp.status_code == 403, resp.text
-
-def test_write_routes_stay_wired_to_the_credential_dependency():
-    """接线自检（Q203）：两个发证写口各自必须挂着 require_internal_actor。
-
-    行为用例已经钉住「无令牌 401」，但那条判红只会说"状态码不是 401"，看不出是
-    Depends 被摘了；这条把接线本身钉住——摘掉即判红，且报错直接指向路由。
-    （本仓 FastAPI 用 `_IncludedRouter` 懒包含，故要顺着 original_router 找。）
-    """
-    from fastapi.routing import APIRoute
-
-    def find_route(path: str, method: str) -> APIRoute:
-        stack = list(app.routes)
-        while stack:
-            node = stack.pop()
-            sub = getattr(node, "original_router", None)
-            if sub is not None:
-                stack.extend(sub.routes)
-            elif (
-                isinstance(node, APIRoute)
-                and node.path == path
-                and method in node.methods
-            ):
-                return node
-        raise AssertionError(f"找不到 {method} {path}")
-
-    def marked_calls(route: APIRoute) -> list:
-        return [
-            d.call
-            for d in route.dependant.dependencies
-            if getattr(
-                d.call, "loom_requires_internal_credential", None
-            )
-            is not None
-        ]
-
-    for path in ("/api/fcw/assemble", "/api/fcw/assembly-tasks"):
-        route = find_route(path, "POST")
-        marked = marked_calls(route)
-        assert len(marked) == 1, f"{path} 上挂着 {len(marked)} 个凭证依赖"
-        assert "operations" in marked[0].loom_requires_internal_credential, path
-
-    # 反向对照：探针不是"逢路由就报有"——只读的状态口没有凭证依赖。
-    assert marked_calls(
-        find_route("/api/fcw/assembly-tasks/{task_id}", "GET")
-    ) == []

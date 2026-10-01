@@ -23,7 +23,7 @@ from app.product.condition import pwc_rules
 from app.product.condition.models import ContentGoal
 from app.product.fieldpool.models import FPSourceRoute
 from app.product.product_intake.models import G2Field
-from tests.integration.staff_tokens import bearer, issue_staff_token
+from tests.integration.staff_tokens import bearer, issue_write_token
 from tests.integration.test_fcw_api import (
     COMPLIANCE,
     GOAL,
@@ -86,7 +86,7 @@ async def client(session_factory):
         # Q203 #34：发证写口只认已验真令牌，本文件要发证，故默认带一枚 operations 令牌
         # （引导口径同 Q178 上线流程；细节见 tests/integration/staff_tokens.py）。
         ac.headers.update(
-            bearer(await issue_staff_token(ac, ["operations"]))
+            bearer(await issue_write_token(ac))
         )
         yield ac
 
