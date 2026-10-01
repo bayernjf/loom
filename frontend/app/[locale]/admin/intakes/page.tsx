@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -30,7 +31,7 @@ function buildQueryString(params: Record<string, string>): string {
 }
 
 function timeText(iso: string): string {
-  return iso.slice(0, 16).replace("T", " ");
+  return formatDateTimeLocal(iso);
 }
 
 function StatusFilters({

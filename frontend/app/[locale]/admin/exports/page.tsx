@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { getTranslations } from "next-intl/server";
 
 import { ApiError, listExportJobs } from "@/lib/api";
@@ -17,7 +18,7 @@ function oneParam(value: string | string[] | undefined): string | undefined {
 }
 
 function fmt(iso: string | null): string {
-  return iso ? iso.slice(0, 16).replace("T", " ") : "—";
+  return formatDateTimeLocal(iso);
 }
 
 function shortId(value: string): string {

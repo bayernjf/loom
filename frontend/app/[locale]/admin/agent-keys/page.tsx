@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function fmt(iso: string | null): string {
-  return iso ? iso.slice(0, 16).replace("T", " ") : "—";
+  return formatDateTimeLocal(iso);
 }
 
 export default async function AgentKeysPage({
