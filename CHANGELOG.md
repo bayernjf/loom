@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q241 项目级代码审计报告（docs/23）登记进治理体系＋审计结论逐条回代码复核（2026-10-01，**纯文档＋复核**，零生产代码零迁移零新表零新 env；基线沿用 1056 passed＋10 skipped）**
+  - **来由**：`docs/23_项目级代码审计报告与功能点梳理.md`（2026-09-30 只读审计，基准 `origin/dev` @ `a915862`）已于 `e68ac72` 提交，但**从未登记进治理体系**（不在 README 文档地图、无 docs/02 Q 条目、handoff/CHANGELOG/AGENTS 皆无）⇒ 本批补登记为 **Q241 / docs/02 C1.185**，并把报告结论**回代码逐条复测**（不复述其自我声明）。
+  - **§4.2「五处写口绕过 `require_any_role` 自判角色」复核＝4 成立／1 不成立**：段11 终稿白名单一条**不成立**——`final/final_whitelist/router.py` 只有 **2 个**写端点（`:60` assemble／`:102` assembly-tasks），两个都带 Q203 的 `require_internal_actor(OPERATIONS)`（`:64`／`:106`），service 内 `_require_ops` 只是 worker 兜底；已就地订正报告 §0 摘要与 §4.2 表（加删除线）并新增 §10 复核节。其余四族经逐条复核**成立**：atom Gate（`product/atom/router.py` 16 个写端点）／段9-10 策略包（`layer_strategy/router.py:49,71,87`）／段7-8 平台适配（`platform_adaptation/router.py` 9 个写端点）／PWS 冻结吊销（`whitelist_center/router.py:78,109`）。
+  - **两个取证工具缺陷随本批修掉**（报告 §1 自列的「工具债」）：`write_authz_trace.py` 的写动词过滤大小写不匹配（`APIRoute.methods` 存**大写**动词）⇒ 输出 0 写操作的空结论（`9419805`）；两脚本 4 处 `# noqa: E402` 未被 ruff 报 unused（`7ec233b`）。修后 `write_authz_trace.py` 输出 **117 写操作／24 个「从 handler 不可达 gate」**，与 `route_auth_matrix.py` 的 117 写口一致。
+  - **只登记、不裁决**：§4.2 四条成立项与 Q203 是两件事——Q203 只把段11 发证两写口改为无条件验真令牌，**未**推广到其余四族 ⇒ 四族仍是未闭合的工程缺口；是否统一到 `require_internal_actor` 属**破坏性契约变更**（同 Q203 一类），已列入待裁项。
 - **Q240 LLM 出站调用加有限重试：driver 层吸收传输层瞬断与 429/5xx（2026-09-30，**代码＋测试＋文档**，零迁移零新表零新 env 字段）**
   - **来由**：真模型全链演练首跑一次 `httpx.RemoteProtocolError: Server disconnected without sending a response.`（卡在 `drivers.py` 的 httpx POST 约 140s 后被切断）；随后对同一把 key 的 curl 复探两次 200、演练重跑 3 PASS／0 FAIL ⇒ 判定**上游瞬断，不是本仓缺陷**。当时未为这次失败改任何代码。
   - **为什么重试落在 driver 层**（决定性论据）：`gateway.invoke`／`gateway.embed` 全仓共 **9 个调用点**，今天**唯一**会重试的消费者是 restock worker ⇒ 其余 8 点零重试。放 driver 层 9 点一次覆盖；放任何调用方只覆盖一个。
