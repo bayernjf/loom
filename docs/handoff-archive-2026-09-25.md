@@ -381,3 +381,12 @@
   - **取值不属本片**：该 env 的值＝实例对外公网域名，取决于**待裁项①「网关与 TLS 归属」**；按 Q135 先例不入 `backend/.env.example`。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。按「最近 5 条」上限滚出 Q232（归档档第四十三次续写，逐字搬入）。
 
 > 本块为 `handoff.md`「最近进度」Q238 一条条目的**逐字原文**（6 行＝父条目＋5 条 sub-bullets，2065 字节；`cmp` 证字节一致，sha256 前缀 `d674ec0b`）；块内 6 行在档内出现 1 次、在 handoff「最近进度」区出现 0 次。
+
+## 第四十九次续写（2026-10-01，Q244 批滚出 Q239 条目原文）
+
+- **Q239 `.env` 载体契约：只承载 `Settings` 字段，其余须走可 source 的 shell 载体（2026-09-30；**测试＋文档**，零迁移零新表零生产代码；新增 `backend/tests/unit/test_env_carrier_contract.py`、改 `backend/.env.example`；基线 1038→**1041 passed＋10 skipped**〔总收集 1051〕；02 C1.183）**：负责人提供 agnes 网关凭证并交代「整理好放到 .env 里…然后记得把 .env 放到 .gitignore 里」，整理时撞上本仓一条从未登记的硬约束，遂「加说明，并追加 Q 记录」。
+  - **缺陷本体（三句实测）**：① `config.py:12` 是 `SettingsConfigDict(env_file=".env", env_prefix="LOOM_")` 而 **pydantic-settings 默认 `extra="forbid"`** ⇒ 往 `.env` 放一个 `Settings` 不认识的名字（如 `LOOM_LLM_BASE_URL_AGNES`）不是"静默无效"而是 `Settings()` 抛 `ValidationError`、**进程直接起不来**（实测 `extra_forbidden`）；② 本仓**没有 `load_dotenv`**；③ pydantic-settings 只把 `.env` 读进 `Settings` 对象、**不写 `os.environ`**（探针实测 `False`）——而 `drivers.py:85` 恰恰直接读 `os.environ["LOOM_LLM_BASE_URL_<PROVIDER>"]` ⇒ 那类变量进 `.env` 既会崩、又本来就不生效（Q233 同型失效）。
+  - **落法＝两个载体**：`backend/.env`／`.env.example` **只放 `Settings` 字段**；直接读 `os.environ` 的走可 source 的 `backend/.env.shell`（`set -a; source backend/.env.shell; set +a`）。两者均被 `.gitignore` 覆盖（`.env`／`.env.*`），**永不入库**。契约写进 `.env.example` 顶部注释＋docs/17 §3＋docs/15 §4。
+  - **承重断言＋先红后绿**：3 例（`.env.example` 只含 `Settings` 字段／**正向对照**"只在真文件上跑绿的检查等于没有检查"／`extra="forbid"` 前提确实成立——否则契约退化成"静默无效"）。植入 `LOOM_LLM_BASE_URL_AGNES=` → 1 failed / 2 passed → 按字节还原 → 3 passed。**不放松密钥纪律**：出站供应商 Key 仍走模型注册表登记、`LOOM_MASTER_KEY` Fernet 加密落 `ai_model_keys`（Q82/Q148），不入任何 env 载体。
+
+> 本块为 `handoff.md`「最近进度」Q239 一条条目的**逐字原文**（4 行＝父条目＋3 条 sub-bullets，2135 字节；`cmp` 证字节一致，sha256 前缀 `97be7ce2`）；块内 4 行在档内出现 1 次、在 handoff「最近进度」区出现 0 次。
