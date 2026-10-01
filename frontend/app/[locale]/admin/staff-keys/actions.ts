@@ -11,18 +11,9 @@ import {
   revokeStaffKey,
 } from "@/lib/api";
 import type { StaffKeyView } from "@/lib/api";
+import { STAFF_ROLE_CODES } from "./role-codes";
+export type { StaffRoleCode } from "./role-codes";
 export type { StaffKeyView };
-
-// 可签发的内部角色（与后端 INTERNAL_STAFF_ROLES 对齐，不含客户角色 whitelist_owner）。
-// 角色码为系统标识，按 docs/18 原样直出，不进消息表翻译。
-export const STAFF_ROLE_CODES = [
-  "operations",
-  "platform_admin",
-  "product_reviewer",
-  "dictionary_admin",
-  "internal_compliance",
-] as const;
-export type StaffRoleCode = (typeof STAFF_ROLE_CODES)[number];
 
 const KNOWN_STATUSES = new Set([400, 401, 403, 404, 409, 422]);
 

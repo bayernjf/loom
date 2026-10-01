@@ -9,9 +9,9 @@ import { useState, useTransition } from "react";
 import styles from "../admin.module.css";
 import {
   issueStaffKeyAction,
-  STAFF_ROLE_CODES,
   type StaffKeyActionResult,
 } from "./actions";
+import { STAFF_ROLE_CODES } from "./role-codes";
 
 const KNOWN_STATUSES = new Set([400, 401, 403, 404, 409, 422]);
 
