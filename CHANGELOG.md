@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q245 待办②（首批主数据＝两个人）拆成九条可执行任务 + 工程侧唯一可自推项「起库并验迁移头」实测就绪（2026-10-01，**执行＋文档**，零生产代码零迁移零测试改动零前端改动；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.189）**
+  - **来由**：负责人「拆②为可执行任务」→「执行 #1 起库并验迁移头」→「更新项目文档」。② 此前只是一条外部阻塞描述，本批拆成**九条单线串联**的可执行任务（#1 工程备库／#2 业务定平台码＋选一个真产品／#3 运营签 `operations` staff 令牌／#4 段1 录入拿 `product_space_id`／#5 只填四样／#6 自检退出码归 0／#7 跑链裁决人走段3→6 冻结 PWS／#8 段10 合规清洗／#9 `POST /api/fcw/assemble` 出真 `final_id` 并溯源），**其中只有 #1 属工程侧可自推**。
+  - **#1 实测**：`docker compose -f infra/docker-compose.yml up -d postgres`（只起数据面＝`infra-postgres-1`，只绑 `127.0.0.1:5432`、`restart: unless-stopped`、`infra_pgdata` 卷持久）；`alembic upgrade head` 升至 **0042**、`current` 回读 `(head)`、`information_schema` 数得 **63 表**；`scripts/check_master_data.py` **exit 1**（三表 0 行），而 `content_goals=5`／`cp_law_sensitive_domains=6`／`g1_categories=6` 与 Q224／Q230 **逐字一致** ⇒ 剩余阻塞精确为「只差业务真值与跑链人手，工程侧零待写」。
+  - **口令不入文档、不入 git**：库口令本机 `openssl rand -hex 16` 生成、未写入任何文件；docs／CHANGELOG 只记容器名、端口与 DSN 形状（沿用 Q82／Q148／Q239 的密钥纪律）。
+  - **【待负责人确认】**：docs/19 §0.2 §E 的完成标准写「staging/真部署的库」，本机 compose 库够 #4–#6 用，**#3 签令牌与 #9 发证仍需 backend 进程**（须 `LOOM_MASTER_KEY`＋redis，空值启动 fail-fast）。
+  - **复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q244 D3.5 白名单组装引擎余项候选方案文档（2026-10-01，**纯文档**，零生产代码零迁移零后端零前端；新增 `docs/design-d3.5-whitelist-assembly-remaining.md`〔草案〕＋`docs/README_文档地图与治理.md` §1 地图一行＋`handoff.md` 待办 #7 指针；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.188）**
   - **来由**：负责人 2026-10-01「先出 D3.5 余项的候选方案」→「请生成 D3.5 余项的候选方案文档」→「更新项目文档」。本批**只产候选**，**不裁决任何一项**。
   - **内容**：按 `docs/09` §D3.5 六子项（① 组装工作台〔V1核心〕② 6 层调动可视化 ③ 字段组合合理性校验 ④ 候选白名单池〔V1关键〕⑤ 白名单审核工作台 ⑥ FCW 冻结管理〔V2〕）给**落地现状**——④ 已落（Q155／Q177／Q180／Q186）、① 后端两发证口（`POST /api/fcw/assemble`／`POST /api/fcw/assembly-tasks`，Q203 只认已验真 `loom_staff_` 令牌）已落而**前端无组装页**、②③⑤ 未建、⑥ 按 `docs/09` 标注属 **V2**——再对**余项**（①②③⑤⑥）逐项给**甲·乙·丙**候选，标注改动面、依赖契约（PT-FCW-ASM-V1.0 七 Guard、PWC 状态机、Q203 唯一出口与 Q242 写口闸）与冲突点。
