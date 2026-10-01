@@ -56,7 +56,7 @@ FCW_GROUP = "fcw-assembly-group"
 FCW_DEAD_STREAM = "loom:fcw-assembly:dead"
 
 # worker 重建 Actor：创建时已验 operations（create_task_record 内 _require_ops），
-# 后台消费按同一 operations 角色调 assemble_one（甲案，待负责人追认）。
+# 后台消费按同一 operations 角色调 assemble_one（甲案，已经负责人 2026-09-22 追认，02 C1.109）。
 def _worker_actor(actor_id: str) -> Actor:
     return Actor(id=actor_id, roles=[ROLE_OPERATIONS])
 

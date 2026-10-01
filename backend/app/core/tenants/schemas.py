@@ -41,7 +41,7 @@ class TenantDetailView(TenantView):
 class CustomerTenantView(BaseModel):
     # Q114：客户侧 settings 只读账户面板视图（仅账户面板字段，不含 detail/审计）。
     # Q163：追加派生 onboarding 进度（复用既有 onboarding_progress，不新建端点/状态机；
-    # 接缝甲案——在客户读口追加派生字段，待负责人追认）。
+    # 接缝甲案——在客户读口追加派生字段；已经负责人 2026-09-22 追认（02 C1.107）。
     tenant_id: str
     name: str | None
     plan: str
