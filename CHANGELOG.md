@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q244 D3.5 白名单组装引擎余项候选方案文档（2026-10-01，**纯文档**，零生产代码零迁移零后端零前端；新增 `docs/design-d3.5-whitelist-assembly-remaining.md`〔草案〕＋`docs/README_文档地图与治理.md` §1 地图一行＋`handoff.md` 待办 #7 指针；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.188）**
+  - **来由**：负责人 2026-10-01「先出 D3.5 余项的候选方案」→「请生成 D3.5 余项的候选方案文档」→「更新项目文档」。本批**只产候选**，**不裁决任何一项**。
+  - **内容**：按 `docs/09` §D3.5 六子项（① 组装工作台〔V1核心〕② 6 层调动可视化 ③ 字段组合合理性校验 ④ 候选白名单池〔V1关键〕⑤ 白名单审核工作台 ⑥ FCW 冻结管理〔V2〕）给**落地现状**——④ 已落（Q155／Q177／Q180／Q186）、① 后端两发证口（`POST /api/fcw/assemble`／`POST /api/fcw/assembly-tasks`，Q203 只认已验真 `loom_staff_` 令牌）已落而**前端无组装页**、②③⑤ 未建、⑥ 按 `docs/09` 标注属 **V2**——再对**余项**（①②③⑤⑥）逐项给**甲·乙·丙**候选，标注改动面、依赖契约（PT-FCW-ASM-V1.0 七 Guard、PWC 状态机、Q203 唯一出口与 Q242 写口闸）与冲突点。
+  - **4 条待裁项**：a) ⑤「修改/合并」vs ⑥「不可变」的**语义冲突**（审核在发证前还是后）；b) 可否新增**预检只读口**；c) ③「8 种冲突检测」名单与「综合评分公式」**原文未给出**，且「6 种判断结果」与实列 8 项数目不符；d) ⑥ 与 Q242 的 PWS 冻结/吊销是否同批打包。
+  - **5 条事实缺口**一律标【原文未给出，待补】、禁臆造；**与 Q242 的边界**＝PWS 冻结在**产品层**、FCW 冻结在**组装结果层**，对象不同、同族治理。**⬜ 待负责人 Gate 裁决后方可点工**，工期一律【待补】。
+  - **复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q243 已追认接缝的状态向活载体回灌 + 一处逐片记录口径由负责人裁决（2026-10-01，**纯文档＋源码注释**，零生产逻辑改动零迁移零新表零新 env；改 11 个文件＝`a09c2ad` 11 文件／13 插入 12 删除，加 `docs/08` 一处＝`c04b132`；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；02 C1.187）**
   - **来由与定性**：负责人「更新项目文档」。本次不是文字润色而是**状态回灌**——专查「02 里已追认过、活载体却仍写『待负责人追认』」。先例 Q190（2026-09-25，02 C1.134）只覆盖**入口文档**；本批查出它未覆盖的**源码注释／测试 docstring／YAML 注释**层。
   - **A. 八个活载体回灌**：Q163（4 处＝`backend/app/core/tenants/schemas.py`、`router.py`、`frontend/lib/api.ts`、`frontend/app/[locale]/(shell)/workbench/page.tsx`）、Q165（`backend/app/final/final_whitelist/service.py`）、Q187（`backend/tests/integration/test_discard_purge.py` 模块 docstring）、Q188（`infra/monitoring/alert_rules.yml` 阈值注释）、Q156（`docs/05_契约层_API与状态机.md` 甲案登记块）。
