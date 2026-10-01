@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q246 状态快照 —— #1 完成并三笔提交、当前卡 #2 待业务给值、两条路径待裁（2026-10-02，**纯状态登记**，零生产代码零迁移零测试改动零前端改动；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.190）**
+  - **来由**：负责人「继续」→「更新项目文档」。Q245 之后本仓**无新决策、无新进展**，本批是对实际状态的诚实快照，不新开任务、不改变 ①②③ 任一层判定。
+  - **① #1 已收口并落库**：`infra-postgres-1` 持久库（0042、`check_master_data.py` exit 1、三表 0 行）随 Q245 两笔＋漂移复扫一笔共 **3 笔纯文档提交**（`42bab9b`／`c424d3a`／`2af8afa`），本地领先 `origin/dev` 3 笔未 push（远端仍 `76d6bed`）。
+  - **② 卡点仍在 #2**：业务定平台码＋选 1 个真产品＋`slot_type` 类型名由业务给＋六个敏感领域要么避开要么排 48h 法审，工程侧零可自推。
+  - **③ 两条待裁路径已抛给负责人**：A＝直连库 `seed_master_data_template.py --dsn` 回填（够 #4–#6）；B＝起 `backend`＋redis 走 `POST /api/admin/staff-keys` 签令牌（#3）与 `POST /api/fcw/assemble` 发证（#9，须 `LOOM_MASTER_KEY`＋redis）。择一即可推进。
+  - **④ 协作上下文（非项目决策）**：本会话模型切到 Hy3。**三层判定不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q245 待办②（首批主数据＝两个人）拆成九条可执行任务 + 工程侧唯一可自推项「起库并验迁移头」实测就绪（2026-10-01，**执行＋文档**，零生产代码零迁移零测试改动零前端改动；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.189）**
   - **来由**：负责人「拆②为可执行任务」→「执行 #1 起库并验迁移头」→「更新项目文档」。② 此前只是一条外部阻塞描述，本批拆成**九条单线串联**的可执行任务（#1 工程备库／#2 业务定平台码＋选一个真产品／#3 运营签 `operations` staff 令牌／#4 段1 录入拿 `product_space_id`／#5 只填四样／#6 自检退出码归 0／#7 跑链裁决人走段3→6 冻结 PWS／#8 段10 合规清洗／#9 `POST /api/fcw/assemble` 出真 `final_id` 并溯源），**其中只有 #1 属工程侧可自推**。
   - **#1 实测**：`docker compose -f infra/docker-compose.yml up -d postgres`（只起数据面＝`infra-postgres-1`，只绑 `127.0.0.1:5432`、`restart: unless-stopped`、`infra_pgdata` 卷持久）；`alembic upgrade head` 升至 **0042**、`current` 回读 `(head)`、`information_schema` 数得 **63 表**；`scripts/check_master_data.py` **exit 1**（三表 0 行），而 `content_goals=5`／`cp_law_sensitive_domains=6`／`g1_categories=6` 与 Q224／Q230 **逐字一致** ⇒ 剩余阻塞精确为「只差业务真值与跑链人手，工程侧零待写」。
