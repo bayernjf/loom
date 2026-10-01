@@ -370,3 +370,14 @@
   - **探针**：`healthz` 200；`POST /api/fcw/assemble` 无 staff Bearer（body 自报 operations）→ **401**，与 Q203 `require_internal_actor(OPERATIONS)` 一致（`router.py:64,106`）；`issue_scope`/`OutsidePublishFCW` 出口守卫仍装载。**本轮未查出新的工程缺陷，工程侧可自推项为零。**
   - **裁决**：**未达到「产品核心完全可用」的 MVP**——卡点全部外部（业务方三表回填＋一个真产品＋跑链裁决的第二个人；负责人网关/TLS 裁决）。按「最近 5 条」上限滚出 Q231（归档档第四十二次续写，逐字搬入 2924 字节（cmp 字节核对通过））。
 
+
+## 第四十八次续写（2026-10-01，Q243 批滚出 Q238 条目原文）
+
+- **Q238 A2A Agent Card `url` 基址落成真 env `LOOM_PUBLIC_BASE_URL`（2026-09-29；**代码＋测试＋文档**，零迁移零新表；改 `backend/app/core/config.py` ＋ `backend/app/core/a2a/card.py` ＋ `tests/unit/test_a2a_vassal.py` ＋ `tests/integration/test_a2a_vassal_api.py`，同步 docs/11·22·17·15·08·16·README、本表、AGENTS、CHANGELOG；基线 1032→**1038 passed＋10 skipped**（总收集 1048；＋6＝单测 5＋集成 1）；02 C1.182）**：负责人点工「先把 A2A 卡片那个 env 做了」。
+  - **修的是 Q233 登记、Q237 复评仍列为「须点工」的那条**：`build_agent_card()` 读 `settings.public_base_url`，而该名**不是 `Settings` 字段**（`getattr(..., None)` 永远落空）⇒ 出厂卡片 `url` 恒为相对路径 `/api/a2a/tasks`。
+  - **落法＝纯加法**：`Settings.public_base_url: str = ""` ＋ `card.py` 去掉 `getattr` 兜底改读真字段并 `.strip().rstrip("/")`。**默认空串 ⇒ 输出与改前逐字节相同**；设为实例对外域名即输出绝对地址。
+  - **承重断言＝「env 名 → 字段」的绑定**（`test_the_env_var_binds_to_the_setting`）——Q233 的失效模式正是「运营设了一个不起作用的变量并以为设好了」；集成一条把两态断言放同用例，兼钉「卡片每请求现建」（快照时第二次断言必红）。
+  - **先红后绿含一次自我纠正**：首次植入「卡片进程内快照」写在 `return` 之后＝不可达 no-op，**那次「绿」不构成证据**；重写植入并加正向对照探针（改设置两次拿到同一 url）后集成用例判红，按 sha256（`42bfdda3…`）还原。
+  - **取值不属本片**：该 env 的值＝实例对外公网域名，取决于**待裁项①「网关与 TLS 归属」**；按 Q135 先例不入 `backend/.env.example`。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。按「最近 5 条」上限滚出 Q232（归档档第四十三次续写，逐字搬入）。
+
+> 本块为 `handoff.md`「最近进度」Q238 一条条目的**逐字原文**（6 行＝父条目＋5 条 sub-bullets，2065 字节；`cmp` 证字节一致，sha256 前缀 `d674ec0b`）；块内 6 行在档内出现 1 次、在 handoff「最近进度」区出现 0 次。

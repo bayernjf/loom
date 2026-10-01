@@ -3,6 +3,14 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q243 已追认接缝的状态向活载体回灌 + 一处逐片记录口径由负责人裁决（2026-10-01，**纯文档＋源码注释**，零生产逻辑改动零迁移零新表零新 env；改 11 个文件＝`a09c2ad` 11 文件／13 插入 12 删除，加 `docs/08` 一处＝`c04b132`；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；02 C1.187）**
+  - **来由与定性**：负责人「更新项目文档」。本次不是文字润色而是**状态回灌**——专查「02 里已追认过、活载体却仍写『待负责人追认』」。先例 Q190（2026-09-25，02 C1.134）只覆盖**入口文档**；本批查出它未覆盖的**源码注释／测试 docstring／YAML 注释**层。
+  - **A. 八个活载体回灌**：Q163（4 处＝`backend/app/core/tenants/schemas.py`、`router.py`、`frontend/lib/api.ts`、`frontend/app/[locale]/(shell)/workbench/page.tsx`）、Q165（`backend/app/final/final_whitelist/service.py`）、Q187（`backend/tests/integration/test_discard_purge.py` 模块 docstring）、Q188（`infra/monitoring/alert_rules.yml` 阈值注释）、Q156（`docs/05_契约层_API与状态机.md` 甲案登记块）。
+  - **B. 「追认只结设计、不结校准」写在原地**：Q187 的 **180 天**与 Q188 的 **100／5000／30s**——设计接缝已追认、数值本身未校准（待首批主数据落地后随真流量重看）⇒ 载体写成「接缝已追认（02 C1.134）；数值仍待校准」。
+  - **C. 两处过期数字／口径**：① `README.md` 基线块刷到 2026-10-01 Q242 时点（**1057 passed＋10 默认 skip**／总收集 **1067**／卡点＝**三表零行**〔`publish_slots`／`pcp_weight_tables`／`packages`〕＋一个真产品＋跑链裁决的第二个人），并补全 988→1057 逐批链（**首稿漏 993／996／999／1003／1014 与 1029，回 docs/16 §4 源行才改对**）；② `AGENTS.md` 待裁项⑤补 Q229 已发生的裁决事实「2026-09-28 负责人答复『维持【建议】只测量』」。
+  - **D. 负责人裁决一处边界（本批唯一非纯文字）**：`docs/08_迭代计划与任务包.md:239` 是 Q122 的逐片记录 blockquote 仍写「待追认」，工程侧按「逐片记录不回改」初判不动并上报，负责人 2026-10-01 **「docs/08:239 那处也一起改了吧」**裁决改 ⇒ 边界＝**「逐片记录不回改」的例外是「已追认却仍写待追认」的状态词**（`CHANGELOG.md` 历史条目按先例仍不回改）；改法＝原文加删除线保留 ＋ 补 ✅ 注记引 Q/C1 编号。
+  - **E. 与 Q190 的关系**：Q190 清入口文档、本批清它未覆盖的源码注释层＋docs/08 逐片记录；两批合起来「已追认却仍写待追认」才清干净。**同类缺陷本仓至此发作两次，判据都是「扫到『待追认』先回查 02 有没有后续销账条」**。
+  - **复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q242 三族写口统一到 `require_internal_actor`（段4 原子／段9-10 策略包／段7-8 平台适配，2026-10-01，**代码＋测试＋文档**，零迁移零新表零新 env；基线 1056→**1057 passed＋10 skipped**（总收集 1067；＋2 新守卫 −1 被接替的旧守卫））**
   - **来由与拍板**：Q241 §4.2 复核出四条「写口自判角色、路由层无凭证闸」的成立项，并把「是否统一」列为待裁项⑥；负责人 2026-10-01 **「开搞吧，按甲案推进」**拍板甲案。
   - **落地范围＝三族 25 个写端点**：段4 原子 **13**（`llm-expand`／`approve`／`batch-approve`／`reject`／`resolve`／`risk-override`／`freeze`／`unfreeze`／`compliance-suspend`／`compliance-resume`／`deprecate`／`archive`／`reject_atom`）、段9/10 策略包 **3**、段7/8 平台适配 **9**。加既有段11 发证两口（Q203），全仓受凭证保护的写口共 **27**。GET 口不动（仍走 Q118 query actor 闸）。角色分配沿用各 service 既有自判口径，不新造：审核类 `PRODUCT_REVIEWER`／运营类 `OPERATIONS`／合规暂停恢复 `INTERNAL_COMPLIANCE`。
