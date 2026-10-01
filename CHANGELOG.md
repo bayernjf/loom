@@ -3,6 +3,14 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q247 A2A/Zeus 比喻措辞全仓清理为专业术语（2026-10-02，**纯文档＋源码注释/卡片描述**，零生产逻辑改动零迁移零新表零新 env；改 88 文件＝`6ea6beb`〔refactor(a2a) 3 文件〕＋`8d8ba01`〔docs 13 文件〕＋`c2ccde5`〔全仓叙事措辞 69 文件，负责人手动作〕；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.191）**
+  - **来由**：负责人「zeus 项目里我已经不允许这种比喻了，全部要求是专业的术语，和 zeus 项目相关的，你都要参考 zeus 项目更改为专业术语，不需要比喻」。执行口径＝参考 zeus 仓库 `docs/terminology.md` v0.3：**文档与注释措辞换专业术语；协议字段、标识符、环境变量、数据格式不动**。
+  - **术语映射（照 zeus 术语表）**：封臣→对接方/执行者（executor）；联邦→上游编排系统；效忠（fealty）→注册握手声明（凭证契约）；战报（report-back）→产物回传。
+  - **A. 代码层（`6ea6beb`，3 文件）**：`a2a/__init__.py` docstring「封臣端点/Zeus 联邦」→「对接端点/上游编排系统 Zeus」；`a2a/router.py` docstring「封臣路由」→「对接路由」；`a2a/card.py` Agent Card 描述文本 `Plan-mode vassal`→`Plan-mode executor`、`Vassal skills`→`Executor skills`。
+  - **B. 文档层（`8d8ba01`，13 文件）**：`docs/design-a2a-vassal.md` 正文（文件名保留，与 zeus `design-vassal-protocol.md` 同构）、`docs/02` C1.94 原文、`docs/08/15/16/17/20`、`docs/README_文档地图`、`README/AGENTS/handoff/CHANGELOG` 活跃区「Zeus 联邦第二封臣」→「上游编排系统 Zeus 的第二个对接方」、`frontend/messages/zh-CN.json` Agent Key 页示例占位「Zeus」→「上游编排系统」。
+  - **刻意保留（不涉契约变更）**：协议字段 `x-zeus-fealty`/`x-zeus-runId`/`x-zeus-report`、卡片载荷 `swornTo=zeus`、`FEALTY` 常量、路由 tag `a2a-vassal`、`_require_zeus_key`、文件名 `test_a2a_vassal*.py` 与 `docs/design-a2a-vassal.md`、docs/22「键名与取值是 Q150 定下的对外契约，不改名」口径、历史归档 `handoff-archive-*`（历史不回改先例）。
+  - **验证**：`test_a2a_vassal.py`＋`test_a2a_vassal_api.py` **28 passed**、ruff 净、`zh-CN.json` 合法、活跃文件比喻词（封臣/联邦/效忠/战报/宣誓/vassal）清零。
+  - **push 状态**：三笔均已 push（远端 `origin/dev`=`c2ccde5`）。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q246 状态快照 —— #1 完成并三笔提交、当前卡 #2 待业务给值、两条路径待裁（2026-10-02，**纯状态登记**，零生产代码零迁移零测试改动零前端改动；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.190）**
   - **来由**：负责人「继续」→「更新项目文档」。Q245 之后本仓**无新决策、无新进展**，本批是对实际状态的诚实快照，不新开任务、不改变 ①②③ 任一层判定。
   - **① #1 已收口并落库**：`infra-postgres-1` 持久库（0042、`check_master_data.py` exit 1、三表 0 行）随 Q245 两笔＋漂移复扫一笔共 **3 笔纯文档提交**（`42bab9b`／`c424d3a`／`2af8afa`），本地领先 `origin/dev` 3 笔未 push（远端仍 `76d6bed`）。
