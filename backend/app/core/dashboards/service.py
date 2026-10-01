@@ -1,6 +1,6 @@
 """M12 驾驶舱聚合查询（Q92；纯只读，无新表/无迁移/不物化）。
 
-口径（02 C1.36 接缝四拍板项）：
+口径（02 C1.36 接缝四决策项）：
 - Token 成本：默认近 30 天可传 from/to（半开区间 [from 00:00, to+1d 00:00)，
   UTC）；计费行 = status=succeeded 且 model_id 非空（合成模型价 0 同样计入调用数），
   按天×model_id×currency_code 聚合 runs/tokens/cost，另附 skill_id 汇总；

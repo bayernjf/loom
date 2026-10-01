@@ -88,7 +88,7 @@ def test_pool_health_bands():
 
 
 def test_constants_traceability():
-    # 拍板值单一事实源为配置中心种子（02 §C2）；缓存未引导时 knob() 回落种子默认。
+    # 决策值单一事实源为配置中心种子（02 §C2）；缓存未引导时 knob() 回落种子默认。
     assert r.single_run_max() == 50
     assert r.default_capacity() == 100
     assert (r.reasonableness_weight(), r.diversity_weight()) == (0.6, 0.4)

@@ -1,6 +1,6 @@
 """Q87 M8 restock_auto worker：消费 Q71/Q76-4 落下的 requested 信号行。
 
-口径（02 C1.31 四接缝 + C1.33 Q89 锁 + C1.34 Q90 退避，均为负责人拍板推荐项）：
+口径（02 C1.31 四接缝 + C1.33 Q89 锁 + C1.34 Q90 退避，均为负责人决策推荐项）：
 
 1. 形态：V1 进程内 asyncio loop（RestockWorker），与 SLA SweepScheduler 同构；
    默认关闭（LOOM_RESTOCK_WORKER_ENABLED=true 显式开启，因为会自动花真 token）；

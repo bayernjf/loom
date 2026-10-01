@@ -1,7 +1,7 @@
 # Evaluation Dataset — TYPE-MATCH（WF-01 段2 C7 兜底，回归矩阵，Q81 切片自带）
 # target=c7 确定性纯函数：coverage（Q6 Layer3 必填覆盖率，空必填→1.0、round 4）、
 # pick_sibling（Q6 Layer2 同父兄弟：approved 且 product_count 最大）、
-# layer3_coverage_floor（Q6 拍板 0.6 配置热更地板）。
+# layer3_coverage_floor（Q6 决策 0.6 配置热更地板）。
 # 不打错误分支（IllegalFid/Q68 fid:'-'）：runner 无错误用例 schema，留在后端集成测试。
 # 数据均为人工编写合成数据（16 §4，禁用生产数据）。
 skill_id: TYPE-MATCH
@@ -9,7 +9,7 @@ wf_id: WF-01
 cases:
   # ---------- layer3_coverage_floor（Q6） ----------
   - id: tm-fl-001
-    title: Q6 Layer3 覆盖率地板拍板值 0.6（配置中心种子默认）
+    title: Q6 Layer3 覆盖率地板决策值 0.6（配置中心种子默认）
     target: c7_layer3_floor
     input: {}
     expected: 0.6

@@ -10,7 +10,7 @@ from app.core.config_center.knobs import knob
 
 
 def layer3_coverage_floor() -> float:
-    # Q6 拍板值经配置中心热更（02 §C2；M10c 接入）。
+    # Q6 决策值经配置中心热更（02 §C2；M10c 接入）。
     return knob("c1.layer3_coverage_floor")
 
 

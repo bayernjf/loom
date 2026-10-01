@@ -1,6 +1,6 @@
 """Q127（段13/Q60a）集成测试：孤儿效果记录人工认领 POST /api/admin/effects/claims。
 
-口径（02 C1.71，接缝按推荐甲拍板）：
+口径（02 C1.71，接缝按推荐甲决策）：
 - 管理面写口 actor 在体、服务层 operations 闸（客户/platform_admin 403，同 Q125）；
 - 入口记录须为当前 orphan（未知 404、非 orphan 409），目标成品须存在且非
   discarded（未知 404、discarded 409）；

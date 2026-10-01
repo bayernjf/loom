@@ -12,7 +12,7 @@
 | dataRealms | enterprise | 私域内容生产平台，服务企业租户 |
 | dataPolicy | read-task-scope | 只读任务范围内数据 |
 | reportBack | true | 产物回传（summary/evidence/cost） |
-| escalationPolicy | auto | 与 loom 既有「AI 只产候选、人工 Gate 裁决」天然同构——不可逆动作升级驾驶员 |
+| escalationPolicy | auto | 与 loom 既有「AI 只产候选、人工 Gate 裁决」天然同构——不可逆动作升级人工在环操作者 |
 | sla.ackSeconds | 10 | 长链路任务受理时限（比 pr-helper 的 5s 宽） |
 
 ## 提议的 skills（第一阶段，均为 plan 模式）

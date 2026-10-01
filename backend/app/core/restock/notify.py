@@ -4,7 +4,7 @@ Q71/Q76-4 跌破 critical 落 ``skill_runs(requested, restock_auto)`` 行后，�
 在事务 ``after_commit`` 把该 request_id XADD 到 Q134 restock 流（消费组
 restock-workers 幂等建组），作为多副本场景下的持久化补货信号 / 唤醒事件。
 
-边界（02 C1.82 拍板）：
+边界（02 C1.82 决策）：
 - **DB requested 行是唯一事实源**，流是提示/留痕：XADD 一律 best-effort，失败只
   告警，不影响补货请求落库；Q87 进程内 worker 的 DB 反连接认领 + Q90 退避游标仍
   是权威路径，信号不会因 XADD 失败而丢。

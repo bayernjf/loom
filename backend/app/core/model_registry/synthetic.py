@@ -257,7 +257,7 @@ def build_article_semantic_check(variables: dict) -> dict:
 
     供集成测试造命中分支：正文含哨兵 "[SEMANTIC_RISK]" 时给一条
     unsubstantiated_claim 发现；其余（含空正文——空正文由质量分覆盖）给空列表。
-    语义检测为 advisory（Q121 拍板），不驱动自动发证或驳回。
+    语义检测为 advisory（Q121 决策），不驱动自动发证或驳回。
     """
     body = str(variables.get("body") or "")
     if "[SEMANTIC_RISK]" in body:

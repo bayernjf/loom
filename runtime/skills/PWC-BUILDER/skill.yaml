@@ -12,7 +12,7 @@ knowledge_deps:
 model_tier: ""        # Q67 模型注册表未建（V1 外部投递，Q76-2），档位留空
 thresholds:
   combo_min_dimensions: 2
-  batch_limit_config: pwc.funnel_batch_limit   # 拍板值 50，配置中心
+  batch_limit_config: pwc.funnel_batch_limit   # 决策值 50，配置中心
 failure_policy: produce_candidates_only        # 仅产候选，不直接写正式对象
 review_rule: skill7 candidate gate → product_reviewer
 cost_limit: null

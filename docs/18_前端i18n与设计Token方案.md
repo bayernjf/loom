@@ -1,6 +1,6 @@
 # 18. 前端 i18n 与设计 Token 方案
 
-> **状态**：✅ **2026-09-16 经负责人拍板定稿（Q96，02 C1.40）**——四项接缝全按推荐甲案：next-intl / CSS Modules + tokens.css / V1 仅 zh-CN 且字典多语言延 V3 / 色值借 Ant Design 5 默认调色板作工程初值（只借值、不引组件库）。本文 2026-09-13 起草稿的“建议”表述据此生效为实现强制依据；具体可落码值见 §2.3、§3.6。旧稿“拍板后追加 Q75”编号作废——Q75 已用于 RBAC 裁决，本项编号 Q96。
+> **状态**：✅ **2026-09-16 经负责人决策定稿（Q96，02 C1.40）**——四项接缝全按推荐甲案：next-intl / CSS Modules + tokens.css / V1 仅 zh-CN 且字典多语言延 V3 / 色值借 Ant Design 5 默认调色板作工程初值（只借值、不引组件库）。本文 2026-09-13 起草稿的“建议”表述据此生效为实现强制依据；具体可落码值见 §2.3、§3.6。旧稿“决策后追加 Q75”编号作废——Q75 已用于 RBAC 裁决，本项编号 Q96。
 > **定位**：只覆盖**界面层**（管理后台 + 客户前端 UI）的国际化与视觉基础。内容侧多语言（Q58）是业务规则，不在此重定义，仅做边界对齐。
 > **关联**：14（技术栈 Next.js 15 + React 19 + TS）、09（客户前端 8 菜单/13 管理菜单展示口径）、08（M12 客户前端基础版；V3 国际化/白牌定制）、02 Q58/Q73、15（前端目录落位）。
 > **事实纪律**：业务规则一律引用 Q 编号/文档；本文新增的只是工程选型建议与数值约定（色板/字号/间距等无原文来源，属设计工程建议，非业务事实）。
@@ -20,7 +20,7 @@
 
 ## 2. 界面 i18n 方案（Q96 定稿）
 
-> **接缝①拍板（Q96）**：库 = **next-intl**（自研轻量字典否掉，V3 外语期会重写）；接缝③拍板：V1 仅 zh-CN、首个外语 V3 再启用（工程默认 en-US，语种顺序届时按客户输入定）、运营数据字典多语言延 V3 且 V1 不预留 name_i18n 字段。
+> **接缝①决策（Q96）**：库 = **next-intl**（自研轻量字典否掉，V3 外语期会重写）；接缝③决策：V1 仅 zh-CN、首个外语 V3 再启用（工程默认 en-US，语种顺序届时按客户输入定）、运营数据字典多语言延 V3 且 V1 不预留 name_i18n 字段。
 
 ### 2.1 技术选型建议：next-intl + App Router 语言前缀路由
 
@@ -82,7 +82,7 @@ frontend/
 
 ## 3. 设计 Token 方案（Q96 定稿）
 
-> **接缝②拍板（Q96）**：载体 = **CSS Modules + tokens.css CSS 变量**（Tailwind 否掉、Ant Design 组件库否掉——不引 antd 依赖，仅借其色值，见 §3.6）；V1 仅浅色。
+> **接缝②决策（Q96）**：载体 = **CSS Modules + tokens.css CSS 变量**（Tailwind 否掉、Ant Design 组件库否掉——不引 antd 依赖，仅借其色值，见 §3.6）；V1 仅浅色。
 
 ### 3.1 分层模型：Primitive → Semantic → Component
 
@@ -130,7 +130,7 @@ Component（组件级覆写，能少则少）
 | 信息/中性进行中 | `--color-state-info` | submitted、in_review、modeling、冷却中 |
 | 失效/归档 | 中性灰阶（非状态色） | archived、deprecated、superseded |
 
-> 状态色只表达 docs 已有状态词，不新增业务语义；同一状态在管理后台与客户前端必须同色（单一 token 源）。色值本身无原文依据，V1 由设计/负责人给定具体 HEX 后写入 primitive 层【具体色值待设计产出，本文不给数字拍板】。
+> 状态色只表达 docs 已有状态词，不新增业务语义；同一状态在管理后台与客户前端必须同色（单一 token 源）。色值本身无原文依据，V1 由设计/负责人给定具体 HEX 后写入 primitive 层【具体色值待设计产出，本文不给数字决策】。
 
 ### 3.5 技术载体建议（V1 最小方案）
 
@@ -140,9 +140,9 @@ Component（组件级覆写，能少则少）
 
 ---
 
-### 3.6 具体值初版（Q96 接缝④拍板：借 Ant Design 5 默认调色板，2026-09-16）
+### 3.6 具体值初版（Q96 接缝④决策：借 Ant Design 5 默认调色板，2026-09-16）
 
-> 色值无业务原文来源（line NNNN 无视觉规格），属工程建议值；负责人 Q96 拍板借用 Ant Design 5 默认 token 色板作为 primitive 初值，**只抄值不装 antd 依赖、不引其组件/主题系统**。设计日后产出品牌视觉时只换 primitive 层，semantic/component 与组件代码不动。
+> 色值无业务原文来源（line NNNN 无视觉规格），属工程建议值；负责人 Q96 决策借用 Ant Design 5 默认 token 色板作为 primitive 初值，**只抄值不装 antd 依赖、不引其组件/主题系统**。设计日后产出品牌视觉时只换 primitive 层，semantic/component 与组件代码不动。
 
 Primitive（只定义，组件不直接引用）：
 
@@ -208,9 +208,9 @@ z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-
 |---|---|---|
 | V1（M12 客户前端 8 菜单基础版 + 管理端页面） | zh-CN 单语；`[locale]` 路由 + next-intl + 文案全量走消息表（§2.3 结构）；枚举码不翻译；时间 UTC 存储/上海展示 | tokens.css 初版（§3.6 AntD5 借值已可落码）；CSS Modules；状态色映射 13 状态词；无深色 |
 | V2 | 无界面外语；内容多语言按 Q58 独立推进（与本方案解耦） | 按实际页面补 token，不新增机制 |
-| V3（路线图已列国际化/白牌） | 启用 en-US（语种顺序待拍板）；语言切换器；运营数据 name_i18n 扩展（04/10 加字段迁移） | 深色主题（如需要）、租户白牌变量包、stylelint 硬编码拦截、W3C token 构建链（多主题证实需要时） |
+| V3（路线图已列国际化/白牌） | 启用 en-US（语种顺序待决策）；语言切换器；运营数据 name_i18n 扩展（04/10 加字段迁移） | 深色主题（如需要）、租户白牌变量包、stylelint 硬编码拦截、W3C token 构建链（多主题证实需要时） |
 
-### 4.1 拍板结果（Q96，2026-09-16，四项接缝全甲；旧第 5 项并入接缝③）
+### 4.1 决策结果（Q96，2026-09-16，四项接缝全甲；旧第 5 项并入接缝③）
 
 1. i18n 库：**next-intl**（否掉自研轻量字典）；
 2. V1 样式载体：**CSS Modules + tokens.css**（否掉 Tailwind 与 AntD 组件库；AntD 仅借色值，不装依赖）；
@@ -238,7 +238,7 @@ z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-
 
 ## 6. 应用外壳与导航（Q97 定稿，2026-09-16）
 
-客户前端第一个页面切片（M12）边界由 Q97 四接缝拍板（02 C1.41）：
+客户前端第一个页面切片（M12）边界由 Q97 四接缝决策（02 C1.41）：
 
 - **结构**：路由组 `app/[locale]/(shell)/`（layout + `sidebar.tsx` client 组件 + `menu-placeholder` 共享占位 + 8 个菜单目录）；导航注册表 `app/[locale]/nav.ts` 为唯一菜单事实源（`{href,labelKey,phase}` ×8），`i18n/navigation.ts` 由 createNavigation 产出 Link/usePathname。
 - **布局**：左侧固定 240px（`--sidebar-width`）+ 顶栏 64px（`--space-8`）+ 内容区 max-width 1280（`--layout-content-max`）；当前项 `aria-current="page"`；样式全部 Semantic/刻度变量（Q97 新增语义别名 `--color-bg-hover: var(--color-surface-2)`，tokens 总数 85→86）。
@@ -261,7 +261,7 @@ z 层级固定枚举：`--z-dropdown:1000; --z-sticky:1020; --z-fixed:1030; --z-
 
 ## 7. 产品中心功能页（Q98 定稿，2026-09-16）
 
-D5 菜单 2「产品中心」由 Q98 四接缝拍板（02 C1.42，全甲）：跨栈最小闭环、env 固定租户、Next 服务端代理、仅产品名（fid 挂账）。
+D5 菜单 2「产品中心」由 Q98 四接缝决策（02 C1.42，全甲）：跨栈最小闭环、env 固定租户、Next 服务端代理、仅产品名（fid 挂账）。
 
 - **路由**（均在 `(shell)/products/`，subnav 三项 + 新建按钮）：
   - `/products` RSC 列表（我的产品），`export const dynamic = "force-dynamic"`——租户/基址运行时从 env 读，不得构建期静态固化；
@@ -274,7 +274,7 @@ D5 菜单 2「产品中心」由 Q98 四接缝拍板（02 C1.42，全甲）：�
 
 ## 8. 工作台功能页（Q99 定稿，2026-09-16）
 
-D5 菜单 1「工作台」由 Q99 四接缝拍板（02 C1.43，全甲）：跨栈最小总览、独立 overview 端点、五卡 V2 禁用态、补全 `intake.status.*` 十五态。
+D5 菜单 1「工作台」由 Q99 四接缝决策（02 C1.43，全甲）：跨栈最小总览、独立 overview 端点、五卡 V2 禁用态、补全 `intake.status.*` 十五态。
 
 - **路由**：`/workbench`（Q97 默认落地页，`/[locale]` 307 至此）由占位升级为 RSC 功能页，`export const dynamic = "force-dynamic"`（env 纪律同 §7）。
 - **数据**：`GET /api/intakes/overview` → lib/api.ts `getIntakeOverview`（server-only，浏览器零直连）；渲染产品总数与状态分布（按 docs/13 §1.1 十五态顺序，仅计数 > 0 渲染）；total=0 显空态文案。

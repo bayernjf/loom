@@ -174,7 +174,7 @@ stage_consume() {
     "net_api GET http://grafana:3000/api/dashboards/uid/loom-operations '' '$GRAFANA_AUTH'" \
     "STATUS 200"
 
-  # Q192：负责人拍板开 Grafana 回环端口。断言必须打在**宿主**上，否则证明的是网格内
+  # Q192：负责人决策开 Grafana 回环端口。断言必须打在**宿主**上，否则证明的是网格内
   # 可达（那在没有发布端口时也一样成立），等于没验这次改动。
   c "宿主直连 Grafana 回环端口 $GRAFANA_HOST_URL" \
     curl -fsS --max-time 10 "$GRAFANA_HOST_URL"

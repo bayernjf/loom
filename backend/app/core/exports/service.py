@@ -1,6 +1,6 @@
 """M12 中台导出（Q100/Q132）：FCW final_id 单列 CSV、JSON 形态与导出任务。
 
-契约（docs/05 D4，02 C1.44 拍板；Q132/C1.76 扩 JSON 与任务记录）：中台手动
+契约（docs/05 D4，02 C1.44 决策；Q132/C1.76 扩 JSON 与任务记录）：中台手动
 用，M12 验收口径“CSV 只消费 final_id”——仅导一列 final_id（含表头），不
 拼装 6 层原料包。读路径同 Q98/Q99：不触发 Q95 准入门，未知租户返回空结果
 （CSV 仅表头、JSON 空 envelope）200；只导 published（draft 不导出；Q32

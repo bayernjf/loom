@@ -1,6 +1,6 @@
 """M12 驾驶舱端点（Q92）：platform_admin 只读，实时聚合。
 
-GET 无请求体先例（agent-keys 列表不过闸）不适用成本/工作量视图——接缝④拍板
+GET 无请求体先例（agent-keys 列表不过闸）不适用成本/工作量视图——接缝④决策
 platform_admin 只读，故管理面 GET 首次经 query 携带 actor（actor_id 必填，
 roles 可重复传），缺 actor_id 由 FastAPI 判 422、角色不符服务前依赖判 403。
 真实认证中间件（会话/JWT）随 V2，V1 actor 仍为请求自报口径（同写端点）。

@@ -2,7 +2,7 @@
 
 AI Skill 质量回归两件套：**Evaluation Dataset**（每 Skill 回归矩阵，防 S2
 "Skill 从未运行"）与 **Golden Cases**（人工精选标杆案例库）。V1 形态经
-负责人拍板（**Q77**，docs/02 C1.21）。
+负责人决策（**Q77**，docs/02 C1.21）。
 
 ## 目录
 
@@ -89,7 +89,7 @@ cases:
   的第二个 Skill）**：→ c7 确定性纯函数（`modeling.c7.coverage` /
   `pick_sibling` / `layer3_coverage_floor`），覆盖 Q6 Layer3 覆盖率（空必填→
   1.0 / 0.6 地板边界包含 / round 4）、L2 兄弟继承（仅 approved、最大
-  product_count、平局保序、无 approved→None）与 0.6 拍板地板，共 14+3 例。
+  product_count、平局保序、无 approved→None）与 0.6 决策地板，共 14+3 例。
   Q68 fid:'-' 拒绝与各错误分支 runner 无错误案例 schema，由 backend 集成
   测试覆盖；L4 真 LLM 新字段生成本体挂 Q67。
 - **PWC-BUILDER 无案例（挂账）**：该 Skill V1 为外部投递，仓库内无确定性

@@ -1,6 +1,6 @@
 """Q125（Q60c）集成测试：运营待发布队列 + 平台链接/ID 回填。
 
-口径（02 C1.69，接缝按推荐甲拍板）：
+口径（02 C1.69，接缝按推荐甲决策）：
 - GET /api/admin/content/ready-to-publish 为 operations 读口（query actor 闸，
   缺 actor 422、客户 403）：跨租户仅返回 ready_for_publish 且 published_at
   为空的成品，created_at 升序（先到先发），行不含 body；

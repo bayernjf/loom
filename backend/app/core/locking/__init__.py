@@ -1,6 +1,6 @@
 """Q89 多副本单实例锁：Redis SET NX PX 分布式 leader 锁。
 
-口径（02 C1.33 四接缝，均为负责人拍板推荐项甲案）：
+口径（02 C1.33 四接缝，均为负责人决策推荐项甲案）：
 
 1. 机制：Redis SET key token NX PX ttl；唯一 owner token，释放/续约走 Lua
    比对 token（不删别人的锁）；持锁期间看门狗按 TTL/3 周期续约，进程崩溃

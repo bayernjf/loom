@@ -10,7 +10,7 @@ Q71（按分排序取用、target100/min70/critical50、补货冷却 5min）、l
 WF-04 三 Skill（PWC-BUILDER/COMBO-VALIDATE/PWC-SCORING）的 AI 通道随 M10；
 M5 接收结构化组合与 AI 分项分，做确定性合规检测、评分、去重、冷却与流转。
 
-拍板值暂为常量，M10 迁配置中心（02 §C2：50/100、0.6/0.4、w1=w2=0.5、
+决策值暂为常量，M10 迁配置中心（02 §C2：50/100、0.6/0.4、w1=w2=0.5、
 0.8、7 天 3 次/14 天、5min）。
 """
 
@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from app.core.config_center.knobs import knob
 
 
-# 拍板值均经配置中心热更（02 §C2；键见 app.core.config_center.seeds）。
+# 决策值均经配置中心热更（02 §C2；键见 app.core.config_center.seeds）。
 def single_run_max() -> int:
     return knob("pwc.funnel_batch_limit")
 
