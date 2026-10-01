@@ -28,7 +28,11 @@ from app.core.identity import (
 )
 from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.staff_auth import service
-from app.core.staff_auth.context import get_current_staff, set_current_staff
+from app.core.staff_auth.context import (
+    get_current_staff,
+    reset_current_staff,
+    set_current_staff,
+)
 
 
 async def get_auth_session(
@@ -52,7 +56,11 @@ async def staff_auth_context(
 ) -> None:
     # 每个请求从"无凭证"起步：即便 ASGI 实现复用了同一 context 副本，也不会有
     # 上一请求的凭证泄漏进本请求的审计。
+    # Q242：两个 contextvar 都要清——段4/7/8/10 写口的 require_internal_actor 在
+    # 门控关时也会 set_current_staff，只清 verified_credential 会让下一个复用同一
+    # context 的请求（测试的 ASGITransport 正是如此）读到上一请求的人员身份。
     reset_verified_credential()
+    reset_current_staff()
     if not settings.staff_auth_enabled:
         return
     token = service.parse_bearer(authorization)
