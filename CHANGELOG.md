@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q256 文档基线漂移清扫第二刀：docs/17 现行读数＋docs/23 §2 规模表（2026-10-03，**纯文档零代码零迁移零测试变化**；后端基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务物理表 **64**；改动 docs/17＋docs/23＋docs/02＋handoff＋CHANGELOG＋归档；02 C1.200）**
+  - **来由**：负责人「按你推荐的来」——Q255 批只扫了入口三件（AGENTS/handoff/README），本批当场重扫 docs/ 内部活状态，扫出两处漂移订正。
+  - **① docs/17 §6 CI 行现行读数过期**：`1028 passed＋10 默认 skip`（Q230 时点）→ **1080**（Q252 起，带时点注记、原读数保留）；docs/17 迁移头行（0044）已正确未动。
+  - **② docs/23 §2「项目规模与当前状态」表（Q240 审计数据）按权威行刷新**：62→**64 表**、43→**44 迁移**、头 0042→**0044**、1056→**1080 passed**（114 文件不变，实测）、core 26→**30 子**（实测）、前端 85→**90 文件**（实测）；列数 666 为 62 表时读数、64 表列数待第五轮 DBA【待补】；技术债 84 处为 Q240 读数未重扫。审计正文（§0–§9）与 §10 订正区为历史记录不动。
+  - **已核实无需动**：docs/08 权威行、docs/16 基线刷新行、docs/17 迁移头均正确停在 Q252 时点；docs/05/06/09/10/11/21/22 无未标注活状态过期。
+  - **复判不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
 - **Q255 文档入口治理批：AGENTS.md「当前阶段」超长段压缩 ＋ handoff 待办 #5 数字刷新 ＋ README 基线补句（2026-10-03，**纯文档零代码零迁移零测试变化**；后端基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务物理表 **64**；改动文件 AGENTS.md＋handoff.md＋README.md＋docs/02＋CHANGELOG＋docs/handoff-archive-2026-10-03.md；02 C1.199）**
   - **来由**：负责人「那你看看推进一下」——按 Q189/Q191/Q194/Q198/Q205 先例当场重扫而非复述「工程侧无可推项」，扫出入口文档三处真实漂移一次修完。
   - **① AGENTS.md「当前阶段」段压缩（最大发现）**：该段自 Q119 起逐批追加至 **53.6K 字符**（单行 31.6K／22.6K），实测 system 注入 AGENTS 在 16K-token 被截断——治理规则／事实纪律／待裁决／常用入口等后半段可能从未被完整注入（仓库规则文件失效隐患）。压缩为 **919 字节摘要＋指针**（文件 53.6K→9.4K）：当前基线（Q254 时点：0044／64 表／1080 passed／sidebar 14）、最近三批 Q252–Q254、MVP 三层判定、待裁决五项、纪律全保留；7 个二级标题结构核查齐全；**旧原文整块逐字入档 docs/handoff-archive-2026-10-03.md 备查**（git HEAD 双保险）。依据＝项目规则「reference the maintained source path instead of copying long stale content into AGENTS.md」。
