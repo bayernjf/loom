@@ -3,6 +3,17 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q254 agnes 三模（文本／图像／视频）真模型连通性实测 ＋ 本机凭证载体模型编码订正（2026-10-03；**纯实测＋载体注释订正**，零生产代码零迁移零新表零新 env、零测试改动；后端基线不变 **1080 passed＋10 skipped**；唯一文件改动＝`backend/.env.shell` 备查注释行〔被 `.gitignore` 忽略、不入库、不入提交〕；02 C1.198）**
+  - **来由**：负责人「模型你配置如下：Base URL／Key／文本·图像·视频三模」→ 先核对本机凭证载体，再逐模发最小请求实测。**Key 值不写入任何文档**（Q82／Q148 既有纪律，本批只记读数不记值）。
+  - **载体核对与订正**：`backend/.env.shell` 内 `LOOM_LLM_BASE_URL_AGNES` 与 `LOOM_E2E_AGNES_KEY` 与口供一致；备查注释三处订正——图像 `agnes-image-2.1-flash / agnes-image-2.0-flash` → **`agnes-image-2.5-flash`**、视频收敛为 **`agnes-video-2.5-flash`**、文本 `agnes-2.5-flash` 核对一致无需改。
+  - **编码在册**：`GET /v1/models` → **200**，在册 **12** 个模型，三个口供编码**全部在册**（同族另有 `agnes-video-2.5`／`agnes-video-v2.0`／`agnes-image-2.1-flash`／`agnes-image-2.0-flash`／`agnes-2.5-pro`〔＋`pro-alpha`/`pro-beta`〕）。
+  - **文本 ✅**：`POST /chat/completions` → **200**，`content` 回 `ok`；usage 共 **307** tokens（prompt 291／completion 16，`reasoning_tokens` 14、`cached_tokens` 256）；响应含**非 OpenAI 原生字段** `reasoning_content`、`provider_specific_fields.matched_stop` ⇒ 真模型接线做严格 schema 校验须放行。
+  - **图像 ✅**：`POST /images/generations` → **200**，返回 `data[0].url`（`platform-outputs.agnes-ai.space/images/t2i/task_*/output_*.png`）＋ `task_id`；**`b64_json` 实测为空串** ⇒ 消费方须取 `url`，按 OpenAI 同名习惯解析 b64 会拿到空串（登记为接线前必读）。
+  - **视频 ❌（本批最大缺口）**：端点＝**`POST /v1/videos`**（`/v1/videos/generations` 与 `/v1/video` 实测 **404**）；**`mode` 必填**（缺 → `400 mode is required`），实测 `text-to-video`／`t2v`／`std`／`pro`／`text2video` **五种取值全 `400 invalid mode`**；免费档视频 **actual 1 RPM**（官方公共目录 Free/default public 2／actual 1）致探测多次 **429** ⇒ 剩余候选未判。**`mode` 合法取值【原文未给出，待补】**——官方公共目录（`AgnesAI-Models` README.zh-CN.md／MODEL_CATALOG.md，公共文档版本 **2026-07-30**）只登记 `agnes-video-v2.0` 且**无 `mode` 参数**，不覆盖 2.5-flash 视频/图像规格。
+  - **官方口径两条（只登记供接线参考，非本批裁决）**：① 视频结果查询 `GET https://apihub.agnes-ai.com/agnesapi?video_id=<VIDEO_ID>`，**用 `video_id` 不用 `task_id`**（后者属遗留格式）；② 免费档视频 actual 1 RPM ⇒ 真模型视频演练须串行＋退避，不可并发。
+  - **对 Q252 的意义（只登记不越线代裁）**：Q252 记「供应商视频模型 agnes-video 待外部规格」，本批补上**编码在册＋端点形状＋必填 `mode`＋限流档位**，但**仍缺 `mode` 合法取值** ⇒ 视频真模型接线**仍不可自推、维持挂账**；video-studio 独立点工前不接真视频模型（synthetic 构造器口径不变）。
+  - **范围与耗用**：零生产代码、零迁移、零新表、零新 env、零测试改动；三模实测共——文本 1 次、图像 1 次、视频 8 次（2 次限流 429、6 次参数判定 400，**无一次成功生成**，故未产生视频时长计费）。
+  - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）——本批是外部供应商规格核对，不改变任一层判定。
 - **Q253 Q249/Q250 新增管理面内置浏览器功能测试 ＋ 预检渲染崩溃修复（2026-10-03，**真实服务全链功能测试**；真 PG/真 Redis＋前后端本机服务；测试中发现并修复 1 个前端 P1 崩溃；后端零代码、pytest 基线不变 1080 passed＋10 skipped；前端 tsc＋check-admin 净；02 C1.197）**
   - **来由**：负责人「你用豆包工作的内置浏览器做一些功能测试呀，我都没看你搞过测试」——对 Q249/Q250 新增管理面做真实环境功能测试。
   - **环境/造数**：infra-postgres-1（PG16）＋redis 均 healthy，后端 :8001（STAFF_AUTH 启用）＋前端 :3000，引导全角色 staff 令牌；以真实 HTTP 走 golden path 完整 13 段（全 200/201），发证即自动落首版快照＋freeze 事件；补做迁移 0044 PG16 up/down/up 往返实测（三行验证＋downgrade 三 DELETE）。
