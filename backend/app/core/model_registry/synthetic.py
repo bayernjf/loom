@@ -276,6 +276,23 @@ def build_article_semantic_check(variables: dict) -> dict:
 BUILDERS["ARTICLE-SEMANTIC-CHECK"] = build_article_semantic_check
 
 
+def build_video_gen(variables: dict) -> dict:
+    """VIDEO-GEN 结构替身（V1 引擎预备）：从 FCW 原料确定性产占位视频引用。
+
+    视频载体/对象存储/分段脚本随 video-studio 后续切片（供应商视频模型与
+    段12 视频规格原文未给【待补】）；本替身只验证场景注册与路由链路，
+    不模拟视频生成。
+    """
+    final_id = str(variables.get("_final_id", ""))
+    language = str(variables.get("language") or "zh-CN")
+    if not final_id:
+        return {"video_ref": ""}
+    return {"video_ref": f"synthetic:video:{final_id}:{language}"}
+
+
+BUILDERS["VIDEO-GEN"] = build_video_gen
+
+
 def _embed_one(text: str) -> list[float]:
     # 字袋哈希向量：ascii 词 + CJK 单字 + CJK 相邻二元组，各桶 ±1 计数后
     # L2 归一化。相同文本必相同向量；共享长前缀的文本余弦高（确定性、无随机）。
