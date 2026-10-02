@@ -9,6 +9,7 @@ import {
   CURRENT_ADMIN_ACTOR_ID,
   assembleManual,
   getAdminContentGoals,
+  getAdminFcwMaterial,
   getAdminPublishSlots,
   previewAssemble,
   type AdminContentGoal,
@@ -114,6 +115,62 @@ export async function assembleManualAction(
   try {
     const fcw = await assembleManual(body);
     return { ok: true, fcw };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      return {
+        ok: false,
+        status: err.status as 401 | 403 | 404 | 409 | 422,
+        detail: errorDetail(err.message),
+      };
+    }
+    return { ok: false, status: "unknown", detail: null };
+  }
+}
+
+export type ReuseResult =
+  | {
+      ok: true;
+      product_space_id: string;
+      platform: string;
+      slot_id: string;
+      goal: string;
+      country: string | null;
+    }
+  | {
+      ok: false;
+      status: 401 | 403 | 404 | 409 | 422 | "unconfigured" | "missing_role" | "unknown";
+      detail: string | null;
+    };
+
+export async function getFcwReuseAction(
+  finalId: string,
+): Promise<ReuseResult> {
+  // Q251 裁决 c：复用＝已签发成品再发证。取 Q177 管理端六层原料包（issued 段含
+  // 组装入参：product_space_id/platform/slot_id/goal/country）→ 预填组装表单，
+  // 走 E1.1 重新预检/签发；与第 4 项候选池复制（segment-4）划清。
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
+  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
+    return { ok: false, status: "missing_role", detail: null };
+  try {
+    const pack = await getAdminFcwMaterial(finalId);
+    const issued = pack.issued as {
+      product_space_id?: string;
+      platform?: string;
+      slot_id?: string;
+      goal?: string;
+      country?: string | null;
+    };
+    if (!issued.product_space_id || !issued.platform || !issued.slot_id || !issued.goal) {
+      return { ok: false, status: "unknown", detail: null };
+    }
+    return {
+      ok: true,
+      product_space_id: issued.product_space_id,
+      platform: issued.platform,
+      slot_id: issued.slot_id,
+      goal: issued.goal,
+      country: issued.country ?? null,
+    };
   } catch (err) {
     if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
       return {
