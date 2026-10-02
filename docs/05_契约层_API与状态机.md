@@ -189,6 +189,12 @@
 
 > Guard 七项 code：`g1_pws_frozen`（PWS status=frozen）/`g2_compliance_clear`（block_required=false **且** cleaning_passed=true，无报告不放行【实现补】）/`g3_packages_active`（PCP active + CSP/CSTP/CEP active 且 gate=approved）/`g4_product_space_consistent`（六路 PS 一致）/`g5_tenant_consistent`（六路 tenant 一致）/`g6_law_review`（仅法审被触发时要求 approved，Q49）/`g7_pws_active_version`（is_active=true）。Q54 score（pwc×100×0.4 + fit×0.3 + 三包 conf 均值×100×0.3）仅排序，缺失即 null/incomplete=true，永不做门槛。draft publish_status V1 无创建入口；WF-09 AI Skill 随 V2。
 
+> **实现补登（2026-10-03，Q250 FCW 冻结管理 revoke 写口与断消费，02 C1.194；管理面前缀 `/api/admin`）**：
+> | 方法/路径 | 说明 | 依据 |
+> |---|---|---|
+> | POST `/api/admin/fcw/{final_id}/revoke` | **revoke 写口（D3.5 第 6 项）**：body `{reason: str 1..2000 必填, actor}`；`require_internal_actor(OPERATIONS)`（Q242 族，已验真 staff 令牌覆盖自报 actor）；把该 final_id 的 **active frozen 快照**（fcw_snapshots）翻转 revoked＋is_active=false＋revoked_by/at/reason，写 `fcw_freeze_logs` revoke 事件＋审计 `fcw.revoke`；**原成品行（final_content_whitelists）永不 mutate**（exit_guard 不可变）；响应＝`fcw_snapshot_view`（快照翻转后形态）；语义：final_id 无任何快照 → 404（`FcwNotFound`）、有快照但非 active frozen（重复 revoke 等）→ 409（`FcwWrongState`）、角色不足 → 403、reason 空 → 422；**段12 断消费**：`content/generate_content` 与 `content/generation` 生成入口在材料获取后 `ensure_fcw_consumable(session, final_id)`——**无快照行（V1 前发证/夹具）放行**、快照 revoked 立即 409（content router 映射 `FcwRevoked→409`） | Q250/D3.5⑥/Q242/Q203 |
+> - 配套状态机语义（裁决 a/b/d/e/f）：冻结粒度＝final_id 级（每成品一快照、version 恒 v1、`uq_fcw_final_version(final_id,version)`）；回滚＝A 案（作废当前＋重冻新版走 E1.1 再发证，PWS Q32 同族）；不可变由 exit_guard `before_update`/`before_delete` 强制（`FcwImmutable`）；冻结管理专用 UI 随 V2。
+
 **M10 切片 a · 配置中心**（2026-09-14，迁移 0010，路由前缀 `/api/admin/config`）
 
 | 方法/路径 | 说明 | 依据 |
