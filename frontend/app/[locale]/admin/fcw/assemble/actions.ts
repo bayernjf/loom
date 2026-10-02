@@ -1,0 +1,127 @@
+"use server";
+
+// Q249 / D3.5 §3.1 甲：组装工作台——表单数据源 + 预检只读口 + 手动单条发证。
+// 预检（previewAssemble）与签发（assembleManual）都经 lib/api 走 httpOnly staff
+// Bearer；client 岛只允许调本模块，禁直连 lib/api（check-admin 守卫）。
+import {
+  ADMIN_ROLE_LIST,
+  ApiError,
+  CURRENT_ADMIN_ACTOR_ID,
+  assembleManual,
+  getAdminContentGoals,
+  getAdminPublishSlots,
+  previewAssemble,
+  type AdminContentGoal,
+  type AdminPublishSlot,
+  type AssembleManualBody,
+  type AssemblePreview,
+  type FcwCardView,
+} from "@/lib/api";
+import { mapConflictChecks, type ConflictCheckRow } from "@/lib/fcw-conflict-map";
+
+export type {
+  AdminContentGoal,
+  AdminPublishSlot,
+  AssembleManualBody,
+  AssemblePreview,
+  FcwCardView,
+  ConflictCheckRow,
+};
+
+const KNOWN_STATUSES = new Set([401, 403, 404, 409, 422]);
+
+export type FormDataResult =
+  | { ok: true; slots: AdminPublishSlot[]; goals: AdminContentGoal[] }
+  | { ok: false; status: "unconfigured" | "missing_role" | "unknown" };
+
+export async function getAssembleFormDataAction(): Promise<FormDataResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
+  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
+    return { ok: false, status: "missing_role" };
+  try {
+    const [slots, goals] = await Promise.all([
+      getAdminPublishSlots(),
+      getAdminContentGoals(),
+    ]);
+    return { ok: true, slots, goals };
+  } catch (err) {
+    return { ok: false, status: "unknown" };
+  }
+}
+
+function errorDetail(message: string): string | null {
+  try {
+    const parsed = JSON.parse(message) as { detail?: unknown };
+    const detail = parsed.detail;
+    if (typeof detail === "string" && detail) return detail;
+    if (detail && typeof detail === "object") return JSON.stringify(detail);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export type PreviewResult =
+  | { ok: true; preview: AssemblePreview; conflicts: ConflictCheckRow[] }
+  | {
+      ok: false;
+      status: 401 | 403 | 404 | 409 | 422 | "unconfigured" | "missing_role" | "unknown";
+      detail: string | null;
+    };
+
+export async function previewAssembleAction(
+  body: AssembleManualBody,
+): Promise<PreviewResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
+  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
+    return { ok: false, status: "missing_role", detail: null };
+  try {
+    const preview = await previewAssemble(body);
+    return {
+      ok: true,
+      preview,
+      conflicts: mapConflictChecks({
+        guards: preview.guards,
+        scoreIncomplete: preview.score_incomplete,
+      }),
+    };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      return {
+        ok: false,
+        status: err.status as 401 | 403 | 404 | 409 | 422,
+        detail: errorDetail(err.message),
+      };
+    }
+    return { ok: false, status: "unknown", detail: null };
+  }
+}
+
+export type AssembleResult =
+  | { ok: true; fcw: FcwCardView }
+  | {
+      ok: false;
+      status: 401 | 403 | 404 | 409 | 422 | "unconfigured" | "missing_role" | "unknown";
+      detail: string | null;
+    };
+
+export async function assembleManualAction(
+  body: AssembleManualBody,
+): Promise<AssembleResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
+  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
+    return { ok: false, status: "missing_role", detail: null };
+  try {
+    const fcw = await assembleManual(body);
+    return { ok: true, fcw };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      return {
+        ok: false,
+        status: err.status as 401 | 403 | 404 | 409 | 422,
+        detail: errorDetail(err.message),
+      };
+    }
+    return { ok: false, status: "unknown", detail: null };
+  }
+}
