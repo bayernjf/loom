@@ -92,6 +92,8 @@
 - 中台导出：CSV `GET /api/fcw/{final_id}.fcw.csv`、JSON envelope `….fcw.json`（含 limit/offset，行数上限 env `LOOM_EXPORT_MAX_ROWS` 默认 10 万）；台内原料 `GET /api/fcw/{final_id}/material.json`。
 - 异步导出经 `/api/exports/jobs`（worker 门控默认关，关时同步落 completed；管理页 /admin/exports）。
 - **白名单卡片查看（Q177/Q180）**：运营在管理台 /admin/fcw 跨租户分页查看全部成品卡片、行内展开六层原料（只读，operations|platform_admin）；客户在自己台的 content → cards（`/content/cards`，客户 nav 不增项）只看本租户卡片，后端 `GET /api/fcw?tenant_id=` 强制单租户隔离。
+- **组装工作台与只读审核队列（Q249，2026-10-02）**：管理端 sidebar 增两项——`/admin/fcw/assemble` 组装工作台（D3.5 第 3 项，人工发证台面：选候选/装原料/跑预检/走 E1.1 签发）与 `/admin/fcw/review` 只读审核队列（D3.5 第 4 项，发证前审候选）。预检只读口 `POST /api/fcw/assemble/preview`（Q249 3.1 乙）：同装配同七 Guard 同评分但**不签发**，Guard 失败返回 200＋`guards_passed=false`（非 409），唯一出口红线守签发不触碰。冲突映射 `frontend/lib/fcw-conflict-map.ts` 8 项（无源项标【无源·原文未给出，待补】）。
+- **FCW 冻结管理（Q250，2026-10-03，引擎层已落、专用 UI 随 V2）**：发证（`POST /api/fcw/assemble` 或组装台 E1.1）即落首版冻结快照（final_id 级、version v1、status=frozen、六路输入引用＋score/guards 物化）；成品行**不可变**（禁 UPDATE/DELETE）。**revoke 写口** `POST /api/admin/fcw/{final_id}/revoke` `{reason: 1..2000 必填, actor}`——需 staff 令牌且角色含 operations（403）；无任何快照 404、已 revoke 或非 active frozen 409、reason 空 422；成功后快照翻转 revoked＋写 `fcw.revoke` 审计。**断消费**：revoked 成品的段 12 生成入口一律 409（`FcwRevoked`）；未落快照的行（V1 前历史发证）放行。**复用再发证**：组装台「复用已签发成品」输入区读 Q177 material 包预填表单，走 E1.1 再发证（新 final_id、新快照 v1；与 D3.5 第 4 项候选池复制划界）。
 
 ---
 

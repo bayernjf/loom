@@ -241,6 +241,26 @@ $body
 
 ARTICLE_SEMANTIC_PROMPT_VARIABLES = ["body", "language"]
 
+SCENE_VIDEO_GEN = "VIDEO-GEN"
+VIDEO_GEN_PROMPT_VERSION = "v0.1"
+VIDEO_GEN_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:VIDEO-GEN:v0.1"))
+
+VIDEO_GEN_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段12 的 VIDEO-GEN Skill：只读消费一个 final_id 的 FCW 原料，生成视频内容。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【FCW 原料】
+$materials
+
+目标语言：$language
+
+硬性规则：
+1. 只使用上面原料，不重新决策上游、不加入 FCW 之外的内容（PT-ART-GEN-V1.5 同族只读消费）。
+2. 只输出 {"video_ref": "..."}；video_ref 为生成视频的存储引用字符串。
+3. 无可用原料时 video_ref 给空字符串。
+4. 视频的语音与字幕必须使用「目标语言」；不得混入其他语言。
+"""
+
+VIDEO_GEN_PROMPT_VARIABLES = ["materials", "language"]
+
 
 def all_scene_codes() -> tuple[str, ...]:
     """本模块声明的全部 SCENE_* 场景码（Q193：供指标预置零序列用）。

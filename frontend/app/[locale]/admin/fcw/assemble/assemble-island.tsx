@@ -313,7 +313,20 @@ export function AssembleIsland() {
                 <tr key={g.code}>
                   <td className={styles.mono}>{g.code}</td>
                   <td>{g.passed ? t("verdictPass") : t("verdictFail")}</td>
-                  <td className={styles.mono}>{g.detail}</td>
+                  <td
+                    className={styles.mono}
+                    style={{
+                      maxWidth: 420,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {g.detail === null || g.detail === undefined
+                      ? "—"
+                      : typeof g.detail === "object"
+                        ? JSON.stringify(g.detail)
+                        : String(g.detail)}
+                  </td>
                 </tr>
               ))}
             </tbody>
