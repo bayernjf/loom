@@ -28,3 +28,10 @@ class AssemblyTaskCreate(BaseModel):
     count: int = Field(ge=1, le=200)
     slot_ids: list[str] | None = None
     actor: Actor
+
+
+class FcwRevokeRequest(BaseModel):
+    """Q251 裁决 b（A 案）：作废当前快照。reason 必填（审计纪律，同 PWS revoke）。"""
+
+    reason: str = Field(min_length=1, max_length=2000)
+    actor: Actor

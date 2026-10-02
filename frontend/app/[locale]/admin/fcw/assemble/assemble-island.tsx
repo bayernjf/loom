@@ -10,6 +10,7 @@ import styles from "../../admin.module.css";
 import {
   assembleManualAction,
   getAssembleFormDataAction,
+  getFcwReuseAction,
   previewAssembleAction,
   type AdminContentGoal,
   type AdminPublishSlot,
@@ -33,6 +34,11 @@ export function AssembleIsland() {
   const [slotId, setSlotId] = useState("");
   const [goal, setGoal] = useState("");
   const [country, setCountry] = useState("");
+
+  // Q251 裁决 c：复用＝已签发成品再发证（走 E1.1），预填组装表单。
+  const [reuseId, setReuseId] = useState("");
+  const [reuseLoading, setReuseLoading] = useState(false);
+  const [reuseError, setReuseError] = useState<string | null>(null);
 
   const [pending, startTransition] = useTransition();
   const [previewing, setPreviewing] = useState(false);
@@ -111,6 +117,29 @@ export function AssembleIsland() {
     });
   }
 
+  function runReuse() {
+    const finalId = reuseId.trim();
+    if (!finalId) return;
+    setReuseLoading(true);
+    setReuseError(null);
+    setErrorText(null);
+    setPreview(null);
+    setIssued(null);
+    startTransition(async () => {
+      const r = await getFcwReuseAction(finalId);
+      if (r.ok) {
+        setPsId(r.product_space_id);
+        setPlatform(r.platform);
+        setSlotId(r.slot_id);
+        setGoal(r.goal);
+        setCountry(r.country ?? "");
+      } else {
+        setReuseError(failureText(r.status, r.detail));
+      }
+      setReuseLoading(false);
+    });
+  }
+
   function failureText(
     status: string | number,
     detail: string | null,
@@ -127,6 +156,29 @@ export function AssembleIsland() {
   return (
     <section className={styles.section} data-testid="fcw-assemble-form">
       <p className={styles.windowLine}>{t("intro")}</p>
+
+      <div className={styles.grid}>
+        <label className={styles.fieldLabel}>
+          {t("reuseLabel")}
+          <input
+            className={styles.input}
+            value={reuseId}
+            onChange={(e) => setReuseId(e.target.value)}
+            placeholder={t("reuseHint")}
+          />
+        </label>
+        <div className={styles.actionsRow}>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            disabled={reuseLoading || !reuseId.trim()}
+            onClick={runReuse}
+          >
+            {reuseLoading ? t("reuseLoading") : t("reuseButton")}
+          </button>
+        </div>
+      </div>
+      {reuseError && <p className={styles.notice}>{reuseError}</p>}
 
       <div className={styles.grid}>
         <label className={styles.fieldLabel}>

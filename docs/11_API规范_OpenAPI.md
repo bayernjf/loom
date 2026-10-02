@@ -23,7 +23,7 @@
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
 | CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132；**Q196 起两条任务口 `tenant_id` 必填并按任务行归属收口**） | D4 | 🟢 CSV/JSON 同步导出 + 导出任务记录已落地（见 §2.3/§2.4）；queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（env 默认关，门控关走同步）；limit/offset 分页与行数硬上限已随 Q142 落地（env `LOOM_EXPORT_MAX_ROWS` 默认 10 万，超限 422） |
 | 台内白名单 6 层原料包 JSON | GET /api/fcw/{final_id}/material.json（Q155） | 09:87 / 01 line14 | 🟢 后端全量 JSON 已落地（见 §2.5，台内卡片口径、非中台 final_id-only 面）；台内卡片前端随 D3.5 点工 |
-| 管理端白名单卡片只读台（跨租户列表 + 六层内嵌） | GET /api/admin/fcw、GET /api/admin/fcw/{final_id}/material（Q177） | 09:87（D3.5） | 🟢 D3.5 运营只读首片已落地（见 §2.6，读闸 operations\|platform_admin、零迁移）；组装工作台/审核台/冻结管理/客户视图等 D3.5 余项随菜单点工 |
+| 管理端白名单卡片只读台（跨租户列表 + 六层内嵌） | GET /api/admin/fcw、GET /api/admin/fcw/{final_id}/material（Q177）＋ **POST /api/admin/fcw/{final_id}/revoke（Q250 冻结 revoke 写口）** | 09:87（D3.5） | 🟢 D3.5 运营只读首片已落地（见 §2.6，读闸 operations\|platform_admin、零迁移）；组装工作台/预检口/六层回放/冲突映射/只读审核队列随 Q249 落地（见 §2.8）；**FCW 冻结管理（第 6 项）revoke 写口＋段12 断消费随 Q250 落地（迁移 0043，见 §2.8），冻结管理专用 UI 仍随 V2**；客户卡片视图等 D3.5 余项随菜单点工 |
 
 ---
 
@@ -209,6 +209,14 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 **审计**：成功 `fcw.issued`（六路材料＋Guard 结果＋`E1_owner=publishFCW`），失败 `fcw.assembly_blocked`。零迁移、无新增表。
 
 **预检只读口（Q249 新增，02 C1.193；零写零副作用契约）**：`POST /api/fcw/assemble/preview`（`router.py`，`require_internal_actor(OPERATIONS)` 同两写口，门控关着也自行验真 Bearer）——**只预检、不签发**：与 `/assemble` 同材料装配、同七 Guard 求值、同 Q54 评分，但**不 INSERT `final_content_whitelists`、不写 `fcw.issued`/`fcw.assembly_blocked` 审计、不查重**（查重属签发语义，预检不触碰）；唯一出口红线守的是签发，预检是只读求值。**Guard 失败是正常业务结果**：返回 **200**＋`guards_passed=false`＋逐项明细，**不是 409**（409 语义只属写口）；材料缺 409、PWS／slot／goal 未知 404、无有效凭证 401、角色不足 403。body 与 `/assemble` 同（`product_space_id`/`platform`/`slot_id`/`goal`/`country?`/`pws_id?`）；产品选择源＝用户手填产品空间 ID（表单提示从 PWS／白名单列表复制）。契约测试：`tests/integration/test_fcw_preview.py` 6 例（零副作用、Guard 失败 200 非异常、缺材料 409、未知目标 404、无令牌 401、预检后可正常签发且只一条 `fcw.issued` 审计）。
+
+**revoke 写口（Q250 新增，02 C1.194，D3.5 第 6 项 FCW 冻结管理）**：`POST /api/admin/fcw/{final_id}/revoke`（`app/final/final_whitelist/router.py`，`require_internal_actor(OPERATIONS)`，Q242 族同口径——门控关着也自行验真 Bearer；body `{reason: str 1..2000 必填, actor}`）。
+
+- **语义**：把该 `final_id` 的 **active frozen 快照**（`fcw_snapshots`，version 恒 v1）翻转 `revoked`＋`is_active=false`＋`revoked_by/revoked_at/revoke_reason`，写 `fcw_freeze_logs` revoke 事件＋审计 `fcw.revoke`；**原成品行（final_content_whitelists）永不 mutate**（exit_guard `before_update`/`before_delete`，`FcwImmutable`，Q203 唯一出口红线同族）；响应＝`fcw_snapshot_view`。
+- **错误码**：401 无有效凭证、403 角色不足、404 `FcwNotFound`（final_id 无任何快照）、409 `FcwWrongState`（有快照但非 active frozen，含重复 revoke）、422 reason 空。
+- **段12 断消费**：`content/service.generate_content` 与 `content/generation` 两生成入口在材料获取后 `ensure_fcw_consumable(session, final_id)`——**无快照行（V1 前发证/测试夹具）未纳入冻结管理＝放行**（V1 既有行为不变）、快照 revoked 立即 409（content router 映射 `FcwRevoked→409`）。
+- **复用（Q250 裁决 c，纯前端）**：已签发成品再发证＝组装工作台「复用」区块（`frontend/.../admin/fcw/assemble/actions.ts:getFcwReuseAction`）经 Q177 material pack `issued` 段预填表单，写口仍走 E1.1 `/assemble`；与 D3.5 第 4 项候选池复制（segment-4）划界。
+- **契约测试**：`tests/integration/test_fcw_freeze.py` 9 例（首版快照/快照六路物化/不可变 UPDATE＋DELETE/revoke 翻转/404/409/422/403/断消费 409）。
 
 ---
 

@@ -29,6 +29,7 @@ from app.core.rbac import (
     require_any_role,
 )
 from app.final.final_whitelist.models import FinalContentWhitelist
+from app.final.final_whitelist.service import FcwRevoked
 from app.product.product_intake.models import ProductSpace
 
 router = APIRouter(tags=["content"])
@@ -79,6 +80,8 @@ async def generate_content(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except service.ContentFcwNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FcwRevoked as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except service.ContentKindNotImplemented as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except service.ContentLanguageNotEligible as exc:

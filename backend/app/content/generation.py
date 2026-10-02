@@ -20,6 +20,7 @@ from app.core.skill7.models import SkillRun
 from app.decision.compliance_center.models import CcrReport
 from app.decision.layer_strategy.models import Package
 from app.final.final_whitelist.models import FinalContentWhitelist
+from app.final.final_whitelist.service import ensure_fcw_consumable
 from app.platform.platform_adaptation.models import PcpWeightTable
 from app.product.whitelist_center.models import PwsSnapshot
 
@@ -107,6 +108,10 @@ async def invoke_article_gen(
     fcw = await session.get(FinalContentWhitelist, content.final_id)
     if fcw is None:
         raise ArticleGenFcwNotFound(f"FCW {content.final_id} not found")
+
+    # Q251 裁决 b（断消费，Q32 哲学）：快照 revoked 立即 409，不允许基于
+    # 作废成品生成内容；与 generate_content 入口双保险（PT-ART-GEN-V1.5）。
+    await ensure_fcw_consumable(session, content.final_id)
 
     materials = await _assemble_materials(session, fcw)
     variables = {

@@ -33,6 +33,7 @@ from app.core.config_center.knobs import knob
 from app.core.rbac import OPERATIONS, PLATFORM_ADMIN, require_any_role
 from app.decision.compliance_center import ccr_rules
 from app.final.final_whitelist.models import FinalContentWhitelist
+from app.final.final_whitelist.service import ensure_fcw_consumable
 from app.product.product_intake.models import ProductSpace
 
 
@@ -220,6 +221,10 @@ async def generate_content(
     fcw = await session.get(FinalContentWhitelist, body.final_id)
     if fcw is None:
         raise ContentFcwNotFound(body.final_id)
+
+    # Q251 裁决 b（断消费，Q32 哲学）：所引 FCW 快照已 revoked 立即 409，
+    # 不允许基于作废成品再生成内容（PT-ART-GEN-V1.5 只读消费契约）。
+    await ensure_fcw_consumable(session, body.final_id)
 
     # Q119/Q58：语言 = 发布位目标市场（fcw.country）∩ 产品目标语言（PS.target_languages）。
     language = body.language or DEFAULT_LANGUAGE

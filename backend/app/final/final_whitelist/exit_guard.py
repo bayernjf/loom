@@ -25,6 +25,14 @@ class OutsidePublishFCW(RuntimeError):
     """在 E1.1 之外写入 final_content_whitelists（协议违反，不是业务错误）。"""
 
 
+class FcwImmutable(RuntimeError):
+    """已发证成品行不可变（Q251 裁决 d，design §3.2 甲）。
+
+    发证即冻结：final_content_whitelists 行在落库后禁止 UPDATE/DELETE；
+    任何回滚/换版语义走快照状态（revoke + 重发），不得 mutate 原行。
+    """
+
+
 def in_issue_scope() -> bool:
     return _ISSUE_SCOPE.get()
 
@@ -55,3 +63,20 @@ def install(mapper) -> None:
                 "(app/final/final_whitelist/service.assemble_one) 写入；"
                 "需要一条成品请走该服务，测试夹具请显式进 issue_scope()"
             )
+
+    # Q251 裁决 d（不可变强制）：发证即冻结，已落库的行禁止 UPDATE/DELETE。
+    # V1 无 draft 创建入口（assemble_one 只产 published），故全部行一律不可变；
+    # 若未来引入 draft 写路径，此处按 publish_status 判放行（design §3.2 甲）。
+    @event.listens_for(mapper, "before_update")
+    def _reject_fcw_update(*_args) -> None:
+        raise FcwImmutable(
+            "final_content_whitelists 行不可变（Q251）：发证即冻结，"
+            "不允许 UPDATE；版本语义走 fcw_snapshots 状态（revoke + 重发）"
+        )
+
+    @event.listens_for(mapper, "before_delete")
+    def _reject_fcw_delete(*_args) -> None:
+        raise FcwImmutable(
+            "final_content_whitelists 行不可变（Q251）：发证即冻结，"
+            "不允许 DELETE；历史全保留（Q31 同族哲学）"
+        )

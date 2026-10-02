@@ -612,6 +612,10 @@
     "fcwAssemble": {
       "title": "组装工作台",
       "intro": "手动单条发证：先预检七项机械核验（只读口、零副作用），全部放行后才解锁签发。",
+      "reuseLabel": "复用已签发成品（再发证）",
+      "reuseHint": "final_id（预填六路组装入参后走 E1.1 重新预检/签发）",
+      "reuseButton": "预填表单",
+      "reuseLoading": "读取中…",
       "productSpace": "产品空间",
       "productSpaceHint": "product_space_id（从 PWS / 白名单卡片列表复制）",
       "platform": "平台",

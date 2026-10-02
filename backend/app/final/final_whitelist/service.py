@@ -27,8 +27,15 @@ from app.decision.layer_strategy.models import (
 )
 from app.final.final_whitelist import exit_guard, fcw_rules
 from app.final.final_whitelist.models import (
+    FCW_FREEZE_EVENT_FREEZE,
+    FCW_FREEZE_EVENT_REVOKE,
+    FCW_SNAP_FROZEN,
+    FCW_SNAP_REVOKED,
+    FCW_SNAP_VERSION_V1,
     PUBLISH_PUBLISHED,
     FcwAssemblyTask,
+    FcwFreezeLog,
+    FcwSnapshot,
     FinalContentWhitelist,
 )
 from app.platform.platform_adaptation.models import (
@@ -97,6 +104,18 @@ class DuplicateIssuance(Exception):
 
 class InvalidRequest(Exception):
     pass
+
+
+class FcwNotFound(Exception):
+    """final_id 不存在或当前无 active 快照（revoke/消费检查共用）。"""
+
+
+class FcwRevoked(Exception):
+    """段12 断消费（Q32 哲学，Q251 裁决 b）：所引 FCW 快照已 revoked。"""
+
+
+class FcwWrongState(Exception):
+    """快照状态不允许该动作（仅 active frozen 可 revoke）。"""
 
 
 def _require_ops(actor) -> None:
@@ -451,6 +470,63 @@ async def assemble_one(
     with exit_guard.issue_scope():
         session.add(fcw)
         await session.flush()
+
+    # Q251 裁决 a/b/d（发证即冻结）：每个成品落一个 final_id 级不可变快照
+    # （版本恒 v1、status=frozen、is_active=true）；原行自此禁 UPDATE/DELETE，
+    # 回滚语义走快照 revoked + E1.1 重发，不复用/不动原行。
+    session.add(
+        FcwSnapshot(
+            final_id=fcw.final_id,
+            tenant_id=pws.tenant_id,
+            product_space_id=product_space_id,
+            version=FCW_SNAP_VERSION_V1,
+            status=FCW_SNAP_FROZEN,
+            is_active=True,
+            platform=platform,
+            slot_id=slot_id,
+            goal=goal,
+            country=country,
+            snapshot={
+                "materials": {
+                    "pws_id": pws.pws_id,
+                    "pwc_id": pwc_item.ref_id,
+                    "pcp_id": pcp.pcp_id,
+                    "csp_package_id": csp.package_id,
+                    "cstp_package_id": cstp.package_id,
+                    "cep_package_id": cep.package_id,
+                    "ccr_report_id": view["latest_report_id"],
+                    "law_review_id": None,
+                    "platform": platform,
+                    "slot_id": slot_id,
+                    "goal": goal,
+                    "country": country,
+                },
+                "score": score_outcome.score,
+                "score_detail": score_outcome.detail,
+                "score_incomplete": score_outcome.incomplete,
+                "guards": guard_payload,
+            },
+            created_by=actor.id,
+        )
+    )
+    session.add(
+        FcwFreezeLog(
+            tenant_id=pws.tenant_id,
+            product_space_id=product_space_id,
+            final_id=fcw.final_id,
+            event=FCW_FREEZE_EVENT_FREEZE,
+            reason_code=None,
+            detail={
+                "version": FCW_SNAP_VERSION_V1,
+                "task_id": task_id,
+                "platform": platform,
+                "goal": goal,
+                "country": country,
+            },
+            actor_id=actor.id,
+        )
+    )
+    await session.flush()
     await append_audit(
         session,
         tenant_id=pws.tenant_id,
@@ -701,6 +777,105 @@ async def list_fcw_admin(
 
 async def get_task(session, task_id: str) -> FcwAssemblyTask | None:
     return await session.get(FcwAssemblyTask, task_id)
+
+
+async def _active_snapshot(session, final_id: str) -> FcwSnapshot | None:
+    return (
+        await session.scalars(
+            select(FcwSnapshot).where(
+                FcwSnapshot.final_id == final_id,
+                FcwSnapshot.is_active.is_(True),
+            )
+        )
+    ).first()
+
+
+async def revoke_fcw(session, final_id: str, reason: str, actor) -> FcwSnapshot:
+    """Q251 裁决 b（A 案，PWS Q32 语义）：作废当前快照（revoked）＋审计。
+
+    原行不可变（exit_guard 守卫），重冻新版＝走 E1.1 再发证（裁决 c）；
+    本写口只翻转快照状态并记事件流水，不触碰 final_content_whitelists 行。
+    """
+    _require_ops(actor)
+    snapshot = await session.scalar(
+        select(FcwSnapshot).where(FcwSnapshot.final_id == final_id)
+    )
+    if snapshot is None:
+        raise FcwNotFound(f"no FCW snapshot for final_id {final_id}")
+    if not snapshot.is_active or snapshot.status != FCW_SNAP_FROZEN:
+        raise FcwWrongState(
+            f"FCW {final_id} snapshot is {snapshot.status} "
+            f"(is_active={snapshot.is_active}), only active frozen can be revoked"
+        )
+    snapshot.status = FCW_SNAP_REVOKED
+    snapshot.is_active = False
+    snapshot.revoked_by = actor.id
+    snapshot.revoked_at = datetime.now(tz=UTC)
+    snapshot.revoke_reason = reason
+    session.add(
+        FcwFreezeLog(
+            tenant_id=snapshot.tenant_id,
+            product_space_id=snapshot.product_space_id,
+            final_id=snapshot.final_id,
+            event=FCW_FREEZE_EVENT_REVOKE,
+            reason_code=None,
+            detail={"version": snapshot.version, "reason": reason},
+            actor_id=actor.id,
+        )
+    )
+    await append_audit(
+        session,
+        tenant_id=snapshot.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="fcw.revoke",
+        entity_type="fcw_snapshot",
+        entity_id=snapshot.final_id,
+        detail={"version": snapshot.version, "reason": reason},
+    )
+    await session.flush()
+    return snapshot
+
+
+async def ensure_fcw_consumable(session, final_id: str) -> None:
+    """段12 内容生成只读消费前的状态检查（Q32 哲学，Q251 裁决 b）。
+
+    只拒绝「已纳入冻结管理且被作废」的成品：快照存在但非 active frozen
+    （revoked）立即 409；**无快照的行**（V1 前发证/测试夹具未落快照）未纳入
+    冻结管理，保持既有行为放行。挂在生成/改稿两个入口。
+    """
+    snapshot = await session.scalar(
+        select(FcwSnapshot).where(FcwSnapshot.final_id == final_id)
+    )
+    if snapshot is None:
+        return
+    if snapshot.status != FCW_SNAP_FROZEN or not snapshot.is_active:
+        raise FcwRevoked(
+            f"FCW {final_id} is not consumable: snapshot {snapshot.status} "
+            f"(is_active={snapshot.is_active})"
+        )
+
+
+def fcw_snapshot_view(snapshot: FcwSnapshot) -> dict:
+    return {
+        "snapshot_id": snapshot.snapshot_id,
+        "final_id": snapshot.final_id,
+        "tenant_id": snapshot.tenant_id,
+        "product_space_id": snapshot.product_space_id,
+        "version": snapshot.version,
+        "status": snapshot.status,
+        "is_active": snapshot.is_active,
+        "platform": snapshot.platform,
+        "slot_id": snapshot.slot_id,
+        "goal": snapshot.goal,
+        "country": snapshot.country,
+        "snapshot": snapshot.snapshot,
+        "created_by": snapshot.created_by,
+        "created_at": snapshot.created_at,
+        "revoked_by": snapshot.revoked_by,
+        "revoked_at": snapshot.revoked_at,
+        "revoke_reason": snapshot.revoke_reason,
+    }
 
 
 def fcw_view(fcw: FinalContentWhitelist) -> dict:
