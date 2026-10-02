@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q253 Q249/Q250 新增管理面内置浏览器功能测试 ＋ 预检渲染崩溃修复（2026-10-03，**真实服务全链功能测试**；真 PG/真 Redis＋前后端本机服务；测试中发现并修复 1 个前端 P1 崩溃；后端零代码、pytest 基线不变 1080 passed＋10 skipped；前端 tsc＋check-admin 净；02 C1.197）**
+  - **来由**：负责人「你用豆包工作的内置浏览器做一些功能测试呀，我都没看你搞过测试」——对 Q249/Q250 新增管理面做真实环境功能测试。
+  - **环境/造数**：infra-postgres-1（PG16）＋redis 均 healthy，后端 :8001（STAFF_AUTH 启用）＋前端 :3000，引导全角色 staff 令牌；以真实 HTTP 走 golden path 完整 13 段（全 200/201），发证即自动落首版快照＋freeze 事件；补做迁移 0044 PG16 up/down/up 往返实测（三行验证＋downgrade 三 DELETE）。
+  - **修复 P1 崩溃**：组装工作台点预检整页 client-side exception（`Objects are not valid as a React child ... {pws_status, required}`）；根因＝assemble-island 守卫表直接渲染对象 g.detail（actions 透传未标类型、tsc 未拦）；修复＝object 做 JSON.stringify、空值显「—」、加换行样式；修复后七项守卫明细正常渲染。
+  - **验证结果**：Q249 组装表单/预检只读口（七 Guard＋评分＋8 项冲突映射、零副作用）/待审候选（只读/分页/空态）正常；Q250 复用预填（六路正确回填）、revoke 状态码全覆盖（200/409/422/404/403/401）、revoke 事件落库、段12 对 revoked 成品断消费 409。
+  - **复判不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
 - **Q252 VIDEO-GEN 模型网关场景 V1 引擎预备切片（2026-10-03，**场景注册＋Prompt＋synthetic 构造器＋测试**；纯数据迁移 0044 不建表；物理表仍 64；后端基线 **1072→1080 passed＋10 skipped**、ruff 净；前端零改动；02 C1.196）**
   - **来由**：负责人「A、B、C都搞，一口气搞了」B 组——段12 视频支线依赖供应商视频模型与视频规格，但 VIDEO-GEN 场景注册（synthetic 模式，先例 Q116/Q120/Q121）不依赖外部输入、可自推；先立模型网关场景骨架，video-studio 载体改造独立点工。
   - **落地**：`seeds.py` 追加 `SCENE_VIDEO_GEN="VIDEO-GEN"`＋Prompt v0.1（只读消费 FCW 原料、只输出 `{"video_ref":"..."}`、无原料给空串、语音字幕守目标语言）；`synthetic.py` 追加 `build_video_gen`（无 `_final_id`→空 video_ref；否则 `synthetic:video:{final_id}:{language}`，默认 zh-CN）并注册 BUILDERS；迁移 `0044_video_gen_seed`（纯数据不建表，down=0043，三件套 bulk_insert＋downgrade 三 DELETE，照 0030 先例）。场景码经 SCENE_ 前缀自动纳入 `all_scene_codes()`，gateway 预算零序列自动预置。
