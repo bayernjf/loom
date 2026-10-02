@@ -224,20 +224,22 @@ def _guard_payload(results) -> list[dict]:
     ]
 
 
-async def assemble_one(
+async def _prepare(
     session,
     *,
     product_space_id: str,
     platform: str,
     goal: str,
     slot_id: str,
-    actor,
-    country: str | None = None,
-    pws_id: str | None = None,
-    task_id: str | None = None,
-) -> FinalContentWhitelist:
-    """单条机械组装。材料齐 + 7 项全绿才 mint final_id，否则抛 GuardsFailed。"""
-    _require_ops(actor)
+    country: str | None,
+    pws_id: str | None,
+):
+    """材料装配 + 七 Guard 求值 + 评分（纯读，无副作用）。
+
+    assemble_one 与 preview_one 共用：解析六路材料、装配 Materials、过
+    PT-FCW-ASM-V1.0 七项 Guard、算 Q54 临时评分；本函数不 INSERT、不写审计，
+    副作用只可能发生在调用方（签发/审计）或根本不发生（预检）。
+    """
     await _validate_goal(session, goal)
     pws = await _resolve_pws(session, product_space_id, pws_id)
     slot = await _resolve_slot(session, slot_id, platform)
@@ -263,6 +265,130 @@ async def assemble_one(
     )
     results = fcw_rules.evaluate_guards(materials)
     guard_payload = _guard_payload(results)
+    fit_row = await session.get(GoalFitWeight, goal)
+    slot_fit = (
+        compute_fit_score(slot, fit_row.weights) if fit_row is not None else None
+    )
+    score_outcome = fcw_rules.score_fcw(
+        pwc_score=pwc_item.payload.get("score"),
+        slot_fit_score=slot_fit,
+        package_confs=[csp.conf, cstp.conf, cep.conf],
+    )
+    return (
+        pws,
+        pwc_item,
+        pcp,
+        csp,
+        cstp,
+        cep,
+        view,
+        materials,
+        results,
+        guard_payload,
+        score_outcome,
+        slot,
+    )
+
+
+async def preview_one(
+    session,
+    *,
+    product_space_id: str,
+    platform: str,
+    goal: str,
+    slot_id: str,
+    actor,
+    country: str | None = None,
+    pws_id: str | None = None,
+) -> dict:
+    """Q249-b 预检只读口（D3.5 组装工作台第一步）。
+
+    跑与 assemble_one 完全相同的材料装配与七 Guard 求值，但不 mint final_id：
+    不 INSERT final_content_whitelists、不写 fcw.issued / fcw.assembly_blocked
+    审计、不做重复签发查重（重复属于签发时语义，预检不裁决）。Guard 失败不是
+    异常而是正常业务结果（guards_passed=false），唯一出口红线不受触碰。
+    """
+    _require_ops(actor)
+    (
+        pws,
+        pwc_item,
+        pcp,
+        csp,
+        cstp,
+        cep,
+        view,
+        _materials,
+        results,
+        guard_payload,
+        score_outcome,
+        _slot,
+    ) = await _prepare(
+        session,
+        product_space_id=product_space_id,
+        platform=platform,
+        goal=goal,
+        slot_id=slot_id,
+        country=country,
+        pws_id=pws_id,
+    )
+    return {
+        "guards_passed": fcw_rules.guards_passed(results),
+        "guards": guard_payload,
+        "score": score_outcome.score,
+        "score_detail": score_outcome.detail,
+        "score_incomplete": score_outcome.incomplete,
+        "materials": {
+            "pws_id": pws.pws_id,
+            "pwc_id": pwc_item.ref_id,
+            "pcp_id": pcp.pcp_id,
+            "csp_package_id": csp.package_id,
+            "cstp_package_id": cstp.package_id,
+            "cep_package_id": cep.package_id,
+            "ccr_report_id": view["latest_report_id"],
+            "platform": platform,
+            "slot_id": slot_id,
+            "goal": goal,
+            "country": country,
+        },
+    }
+
+
+async def assemble_one(
+    session,
+    *,
+    product_space_id: str,
+    platform: str,
+    goal: str,
+    slot_id: str,
+    actor,
+    country: str | None = None,
+    pws_id: str | None = None,
+    task_id: str | None = None,
+) -> FinalContentWhitelist:
+    """单条机械组装。材料齐 + 7 项全绿才 mint final_id，否则抛 GuardsFailed。"""
+    _require_ops(actor)
+    (
+        pws,
+        pwc_item,
+        pcp,
+        csp,
+        cstp,
+        cep,
+        view,
+        _materials,
+        results,
+        guard_payload,
+        score_outcome,
+        _slot,
+    ) = await _prepare(
+        session,
+        product_space_id=product_space_id,
+        platform=platform,
+        goal=goal,
+        slot_id=slot_id,
+        country=country,
+        pws_id=pws_id,
+    )
     if not fcw_rules.guards_passed(results):
         await append_audit(
             session,
@@ -296,16 +422,6 @@ async def assemble_one(
     ).first()
     if dup is not None:
         raise DuplicateIssuance(dup.final_id)
-
-    fit_row = await session.get(GoalFitWeight, goal)
-    slot_fit = (
-        compute_fit_score(slot, fit_row.weights) if fit_row is not None else None
-    )
-    score_outcome = fcw_rules.score_fcw(
-        pwc_score=pwc_item.payload.get("score"),
-        slot_fit_score=slot_fit,
-        package_confs=[csp.conf, cstp.conf, cep.conf],
-    )
 
     fcw = FinalContentWhitelist(
         task_id=task_id,

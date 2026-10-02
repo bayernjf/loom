@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 // Q130：效果记录展示共用 helpers（metrics 七键固定顺序，缺席键显 "—" 绝不显 0）。
 // 契约见 05 §1.1.1 / 11 §2.1（Q60）：六计数 + read_rate，稀疏存储。
 
@@ -22,5 +23,5 @@ export function metricText(
 }
 
 export function capturedAtText(iso: string | null): string {
-  return iso ? iso.slice(0, 16).replace("T", " ") : "—";
+  return formatDateTimeLocal(iso);
 }

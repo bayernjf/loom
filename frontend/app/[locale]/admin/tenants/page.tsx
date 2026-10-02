@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import {
@@ -20,8 +21,7 @@ function statusChipClass(status: string): string {
 
 function timeText(value: string | null): string {
   if (!value) return "—";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString().slice(0, 16).replace("T", " ");
+    return formatDateTimeLocal(value);
 }
 
 export default async function TenantsPage() {

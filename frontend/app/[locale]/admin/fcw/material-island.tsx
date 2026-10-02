@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 
 import styles from "../admin.module.css";
+import { mapConflictChecks } from "@/lib/fcw-conflict-map";
 import {
   getFcwMaterialAction,
   type FcwMaterialPack,
@@ -24,6 +25,79 @@ const LAYER_KEYS = [
 
 const KNOWN_STATUSES = new Set([403, 404, 409, 422]);
 
+// Q249 / D3.5 §3.2 乙：六层调动链的只读回放式视图——按 product → platform →
+// strategy → structure → expression → compliance 的顺序呈现装配链路，顶层为
+// 组装结果（issued 概要）。纯 CSS 静态链路，不新增检测逻辑；字段原样直出。
+function LayerChainView({ pack }: { pack: FcwMaterialPack }) {
+  const t = useTranslations("admin.fcw");
+  const order = [
+    "product",
+    "platform",
+    "strategy",
+    "structure",
+    "expression",
+    "compliance",
+  ] as const;
+  const steps = order.filter((key) => pack.layers[key] !== undefined);
+  const chainStyle: React.CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "stretch",
+    gap: "12px",
+    margin: "8px 0 16px",
+  };
+  const nodeStyle: React.CSSProperties = {
+    flex: "1 1 180px",
+    minWidth: "150px",
+    border: "1px solid var(--border, #d0d7de)",
+    borderRadius: "6px",
+    padding: "8px 10px",
+    fontSize: "12px",
+  };
+  const arrowStyle: React.CSSProperties = {
+    alignSelf: "center",
+    color: "var(--text-muted, #57606a)",
+    fontSize: "16px",
+  };
+  return (
+    <div data-testid="fcw-layer-chain">
+      <p className={styles.metaLine}>{t("chainNote")}</p>
+      <div style={chainStyle}>
+        {steps.map((key, i) => (
+          <div key={key} style={{ display: "contents" }}>
+            {i > 0 ? <span style={arrowStyle}>→</span> : null}
+            <div style={nodeStyle}>
+              <strong>{t(`layer.${key}`)}</strong>
+              <pre
+                style={{
+                  margin: "6px 0 0",
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "monospace",
+                }}
+              >
+                {JSON.stringify(pack.layers[key], null, 2)}
+              </pre>
+            </div>
+          </div>
+        ))}
+        <span style={arrowStyle}>→</span>
+        <div style={nodeStyle}>
+          <strong>{t("chainAssembled")}</strong>
+          <pre
+            style={{
+              margin: "6px 0 0",
+              whiteSpace: "pre-wrap",
+              fontFamily: "monospace",
+            }}
+          >
+            {JSON.stringify(pack.issued, null, 2)}
+          </pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MaterialIsland({ finalId }: { finalId: string }) {
   const t = useTranslations("admin.fcw");
   const tError = useTranslations("error");
@@ -31,6 +105,7 @@ export function MaterialIsland({ finalId }: { finalId: string }) {
   const [pending, startTransition] = useTransition();
   const [pack, setPack] = useState<FcwMaterialPack | null>(null);
   const [result, setResult] = useState<FcwMaterialResult | null>(null);
+  const [viewMode, setViewMode] = useState<"json" | "chain">("chain");
 
   function toggle() {
     const next = !open;
@@ -101,23 +176,88 @@ export function MaterialIsland({ finalId }: { finalId: string }) {
               >
                 {t("downloadMaterial")}
               </button>
-              {Array.isArray(pack.warnings) && pack.warnings.length > 0 ? (
-                <details open>
-                  <summary>{t("warningsTitle")}</summary>
-                  <pre>{JSON.stringify(pack.warnings, null, 2)}</pre>
-                </details>
-              ) : null}
-              {LAYER_KEYS.map((key) =>
-                pack.layers[key] ? (
-                  <details key={key}>
-                    <summary>{t(`layer.${key}`)}</summary>
-                    <pre>{JSON.stringify(pack.layers[key], null, 2)}</pre>
-                  </details>
-                ) : null,
+              <div className={styles.actionsRow}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setViewMode("chain")}
+                  data-testid="fcw-chain-view"
+                >
+                  {t("chainView")}
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setViewMode("json")}
+                  data-testid="fcw-json-view"
+                >
+                  {t("jsonView")}
+                </button>
+              </div>
+              {viewMode === "chain" ? (
+                <LayerChainView pack={pack} />
+              ) : (
+                <>
+                  {Array.isArray(pack.warnings) && pack.warnings.length > 0 ? (
+                    <details open>
+                      <summary>{t("warningsTitle")}</summary>
+                      <pre>{JSON.stringify(pack.warnings, null, 2)}</pre>
+                    </details>
+                  ) : null}
+                  {LAYER_KEYS.map((key) =>
+                    pack.layers[key] ? (
+                      <details key={key}>
+                        <summary>{t(`layer.${key}`)}</summary>
+                        <pre>{JSON.stringify(pack.layers[key], null, 2)}</pre>
+                      </details>
+                    ) : null,
+                  )}
+                </>
               )}
               <details>
                 <summary>{t("guardsTitle")}</summary>
                 <pre>{JSON.stringify(pack.guards, null, 2)}</pre>
+              </details>
+              <details>
+                <summary>{t("conflictsTitle")}</summary>
+                <p className={styles.metaLine}>{t("conflictsNote")}</p>
+                {(() => {
+                  const guards = Array.isArray(pack.guards)
+                    ? (pack.guards as Array<{
+                        code: string;
+                        passed: boolean;
+                        detail: string;
+                      }>)
+                    : [];
+                  const rows = mapConflictChecks({
+                    guards,
+                    scoreIncomplete: Boolean(
+                      (pack.issued as Record<string, unknown>)["score_incomplete"],
+                    ),
+                  });
+                  return (
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th>{t("colIndex")}</th>
+                          <th>{t("colLabel")}</th>
+                          <th>{t("colVerdict")}</th>
+                          <th>{t("colSource")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={row.index}>
+                            <td>{row.index}</td>
+                            <td>{row.label}</td>
+                            <td>{row.verdict}</td>
+                            <td className={styles.mono}>{row.source}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </details>
             </>
           ) : null}

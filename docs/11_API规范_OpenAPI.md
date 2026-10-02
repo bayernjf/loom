@@ -208,6 +208,8 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 
 **审计**：成功 `fcw.issued`（六路材料＋Guard 结果＋`E1_owner=publishFCW`），失败 `fcw.assembly_blocked`。零迁移、无新增表。
 
+**预检只读口（Q249 新增，02 C1.193；零写零副作用契约）**：`POST /api/fcw/assemble/preview`（`router.py`，`require_internal_actor(OPERATIONS)` 同两写口，门控关着也自行验真 Bearer）——**只预检、不签发**：与 `/assemble` 同材料装配、同七 Guard 求值、同 Q54 评分，但**不 INSERT `final_content_whitelists`、不写 `fcw.issued`/`fcw.assembly_blocked` 审计、不查重**（查重属签发语义，预检不触碰）；唯一出口红线守的是签发，预检是只读求值。**Guard 失败是正常业务结果**：返回 **200**＋`guards_passed=false`＋逐项明细，**不是 409**（409 语义只属写口）；材料缺 409、PWS／slot／goal 未知 404、无有效凭证 401、角色不足 403。body 与 `/assemble` 同（`product_space_id`/`platform`/`slot_id`/`goal`/`country?`/`pws_id?`）；产品选择源＝用户手填产品空间 ID（表单提示从 PWS／白名单列表复制）。契约测试：`tests/integration/test_fcw_preview.py` 6 例（零副作用、Guard 失败 200 非异常、缺材料 409、未知目标 404、无令牌 401、预检后可正常签发且只一条 `fcw.issued` 审计）。
+
 ---
 
 ### 2.9 对外机器面（A2A Q150 ＋ MCP Q232，已落地；接入步骤在 docs/22）

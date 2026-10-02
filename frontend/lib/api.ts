@@ -1434,6 +1434,91 @@ export async function getAdminFcwMaterial(
   );
 }
 
+// ---- D3.5 组装工作台（Q249）：预检只读口 + 签发口 + 表单数据源 ----
+
+export interface AssembleManualBody {
+  product_space_id: string;
+  platform: string;
+  slot_id: string;
+  goal: string;
+  country?: string | null;
+  pws_id?: string | null;
+}
+
+export interface AssemblePreview {
+  guards_passed: boolean;
+  guards: Array<{ code: string; passed: boolean; detail: string }>;
+  score: number | null;
+  score_detail: string | null;
+  score_incomplete: boolean;
+  materials: {
+    pws_id: string;
+    pwc_id: string;
+    pcp_id: string;
+    csp_package_id: string;
+    cstp_package_id: string;
+    cep_package_id: string;
+    ccr_report_id: string | null;
+    platform: string;
+    slot_id: string;
+    goal: string;
+    country: string | null;
+  };
+}
+
+/** Q249-b：D3.5 组装工作台预检只读口（零副作用，Guard 失败返回 200+guards_passed=false）。 */
+export async function previewAssemble(body: AssembleManualBody): Promise<AssemblePreview> {
+  return request<AssemblePreview>("/api/fcw/assemble/preview", {
+    method: "POST",
+    body: JSON.stringify({
+      ...body,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+/** Q55 手动单条发证（既有口）：材料齐+七 Guard 全绿才 mint final_id。 */
+export async function assembleManual(body: AssembleManualBody): Promise<FcwCardView> {
+  return request<FcwCardView>("/api/fcw/assemble", {
+    method: "POST",
+    body: JSON.stringify({
+      ...body,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+export interface AdminPublishSlot {
+  slot_id: string;
+  platform: string;
+  code: string;
+  name: string;
+  slot_type: string;
+  gate: string;
+  status: string;
+}
+
+export async function getAdminPublishSlots(platform?: string): Promise<AdminPublishSlot[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (platform) params.set("platform", platform);
+  return request<AdminPublishSlot[]>(`/api/admin/publish-slots?${params}`);
+}
+
+export interface AdminContentGoal {
+  code: string;
+  color: string;
+  ratio_min: number | null;
+  ratio_max: number | null;
+  status: string;
+}
+
+export async function getAdminContentGoals(): Promise<AdminContentGoal[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminContentGoal[]>(`/api/admin/content-goals?${params}`);
+}
+
 // Q178：内部运营个人访问令牌（PAT，甲案第一切片）。门控开启后请求由 request 底层统一
 // 注入 httpOnly staff Bearer，且后端以令牌身份覆盖 query/body 自报 actor；门控关闭时
 // 沿用 V1 env 自报（用于引导签发首个 platform_admin 令牌）。明文 secret 仅签发返回一次。

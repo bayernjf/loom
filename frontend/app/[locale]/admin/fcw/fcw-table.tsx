@@ -4,6 +4,7 @@
 // 只为承载「本页选中态」（跨行共享状态无法由 RSC 持有）；数据仍由 page.tsx 服务端
 // 取好后以 props 传入，岛内不直连后端、不做任何写操作、不刷新路由。
 // 复制范式沿用 Q167/Q178 密钥岛的 navigator.clipboard + 按钮换文案。
+import { formatDateTimeLocal } from "@/lib/time";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -16,7 +17,7 @@ function shortId(value: string): string {
 }
 
 function fmt(iso: string | null): string {
-  return iso ? iso.slice(0, 16).replace("T", " ") : "—";
+  return formatDateTimeLocal(iso);
 }
 
 function CopyIdButton({ finalId }: { finalId: string }) {

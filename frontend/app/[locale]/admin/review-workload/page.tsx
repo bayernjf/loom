@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import {
@@ -32,7 +33,7 @@ function num(value: number): string {
 }
 
 function snapshotTime(iso: string): string {
-  return iso.slice(0, 16).replace("T", " ");
+  return formatDateTimeLocal(iso);
 }
 
 // 纯机械换算（天 ≥ 1 取整天，否则小时 ≥ 1 取整小时，否则分钟），不做业务语义。

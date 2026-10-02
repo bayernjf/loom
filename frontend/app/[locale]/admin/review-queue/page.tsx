@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -65,7 +66,7 @@ function formatWait(seconds: number): string {
 }
 
 function timeText(iso: string | null): string {
-  return iso === null ? "—" : iso.slice(0, 16).replace("T", " ");
+  return formatDateTimeLocal(iso);
 }
 
 function confidenceText(value: number | null): string {

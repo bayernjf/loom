@@ -57,6 +57,45 @@ def _guard_conflict(exc: service.GuardsFailed) -> HTTPException:
     )
 
 
+@router.post("/api/fcw/assemble/preview")
+async def preview_assemble(
+    body: AssemblyManual,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(require_internal_actor(OPERATIONS)),
+) -> dict:
+    """Q249-b D3.5 组装工作台预检只读口（零副作用）。
+
+    与 /api/fcw/assemble 同材料装配、同七 Guard 求值、同 Q54 评分，但**不签发**：
+    不 INSERT final_content_whitelists、不写 fcw.issued / fcw.assembly_blocked 审计、
+    不查重。Guard 失败是正常业务结果（guards_passed=false，200 返回），供运营在
+    点发证前先看会否放行；唯一出口红线（E1.1 只有 assemble 可 mint final_id）不受
+    触碰。写身份闸与 /assemble 同口径（已验真 staff 令牌覆盖自报 actor）。
+    """
+    body.actor.id = verified.id
+    body.actor.roles = list(verified.roles)
+    try:
+        return await service.preview_one(
+            session,
+            product_space_id=body.product_space_id,
+            platform=body.platform,
+            goal=body.goal,
+            slot_id=body.slot_id,
+            actor=body.actor,
+            country=body.country,
+            pws_id=body.pws_id,
+        )
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except (service.PwsNotFound, service.SlotNotFound) as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except service.GoalInvalid as exc:
+        raise HTTPException(404, f"unknown or inactive goal: {exc}") from exc
+    except service.InvalidRequest as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except service.MaterialMissing as exc:
+        raise HTTPException(409, f"materials missing: {exc}") from exc
+
+
 @router.post("/api/fcw/assemble")
 async def assemble_manual(
     body: AssemblyManual,

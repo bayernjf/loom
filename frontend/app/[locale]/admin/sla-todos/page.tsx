@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -19,7 +20,7 @@ function asString(value: string | string[] | undefined): string {
 }
 
 function timeText(iso: string | null): string {
-  return iso ? iso.slice(0, 16).replace("T", " ") : "—";
+  return formatDateTimeLocal(iso);
 }
 
 function shortId(id: string): string {

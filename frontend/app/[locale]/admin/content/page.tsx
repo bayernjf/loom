@@ -1,3 +1,4 @@
+import { formatDateTimeLocal } from "@/lib/time";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
@@ -22,7 +23,7 @@ const KNOWN_ERROR_STATUSES = new Set([403, 404, 422]);
 type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 function timeText(iso: string | null): string {
-  return iso ? iso.slice(0, 16).replace("T", " ") : "—";
+  return formatDateTimeLocal(iso);
 }
 
 function formatScore(score: number | null): string {
