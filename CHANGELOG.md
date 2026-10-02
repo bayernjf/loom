@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q252 VIDEO-GEN 模型网关场景 V1 引擎预备切片（2026-10-03，**场景注册＋Prompt＋synthetic 构造器＋测试**；纯数据迁移 0044 不建表；物理表仍 64；后端基线 **1072→1080 passed＋10 skipped**、ruff 净；前端零改动；02 C1.196）**
+  - **来由**：负责人「A、B、C都搞，一口气搞了」B 组——段12 视频支线依赖供应商视频模型与视频规格，但 VIDEO-GEN 场景注册（synthetic 模式，先例 Q116/Q120/Q121）不依赖外部输入、可自推；先立模型网关场景骨架，video-studio 载体改造独立点工。
+  - **落地**：`seeds.py` 追加 `SCENE_VIDEO_GEN="VIDEO-GEN"`＋Prompt v0.1（只读消费 FCW 原料、只输出 `{"video_ref":"..."}`、无原料给空串、语音字幕守目标语言）；`synthetic.py` 追加 `build_video_gen`（无 `_final_id`→空 video_ref；否则 `synthetic:video:{final_id}:{language}`，默认 zh-CN）并注册 BUILDERS；迁移 `0044_video_gen_seed`（纯数据不建表，down=0043，三件套 bulk_insert＋downgrade 三 DELETE，照 0030 先例）。场景码经 SCENE_ 前缀自动纳入 `all_scene_codes()`，gateway 预算零序列自动预置。
+  - **测试**：单测 `tests/unit/test_video_gen.py` 6 例；集成 `tests/integration/test_video_gen_api.py` 2 例（直接调 `gw.invoke` 断言 video_ref；含无 final_id 空引用例；须 `from app.main import app` 注册全量模型）。
+  - **刻意未做（外部阻塞，禁代裁/禁臆造）**：供应商视频模型 agnes-video 接入、视频载体/对象存储/分段脚本、段12 视频业务链路（随 video-studio 独立点工）；迁移 0044 PG16 up/down/up 往返实测随 C 组起 infra-postgres-1 时一并验。
+  - **复判不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
 - **Q251 Q250 后文档基线漂移清扫（2026-10-03，**纯文档**，零代码零迁移零测试变化；02 C1.195）**
   - **来由**：负责人「推进你自己能搞的任务」——Q250（0043/64 表/1072 passed）落地后五处权威基线/Q249 后未同步文档订正。
   - **订正五处**：docs/08 权威行补至 Q250（旧 Q249 行降级历史快照）；docs/16 基线刷新补 Q250 行（1063→1072＋9 冻结契约、总收集 1082）；docs/17 当前迁移头 0042→**0043_fcw_snapshots**（62→64 表、43 迁移文件、PG16 往返实测）；README.md 当前基线（2026-10-01 Q242 时点）→（2026-10-03 Q250 时点）；docs/21 段 11 补 Q249（组装工作台/预检口/只读审核队列）与 Q250（冻结快照/revoke 写口/断消费/复用再发证）运营操作。

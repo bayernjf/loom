@@ -44,6 +44,8 @@ Loom：私域内容生产白名单平台（SaaS 后台）。核心是一条 **13
 
 **Q251（2026-10-03，02 C1.195，Q250 后文档基线漂移清扫）**负责人「推进你自己能搞的任务」授权——纯文档零代码零迁移零测试变化。Q250（0043/64 表/1072 passed）落地后五处权威基线/Q249 后未同步文档订正：docs/08 权威行补至 Q250（旧 Q249 行就地降级历史快照）；docs/16 基线刷新补 Q250 行（1063→1072＋9 冻结契约、总收集 1082）；docs/17 当前迁移头 0042→**0043_fcw_snapshots**（62→64 表、43 迁移文件、PG16 往返实测）；README.md 当前基线（2026-10-01 Q242 时点）→（2026-10-03 Q250 时点）；docs/21 段 11 补 Q249（组装工作台/预检口/只读审核队列）与 Q250（冻结快照/revoke 写口/断消费/复用再发证）运营操作。刻意未动：docs/23（只读审计快照、历史不回改）／docs/22（无机器面变化）／docs/15（结构文档不逐批更新）。**MVP 判定不变**；本轮改动未 push。
 
+**Q252（2026-10-03，02 C1.196，VIDEO-GEN 模型网关场景 V1 引擎预备切片）**负责人「A、B、C都搞，一口气搞了」B 组授权——段12 视频支线依赖供应商视频模型与视频规格，但 VIDEO-GEN 场景注册（synthetic 模式，先例 Q116/Q120/Q121）不依赖外部输入、可自推，先立模型网关场景骨架，video-studio 载体改造独立点工。落地：`seeds.py` 追加 `SCENE_VIDEO_GEN="VIDEO-GEN"`＋Prompt v0.1（只读消费 FCW 原料、只输出 `{"video_ref":"..."}`、无原料给空串、语音字幕守目标语言）；`synthetic.py` 追加 `build_video_gen`（无 `_final_id`→空 video_ref；否则 `synthetic:video:{final_id}:{language}`，默认 zh-CN）并注册 BUILDERS；迁移 **0044_video_gen_seed**（**纯数据不建表**，down=0043，三件套 bulk_insert＋downgrade 三 DELETE，照 0030 先例；物理表仍 **64**、迁移文件 44 个）。场景码经 SCENE_ 前缀自动纳入 `all_scene_codes()`，gateway 预算零序列自动预置。测试：单测 `tests/unit/test_video_gen.py` 6 例、集成 `tests/integration/test_video_gen_api.py` 2 例（直接调 `gw.invoke` 断言 video_ref；须 `from app.main import app` 注册全量模型）。基线：后端 **1072→1080 passed＋10 skipped**、ruff 净；前端零改动。刻意未做：供应商视频模型 agnes-video 接入、视频载体/对象存储/分段脚本、段12 视频业务链路（随 video-studio 独立点工）；迁移 0044 PG16 up/down/up 往返实测随 C 组起 infra-postgres-1 时一并验。**MVP 判定不变**；本轮改动未 push。
+
 ## 文档体系与治理规则（必须先读）
 
 - **入口**：先读 [handoff.md](handoff.md)（当前状态/待办），再读 [docs/README_文档地图与治理.md](docs/README_文档地图与治理.md)（场景导航 + 治理规则）。
