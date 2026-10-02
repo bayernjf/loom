@@ -508,6 +508,10 @@ const requiredFiles = [
   join("fcw", "actions.ts"),
   join("fcw", "material-island.tsx"),
   join("fcw", "fcw-table.tsx"),
+  join("fcw", "assemble", "page.tsx"),
+  join("fcw", "assemble", "actions.ts"),
+  join("fcw", "assemble", "assemble-island.tsx"),
+  join("fcw", "review", "page.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -612,10 +616,14 @@ if (!sidebarText.includes("/admin/exports"))
   problems.push("admin sidebar must link the export jobs admin page (Q168)");
 if (!sidebarText.includes("/admin/fcw"))
   problems.push("admin sidebar must link the in-platform whitelist card page (Q177)");
+if (!sidebarText.includes("/admin/fcw/assemble"))
+  problems.push("admin sidebar must link the assembly workbench (Q249)");
+if (!sidebarText.includes("/admin/fcw/review"))
+  problems.push("admin sidebar must link the whitelist review queue (Q249)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 12)
-    problems.push(`admin sidebar must keep exactly 12 admin entries, got ${navCount}`);
+  if (navCount !== 14)
+    problems.push(`admin sidebar must keep exactly 14 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -1431,8 +1439,11 @@ if (!skRevoke.includes("window.confirm"))
 if (!getKey(messages, "admin.staffKeys.revokeConfirm")?.includes("{name}"))
   problems.push("admin.staffKeys.revokeConfirm must contain the {name} placeholder");
 // 角色码为系统标识，必须在 actions 以常量原样提供、不得翻译进消息表。
-if (!/operations[\s\S]*platform_admin[\s\S]*product_reviewer[\s\S]*dictionary_admin[\s\S]*internal_compliance/.test(skActions))
-  problems.push("staff-keys actions must list the five internal role codes raw");
+// Q248 修复（75f5da7）把 STAFF_ROLE_CODES 抽到 role-codes.ts 以跨 "use server"
+// 边界共享，断言随之指向该常量文件（actions.ts 只 import 引用）。
+const skRoleCodes = readAdmin(join("staff-keys", "role-codes.ts"));
+if (!/operations[\s\S]*platform_admin[\s\S]*product_reviewer[\s\S]*dictionary_admin[\s\S]*internal_compliance/.test(skRoleCodes))
+  problems.push("staff-keys role-codes must list the five internal role codes raw");
 const staffRouter = readFileSync(
   join(repoRoot, "backend", "app", "core", "staff_auth", "router.py"), "utf8",
 );
@@ -1599,6 +1610,84 @@ if (!fcwIsland.includes("Blob") || !fcwIsland.includes("createObjectURL"))
 for (const token of ["downloadMaterial", "revokeObjectURL"]) {
   if (!fcwIsland.includes(token))
     problems.push(`fcw material island download must contain ${token}`);
+}
+// Q249 / D3.5 §3.2 乙＋§3.3 甲：六层调动链回放式视图 + 冲突检测结果标签映射。
+for (const token of [
+  "fcw-layer-chain",
+  "chainAssembled",
+  "mapConflictChecks",
+  "conflictsTitle",
+]) {
+  if (!fcwIsland.includes(token))
+    problems.push(`fcw material island must contain ${token} (Q249 chain view + conflict map)`);
+}
+
+// Q249 / D3.5 §3.1 甲：组装工作台（预检只读口 + 手动单条发证）。
+const fcwAssembleDir = join("fcw", "assemble");
+const assemblePage = readAdmin(join(fcwAssembleDir, "page.tsx"));
+const assembleActions = readAdmin(join(fcwAssembleDir, "actions.ts"));
+const assembleIsland = readAdmin(join(fcwAssembleDir, "assemble-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(assemblePage))
+  problems.push("fcw/assemble/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(assemblePage) || /https?:\/\//.test(assemblePage))
+  problems.push("fcw/assemble/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+if (!/^"use server"/m.test(assembleActions))
+  problems.push("fcw/assemble/actions.ts must be a Server Action module");
+for (const token of [
+  "previewAssembleAction",
+  "assembleManualAction",
+  "getAssembleFormDataAction",
+  "previewAssemble",
+  "assembleManual",
+  "getAdminPublishSlots",
+  "getAdminContentGoals",
+  "mapConflictChecks",
+]) {
+  if (!assembleActions.includes(token))
+    problems.push(`fcw/assemble/actions.ts must contain ${token}`);
+}
+for (const status of [401, 403, 404, 409, 422]) {
+  if (!assembleActions.includes(String(status)))
+    problems.push(`fcw/assemble actions must map failure status ${status}`);
+}
+if (!/^"use client"/m.test(assembleIsland))
+  problems.push("fcw/assemble island must be a client island");
+if (
+  assembleIsland.includes("@/lib/api") ||
+  /\bfetch\s*\(/.test(assembleIsland) ||
+  /https?:\/\//.test(assembleIsland)
+)
+  problems.push("fcw/assemble island must call only the Server Actions, never the API directly");
+for (const token of [
+  "previewAssembleAction",
+  "assembleManualAction",
+  "guards_passed",
+  "conflicts",
+  "data-testid",
+]) {
+  if (!assembleIsland.includes(token))
+    problems.push(`fcw/assemble island must contain ${token}`);
+}
+
+// Q249 / D3.5 §3.4 甲：白名单只读审核队列（发证前审候选，复用统一审核台数据口）。
+const fcwReviewPage = readAdmin(join("fcw", "review", "page.tsx"));
+if (!/export const dynamic = "force-dynamic"/.test(fcwReviewPage))
+  problems.push("fcw/review/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(fcwReviewPage) || /https?:\/\//.test(fcwReviewPage))
+  problems.push("fcw/review/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (fcwReviewPage.includes(forbidden))
+    problems.push(`fcw/review/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of [
+  "getReviewQueue",
+  '"pwc_combo"',
+  "pending_review",
+  "review-queue",
+]) {
+  if (!fcwReviewPage.includes(token))
+    problems.push(`fcw/review/page.tsx must contain ${token}`);
 }
 // Q186：D3.5 余项 final_id 单条/多选复制。表格下沉 client 岛只为承载本页选中态，
 // 仍不得直连后端、不得写数据、不得刷新路由。

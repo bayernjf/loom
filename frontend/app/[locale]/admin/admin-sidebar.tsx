@@ -18,6 +18,8 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/staff-keys", labelKey: "admin.staffKeysNav" },
   { href: "/admin/exports", labelKey: "admin.exportsNav" },
   { href: "/admin/fcw", labelKey: "admin.fcwNav" },
+  { href: "/admin/fcw/assemble", labelKey: "admin.fcwAssembleNav" },
+  { href: "/admin/fcw/review", labelKey: "admin.fcwReviewNav" },
 ] as const;
 
 export function AdminSidebar() {
