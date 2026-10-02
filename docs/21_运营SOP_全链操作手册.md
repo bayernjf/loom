@@ -182,7 +182,7 @@
 |---|---|---|
 | `LoomBackendUnreachable` | **端到端**：真停 backend → firing → watchdog 恰一次转发（阶段 4） | — |
 | `LoomJobFailed` | **端到端**：真停 redis 走入流 fail-closed → 75s firing、105s 转发 1 次（阶段 5）＋exposition 0→1 单测 | — |
-| `LoomLlmBudgetBlocked` | 9 场景零序列已预置（单测）；真 HTTP 409 会计数（集成测试断言 counter +1） | 真栈上「求值→转发」那一段无独立证据（与上两条共用机制，但共用不等于验过） |
+| `LoomLlmBudgetBlocked` | 10 场景零序列已预置（单测）**（Q252 起 VIDEO-GEN 纳入 `all_scene_codes()`，Q148 时点为 9）**；真 HTTP 409 会计数（集成测试断言 counter +1） | 真栈上「求值→转发」那一段无独立证据（与上两条共用机制，但共用不等于验过） |
 | `LoomStreamDeadLettered` | 零序列随 worker tick 预置（单测，且后端故障时预置仍先生效） | 真栈未证：造一条死信需 ≥6 分钟投递接管轮（`max_deliveries=5`、`min_idle=60s` 皆非 env 可调），**刻意未做** |
 | `LoomQueueBacklog` / `LoomStreamNearTrimLimit` | 取样链与 Gauge 语义（真 Redis 实测 XPENDING 与 XLEN 正交） | 真栈无积压量级可造；阈值本身待校准 |
 | `LoomLlmUpstreamSlow` | 桶与 outcome 标签、真往返计时 | 分位数需窗口内 ≥2 次调用，**单次慢调用不触发**（固有性质非缺陷）；真供应商 P99 未测 |

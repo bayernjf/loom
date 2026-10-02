@@ -3,6 +3,10 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q258 文档更新：docs/05 补 Q249 预检口＋Q252 第 10 场景、docs/10 迁移范围补 0044、docs/21 场景数 9→10（2026-10-03，**纯文档零代码零迁移零测试变化**；基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务表 **64**；改动 docs/05＋docs/10＋docs/21＋docs/02＋handoff＋CHANGELOG＋归档；02 C1.202）**
+  - **来由**：负责人「更新项目文档」——当场重扫 docs 活状态与最新基线的漂移，订正三处：① docs/05 M8 FCW 表补 Q249 预检口行（只预检不签发、Guard 失败 200、写身份闸同 Q203）；② docs/05 场景段补 Q252 第 10 场景 VIDEO-GEN（synthetic 构造器＋迁移 0044 纯种子，agnes-video 接入随 video-studio、mode 取值待补）；③ docs/10 迁移范围 0001–0043→**0001–0044**；④ docs/21 告警证据「9 场景」→**10 场景**（Q252 起 VIDEO-GEN 纳入 all_scene_codes()）。
+  - **已核实无需动**：docs/06（场景演进权威在 docs/05）、docs/12、docs/18、README、docs/16、docs/08；docs/02 Q148/Q193 历史注记不回改。
+  - **复判不变**：① 达标／② 未达标（卡点＝三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q257 文档对账第三刀：docs/20 §6.6 #33/#34 活清单补 Q203 收口注记（2026-10-03，**纯文档零代码零迁移零测试变化**；后端基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务物理表 **64**；改动 docs/20＋docs/02＋handoff＋CHANGELOG＋归档；02 C1.201）**
   - **来由**：负责人「按你建议的继续来」——Q256 批扫完 docs/17＋docs/23 后，本批继续扫 docs/20 §6.6 活清单与 docs/09/docs/11/docs/21 同步状态。
   - **① #34「治理不变式」行停在 Q200 半闭**，但 Q203（C1.147）已收口大半：唯一出口运行期守卫（`exit_guard.py` `issue_scope()`＋mapper `before_insert`、9 文件 16 写入点改走 `add_fcw` 夹具、Core 裸写边界钉成可见）＋发证两写口无条件 `require_internal_actor`（门控关自行验真、取消 Q200「门控关维持 V1 自报」在该两口适用性）；剩余＝网关/TLS 待裁项①。已补注记（引用 §9.2/§9.3）。
