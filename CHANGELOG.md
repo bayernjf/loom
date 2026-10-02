@@ -3,6 +3,10 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **FCW 冻结管理（D3.5 第 6 项）实现候选设计起草（2026-10-02，**纯文档**，零代码零迁移零新表零新 env；基线沿用 Q249＝后端 **1063 passed＋10 skipped**、eval 101/101、ruff 净；前端 tsc 净＋七 checker 绿；Alembic 头 **0042_g1_category_seed**；无新 Q，待裁决后另追加）**
+  - **来由**：负责人「那你搞」点工两项（FCW 冻结写侧、DIM-SOURCE 七路连接器）后，规格核查发现两项均不可直接写码：**FCW 冻结写侧**＝docs/09 L90 仅一句话需求（唯一 ID·版本快照·不可变·回滚·复用）、无实现规格，且 Q249 裁决 d 已守【V2】；**DIM-SOURCE**＝02 C1.35（Q91）定稿「连接器本身 V2 未建」＋docs/20 §6.6 #10（L245）明列「第 7 路枚举原文未列全【待补】，业务方补七路来源规格」＝禁臆造硬阻塞。
+  - **交付（路径 1）**：新文档 `docs/design-fcw-freeze-management.md`——按 PWS 冻结哲学（Q31/Q32＋pws_snapshots 物理实现）展开四语义候选：**版本快照载体**（甲=新建 fcw_snapshots＋fcw_freeze_logs 两表）／**不可变**（exit_guard 扩 before_update/delete）／**回滚**（参照 Q32 revoke＋审计＋段12 入口断消费）／**复用**（走 E1.1 再发证，与第 4 项候选池复制划界）；§4 六项待裁决（a 版本粒度 final_id 级 vs 键级／b 回滚 A 作废重冻 vs B 恢复旧版／c 复用划界／d 不可变守卫／e 角色口径／f 是否提前入 V1）；§5 五项事实缺口（版本/回滚/复用语义、触发方角色、下游已生成处置、复用划界、排期三列均【原文未给出，待补】）。
+  - **同步**：handoff 顶部最新块＋docs/09 D3.5 第 6 项状态注＋docs/README 文档地图登记。**提交**：`debfa81`（未 push）。**复判不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
 - **Q249 D3.5 组装工作台四条待裁项裁决 + 五片一口气落地（2026-10-02，**裁决＋代码＋测试＋文档**，零迁移零新表零新 env；后端 **1057→1063 passed＋10 skipped**〔总收集 1073，+6 预检集成〕、eval 101/101、ruff 净；前端 tsc 净、check-admin＋六 checker 净、sidebar 12→**14 项**；Alembic 头 **0042_g1_category_seed**；02 C1.193）**
   - **来由**：负责人「1」→「按你推进来」——就 `docs/design-d3.5-whitelist-assembly-remaining.md` §4 四条待裁项全部按推荐裁决，并按 §5 P 序一口气落地。
   - **四条裁决**：**a 发证前审候选（3.4 甲）**＝审核发生在发证前，审对象是 `pwc_combo` 候选、FCW 成品不可变由 V2 版本快照管，语义冲突消解；**b 允许预检只读口（3.1 乙）**＝与 `/assemble` 同材料装配、同七 Guard 求值、同评分，但**不签发**（不 INSERT、不写审计、不查重），Guard 失败＝200＋`guards_passed=false`，唯一出口红线守签发不触碰；**c 冲突映射按甲案（3.3 甲）**＝只做 8 项判断结果标签映射、无源项逐项标【无源·原文未给出，待补】、不臆造（「6 种」vs 8 项数目不符记事实缺口）；**d 不与 Q242 打包（3.5 取甲）**＝FCW 冻结写侧归 V2 另点工，本批只落只读队列。
