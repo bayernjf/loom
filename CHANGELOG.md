@@ -3,6 +3,13 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q255 文档入口治理批：AGENTS.md「当前阶段」超长段压缩 ＋ handoff 待办 #5 数字刷新 ＋ README 基线补句（2026-10-03，**纯文档零代码零迁移零测试变化**；后端基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务物理表 **64**；改动文件 AGENTS.md＋handoff.md＋README.md＋docs/02＋CHANGELOG＋docs/handoff-archive-2026-10-03.md；02 C1.199）**
+  - **来由**：负责人「那你看看推进一下」——按 Q189/Q191/Q194/Q198/Q205 先例当场重扫而非复述「工程侧无可推项」，扫出入口文档三处真实漂移一次修完。
+  - **① AGENTS.md「当前阶段」段压缩（最大发现）**：该段自 Q119 起逐批追加至 **53.6K 字符**（单行 31.6K／22.6K），实测 system 注入 AGENTS 在 16K-token 被截断——治理规则／事实纪律／待裁决／常用入口等后半段可能从未被完整注入（仓库规则文件失效隐患）。压缩为 **919 字节摘要＋指针**（文件 53.6K→9.4K）：当前基线（Q254 时点：0044／64 表／1080 passed／sidebar 14）、最近三批 Q252–Q254、MVP 三层判定、待裁决五项、纪律全保留；7 个二级标题结构核查齐全；**旧原文整块逐字入档 docs/handoff-archive-2026-10-03.md 备查**（git HEAD 双保险）。依据＝项目规则「reference the maintained source path instead of copying long stale content into AGENTS.md」。
+  - **② handoff 待办 #5 过期数字**：迁移头 0042_g1_category_seed（Q249 时点）→ **0044_video_gen_seed**（Q252；0043 新建两表／0044 纯种子，pg16 往返实测）、pytest 1057→**1080**（Q252 起；Q253/Q254 零增量）；历史注记原文保留不回改。
+  - **③ README 基线段补 Q253/Q254 一句**（内置浏览器功能测试＋预检 P1 修复／agnes 三模实测、视频 `mode` 合法取值【原文未给出，待补】维持挂账）。
+  - **已核实无需动**：docs/08 §2.2 权威行已由 Q251 同步到 Q252 时点；docs/02 台账完整到 C1.198；迁移文件 44 个与 0044 头相符。
+  - **复判不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
 - **Q254 agnes 三模（文本／图像／视频）真模型连通性实测 ＋ 本机凭证载体模型编码订正（2026-10-03；**纯实测＋载体注释订正**，零生产代码零迁移零新表零新 env、零测试改动；后端基线不变 **1080 passed＋10 skipped**；唯一文件改动＝`backend/.env.shell` 备查注释行〔被 `.gitignore` 忽略、不入库、不入提交〕；02 C1.198）**
   - **来由**：负责人「模型你配置如下：Base URL／Key／文本·图像·视频三模」→ 先核对本机凭证载体，再逐模发最小请求实测。**Key 值不写入任何文档**（Q82／Q148 既有纪律，本批只记读数不记值）。
   - **载体核对与订正**：`backend/.env.shell` 内 `LOOM_LLM_BASE_URL_AGNES` 与 `LOOM_E2E_AGNES_KEY` 与口供一致；备查注释三处订正——图像 `agnes-image-2.1-flash / agnes-image-2.0-flash` → **`agnes-image-2.5-flash`**、视频收敛为 **`agnes-video-2.5-flash`**、文本 `agnes-2.5-flash` 核对一致无需改。
