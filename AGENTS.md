@@ -42,6 +42,8 @@ Loom：私域内容生产白名单平台（SaaS 后台）。核心是一条 **13
 
 **Q250（2026-10-03，02 C1.194，D3.5 第 6 项 FCW 冻结管理六项裁决＋F2–F4 一口气落地）**负责人「那你搞」授权，就 `docs/design-fcw-freeze-management.md` §4 六项待裁决**全部按推荐裁决**并落地：a final_id 级快照（version 恒 v1）／b 回滚 A 案（作废重冻走 E1.1）／c 复用=走 E1.1 再发证（组装台「复用」预填，纯前端）／d 采纳不可变守卫（`exit_guard` 扩 before_update/before_delete，`FcwImmutable`）／e Q242 族 OPERATIONS（revoke 写口）／f 守 V2（引擎层落 dev、冻结管理专用 UI 随 V2）。迁移 **0043_fcw_snapshots** 新建 `fcw_snapshots`＋`fcw_freeze_logs` 两表（pg16 up/down/up 往返实测，物理表 62→**64**）；`assemble_one` 发证落首版快照＋freeze 事件；`POST /api/admin/fcw/{final_id}/revoke`（404 无快照／409 非 active frozen／422 reason 空／403 角色）；段12 两生成入口 `ensure_fcw_consumable` 断消费（无快照行放行、revoked 409）；组装工作台「复用」预填（`getFcwReuseAction`，读 Q177 material pack `issued` 段）。基线：后端 **1063→1072 passed＋10 skipped**（+9 冻结集成 `test_fcw_freeze.py`）、eval 101/101、ruff 净；前端 tsc＋check-admin＋check-tokens 净。§6.6 #10 冻结管理由「写侧待点工」翻转为「引擎层已落、UI 仍 V2」；docs/02/04/05/09/10/11/20/README/归档档与 CHANGELOG 已同步（第十二次 MVP 更新块）。**MVP 判定不变**；本轮改动未 push。
 
+**Q251（2026-10-03，02 C1.195，Q250 后文档基线漂移清扫）**负责人「推进你自己能搞的任务」授权——纯文档零代码零迁移零测试变化。Q250（0043/64 表/1072 passed）落地后五处权威基线/Q249 后未同步文档订正：docs/08 权威行补至 Q250（旧 Q249 行就地降级历史快照）；docs/16 基线刷新补 Q250 行（1063→1072＋9 冻结契约、总收集 1082）；docs/17 当前迁移头 0042→**0043_fcw_snapshots**（62→64 表、43 迁移文件、PG16 往返实测）；README.md 当前基线（2026-10-01 Q242 时点）→（2026-10-03 Q250 时点）；docs/21 段 11 补 Q249（组装工作台/预检口/只读审核队列）与 Q250（冻结快照/revoke 写口/断消费/复用再发证）运营操作。刻意未动：docs/23（只读审计快照、历史不回改）／docs/22（无机器面变化）／docs/15（结构文档不逐批更新）。**MVP 判定不变**；本轮改动未 push。
+
 ## 文档体系与治理规则（必须先读）
 
 - **入口**：先读 [handoff.md](handoff.md)（当前状态/待办），再读 [docs/README_文档地图与治理.md](docs/README_文档地图与治理.md)（场景导航 + 治理规则）。

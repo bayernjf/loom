@@ -3,11 +3,16 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q251 Q250 后文档基线漂移清扫（2026-10-03，**纯文档**，零代码零迁移零测试变化；02 C1.195）**
+  - **来由**：负责人「推进你自己能搞的任务」——Q250（0043/64 表/1072 passed）落地后五处权威基线/Q249 后未同步文档订正。
+  - **订正五处**：docs/08 权威行补至 Q250（旧 Q249 行降级历史快照）；docs/16 基线刷新补 Q250 行（1063→1072＋9 冻结契约、总收集 1082）；docs/17 当前迁移头 0042→**0043_fcw_snapshots**（62→64 表、43 迁移文件、PG16 往返实测）；README.md 当前基线（2026-10-01 Q242 时点）→（2026-10-03 Q250 时点）；docs/21 段 11 补 Q249（组装工作台/预检口/只读审核队列）与 Q250（冻结快照/revoke 写口/断消费/复用再发证）运营操作。
+  - **刻意未动**：docs/23（只读审计快照、历史不回改）；docs/22（无机器面变化）；docs/15（结构文档不逐批更新）。
+  - **复判不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
 - **Q250 FCW 冻结管理（D3.5 第 6 项）六项裁决 + F2–F4 一口气落地（2026-10-03，**裁决＋代码＋测试＋文档**，迁移 0043 新建 `fcw_snapshots`＋`fcw_freeze_logs` 两表；Alembic 头 **0042→0043**（pg16 往返实测）；后端基线 **1063 passed＋10 skipped**〔+9 冻结集成〕、ruff 净；前端 tsc 净、check-admin＋check-tokens 净；02 C1.194）**
   - **来由**：负责人「那你搞」——就 `docs/design-fcw-freeze-management.md` §4 六项待裁决全部按推荐裁决，并按 §6 落地顺序 F2–F4 一口气落地。
   - **六项裁决**：**a 版本粒度＝final_id 级**（每成品一快照、版本恒 v1、不触碰 `uq_fcw_same_issue`）；**b 回滚＝A 案**（作废当前＋重冻新版走 E1.1，PWS Q32 同族，原行永不 mutate）；**c 复用＝走 E1.1 再发证**（前端「复用」按钮预填表单，与第 4 项候选池复制划界）；**d 不可变强制＝采纳**（exit_guard 扩 before_update/delete，`FcwImmutable`）；**e 角色＝Q242 族**（revoke 写口 `require_internal_actor(OPERATIONS)`）；**f 守 V2**（引擎层落 dev，冻结管理专用 UI 随 V2）。
   - **落地**：迁移 0043（`fcw_snapshots`＋`fcw_freeze_logs`，参照 pws_snapshots/pws_freeze_logs，pg16 up/down/up 往返实测）；`assemble_one` 发证即落首版快照（frozen＋is_active=true＋snapshot 六路引用＋score＋guards）＋freeze 事件；`POST /api/admin/fcw/{final_id}/revoke`（reason 必填、404/409/422/403）＋revoke 事件＋`fcw.revoke` 审计；段12 两入口（`generate_content`/`run_generation`）断消费检查（无快照行放行、revoked 409）；组装工作台「复用」预填（`getFcwReuseAction`，纯前端）。
-  - **验证**：`test_fcw_freeze.py` 9 例全绿；全量 pytest 1063 passed＋10 skipped＋9 冻结、ruff 净；前端 tsc＋check-admin＋check-tokens 净。**提交**：待原子拆分后登记（不 push）。
+  - **验证**：`test_fcw_freeze.py` 9 例全绿；全量 pytest 1063 passed＋10 skipped＋9 冻结、ruff 净；前端 tsc＋check-admin＋check-tokens 净。**提交**：五笔原子提交已落账（HEAD=`b333f09`），已由负责人 push（2026-10-03 实测 origin/dev=`b333f09`）。
   - **复判不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
 - **FCW 冻结管理（D3.5 第 6 项）实现候选设计起草（2026-10-02，**纯文档**，零代码零迁移零新表零新 env；基线沿用 Q249＝后端 **1063 passed＋10 skipped**、eval 101/101、ruff 净；前端 tsc 净＋七 checker 绿；Alembic 头 **0042_g1_category_seed**；无新 Q，待裁决后另追加）**
   - **来由**：负责人「那你搞」点工两项（FCW 冻结写侧、DIM-SOURCE 七路连接器）后，规格核查发现两项均不可直接写码：**FCW 冻结写侧**＝docs/09 L90 仅一句话需求（唯一 ID·版本快照·不可变·回滚·复用）、无实现规格，且 Q249 裁决 d 已守【V2】；**DIM-SOURCE**＝02 C1.35（Q91）定稿「连接器本身 V2 未建」＋docs/20 §6.6 #10（L245）明列「第 7 路枚举原文未列全【待补】，业务方补七路来源规格」＝禁臆造硬阻塞。
