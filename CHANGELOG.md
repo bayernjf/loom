@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q257 文档对账第三刀：docs/20 §6.6 #33/#34 活清单补 Q203 收口注记（2026-10-03，**纯文档零代码零迁移零测试变化**；后端基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务物理表 **64**；改动 docs/20＋docs/02＋handoff＋CHANGELOG＋归档；02 C1.201）**
+  - **来由**：负责人「按你建议的继续来」——Q256 批扫完 docs/17＋docs/23 后，本批继续扫 docs/20 §6.6 活清单与 docs/09/docs/11/docs/21 同步状态。
+  - **① #34「治理不变式」行停在 Q200 半闭**，但 Q203（C1.147）已收口大半：唯一出口运行期守卫（`exit_guard.py` `issue_scope()`＋mapper `before_insert`、9 文件 16 写入点改走 `add_fcw` 夹具、Core 裸写边界钉成可见）＋发证两写口无条件 `require_internal_actor`（门控关自行验真、取消 Q200「门控关维持 V1 自报」在该两口适用性）；剩余＝网关/TLS 待裁项①。已补注记（引用 §9.2/§9.3）。
+  - **② #33 残留「弱默认未列为启动必检（§8.4-1）」**随 Q203 落点三销账（口令无仓内默认、未设容器启动失败），已补注记。
+  - **已核实无需动**：docs/09 D3.5 已同步 Q249/Q250；docs/11 已到 Q249/Q250（§2.8）；docs/21 已补 Q249/Q250 且无过期基线；docs/20 §9.3 后续由 §10（Q204）覆盖、§8 为历史不回改。
+  - **复判不变**：① 达标／② 未达标（卡点＝三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q256 文档基线漂移清扫第二刀：docs/17 现行读数＋docs/23 §2 规模表（2026-10-03，**纯文档零代码零迁移零测试变化**；后端基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务物理表 **64**；改动 docs/17＋docs/23＋docs/02＋handoff＋CHANGELOG＋归档；02 C1.200）**
   - **来由**：负责人「按你推荐的来」——Q255 批只扫了入口三件（AGENTS/handoff/README），本批当场重扫 docs/ 内部活状态，扫出两处漂移订正。
   - **① docs/17 §6 CI 行现行读数过期**：`1028 passed＋10 默认 skip`（Q230 时点）→ **1080**（Q252 起，带时点注记、原读数保留）；docs/17 迁移头行（0044）已正确未动。
