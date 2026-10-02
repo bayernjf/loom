@@ -21,7 +21,11 @@ from app.core.rbac import (
 )
 from app.core.staff_auth.deps import require_internal_actor
 from app.final.final_whitelist import material, service
-from app.final.final_whitelist.schemas import AssemblyManual, AssemblyTaskCreate
+from app.final.final_whitelist.schemas import (
+    AssemblyManual,
+    AssemblyTaskCreate,
+    FcwRevokeRequest,
+)
 
 router = APIRouter(tags=["final-whitelist"])
 
@@ -305,3 +309,30 @@ async def admin_fcw_material(
         raise HTTPException(404, f"FCW not found: {final_id}")
     pack = await material.build_material_pack(session, fcw)
     return JSONResponse(content=jsonable_encoder(pack))
+
+
+@router.post("/api/admin/fcw/{final_id}/revoke")
+async def revoke_fcw(
+    final_id: str,
+    body: FcwRevokeRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(require_internal_actor(OPERATIONS)),
+) -> dict:
+    """Q251 裁决 b（A 案，PWS Q32 语义）：作废当前快照 + 审计 + 断消费。
+
+    只翻转 fcw_snapshots 状态（frozen→revoked、is_active=false），原成品行
+    不可变（exit_guard 守卫）；重冻新版＝走 E1.1 POST /api/fcw/assemble 再发证
+    （裁决 c）。reason 必填；鉴权同 Q242 族（已验真 staff 令牌，operations）。
+    """
+    body.actor.id = verified.id
+    body.actor.roles = list(verified.roles)
+    try:
+        snapshot = await service.revoke_fcw(session, final_id, body.reason, body.actor)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.FcwNotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except service.FcwWrongState as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await session.commit()
+    return service.fcw_snapshot_view(snapshot)
