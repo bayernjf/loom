@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q248 内置浏览器首轮 UI 功能测试 + 两个前端缺陷修复（2026-10-02，**执行＋修复**，零后端改动零迁移零新表零新 env；后端基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；前端 tsc exit 0；Alembic 头 **0042_g1_category_seed**；02 C1.192）**
+  - **来由**：负责人「你用豆包工作的内置浏览器做一些功能测试呀，我都没看你搞过测试」⇒ 首轮真实浏览器 UI 测试（27 页＋完整业务闭环＋失败路径）。环境：`infra-postgres-1`＋redis＋backend :8001（8000 被 Atlas 占用）＋frontend :3000；`frontend/.env` 照 example 补齐（gitignore）；`infra-postgres-1` 的 loom 口令重置为本机开发值 `loom`（Q245 随机值无文件记录，纪律不变）。
+  - **缺陷 1（`75f5da7`）**：staff-keys 页崩溃——client 岛从 `"use server"` 模块导入 `STAFF_ROLE_CODES`，Server Reference 代理致 `.map is not a function`；修复＝无指令共享模块 `role-codes.ts` 承载常量。回归：签发→secret 一次显示→吊销→「已吊销」闭环通过。
+  - **缺陷 2（`a2a8c31`）**：时间展示违反 docs/02「UTC 存储、Asia/Shanghai 展示」契约（`iso.slice(0,16)` 直出 UTC）；修复＝`lib/time.ts` `formatDateTimeLocal()`（Intl Asia/Shanghai），显示层切换、输入侧转换保留。
+  - **测试数据（可清理）**：租户 t1/t2、1 条产品草稿、1 条已吊销 PAT。**提交**：两笔修复均未 push，本批登记第 3 笔，本地领先 `origin/dev` 3 笔。**复判不变**：① 达标／② 未达标（三表真值＋跑链第二个人）／③ 未达标（网关/TLS 待裁）。
 - **Q247 A2A/Zeus 比喻措辞全仓清理为专业术语（2026-10-02，**纯文档＋源码注释/卡片描述**，零生产逻辑改动零迁移零新表零新 env；改 88 文件＝`6ea6beb`〔refactor(a2a) 3 文件〕＋`8d8ba01`〔docs 13 文件〕＋`c2ccde5`〔全仓叙事措辞 69 文件，负责人手动作〕；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；Alembic 头 **0042_g1_category_seed**；02 C1.191）**
   - **来由**：负责人「zeus 项目里我已经不允许这种比喻了，全部要求是专业的术语，和 zeus 项目相关的，你都要参考 zeus 项目更改为专业术语，不需要比喻」。执行口径＝参考 zeus 仓库 `docs/terminology.md` v0.3：**文档与注释措辞换专业术语；协议字段、标识符、环境变量、数据格式不动**。
   - **术语映射（照 zeus 术语表）**：封臣→对接方/执行者（executor）；联邦→上游编排系统；效忠（fealty）→注册握手声明（凭证契约）；战报（report-back）→产物回传。
