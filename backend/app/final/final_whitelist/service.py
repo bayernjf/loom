@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 
 from app.core.actor import Actor
 from app.core.audit import append_audit
+from app.core.config_center.knobs import knob
 from app.core.metrics.business import record_job_failed
 from app.core.queue import (
     DEFAULT_MAXLEN,
@@ -555,6 +556,33 @@ async def assemble_one(
             "guards": guard_payload,
         },
     )
+    # Q263（Q45 落地）：发证成功即「使用」一次——三包 usage_count 各 +1；
+    # 跨过 package.reuse_threshold（配置键，02 §C2 已登记 Q45）时写审计触发重配信号。
+    # 注意：重配走 Gate 的载体（候选表/批准形态/旧包处置）原文未给【待补】，
+    # 本片只递增计数并留审计信号，载体落候选设计文档待负责人 Gate 裁决。
+    threshold = int(knob("package.reuse_threshold"))
+    for pkg in (csp, cstp, cep):
+        before = pkg.usage_count
+        pkg.usage_count = before + 1
+        if before < threshold <= pkg.usage_count:
+            await append_audit(
+                session,
+                tenant_id=pws.tenant_id,
+                actor_id=actor.id,
+                actor_roles=actor.roles,
+                action="package.reuse_threshold_reached",
+                entity_type="package",
+                entity_id=pkg.package_id,
+                detail={
+                    "kind": pkg.kind,
+                    "platform": platform,
+                    "goal": goal,
+                    "final_id": fcw.final_id,
+                    "usage_count": pkg.usage_count,
+                    "threshold": threshold,
+                },
+            )
+    await session.flush()
     return fcw
 
 
