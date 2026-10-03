@@ -261,6 +261,32 @@ $materials
 
 VIDEO_GEN_PROMPT_VARIABLES = ["materials", "language"]
 
+SCENE_PLATFORM_ADAPTER = "PLATFORM-ADAPTER"
+PLATFORM_ADAPTER_PROMPT_VERSION = "v0.1"
+PLATFORM_ADAPTER_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:PLATFORM-ADAPTER:v0.1"))
+
+PLATFORM_ADAPTER_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段7 的 PLATFORM-ADAPTER Skill：只读消费 frozen PWS 快照、目标平台的 active 规则与近期动态信号，给出平台适配建议。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【Frozen PWS 快照】
+$pws
+
+【目标平台 active 规则命中（按 Q36 selector 语义已由调用方算好）】
+$platform_rules
+
+【active 动态信号（Q37 运营手工登记）】
+$dynamic_events
+
+硬性规则（PT-PLATFORM-ADAPTER-V1.0）：
+1. 只读 frozen PWS；禁止消费 pending PWC/PWS；禁止输出成稿（正文/脚本/标题）；禁止生成 final_id。
+2. 必须返回 JSON：{"missing": bool, "decision": "allow|downgrade|block|pending_review", "reason": "...", "refs": ["..."], "gate": "pending_review"}。
+3. 无 frozen PWS 时返回 {"missing": true, "reason": "no_frozen_pws"}，不造假数据。
+4. AI 输出一律 gate=pending_review，需 HumanGate（平台审核员）裁决。
+5. decision=pending_review 表示存在动态信号等变化、无法机械判定，须人工复核。
+6. 降级动作与四维权重按既有配置（Q38/Q34）口径，不自行发明。
+"""
+
+PLATFORM_ADAPTER_PROMPT_VARIABLES = ["pws", "platform_rules", "dynamic_events"]
+
 
 def all_scene_codes() -> tuple[str, ...]:
     """本模块声明的全部 SCENE_* 场景码（Q193：供指标预置零序列用）。
