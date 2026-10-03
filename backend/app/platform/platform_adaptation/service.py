@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.core.audit import append_audit
 from app.core.config_center.knobs import knob
+from app.decision.layer_strategy.models import Package
 from app.platform.platform_adaptation import pa_rules
 from app.platform.platform_adaptation.models import (
     GoalFitWeight,
@@ -501,6 +502,38 @@ async def update_pcp(session, pcp_id: str, body, actor) -> PcpWeightTable:
         entity_id=pcp_id,
         detail={"before": before, "after": body.weights},
     )
+    # Q264（Q45 重配载体甲，PCP 触发源）：PCP 权重表更新即触发重配走 Gate——
+    # 对该 PS×platform 下全部 active 三包各写一条 package.reuse_threshold_reached
+    # 审计（trigger=pcp_update，detail 带 pcp_id），复用 Q263 审计通道作信号源；
+    # 不区分模板切换/微调（裁决口径 docs/design-p2-package-reuse-reconfig.md §4 裁点 3）。
+    active = (
+        await session.scalars(
+            select(Package).where(
+                Package.product_space_id == pcp.product_space_id,
+                Package.platform == pcp.platform,
+                Package.status == "active",
+            )
+        )
+    ).all()
+    for pkg in active:
+        await append_audit(
+            session,
+            tenant_id=pcp.tenant_id,
+            actor_id=actor.id,
+            actor_roles=actor.roles,
+            action="package.reuse_threshold_reached",
+            entity_type="package",
+            entity_id=pkg.package_id,
+            detail={
+                "trigger": "pcp_update",
+                "kind": pkg.kind,
+                "platform": pcp.platform,
+                "goal": pkg.goal,
+                "pcp_id": pcp_id,
+                "usage_count": pkg.usage_count,
+                "threshold": int(knob("package.reuse_threshold")),
+            },
+        )
     return pcp
 
 

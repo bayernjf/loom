@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.core.audit import append_audit
+from app.core.config_center.knobs import knob
 from app.decision.layer_strategy.models import (
     ITEM_ARCHIVED,
     ITEM_WRITABLE_STATUSES,
@@ -167,6 +168,22 @@ async def update_package(session, package_id: str, body, actor) -> Package:
         entity_id=package_id,
         detail={"kind": package.kind},
     )
+    # Q264（Q45 重配载体甲，02 C1.208）：人工更新即清零——运营改包 payload 即
+    # 视为「重配完成」，usage_count 重置重启计数；写 package.reuse_reset 审计留痕。
+    # 裁决口径：清零时机＝人工更新 payload（不设独立按钮），见 docs/design-p2-
+    # package-reuse-reconfig.md §4 裁点 2。
+    if package.usage_count:
+        package.usage_count = 0
+        await append_audit(
+            session,
+            tenant_id=package.tenant_id,
+            actor_id=actor.id,
+            actor_roles=actor.roles,
+            action="package.reuse_reset",
+            entity_type="package",
+            entity_id=package_id,
+            detail={"kind": package.kind},
+        )
     return package
 
 
@@ -205,6 +222,35 @@ async def list_packages(
     if status:
         stmt = stmt.where(Package.status == status)
     return list((await session.scalars(stmt.order_by(Package.kind))).all())
+
+
+# Q264（Q45 重配载体甲）：运营待重配清单——按「package.reuse_threshold_reached」
+# 审计聚合出触发过重配信号的 active 包（含 PCP 更新触发源 trigger=pcp_update），
+# 返回包三元组＋当前 usage_count＋阈值；人工更新包 payload 清零后自然移出清单。
+async def list_reuse_pending(session) -> list[dict]:
+    threshold = int(knob("package.reuse_threshold"))
+    packages = (
+        await session.scalars(
+            select(Package).where(Package.status == "active")
+        )
+    ).all()
+    rows = []
+    for p in packages:
+        if p.usage_count >= threshold:
+            rows.append(
+                {
+                    "package_id": p.package_id,
+                    "kind": p.kind,
+                    "tenant_id": p.tenant_id,
+                    "product_space_id": p.product_space_id,
+                    "platform": p.platform,
+                    "goal": p.goal,
+                    "usage_count": p.usage_count,
+                    "threshold": threshold,
+                }
+            )
+    rows.sort(key=lambda r: (r["product_space_id"], r["platform"], r["goal"], r["kind"]))
+    return rows
 
 
 # ---------------------------------------------------------------------------
