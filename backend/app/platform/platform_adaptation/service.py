@@ -8,11 +8,14 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.core.audit import append_audit
+from app.core.config_center.knobs import knob
 from app.platform.platform_adaptation import pa_rules
 from app.platform.platform_adaptation.models import (
     GoalFitWeight,
+    PcpRecalcCandidate,
     PcpTemplate,
     PcpWeightTable,
+    PlatformDynamicEvent,
     PlatformRule,
     PublishSlot,
     SlotTypeDefault,
@@ -22,6 +25,13 @@ from app.product.product_intake.models import ProductSpace
 
 PLATFORM_TENANT = "_platform"
 ROLE_OPERATIONS = "operations"
+
+# Q42 单项单次重算幅度（配置中心 platform.recalc_step，默认 0.05）。
+RECALC_STEP_KEY = "platform.recalc_step"
+SOURCE_MANUAL = "manual"
+CAND_PENDING = "pending"
+CAND_APPROVED = "approved"
+CAND_REJECTED = "rejected"
 
 
 class RoleNotAllowed(Exception):
@@ -66,6 +76,25 @@ class PcpNotFound(Exception):
 
 class PcpExists(Exception):
     pass
+
+
+class EventNotFound(Exception):
+    pass
+
+
+class EventPeriodInvalid(Exception):
+    pass
+
+
+class PendingCandidateExists(Exception):
+    pass
+
+
+class RecalcStepExceeded(Exception):
+    """Q42：单项变化超出 platform.recalc_step（默认 ±0.05）；重大变化走人工直编通道。"""
+
+    def __init__(self, message: str):
+        super().__init__(message)
 
 
 def _now() -> datetime:
@@ -485,3 +514,284 @@ async def list_pcps(session, product_space_id: str) -> list[PcpWeightTable]:
             )
         ).all()
     )
+
+
+# ---------- Q37 动态信号事件 ----------
+
+
+async def list_events(
+    session, platform: str | None = None, status: str | None = "active"
+) -> list[PlatformDynamicEvent]:
+    stmt = select(PlatformDynamicEvent).order_by(
+        PlatformDynamicEvent.effective_start.desc()
+    )
+    if platform is not None:
+        stmt = stmt.where(PlatformDynamicEvent.platform == platform)
+    if status is not None:
+        stmt = stmt.where(PlatformDynamicEvent.status == status)
+    return list((await session.scalars(stmt)).all())
+
+
+async def create_event(session, body, actor) -> PlatformDynamicEvent:
+    """Q37 运营手工登记平台动态事件；登记后由每周重算与 match advisory 消费。"""
+    _require_ops(actor)
+    item = body.item
+    if item.effective_end is not None and item.effective_end < item.effective_start:
+        raise EventPeriodInvalid("effective_end < effective_start")
+    ev = PlatformDynamicEvent(
+        platform=item.platform,
+        slot_id=item.slot_id,
+        event_type=item.event_type,
+        severity=item.severity,
+        effective_start=item.effective_start,
+        effective_end=item.effective_end,
+        note=item.note,
+        created_by=actor.id,
+    )
+    session.add(ev)
+    await session.flush()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="signal.event.created",
+        entity_type="platform_dynamic_event",
+        entity_id=ev.event_id,
+        detail={
+            "platform": ev.platform,
+            "slot_id": ev.slot_id,
+            "event_type": ev.event_type,
+            "severity": ev.severity,
+        },
+    )
+    return ev
+
+
+async def update_event(session, event_id: str, body, actor) -> PlatformDynamicEvent:
+    _require_ops(actor)
+    ev = await session.get(PlatformDynamicEvent, event_id)
+    if ev is None:
+        raise EventNotFound(event_id)
+    item = body.item
+    if item.effective_end is not None and item.effective_end < item.effective_start:
+        raise EventPeriodInvalid("effective_end < effective_start")
+    ev.platform = item.platform
+    ev.slot_id = item.slot_id
+    ev.event_type = item.event_type
+    ev.severity = item.severity
+    ev.effective_start = item.effective_start
+    ev.effective_end = item.effective_end
+    ev.note = item.note
+    ev.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="signal.event.updated",
+        entity_type="platform_dynamic_event",
+        entity_id=event_id,
+        detail={"event_type": ev.event_type, "severity": ev.severity},
+    )
+    return ev
+
+
+async def archive_event(session, event_id: str, actor) -> None:
+    _require_ops(actor)
+    ev = await session.get(PlatformDynamicEvent, event_id)
+    if ev is None:
+        raise EventNotFound(event_id)
+    ev.status = "archived"
+    ev.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="signal.event.archived",
+        entity_type="platform_dynamic_event",
+        entity_id=event_id,
+        detail={"event_type": ev.event_type, "severity": ev.severity},
+    )
+
+
+async def active_events_for(
+    session, platform: str, slot_id: str | None = None
+) -> list[PlatformDynamicEvent]:
+    """当前生效的事件（advisory 消费方：平台规则 match 时回带，不改变规则判定）。"""
+    now = _now()
+    stmt = select(PlatformDynamicEvent).where(
+        PlatformDynamicEvent.platform == platform,
+        PlatformDynamicEvent.status == "active",
+        PlatformDynamicEvent.effective_start <= now,
+        (PlatformDynamicEvent.effective_end.is_(None))
+        | (PlatformDynamicEvent.effective_end >= now),
+    ).order_by(PlatformDynamicEvent.effective_start.desc())
+    if slot_id is not None:
+        stmt = stmt.where(
+            (PlatformDynamicEvent.slot_id == slot_id)
+            | (PlatformDynamicEvent.slot_id.is_(None))
+        )
+    return list((await session.scalars(stmt)).all())
+
+
+# ---------- Q41/Q42 PCP 重算候选 HumanGate ----------
+
+
+async def list_candidates(
+    session, status: str | None = None
+) -> list[PcpRecalcCandidate]:
+    stmt = select(PcpRecalcCandidate).order_by(
+        PcpRecalcCandidate.created_at.desc()
+    )
+    if status is not None:
+        stmt = stmt.where(PcpRecalcCandidate.status == status)
+    return list((await session.scalars(stmt)).all())
+
+
+async def create_candidate(session, body, actor) -> PcpRecalcCandidate:
+    """Q41 候选提交（V1 仅 manual；AI 生成器随 V2）。
+
+    Q40 统一校验器强制 Σ≤1.0；Q42 单项变化 ≤ platform.recalc_step（默认 ±0.05），
+    超出即走人工直编通道（既有 PUT /api/pcp/{pcp_id}，无幅度限制）；同 PCP 同刻
+    仅一条 pending（partial unique index）。
+    """
+    _require_ops(actor)
+    pcp = await session.get(PcpWeightTable, body.pcp_id)
+    if pcp is None:
+        raise PcpNotFound(body.pcp_id)
+    if pcp.status != "active":
+        raise PcpNotFound(body.pcp_id)
+    violations = pa_rules.validate_weights_17(body.proposed_weights)
+    if violations:
+        raise ValidationFailed(violations)
+    step = float(knob(RECALC_STEP_KEY))
+    changes = []
+    for key, new in body.proposed_weights.items():
+        old = pcp.weights.get(key)
+        if old is None:
+            continue
+        if abs(float(new) - float(old)) > step + 1e-9:
+            raise RecalcStepExceeded(
+                f"{key}: |{old}->{new}| > {step} (use manual direct-edit PUT)"
+            )
+        if abs(float(new) - float(old)) > 1e-9:
+            changes.append(
+                {
+                    "field": key,
+                    "old": old,
+                    "new": new,
+                    "reason": "recalc candidate (manual)",
+                }
+            )
+    pending = (
+        await session.scalars(
+            select(PcpRecalcCandidate).where(
+                PcpRecalcCandidate.pcp_id == body.pcp_id,
+                PcpRecalcCandidate.status == CAND_PENDING,
+            )
+        )
+    ).first()
+    if pending is not None:
+        raise PendingCandidateExists(pending.candidate_id)
+    cand = PcpRecalcCandidate(
+        pcp_id=pcp.pcp_id,
+        tenant_id=pcp.tenant_id,
+        product_space_id=pcp.product_space_id,
+        platform=pcp.platform,
+        source=SOURCE_MANUAL,
+        proposed_weights=dict(body.proposed_weights),
+        change_list=changes,
+        created_by=actor.id,
+    )
+    session.add(cand)
+    await session.flush()
+    await append_audit(
+        session,
+        tenant_id=pcp.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="pcp.recalc_candidate_created",
+        entity_type="pcp_recalc_candidate",
+        entity_id=cand.candidate_id,
+        detail={
+            "pcp_id": pcp.pcp_id,
+            "source": SOURCE_MANUAL,
+            "changes": len(changes),
+        },
+    )
+    return cand
+
+
+async def approve_candidate(session, candidate_id: str, actor) -> PcpRecalcCandidate:
+    """Q41 HumanGate 批准生效：写回 pcp_weight_tables + 清 template_code（Q42
+    人工直编语义）+ before/after 审计。"""
+    _require_ops(actor)
+    cand = await session.get(PcpRecalcCandidate, candidate_id)
+    if cand is None:
+        raise EventNotFound(candidate_id)
+    if cand.status != CAND_PENDING:
+        raise EventNotFound(candidate_id)
+    pcp = await session.get(PcpWeightTable, cand.pcp_id)
+    if pcp is None or pcp.status != "active":
+        raise PcpNotFound(cand.pcp_id)
+    before = dict(pcp.weights)
+    pcp.weights = dict(cand.proposed_weights)
+    pcp.template_code = None
+    pcp.updated_at = _now()
+    cand.status = CAND_APPROVED
+    cand.approved_by = actor.id
+    cand.approved_at = _now()
+    await append_audit(
+        session,
+        tenant_id=pcp.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="pcp.recalc_applied",
+        entity_type="pcp_weight_table",
+        entity_id=pcp.pcp_id,
+        detail={
+            "candidate_id": cand.candidate_id,
+            "before": before,
+            "after": dict(pcp.weights),
+            "change_list": cand.change_list,
+        },
+    )
+    await append_audit(
+        session,
+        tenant_id=pcp.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="pcp.recalc_approved",
+        entity_type="pcp_recalc_candidate",
+        entity_id=cand.candidate_id,
+        detail={"pcp_id": pcp.pcp_id},
+    )
+    return cand
+
+
+async def reject_candidate(
+    session, candidate_id: str, reason: str, actor
+) -> PcpRecalcCandidate:
+    _require_ops(actor)
+    cand = await session.get(PcpRecalcCandidate, candidate_id)
+    if cand is None:
+        raise EventNotFound(candidate_id)
+    if cand.status != CAND_PENDING:
+        raise EventNotFound(candidate_id)
+    cand.status = CAND_REJECTED
+    cand.rejected_reason = reason
+    cand.rejected_by = actor.id
+    cand.rejected_at = _now()
+    await append_audit(
+        session,
+        tenant_id=cand.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="pcp.recalc_rejected",
+        entity_type="pcp_recalc_candidate",
+        entity_id=candidate_id,
+        detail={"reason": reason},
+    )
+    return cand

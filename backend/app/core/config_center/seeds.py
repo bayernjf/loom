@@ -89,6 +89,8 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("review.sla_hours.c1_recognition", "review", "float", 72, "Q70②/Q114", {"min": 1}),
     ("review.sla_hours.atom_batch", "review", "float", 72, "Q70②/Q114", {"min": 1}),
     ("review.sla_hours.c7_layer4", "review", "float", 72, "Q70②/Q114", {"min": 1}),
+    # ---- 段7/8 动态信号与 PCP 重算（Q42 单项单次幅度上限，Q259 起消费）----
+    ("platform.recalc_step", "platform", "float", 0.05, "Q42", {"min": 0.001}),
 ]
 
 SEED_BY_KEY = {row[0]: row for row in CONFIG_SEEDS}
