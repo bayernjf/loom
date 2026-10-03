@@ -84,6 +84,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_pcp_recalc_candidates_pcp_id", "pcp_recalc_candidates", ["pcp_id"])
     op.create_index("ix_pcp_recalc_candidates_status", "pcp_recalc_candidates", ["status"])
+    op.create_index("ix_pcp_recalc_candidates_tenant_id", "pcp_recalc_candidates", ["tenant_id"])
     op.create_index(
         "uq_pcp_recalc_pending",
         "pcp_recalc_candidates",
@@ -144,6 +145,7 @@ def downgrade() -> None:
     op.execute(f"DELETE FROM config_items WHERE key = '{_SEED_KEY}'")
     op.drop_index("uq_pcp_recalc_pending", table_name="pcp_recalc_candidates")
     op.drop_index("ix_pcp_recalc_candidates_status", table_name="pcp_recalc_candidates")
+    op.drop_index("ix_pcp_recalc_candidates_tenant_id", table_name="pcp_recalc_candidates")
     op.drop_index("ix_pcp_recalc_candidates_pcp_id", table_name="pcp_recalc_candidates")
     op.drop_table("pcp_recalc_candidates")
     op.drop_index("ix_platform_dynamic_events_slot_id", table_name="platform_dynamic_events")
