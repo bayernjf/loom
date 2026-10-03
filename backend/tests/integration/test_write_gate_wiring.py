@@ -50,6 +50,10 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     # 段11 E1.1 发证（Q203）
     ("/api/fcw/assemble", "POST"): OPS,
     ("/api/fcw/assembly-tasks", "POST"): OPS,
+    # 段9 layerSpaces 通用底座（Q262/Q46）：增删改仅平台级管理员。
+    ("/api/admin/layer-spaces/items", "POST"): ("platform_admin",),
+    ("/api/admin/layer-spaces/items/{item_id}", "PUT"): ("platform_admin",),
+    ("/api/admin/layer-spaces/items/{item_id}", "DELETE"): ("platform_admin",),
 }
 
 # 必须一个标记都没有：只读口，以及有意不加闸的写口。
@@ -63,6 +67,9 @@ UNGATED: tuple[tuple[str, str], ...] = (
     # 段4 的这两口 docs/05 未给角色，Q242 刻意不动。
     ("/api/product-spaces/{product_space_id}/atom-batches", "POST"),
     ("/api/atom-candidates/{candidate_id}/evidence", "POST"),
+    # Q262 读口：query actor 闸（require_layer_spaces_view），非凭证依赖。
+    ("/api/admin/layer-spaces", "GET"),
+    ("/api/admin/layer-spaces/items/{item_id}/impact", "GET"),
 )
 
 
