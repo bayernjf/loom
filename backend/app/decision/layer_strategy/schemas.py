@@ -1,4 +1,4 @@
-"""段9 三包配置实例 Pydantic 契约。"""
+"""段9 三包配置实例 + Q262 layerSpaces 通用底座 Pydantic 契约。"""
 
 from pydantic import BaseModel, Field
 
@@ -25,4 +25,28 @@ class PackageUpdate(BaseModel):
 
 
 class ActorOnly(BaseModel):
+    actor: Actor
+
+
+# --- Q262 layerSpaces（Q46） ---
+
+
+class LayerSpaceItemCreate(BaseModel):
+    layer_id: str
+    dimension: str
+    name: str
+    status: str | None = Field(default=None)
+    actor: Actor
+
+
+class LayerSpaceItemUpdate(BaseModel):
+    name: str | None = None
+    status: str | None = None
+    # Q46：被活跃配方引用时，变更须显式确认影响面（Gate，工程口径【实现补】）。
+    impact_confirmed: bool = False
+    actor: Actor
+
+
+class LayerSpaceItemArchive(BaseModel):
+    impact_confirmed: bool = False
     actor: Actor
