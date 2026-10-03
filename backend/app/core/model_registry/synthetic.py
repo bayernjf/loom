@@ -293,6 +293,47 @@ def build_video_gen(variables: dict) -> dict:
 BUILDERS["VIDEO-GEN"] = build_video_gen
 
 
+def build_platform_adapter(variables: dict) -> dict:
+    """PLATFORM-ADAPTER 结构替身（V1 引擎预备，PT-PLATFORM-ADAPTER-V1.0）。
+
+    从调用方传入的 frozen PWS 摘要 + 平台规则命中 + 动态信号确定性产四态建议
+    （allow/downgrade/block/pending_review）。命中计算由调用方按 Q36 selector
+    语义完成，本构造器只做机械映射（V1 工程口径，待真模型/业务校准）：
+    - 无 frozen PWS → missing、不造假（原文 constraints）；
+    - 命中 effect=blocked → block；effect=partial → downgrade；
+    - 存在 active 动态信号 → pending_review（Q41 每周检查语义：有变化须人工）；
+    - 其余 → allow。
+    AI 输出一律 gate=pending_review 需 HumanGate（原文 guards）。
+    业务接线（候选投递/HumanGate 裁决/平台审核员界面）随 V2 后续片。
+    """
+    pws = variables.get("pws")
+    if not isinstance(pws, dict) or pws.get("frozen") is not True:
+        return {"missing": True, "reason": "no_frozen_pws"}
+
+    hits = [h for h in (variables.get("platform_rules") or []) if isinstance(h, dict)]
+    events = [e for e in (variables.get("dynamic_events") or []) if isinstance(e, dict)]
+
+    if any(h.get("effect") == "blocked" for h in hits):
+        decision, reason = "block", "platform rule effect=blocked"
+    elif any(h.get("effect") == "partial" for h in hits):
+        decision, reason = "downgrade", "platform rule effect=partial"
+    elif events:
+        decision, reason = "pending_review", "active dynamic signal requires human review"
+    else:
+        decision, reason = "allow", "no blocking rules or dynamic signals"
+
+    return {
+        "missing": False,
+        "decision": decision,
+        "reason": reason,
+        "refs": [f"rule:{h['rule_id']}" for h in hits if h.get("rule_id")],
+        "gate": "pending_review",
+    }
+
+
+BUILDERS["PLATFORM-ADAPTER"] = build_platform_adapter
+
+
 def _embed_one(text: str) -> list[float]:
     # 字袋哈希向量：ascii 词 + CJK 单字 + CJK 相邻二元组，各桶 ±1 计数后
     # L2 归一化。相同文本必相同向量；共享长前缀的文本余弦高（确定性、无随机）。

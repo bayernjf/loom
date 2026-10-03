@@ -10,9 +10,13 @@ from app.core.staff_auth.deps import require_internal_actor
 from app.platform.platform_adaptation import service
 from app.platform.platform_adaptation.schemas import (
     ActorOnly,
+    CandidateApprove,
+    CandidateReject,
+    EventUpsert,
     FitWeightPut,
     PcpCreate,
     PcpUpdate,
+    RecalcCandidateCreate,
     RuleCreate,
     SlotTypeDefaultPut,
     SlotUpsert,
@@ -84,6 +88,39 @@ def _pcp_view(p) -> dict:
         "template_code": p.template_code,
         "weights": p.weights,
         "status": p.status,
+    }
+
+
+def _event_view(e) -> dict:
+    return {
+        "event_id": e.event_id,
+        "platform": e.platform,
+        "slot_id": e.slot_id,
+        "event_type": e.event_type,
+        "severity": e.severity,
+        "effective_start": e.effective_start.isoformat(),
+        "effective_end": e.effective_end.isoformat() if e.effective_end else None,
+        "note": e.note,
+        "status": e.status,
+    }
+
+
+def _candidate_view(c) -> dict:
+    return {
+        "candidate_id": c.candidate_id,
+        "pcp_id": c.pcp_id,
+        "tenant_id": c.tenant_id,
+        "product_space_id": c.product_space_id,
+        "platform": c.platform,
+        "source": c.source,
+        "proposed_weights": c.proposed_weights,
+        "change_list": c.change_list,
+        "status": c.status,
+        "rejected_reason": c.rejected_reason,
+        "created_by": c.created_by,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "approved_by": c.approved_by,
+        "approved_at": c.approved_at.isoformat() if c.approved_at else None,
     }
 
 
@@ -254,9 +291,146 @@ async def match_rules(
     country: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    return await service.match_rules(
+    result = await service.match_rules(
         session, platform=platform, slot_type=slot_type, slot_id=slot_id, country=country
     )
+    # Q259：动态信号 advisory 回带——命中平台（及发布位）的当前生效事件，
+    # 仅提示不改变规则裁决（Q37 事件→池字段映射【原文未给出，待补】）。
+    events = await service.active_events_for(session, platform, slot_id=slot_id)
+    result["events"] = [_event_view(e) for e in events]
+    return result
+
+
+# ---------- Q37 动态信号事件 ----------
+
+@router.get("/api/admin/platform-dynamic-events")
+async def list_events(
+    platform: str | None = None,
+    status: str | None = "active",
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_operations_view),
+) -> list[dict]:
+    return [_event_view(e) for e in await service.list_events(session, platform=platform, status=status)]
+
+
+@router.post("/api/admin/platform-dynamic-events", status_code=201)
+async def create_event(
+    body: EventUpsert,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        ev = await service.create_event(session, body, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.EventPeriodInvalid as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await session.commit()
+    return _event_view(ev)
+
+
+@router.put("/api/admin/platform-dynamic-events/{event_id}")
+async def update_event(
+    event_id: str,
+    body: EventUpsert,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        ev = await service.update_event(session, event_id, body, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.EventNotFound as exc:
+        raise HTTPException(404, f"event not found: {exc}") from exc
+    except service.EventPeriodInvalid as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await session.commit()
+    return _event_view(ev)
+
+
+@router.delete("/api/admin/platform-dynamic-events/{event_id}", status_code=204)
+async def archive_event(
+    event_id: str,
+    body: ActorOnly,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> None:
+    try:
+        await service.archive_event(session, event_id, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.EventNotFound as exc:
+        raise HTTPException(404, f"event not found: {exc}") from exc
+    await session.commit()
+
+
+# ---------- Q41/Q42 PCP 重算候选 HumanGate ----------
+
+@router.get("/api/admin/pcp-recalc/candidates")
+async def list_candidates(
+    status: str | None = None,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_operations_view),
+) -> list[dict]:
+    return [_candidate_view(c) for c in await service.list_candidates(session, status=status)]
+
+
+@router.post("/api/admin/pcp-recalc/candidates", status_code=201)
+async def create_candidate(
+    body: RecalcCandidateCreate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        cand = await service.create_candidate(session, body, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.PcpNotFound as exc:
+        raise HTTPException(404, f"pcp not found or not active: {exc}") from exc
+    except service.ValidationFailed as exc:
+        raise HTTPException(422, {"violations": exc.violations}) from exc
+    except service.RecalcStepExceeded as exc:
+        raise HTTPException(422, f"recalc step exceeded: {exc}") from exc
+    except service.PendingCandidateExists as exc:
+        raise HTTPException(409, f"pending candidate exists: {exc}") from exc
+    await session.commit()
+    return _candidate_view(cand)
+
+
+@router.post("/api/admin/pcp-recalc/candidates/{candidate_id}/approve")
+async def approve_candidate(
+    candidate_id: str,
+    body: CandidateApprove,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        cand = await service.approve_candidate(session, candidate_id, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.EventNotFound as exc:
+        raise HTTPException(404, f"candidate not found or not pending: {exc}") from exc
+    except service.PcpNotFound as exc:
+        raise HTTPException(404, f"pcp not found or not active: {exc}") from exc
+    await session.commit()
+    return _candidate_view(cand)
+
+
+@router.post("/api/admin/pcp-recalc/candidates/{candidate_id}/reject")
+async def reject_candidate(
+    candidate_id: str,
+    body: CandidateReject,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        cand = await service.reject_candidate(session, candidate_id, body.reason, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.EventNotFound as exc:
+        raise HTTPException(404, f"candidate not found or not pending: {exc}") from exc
+    await session.commit()
+    return _candidate_view(cand)
 
 
 # ---------- slotType 默认值 ----------

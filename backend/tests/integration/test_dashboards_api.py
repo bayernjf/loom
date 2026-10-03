@@ -5,7 +5,7 @@
 """
 
 from collections.abc import AsyncGenerator
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -18,6 +18,7 @@ from app.product.modeling.models import OpsTodo
 
 NOW = datetime.now(UTC)
 TODAY = NOW.date()
+NOON_UTC = datetime.combine(TODAY, time(12, 0), tzinfo=UTC)
 
 PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
 OPERATIONS = {"id": "op-1", "roles": ["operations"]}
@@ -134,10 +135,10 @@ async def test_token_cost_default_window_groups_by_day_model_and_skill(
 ):
     async with session_factory() as session:
         session.add_all([
-            _run(skill_id="CAT-RECOG", at=NOW - timedelta(days=1, hours=1)),
+            _run(skill_id="CAT-RECOG", at=NOON_UTC - timedelta(days=1, hours=1)),
             _run(
                 skill_id="CAT-RECOG",
-                at=NOW - timedelta(days=1, hours=2),
+                at=NOON_UTC - timedelta(days=1, hours=2),
                 input_tokens=200,
                 output_tokens=100,
                 input_cost=0.002,
@@ -147,7 +148,7 @@ async def test_token_cost_default_window_groups_by_day_model_and_skill(
                 skill_id="PWC-BUILDER",
                 model_id="synthetic-embedding",
                 currency_code="USD",
-                at=NOW - timedelta(hours=2),
+                at=NOON_UTC - timedelta(hours=2),
                 input_cost=0.0,
                 output_cost=0.0,
             ),
@@ -157,7 +158,7 @@ async def test_token_cost_default_window_groups_by_day_model_and_skill(
                 status="requested",
                 source="restock_auto",
                 model_id=None,
-                at=NOW - timedelta(hours=3),
+                at=NOON_UTC - timedelta(hours=3),
                 input_tokens=None,
                 output_tokens=None,
                 input_cost=None,
@@ -167,7 +168,7 @@ async def test_token_cost_default_window_groups_by_day_model_and_skill(
             _run(
                 skill_id="PWC-BUILDER",
                 status="failed",
-                at=NOW - timedelta(hours=4),
+                at=NOON_UTC - timedelta(hours=4),
                 input_tokens=None,
                 output_tokens=None,
                 input_cost=None,
@@ -175,7 +176,7 @@ async def test_token_cost_default_window_groups_by_day_model_and_skill(
                 currency_code=None,
             ),
             # 窗口外（31 天前）
-            _run(skill_id="CAT-RECOG", at=NOW - timedelta(days=31)),
+            _run(skill_id="CAT-RECOG", at=NOON_UTC - timedelta(days=31)),
         ])
         await session.commit()
 
@@ -220,13 +221,13 @@ async def test_token_cost_separates_currencies_without_conversion(
 ):
     async with session_factory() as session:
         session.add_all([
-            _run(skill_id="S1", currency_code="USD", at=NOW - timedelta(hours=1)),
+            _run(skill_id="S1", currency_code="USD", at=NOON_UTC - timedelta(hours=1)),
             _run(
                 skill_id="S1",
                 currency_code="EUR",
                 input_cost=0.01,
                 output_cost=0.02,
-                at=NOW - timedelta(hours=1),
+                at=NOON_UTC - timedelta(hours=1),
             ),
         ])
         await session.commit()

@@ -1,5 +1,7 @@
 """段7/8 静态底表 Pydantic 契约。"""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from app.core.actor import Actor
@@ -75,4 +77,46 @@ class PcpUpdate(BaseModel):
 
 
 class ActorOnly(BaseModel):
+    actor: Actor
+
+
+class EventItem(BaseModel):
+    """Q37 动态信号事件（平台/发布位/事件类型/严重度/生效期）。
+
+    event_type/severity 取值枚举【原文未给出，待补】，运营录入；slot_id 可空=
+    平台级事件；effective_end 可空=长期生效。
+    """
+
+    platform: str
+    slot_id: str | None = None
+    event_type: str
+    severity: str
+    effective_start: datetime
+    effective_end: datetime | None = None
+    note: str | None = Field(default=None, max_length=512)
+
+
+class EventUpsert(BaseModel):
+    item: EventItem
+    actor: Actor
+
+
+class RecalcCandidateCreate(BaseModel):
+    """Q41 重算候选提交（V1 仅 manual 来源；AI 生成器随 V2 PCP-SCORE）。
+
+    change_list = 变化对照单（Q41：项/旧值/新值/理由）。
+    """
+
+    pcp_id: str
+    proposed_weights: dict
+    change_list: list[dict] = Field(default_factory=list)
+    actor: Actor
+
+
+class CandidateApprove(BaseModel):
+    actor: Actor
+
+
+class CandidateReject(BaseModel):
+    reason: str = Field(min_length=1, max_length=512)
     actor: Actor

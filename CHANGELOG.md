@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q260 PLATFORM-ADAPTER 模型网关第 11 场景 V1 引擎预备切片（2026-10-03，**代码＋迁移＋测试＋文档**；Alembic 头 0045→0046_platform_adapter_seed（纯种子）；后端 1084→1095 passed＋10 skipped；eval 101/101；ruff 净；前端零改动）**——段7 平台适配 pending Skill 首次落地（PT-PLATFORM-ADAPTER-V1.0 定稿 ✅，docs/06 §4.1「实现即首次落地」）：场景注册＋Prompt v0.1＋synthetic 构造器，四态 allow/downgrade/block/pending_review 确定性机械映射、gate 恒 pending_review、无 frozen PWS 返回 missing 不造假。02 C1.204。
+- **Q259 段7/8 动态信号 + PCP 每周重算 HumanGate 闭环 V1 切片（2026-10-03，**代码＋迁移＋测试＋文档**；Alembic 头 **0044→0045_platform_dynamic_signal**（建两表，业务物理表 64→66，迁移文件 44→45，PG16 往返实测宿主 55442）；后端常规 **1080→1084 passed＋10 skipped**（总收集 1094，+4 新集成；同批修复 test_dashboards_api 两例 UTC 日期边界缺陷并入 passed）、eval 101/101、ruff 净；前端零改动；02 C1.203）**
 - **Q258 文档更新：docs/05 补 Q249 预检口＋Q252 第 10 场景、docs/10 迁移范围补 0044、docs/21 场景数 9→10（2026-10-03，**纯文档零代码零迁移零测试变化**；基线不变 **1080 passed＋10 skipped**／Alembic 头 **0044_video_gen_seed**／业务表 **64**；改动 docs/05＋docs/10＋docs/21＋docs/02＋handoff＋CHANGELOG＋归档；02 C1.202）**
   - **来由**：负责人「更新项目文档」——当场重扫 docs 活状态与最新基线的漂移，订正三处：① docs/05 M8 FCW 表补 Q249 预检口行（只预检不签发、Guard 失败 200、写身份闸同 Q203）；② docs/05 场景段补 Q252 第 10 场景 VIDEO-GEN（synthetic 构造器＋迁移 0044 纯种子，agnes-video 接入随 video-studio、mode 取值待补）；③ docs/10 迁移范围 0001–0043→**0001–0044**；④ docs/21 告警证据「9 场景」→**10 场景**（Q252 起 VIDEO-GEN 纳入 all_scene_codes()）。
   - **已核实无需动**：docs/06（场景演进权威在 docs/05）、docs/12、docs/18、README、docs/16、docs/08；docs/02 Q148/Q193 历史注记不回改。
