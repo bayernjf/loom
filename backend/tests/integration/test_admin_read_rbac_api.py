@@ -44,6 +44,8 @@ GATED_READS = [
     ("/api/admin/cp-law-domains", ["internal_compliance"]),    # 05 Q49 敏感领域清单
     ("/api/admin/publish-slots", ["operations"]),              # 05 Q35 发布位档案
     ("/api/admin/slot-type-defaults", ["operations"]),         # 05 Q39 slotType 默认值
+    # ---- Q262：layerSpaces 通用底座读口（Q46 普通运营只读，platform_admin 可读） ----
+    ("/api/admin/layer-spaces", ["operations", "platform_admin"]),  # 02 Q46
 ]
 
 # Q113 子路径读口（资源可能不存在，故只锁鉴权层 422/403，不强制 200）。
@@ -52,6 +54,7 @@ GATED_SUBPATHS = [
     "/api/admin/config/some.key/history",
     "/api/admin/skill-prompts/PWC-BUILDER/versions",
     "/api/admin/skill-prompts/PWC-BUILDER/versions/v0.1",
+    "/api/admin/layer-spaces/items/some.item/impact",
 ]
 
 # 矩阵明确无 actor 体的读口：继续免闸。
