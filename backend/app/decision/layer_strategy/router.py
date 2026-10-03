@@ -129,6 +129,17 @@ async def archive_package(
     await session.commit()
 
 
+# Q264（Q45 重配载体甲）：运营待重配清单只读口——管理面读口同 Q109/Q118 口径
+# 补 query actor 闸（operations|platform_admin 只读），人工更新包 payload 清零后
+# 自然移出清单。语义与排期见 docs/design-p2-package-reuse-reconfig.md §3.1 甲。
+@router.get("/api/admin/packages/reuse-pending")
+async def list_reuse_pending(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_layer_spaces_view),
+) -> list[dict]:
+    return await service.list_reuse_pending(session)
+
+
 # ---------------------------------------------------------------------------
 # Q262 layerSpaces 通用底座（Q46）
 # ---------------------------------------------------------------------------
