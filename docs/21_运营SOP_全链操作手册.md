@@ -74,6 +74,7 @@
 1. 发布位：**operations** `POST /api/admin/publish-slots`（platform、code、slot_type、四维人工分 traffic/safe/conv/load）。
 2. PCP：`POST /api/product-spaces/{ps}/pcp`（platform + template_code）。
 3. 三包：`POST /api/product-spaces/{ps}/packages` 逐条建 csp / cstp / cep，`{kind, platform, goal, payload, conf}`。
+4. **三包重配（Q263/Q264，2026-10-03 起）**：发证后三包 `usage_count` 由 `assemble_one` 自动递增，无需运营操作；任一包跨过 `package.reuse_threshold`（默认 20 次，配置键）或对应 PCP 权重被更新时，系统写 `package.reuse_threshold_reached` 审计＝重配触发信号。**运营处置**：① `GET /api/admin/packages/reuse-pending`（query actor 闸，operations|platform_admin 只读）查看待重配清单（package_id/kind/tenant/product_space/platform/goal/usage_count/threshold）；② 人工重配＝`PUT /api/packages/{id}` 更新 payload（成功后 `usage_count` 自动清零并写 `package.reuse_reset` 审计，包自然移出清单；**不设独立重置按钮，改包即重配完成**）。
 
 > **Q242（2026-10-01）起这三族写口也要 staff 令牌**：发布位（POST/PUT/DELETE `/api/admin/publish-slots`）、PCP（POST `/api/product-spaces/{ps}/pcp` 与 PUT `/api/pcp/{id}`）、三包（POST/PUT/DELETE `/api/product-spaces/{ps}/packages`）以及 `PUT /api/admin/fit-weights`、`PUT /api/admin/slot-type-defaults`、`POST/DELETE /api/admin/platform-rules` **全部**统一到 `require_internal_actor(OPERATIONS)`——与段11 发证口同口径，**门控关着也自行验真**：无/坏/吊销令牌 401、令牌角色不含 operations 403，body 自报 `actor` 被令牌身份覆盖。**故 §0.1 的引导签发令牌是走段7/8/9 的第 0 步**，不是发证前才做。段9 策略包（`POST/PUT/DELETE /api/layer-strategies`）同口径；段4 atom Gate 的审核/运营/合规写口也已统一（三个无角色规定的口 `submit_batch`/`supplement_evidence`/`revive_candidate` 刻意不加闸）。
 
