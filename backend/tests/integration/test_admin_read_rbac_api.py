@@ -46,6 +46,8 @@ GATED_READS = [
     ("/api/admin/slot-type-defaults", ["operations"]),         # 05 Q39 slotType 默认值
     # ---- Q262：layerSpaces 通用底座读口（Q46 普通运营只读，platform_admin 可读） ----
     ("/api/admin/layer-spaces", ["operations", "platform_admin"]),  # 02 Q46
+    # ---- Q264：三包重配待办清单只读口（Q45 重配走 Gate，operations|platform_admin 只读） ----
+    ("/api/admin/packages/reuse-pending", ["operations", "platform_admin"]),  # 02 Q264
 ]
 
 # Q113 子路径读口（资源可能不存在，故只锁鉴权层 422/403，不强制 200）。
