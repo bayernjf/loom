@@ -119,3 +119,37 @@ def test_every_gated_write_route_carries_the_credential_dependency():
 def test_read_and_deliberately_ungated_routes_have_no_credential_dependency():
     for path, method in UNGATED:
         assert _marked_calls(_find_route(path, method)) == [], f"{method} {path}"
+
+
+def _all_routes() -> list[APIRoute]:
+    """`app.routes` 把 include 包成 `_IncludedRouter`（取不到 path），必须顺着 original_router 走。"""
+    out: list[APIRoute] = []
+    stack = list(app.routes)
+    while stack:
+        node = stack.pop()
+        sub = getattr(node, "original_router", None)
+        if sub is not None:
+            stack.extend(sub.routes)
+        elif isinstance(node, APIRoute):
+            out.append(node)
+    return out
+
+
+def test_the_gated_list_is_complete_no_route_can_carry_a_credential_unmarked():
+    """反向枚举：手工清单必然落后（Q276 就是这么漏掉 8 口的），所以改由机器求交集。
+
+    断言两个方向：① 代码里任何带凭证依赖的路由都必须在 `GATED` 内（新增口忘记登记即判红）；
+    ② `GATED` 里每个角色集合与路由实际要求一致（已由上一条用例覆盖角色，这里只保证集合相等）。
+    """
+    marked = {
+        (m.upper(), route.path)
+        for route in _all_routes()
+        for m in (route.methods or set())
+        if _marked_calls(route)
+    }
+    contract = {(method, path) for (path, method) in GATED}
+    assert marked == contract, (
+        f"只在代码里（清单漏登）：{sorted(marked - contract)}；"
+        f"只在清单里（口已删除或改闸）：{sorted(contract - marked)}"
+    )
+    assert not ({(m, p) for (p, m) in UNGATED} & contract), "同一口既在 GATED 又在 UNGATED"

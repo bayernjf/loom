@@ -100,6 +100,8 @@
 | POST/GET `/categories`，PUT `/categories/{category_id}/template` | G1 最小切片 + 叶子模板（**dictionary_admin**，越权 403；fid:'-'/未知 fid → 422；Q75；**Q109 起 GET 同补 dictionary_admin query 读闸：缺 actor_id 422、越权 403**） | Q68/Q75/**Q109** |
 | POST `/intakes/{intake_id}/c7-runs` | C7 L1–L4 兜底（L4 提案入库候选） | Q6/Q68 |
 
+> **🟡 契约待补（2026-10-04，Q277 登记，来源＝docs/23 §11.5 第 3 类）**：下列三个**写口**在本文件的行内只写了业务语义、**未规定调用角色**，而代码里也没有角色闸（两处经读 service 逐条核实：`modeling/service.py::ops_decide` 只校验录入单状态与待办存在；`condition/service.py::run_funnel` 只校验池 approved 与批量上限）——① `POST /intakes/{intake_id}/ops-decision`（Q3）② `POST /product-spaces/{id}/pwc/funnel`（WF-04）③ `POST /product-spaces/{id}/pwc/consume`（Q71 中台消费口）。**本条只登记缺口，不在此规定角色，也不由工程侧擅自加闸**：给写口加凭证／角色属破坏性契约变更（先例＝Q203 发证口、Q242 三族写口），须负责人裁决后再回填本表的角色列与 docs/11。
+
 **M3 段3 字段池规划（前缀 `/api`）**
 
 | 方法/路径 | 说明 | 依据 |
