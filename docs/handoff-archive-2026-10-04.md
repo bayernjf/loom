@@ -1,6 +1,9 @@
 # Handoff Archive — 2026-10-04
 
-> 2026-10-04 进度归档。本档收录：handoff 顶部 Q265 banner 原文（按「最近 5 条」上限滚出）。权威逐条台账仍为 docs/02（C1 日志）。
+> 2026-10-04 进度归档。本档收录：handoff 顶部 Q265、Q266 banner 原文（按「最近 5 条」上限滚出；Q266 于 Q271–Q273 批滚出）。权威逐条台账仍为 docs/02（C1 日志）。
 
 ---
 > **最新（2026-10-03）：Q265 文档对账：docs/05 契约补 Q263/Q264 三包重配端点登记、docs/17 §1 Windows 复跑读数补 Q263/Q264 时点（**纯文档零代码零迁移**；基线不变 1120 passed＋10 skipped／Alembic 头 0047_layer_spaces／业务表 68；commit `7d7e2b1`＋`cea7dc1`＋`95b718a` 已落 dev，未 push；02 C1.209）**——负责人「更新项目文档」：A 组文档一致性收口。① **docs/05 契约补登记**：新增 `GET /admin/packages/reuse-pending` 只读口行（query actor 闸、operations|platform_admin 只读、聚合 active 包 usage_count>=threshold、工程接缝【实现补】：包实时值入清单非审计历史聚合、清零自然移出）；`PUT /packages/{package_id}` 行补 Q263 递增（assemble_one 发证成功三包各 +1、跨阈值写 reuse_threshold_reached 审计）＋Q264 清零语义（人工更新即清零＋reuse_reset 审计）；`PUT /pcp/{pcp_id}` 行补 Q264 触发审计（同 PS×platform 全部 active 三包各写 reuse_threshold_reached、trigger=pcp_update）；② **docs/17 §1 补读数**：本行原记 1104/1110 为 Q262 时点，追加 Q263 时点（本机 1109／CI 1115）与 Q264 时点（本机 1114 passed＋6 failed 环境差异＋10 skipped／CI 1120，总收集 1130）；③ **AGENTS.md 基线刷至 Q264**（0047 头/68 表/pytest 1120、最近批次 Q263/Q264）。**三层判定不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
+
+---
+> **最新（2026-10-04）：Q266 文档对账第二刀：docs/10 迁移登记续登 0043–0047＋docs/21 SOP 补 Q263/Q264 三包重配操作面（**纯文档零代码零迁移**；基线不变 1120 passed＋10 skipped／Alembic 头 0047_layer_spaces／业务表 68；commit `0be95e4`＋`9a396f8` 已落 dev，未 push；02 C1.210）**——负责人「你继续迭代」：承接 Q265 对账，当场重扫 docs/ 活状态扫出两处漂移并补齐。① **docs/10 迁移登记**：§2.8 head 行 0042→**0047_layer_spaces**、§4 登记完整性 0001–0042→**0001–0047**（业务物理表 68）、Q207 行追加 2026-10-04 注记（62 表/666 列是 head=0040 时点快照，0043/0045/0047 新增 6 表后 68 表、CI Migration gate 持续覆盖零漂移）；新增实现补登段 0044–0047（0044 VIDEO-GEN 纯种子 Q252／0045 动态信号＋PCP 重算两表 Q259 64→66／0046 PLATFORM-ADAPTER 纯种子 Q260／0047 layerSpaces 两表＋4 层 22 维度种子 Q262 66→68）。② **docs/21 SOP 段7/8/9**：补「三包重配」第 4 步——发证自动递增 usage_count 无需运营操作、跨阈值写 reuse_threshold_reached 审计＝信号、`GET /api/admin/packages/reuse-pending` 查待重配清单、人工重配＝`PUT /api/packages/{id}` 更新即清零（reuse_reset 审计、无独立重置按钮）。**三层判定不变**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）。
