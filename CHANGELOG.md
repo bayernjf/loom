@@ -3,6 +3,7 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q281 覆盖率读数复测（2026-10-05，**纯测量；零代码零迁移零测试变化**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.224）** —— 按 CI 原命令复跑：全系统 `app/` **71.78%**（13,100 条语句／missed 3,697）、核心规则层 **99.34%**（602 条／9 文件），**与 Q273 逐位不变**（最差单项仍 `pa_rules.py` 96.97%·`config_rules.py` 97.3%）。两条实测副产品：① 分母未变＝**Q276–Q280 五批确实零 `app/` 语句改动**（全为测试＋配置＋文档）；② 这五批新增的 15 条测的是制品（compose 面／Caddyfile 入站面／文档漂移），不在 `--cov=app` 分母里 ⇒ **「测试数在涨、覆盖率不动」在这类批里是预期，不是质量退坡**。阈值仍【建议】、仍不接 `--cov-fail-under`（Q229），本批不据此判红也不改门，只在 docs/16 追加一条带日期与前置条件的读数行。
 - **Q280 空库真栈首启查出「旋钮没被转发」的部署缺陷，并补三道防线（2026-10-05，**配置＋测试＋文档；零迁移零新表**；后端 **1139→1140 passed＋10 skipped**（总收集 **1150**；＋1＝compose 转发断言）、ruff 净、前端零改动；02 C1.223）** —— 负责人「那你继续搞」，本批做两件不需要裁决的事：把 Q279 的 stand-in 探针补成**真栈空卷首启**，并修掉首启查出的缺陷。
   - **首启实测**（独立 compose project、宿主端口让位、不碰既有容器）：postgres/redis/backend/frontend 全 healthy（`depends_on` 服务健康条件真实生效）、宿主只剩网关的 80/443、`GET /api/admin/publish-slots?actor_id=…&roles=operations` 经网关回 **`[]` 200**（空库真实读）、`POST /mcp` 无凭证回 **401**（鉴权先于门控、body 来自 FastAPI 而非 Next）、`/docs`·`/metrics`·`/healthz` 网关 404、`http` → **308** `https`。清理＝`down -v`（只删本项目卷与网络）。
   - **查出的缺陷**：`infra/docker-compose.yml` 的 backend 段**从不转发 `LOOM_PUBLIC_BASE_URL`** ⇒ 容器内 `settings.public_base_url` 恒为空串 ⇒ **A2A 卡片对外 `url` 永远是相对路径 `/api/a2a/tasks`，外部 Agent 拿到没法用**（首启实测回的就是这个值）。CI 六道门与全部单元契约测试都看不见这类缺陷——它们只校应用内一致性，不校「Settings 里的旋钮接没接到部署制品」。
