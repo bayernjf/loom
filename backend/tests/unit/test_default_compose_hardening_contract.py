@@ -22,6 +22,7 @@ REHEARSAL_SCRIPTS = (
     REPO_ROOT / "infra" / "ha-rehearsal.sh",
     REPO_ROOT / "infra" / "load-rehearsal.sh",
     REPO_ROOT / "infra" / "alerting-rehearsal.sh",
+    REPO_ROOT / "infra" / "gateway-rehearsal.sh",
 )
 INFRA_SERVICES = ("postgres", "redis", "minio")
 

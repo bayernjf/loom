@@ -4,7 +4,7 @@ Loom 的性能与容量基准登记表。**代码已实现并有实测台账**�
 
 ## How to run
 
-七套端到端演练就是本表的数据来源，**脚本本体全部本地手动、不进 CI**（要起多容器、断言依赖宿主网络）；其中**不需要容器的那一半**自 Q229 起由 CI job `infra-static` 以**等价门**覆盖（五个 compose overlay 各自过 `docker compose config -q`、`promtool check config/rules` 校 PromQL 语法），但**进 CI 的是等价门、不是 `*rehearsal.sh` 本体**（实质判据：该文件里**没有任何 `run` 步执行 `*rehearsal*.sh`**；`grep -n rehearsal .github/workflows/ci.yml` 命中 4 处——Q227 注释 3 行＋`docker-compose.alerting-rehearsal.yml` 文件名 1 处，无一处执行脚本）；脚本自身只跑负载与断言，**不产出基准数字文件**，实测值只登记在 docs/17 §7 对应小节。命令均在 `infra/` 下执行，且都需要本机 Docker；脚本一律用一次性容器/独立宿主端口，不触碰本机 atlas-pg。
+**八套**端到端演练（Q282 增 `gateway-rehearsal.sh`）就是本表的数据来源，**脚本本体全部本地手动、不进 CI**（要起多容器、断言依赖宿主网络）；其中**不需要容器的那一半**自 Q229 起由 CI job `infra-static` 以**等价门**覆盖（五个 compose overlay 各自过 `docker compose config -q`、`promtool check config/rules` 校 PromQL 语法），但**进 CI 的是等价门、不是 `*rehearsal.sh` 本体**（实质判据：该文件里**没有任何 `run` 步执行 `*rehearsal*.sh`**；`grep -n rehearsal .github/workflows/ci.yml` 命中 4 处——Q227 注释 3 行＋`docker-compose.alerting-rehearsal.yml` 文件名 1 处，无一处执行脚本）；脚本自身只跑负载与断言，**不产出基准数字文件**，实测值只登记在 docs/17 §7 对应小节。命令均在 `infra/` 下执行，且都需要本机 Docker；脚本一律用一次性容器/独立宿主端口，不触碰本机 atlas-pg。
 
 | 场景 | 制品 | 权威结果 |
 |---|---|---|
@@ -15,6 +15,7 @@ Loom 的性能与容量基准登记表。**代码已实现并有实测台账**�
 | WAL 归档 + 对象存储 PITR | `./wal/pitr-rehearsal.sh`（自包含网络与命名卷） | docs/17 §7.5（Q182） |
 | 指标采集 → 规则求值 → 告警转发 → 看板 | `./alerting-rehearsal.sh up\|run\|down`（叠 staging + monitoring overlay） | docs/17 §7.6（Q185/Q188/Q192/Q193） |
 | 全链 golden path（真 PG 变体） | `./fullchain-rehearsal.sh`（一次性 pg16 容器；默认 synthetic 不花钱，`LOOM_E2E_REAL_LLM=1`＋`LOOM_E2E_AGNES_KEY` 才走真 agnes，需负责人授权） | docs/17 §7 的 Q169–Q172 补记段与 02 C1；**同一 golden path 的 sqlite 变体在后端 pytest 里进 CI**，真 PG 变体不进 |
+| 网关对外发布面／放行面／拦截面／`LOOM_PUBLIC_BASE_URL` 旋钮 | `./gateway-rehearsal.sh up|run|down`（真栈叠 base＋gateway，project=`loom-gateway`；四段 21 断言） | docs/17 §7.8（Q282） |
 
 此外每次 push 由 CI 的 `Migration gate` 在真 PG16 上跑迁移往返与 ORM⇄DB 漂移检查（docs/17 §7.7，Q207）——那是**一致性门，不是基准**，不产出性能数字。
 

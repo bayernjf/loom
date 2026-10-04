@@ -263,6 +263,9 @@ jobs:
           #    （Q185 实测踩到，故 Grafana 口令的护栏只许待在 opt-in overlay）。
           docker compose -f docker-compose.yml config -q
           docker compose -f docker-compose.yml -f docker-compose.staging.yml config -q
+          # Q279 甲案：网关 overlay 也必须在**零注入 secret** 的默认路径上可解析
+          # （它只带 ${LOOM_GATEWAY_DOMAIN:-…}，没有口令类插值）。
+          docker compose -f docker-compose.yml -f docker-compose.gateway.yml config -q
           docker compose -f docker-compose.yml -f docker-compose.staging.yml \
             -f docker-compose.ha.yml config -q
           # b) opt-in overlay 叠进来后仍得是一个合法 project：护栏只约束 -f 进来的人，
@@ -300,3 +303,23 @@ jobs:
               exit 1
               ;;
           esac
+      - name: Caddyfile validates statically (caddy validate + adapt)
+        working-directory: infra
+        run: |
+          set -eo pipefail
+          # Q279 甲案：与 promtool 同法——钉具体版本、在容器里跑，门要可复现。
+          CADDY=(docker run --rm -v "$PWD/caddy":/etc/caddy:ro caddy:2.10.2)
+          "${CADDY[@]}" caddy validate --config /etc/caddy/Caddyfile 2>&1 | tee caddy-validate.log
+          # 哨兵（promtool「0 条规则也报 SUCCESS」同款陷阱）：空 Caddyfile 照样 valid。
+          # 判据取「源文件写了几个转发块」与「适配后的 JSON 里真有几个」相等——挂载路径写错
+          # 或文件被清空时两者立刻分叉；刻意不钉死总数（新增一条放行面不该假红）。
+          "${CADDY[@]}" caddy adapt --config /etc/caddy/Caddyfile > caddy-adapted.log
+          src=$(grep -c '^[[:space:]]*reverse_proxy ' caddy/Caddyfile)
+          json=$(grep -o '"handler":"reverse_proxy"' caddy-adapted.log | wc -l | tr -d ' ')
+          echo "caddy: reverse_proxy 源文件=${src} 适配后=${json}"
+          [ "${json}" -gt 0 ] || { echo "::error::适配 JSON 里一个转发块都没有——网关面没被装载"; exit 1; }
+          [ "${src}" = "${json}" ] || { echo "::error::源文件 ${src} 与适配结果 ${json} 转发块数不符"; exit 1; }
+          grep -q '"handler":"static_response"' caddy-adapted.log \
+            || { echo "::error::docs/探针面的拦截块消失了（/docs·/metrics 会直接暴露在后端）"; exit 1; }
+          grep -q 'backend:8000' caddy-adapted.log && grep -q 'frontend:3000' caddy-adapted.log \
+            || { echo "::error::上游地址缺失，转发目标与 compose 服务名不再一致"; exit 1; }

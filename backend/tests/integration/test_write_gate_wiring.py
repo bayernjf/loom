@@ -77,6 +77,11 @@ UNGATED: tuple[tuple[str, str], ...] = (
     # 段4 的这两口 docs/05 未给角色，Q242 刻意不动。
     ("/api/product-spaces/{product_space_id}/atom-batches", "POST"),
     ("/api/atom-candidates/{candidate_id}/evidence", "POST"),
+    # Q277 登记在 docs/05 的三口：契约未规定调用角色、代码亦无角色闸。
+    # 钉在 UNGATED＝"当前刻意不加闸"是判据；负责人裁决补角色后，须整条移进 GATED 并写期望角色。
+    ("/api/intakes/{intake_id}/ops-decision", "POST"),
+    ("/api/product-spaces/{product_space_id}/pwc/funnel", "POST"),
+    ("/api/product-spaces/{product_space_id}/pwc/consume", "POST"),
     # Q262 读口：query actor 闸（require_layer_spaces_view），非凭证依赖。
     ("/api/admin/layer-spaces", "GET"),
     ("/api/admin/layer-spaces/items/{item_id}/impact", "GET"),
