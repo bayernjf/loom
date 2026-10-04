@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q284 交两件不需裁决的收口件＝待裁项⑦ 的评审材料 ＋ Q275 预留号说明（2026-10-05，**纯文档，零代码零迁移零库操作**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.227）**
+  - **⑦ 的材料**落 `docs/design-p2-package-reuse-reconfig.md` 新增 §6：只读盘点 SQL（判据与 `service.py:113-119` **逐字同键**——`product_space_id·platform·goal·kind`＋`status='active'`；`tenant_id` 只进投影不进键，因为 PS 已定租户，塞进键是换语义不是补守卫）＋`0048_packages_active_triple_unique.py` 迁移草案＋归档口径三案（甲 保 `usage_count` 最大者其余 archived 不删行／乙 全置 archived／丙 盘点 0 行直接建）＋并发形态提醒（走 DB 冲突后 `router.py:90` 须接 `IntegrityError` 并仍回 **409**，否则外部自动化看到 500，属破坏性变更）。
+  - **材料里写死两条硬前提**：① **索引名刻意不复用 `uq_package_active_triple`**——那是 Q272 起被误当真事引用五处的幻影标识符，复用等于让「文档早就写了」继续掩盖「代码从来没有」；② 索引必须同时声明进 `packages.__table_args__` 且 `postgresql_where`＋`sqlite_where` **双写**（先例＝`platform_adaptation/models.py:221-226` 的 `uq_pcp_recalc_pending`、`content/models.py:50-56`），否则 Q207 的 ORM⇄DB 漂移门判红。
+  - **Q275 预留号说明**：Q274 写「裁决点登记 Q275」、Q276 起刻意跳过，实际裁决随 Q279 落地登记 ⇒ **Q275 号保留未用**；台账不插号、不回填、不重编号（编号即历史时序），此后 Q280→Q284 连续。
+  - **纪律**：本批未建迁移、未跑盘点、未改一行数据——没有负责人裁决就没有材料之外的任何动作。
 - **Q283 全仓「活状态」复扫（2026-10-05，**纯文档零代码零迁移零测试变化**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.226）** —— 方法＝每条「当前状态」句子回源码／回制品重测，475 条 `file:line` 引用（98 个文件）扫描后再**抽查内容**。
   - **数字全部现行、无需更正**：188 路径／223 操作（写 128／读 95）、68 表／734 列／47 迁移／头 `0047_layer_spaces`、sidebar 14、`tokens.css` 86 变量⇄`tokens.ts` 86 引用、客户 nav 8（6 v1＋2 v2）、docs/12 #21–24 确为 ⬜；**行号越界 0**。
   - **补登 runner 读数**：CI run `37229962678`（dev push）＝ `1140 passed, 10 skipped`、Ruff `All checks passed!`、eval 101/101、六道门全 success，且 infra-static 里 Q279 新加的两步真在 runner 执行（哨兵 `caddy: reverse_proxy 源文件=4 适配后=4`）——基线此前只标本机实测，现两侧都写明。
