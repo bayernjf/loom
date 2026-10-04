@@ -28,7 +28,8 @@
 
 ### 2.2 现有物理结构（`packages`，迁移 0005/0008）
 
-- 字段（models.py 实测）：`package_id` PK / `tenant_id` / `product_space_id` / `platform` / `goal` / `kind`（csp|cstp|cep）/ `payload` JSON（引用 layerSpaces 原子名）/ `conf` / `status`（active|archived）/ `usage_count` / `created_by/at` / `updated_at`；唯一约束 `uq_package_active_triple`。
+- 字段（models.py 实测）：`package_id` PK / `tenant_id` / `product_space_id` / `platform` / `goal` / `kind`（csp|cstp|cep）/ `payload` JSON（引用 layerSpaces 原子名）/ `conf` / `status`（active|archived）/ `usage_count` / `created_by/at` / `updated_at`；**「同三元组仅一个 active」由 service 层先查后插保证**（`decision/layer_strategy/service.py:113-124`→`PackageExists`→409）。
+  > **Q278 勘误（2026-10-04）**：本行原写作「唯一约束 `uq_package_active_triple`」——**该标识符全仓不存在**，`alembic/versions/0008_m11_stage78.py:127-143` 建表时只给 kind/tenant_id/product_space_id/platform/goal 五个**普通**索引，**无任何唯一约束**；并发双建同三元组 active 包无 DB 守卫，是否补 partial unique index 属迁移决策，已登记待裁（docs/23 §8.3 勘误注、02 C1.221）。
 - **现状缺口（Q45 剩余语义对应）**：
   - 「使用满 20 次 → 触发重配」→ Q263 已落**计数＋跨阈值审计信号** ✅；「触发后发生什么」→ **无**（重配载体缺失）；
   - 「PCP 权重表更新 → 触发重配」→ **无**（PCP 更新写口在哪、如何关联到包，未实现）；
