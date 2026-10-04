@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q283 全仓「活状态」复扫（2026-10-05，**纯文档零代码零迁移零测试变化**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.226）** —— 方法＝每条「当前状态」句子回源码／回制品重测，475 条 `file:line` 引用（98 个文件）扫描后再**抽查内容**。
+  - **数字全部现行、无需更正**：188 路径／223 操作（写 128／读 95）、68 表／734 列／47 迁移／头 `0047_layer_spaces`、sidebar 14、`tokens.css` 86 变量⇄`tokens.ts` 86 引用、客户 nav 8（6 v1＋2 v2）、docs/12 #21–24 确为 ⬜；**行号越界 0**。
+  - **补登 runner 读数**：CI run `37229962678`（dev push）＝ `1140 passed, 10 skipped`、Ruff `All checks passed!`、eval 101/101、六道门全 success，且 infra-static 里 Q279 新加的两步真在 runner 执行（哨兵 `caddy: reverse_proxy 源文件=4 适配后=4`）——基线此前只标本机实测，现两侧都写明。
+  - **抓到一个「在范围内却指错行」的锚点**：docs/23 §10 把「门控关 ⇒ `internal_gate` 闭包直接放行」锚在 `app/core/staff_auth/deps.py:135-139`，真实位置＝`deps.py:88-90`（`def internal_gate` 自 `:80`）；135-139 落在**另一个函数** `require_internal_actor`（`:104-141`）的强制段里。活文档（docs/23）本批更正；同句另三处（CHANGELOG Q277 条／docs/02 C1.220／handoff 档案）属历史台账，按「逐片记录不回改」保留、由 docs/23 §0.2 点名纠偏。
+  - **登记一类口径**：15 处引用写作子项目相对路径（`scripts/coverage_report.py` 实为 `backend/scripts/…`、`scripts/check-*.mjs` 实为 `frontend/scripts/…`）——文件都在，只差基准目录，核对时先补前缀。**方法学留档**：判「行号≤文件长度」全绿不足以证明引用有效，复扫必须把锚点行打出来对内容。
 - **Q282 把网关的手工容器验证固化成第八套演练制品 `infra/gateway-rehearsal.sh`（2026-10-05，**脚本＋测试约定接线＋文档；零生产代码零迁移**；后端 1140 passed＋10 skipped／总收集 1150 不变；02 C1.225）** —— 工程侧队列已空（剩余全挂裁决／业务输入），本批挑不需裁决又能收口的事。
   - **四段 21 断言**：发布面＝`docker port` 实测 frontend／backend **零宿主绑定**、caddy 真绑 80/443（「后端在网关后」的可执行版本）；放行面＝`/api/admin/publish-slots?...` 经 https 回**空库真实值 `[]`**（caddy→FastAPI→PostgreSQL）、`POST /mcp` 无凭证 401 且 body 是鉴权层那句、两张 A2A 卡片 200；拦截面＝六条 docs·探针面全部回网关自己那句 `not found` **404**（**判 body 不判状态码**，否则「上游恰好没这个口」会冒充「拦住了」）；旋钮面＝env 空⇒卡片 `url` 相对、注入 `https://rehearsal.test`⇒两张卡片都变绝对（Q280 缺陷的正向验证，仓内不预设真实域名）。
   - **首跑 5 条 FAIL，逐条查实是脚本自己的写法**：`docker compose port <svc> <port>` 对没有端口映射的服务回一行 `invalid IP:0` 且**退出码 0**（拿它判空必然假红，改判内核绑定 `docker port`）；卡片 JSON 是紧凑形式（`"url":"…"` 冒号后无空格）。更正后 `down && up` 复跑＝**21/21 PASS、FAIL=0**，拆除后本项目残留 0 容器，**期间未改任何网关配置**——网关行为从首跑到末跑一致，错的只是断言。
