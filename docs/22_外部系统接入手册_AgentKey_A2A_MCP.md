@@ -18,6 +18,8 @@
 | MCP（Q232） | `POST /mcp` | 同上（同一套 Q88 Key） | `LOOM_MCP_ENABLED` **默认关** | 否（plan only） | `app/core/mcp/router.py:35`、`app/core/config.py:126` |
 | 效果回流（Q126） | `POST /api/effect-callback` | 同上 | 无 | 是（写 `effect_records`） | `app/core/effects/router.py:68`；契约见 docs/11 §2.1 |
 
+**这些面从哪儿可达（Q279 甲案，2026-10-04）**：仓内网关 = Caddy overlay（`infra/docker-compose.gateway.yml` ＋ `infra/caddy/Caddyfile`，运行手册与实测记录见 [docs/17 §1.1](17_部署与运维.md)）。部署后**公网入口只有 `https://loom.bayjf.com`（80/443）**，网关把 `/api/*`、顶层 `POST /mcp`、`/.well-known/*` 转后端，其余转前端；`frontend` 的 `3000` 与 `backend` 的 `8000` 都不再对宿主发布，所以**接入方拿到的地址必须带 scheme＋域名**，`LOOM_PUBLIC_BASE_URL` 要设成同一个值（A2A 卡片 `url` 由它拼出，`app/core/a2a/card.py:50,57`）。**别指望公网能取到 `/openapi.json`·`/docs`·`/redoc`**（网关 404，schema 请走仓内文档），`/healthz`·`/metrics` 同样不外露（Prometheus 在网格内直抓 `backend:8000`）。这张放行表由 `backend/tests/unit/test_gateway_surface_contract.py` 与代码逐条对齐——本文件新增一个对外面而未写网关策略，那条门会判红。
+
 三条要点：
 
 1. **凭证只有两种，不能互换**：机器用 `loom_` 前缀（`app/core/api_keys/service.py:22`），内部人员用 `loom_staff_`（Q178）。全仓 `require_agent_key` 的调用方**恰好三处**（`app/core/a2a/router.py:30`、`app/core/mcp/router.py:32`、`app/core/effects/router.py:45`，2026-09-28 grep 实测）——没有第四处，也没有任何机器凭证能碰发证两口（`final_id` 两口只认 staff 令牌，docs/11 §2.8／Q203）。
