@@ -80,6 +80,10 @@ services:
       LOOM_MASTER_KEY: ${LOOM_MASTER_KEY:-}
       # Endpoint only; the outbound key lives encrypted in the database, never in env/files.
       LOOM_LLM_BASE_URL_OPENAI: ${LOOM_LLM_BASE_URL_OPENAI:-}
+      # Q280：A2A 卡片的 `url` 由它拼出（app/core/a2a/card.py:50,57 读 settings.public_base_url，
+      # 该字段自 Q238 存在）。此前 compose 从不转发 ⇒ 运维在 .env 里设了也不进容器，
+      # 卡片对外报相对路径 `/api/a2a/tasks`，外部 Agent 无法使用。空值＝沿用相对路径（不改变门控语义）。
+      LOOM_PUBLIC_BASE_URL: ${LOOM_PUBLIC_BASE_URL:-}
     expose: ["8000"]
     depends_on:
       postgres: {condition: service_healthy}

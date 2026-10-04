@@ -167,6 +167,18 @@ def test_the_overlay_default_must_be_the_empty_safe_form() -> None:
     )
 
 
+def test_the_public_base_url_actually_reaches_the_backend_container() -> None:
+    """Q280＝空库真栈首启查出来的缺陷，不是推理。
+
+    compose 从不转发 `LOOM_PUBLIC_BASE_URL`，于是运维在 `.env` 里设了也进不了容器，
+    A2A 卡片对外报的是相对路径 `/api/a2a/tasks`（`app/core/a2a/card.py:50,57` 读
+    `settings.public_base_url`，该字段默认空串）——外部 Agent 拿到这个地址没法用。
+    判据＝旋钮必须存在且默认留空：留空＝沿用相对路径，不预设任何仓内域名。
+    """
+    env = yaml.safe_load(BASE_COMPOSE.read_text())["services"]["backend"]["environment"]
+    assert env.get("LOOM_PUBLIC_BASE_URL") == "${LOOM_PUBLIC_BASE_URL:-}", env.get("LOOM_PUBLIC_BASE_URL")
+
+
 def test_reverse_proxy_targets_are_real_services_on_real_ports() -> None:
     base = yaml.safe_load(BASE_COMPOSE.read_text())["services"]
     backend_port = re.search(r"--port (\d+)", ENTRYPOINT.read_text()).group(1)
