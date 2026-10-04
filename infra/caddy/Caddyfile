@@ -1,0 +1,56 @@
+# Loom 网关（Q279 甲案，docs/17 §1.3）。
+#
+# 这个文件里唯一的可变项是站点地址：LOOM_GATEWAY_DOMAIN 未设时取
+# loom.bayjf.com（Q238/Q274 的推荐值）。换域名只改 env，不改本文件。
+#
+# 上游两个名字来自 infra/docker-compose.yml 的服务名与端口：
+#   backend:8000  FastAPI（仅 expose，不对宿主发布）
+#   frontend:3000 Next.js standalone
+#
+# 公开面 = 对外入站路径面清单（docs/22 机器接入 + 管理台页面）；
+# 未列出的口一律不放公网：/healthz·/metrics 由 Prometheus 直接抓
+# backend:8000（infra/monitoring/prometheus.yml:16），经网关没有意义。
+
+{$LOOM_GATEWAY_DOMAIN:loom.bayjf.com} {
+	# 1) FastAPI 默认开启的文档面（backend/app/main.py:145 实例化时未禁用）。
+	#    关在网关而不是改应用：改 app 会动既有契约测试，且 schema 本身就是攻击面情报。
+	#    形态取 404 而非 403——403 等于告诉扫描器「这里有个被藏起来的东西」。
+	handle /docs {
+		respond "not found" 404
+	}
+	handle /docs/* {
+		respond "not found" 404
+	}
+	handle /redoc {
+		respond "not found" 404
+	}
+	handle /openapi.json {
+		respond "not found" 404
+	}
+
+	# 2) 探针面：默认关。要开就删掉这两块并在 docs/22 登记谁在看。
+	handle /healthz {
+		respond "not found" 404
+	}
+	handle /metrics {
+		respond "not found" 404
+	}
+
+	# 3) 机器接入面（docs/22）：业务 API、顶层 POST /mcp、A2A 卡片。
+	#    /.well-known/* 整段给后端——除了 agent.json 与 agent-card.json，
+	#    该前缀下的其它路径也不该被前端页面吞掉。
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /mcp {
+		reverse_proxy backend:8000
+	}
+	handle /.well-known/* {
+		reverse_proxy backend:8000
+	}
+
+	# 4) 其余全是管理台页面。
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

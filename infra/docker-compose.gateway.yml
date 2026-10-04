@@ -1,0 +1,41 @@
+# Q279 甲案：仓内 Caddy 网关 overlay（docs/17 §1.3）。
+#
+# 起法：
+#   docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d
+#
+# 这个 overlay 只干两件事：
+#   1) 加一个 caddy 容器，它是**唯一**对宿主开应用口的服务（80 只为 ACME 签发与跳转）；
+#   2) 把 base 里 frontend 的 3000:3000 收回内部网络——否则「后端在网关后」这句话
+#      不成立：绕过网关直打 3000 就绕过了 TLS 与放行面。
+#
+# 证书必须落在命名卷：/data 里没有证书，每次 up 都会重新签发，
+# 而 Let's Encrypt 的签发速率限额会把「重启」变成「今天签不出证书」。
+
+x-logging: &default-logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
+services:
+  caddy:
+    image: caddy:2.10.2
+    ports: ["80:80", "443:443"]
+    environment:
+      # Caddyfile 里也有同一个默认值，两处必须一致（由
+      # tests/unit/test_gateway_surface_contract.py 钉住）。
+      LOOM_GATEWAY_DOMAIN: ${LOOM_GATEWAY_DOMAIN:-loom.bayjf.com}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend: {condition: service_healthy}
+      frontend: {condition: service_healthy}
+    restart: unless-stopped
+    logging: *default-logging
+
+  frontend:
+    ports: !reset []
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
