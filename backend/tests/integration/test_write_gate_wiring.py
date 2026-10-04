@@ -54,6 +54,16 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/admin/layer-spaces/items", "POST"): ("platform_admin",),
     ("/api/admin/layer-spaces/items/{item_id}", "PUT"): ("platform_admin",),
     ("/api/admin/layer-spaces/items/{item_id}", "DELETE"): ("platform_admin",),
+    # 段7/8 动态信号与 PCP 每周重算 HumanGate（Q259）：写口同样要已验真令牌。
+    ("/api/admin/platform-dynamic-events", "POST"): OPS,
+    ("/api/admin/platform-dynamic-events/{event_id}", "PUT"): OPS,
+    ("/api/admin/platform-dynamic-events/{event_id}", "DELETE"): OPS,
+    ("/api/admin/pcp-recalc/candidates", "POST"): OPS,
+    ("/api/admin/pcp-recalc/candidates/{candidate_id}/approve", "POST"): OPS,
+    ("/api/admin/pcp-recalc/candidates/{candidate_id}/reject", "POST"): OPS,
+    # 段11 组装预检与冻结管理（Q249/Q250）：预检只读但走同一受闸口，吊销是写口。
+    ("/api/fcw/assemble/preview", "POST"): OPS,
+    ("/api/admin/fcw/{final_id}/revoke", "POST"): OPS,
 }
 
 # 必须一个标记都没有：只读口，以及有意不加闸的写口。
