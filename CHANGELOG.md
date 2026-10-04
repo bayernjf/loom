@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q280 空库真栈首启查出「旋钮没被转发」的部署缺陷，并补三道防线（2026-10-05，**配置＋测试＋文档；零迁移零新表**；后端 **1139→1140 passed＋10 skipped**（总收集 **1150**；＋1＝compose 转发断言）、ruff 净、前端零改动；02 C1.223）** —— 负责人「那你继续搞」，本批做两件不需要裁决的事：把 Q279 的 stand-in 探针补成**真栈空卷首启**，并修掉首启查出的缺陷。
+  - **首启实测**（独立 compose project、宿主端口让位、不碰既有容器）：postgres/redis/backend/frontend 全 healthy（`depends_on` 服务健康条件真实生效）、宿主只剩网关的 80/443、`GET /api/admin/publish-slots?actor_id=…&roles=operations` 经网关回 **`[]` 200**（空库真实读）、`POST /mcp` 无凭证回 **401**（鉴权先于门控、body 来自 FastAPI 而非 Next）、`/docs`·`/metrics`·`/healthz` 网关 404、`http` → **308** `https`。清理＝`down -v`（只删本项目卷与网络）。
+  - **查出的缺陷**：`infra/docker-compose.yml` 的 backend 段**从不转发 `LOOM_PUBLIC_BASE_URL`** ⇒ 容器内 `settings.public_base_url` 恒为空串 ⇒ **A2A 卡片对外 `url` 永远是相对路径 `/api/a2a/tasks`，外部 Agent 拿到没法用**（首启实测回的就是这个值）。CI 六道门与全部单元契约测试都看不见这类缺陷——它们只校应用内一致性，不校「Settings 里的旋钮接没接到部署制品」。
+  - **修复与复跑**：backend environment 补 `LOOM_PUBLIC_BASE_URL: ${LOOM_PUBLIC_BASE_URL:-}`（`:-` 空值安全形式，与 Q200 #33「不用 `:?`」一致；默认留空＝沿用相对路径，**仓内不预设任何域名**）；同一探针复跑＝设 `https://loom.bayjf.com` 后 `agent-card.json`·`agent.json` 经网关都回 **`url = https://loom.bayjf.com/api/a2a/tasks`**。
+  - **另两道防线**：`test_gateway_surface_contract.py` 新增断言钉住该转发形式（不许再消失、也不许写死成域名）；Q277「刻意不加闸」的三口写口（`POST /api/intakes/{id}/ops-decision`·`POST /api/product-spaces/{id}/pwc/funnel`·`.../consume`）加进 `test_write_gate_wiring.py` 的 `UNGATED`（现 12 条），使「当前无角色闸」从陈述变成断言——负责人裁决补角色时须整条移进 `GATED`。
+  - 文档：docs/17 新增 §1.2 首启实测、docs/22 §2.1 补 Q280 补正（原文只说「未设⇒相对路径」，没说 compose 层根本设不进去）、docs/23 新增 §11.12。真实域名取值与真 ACME 签发仍未证（部署期决定）；prometheus `9090` 回环绑定、待裁项⑦、②主数据与跑链第二人不在本批。
 - **Q279 网关与 TLS 归属按甲案落地＝反代入仓（2026-10-04，负责人「好的，你搞吧」；**代码＋配置＋测试＋文档；零迁移零新表零新业务凭证**；后端 **1131→1139 passed＋10 skipped**（总收集 1141→**1149**；＋8＝`tests/unit/test_gateway_surface_contract.py`）、ruff 净、前端零改动；02 C1.222）** —— 待裁项①（Q274 候选三案）选定**甲＝仓内 Caddy**，这是本项目第一批**运行面制品**：
   - **选型新增**：反代入仓、TLS 终结在 gateway 层写进 docs/14 总表第 7 项＋新增 §2.7（原 1–6 项里没有任何反代/TLS 条目，实测 `infra/*.yml` 对 `nginx|caddy|traefik` 零命中，所以这不是照既定选型实现，是一次真·选型落地）。
   - **制品**：`infra/caddy/Caddyfile`＋`infra/docker-compose.gateway.yml`（第 5 个 overlay，与 staging/monitoring/ha/alerting 同构）。`caddy:2.10.2`（`docker pull` 后 `caddy version` 实测 v2.10.2）是**唯一**发布 80/443 的应用服务；base 里 `frontend` 的 `3000:3000` 用 `ports: !reset []` 收回内部网络——不收回则「后端在网关后」不成立（绕过网关直打 3000 就绕过 TLS 与放行面）。证书落命名卷 `/data`·`/config`（卷没了＝每次重启重签＝撞 LE 速率限额）。
