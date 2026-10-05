@@ -367,7 +367,7 @@
 - **restock 瞬态退避游标已实现（Q90，2026-09-15，迁移 0020_restock_retry_state，down_revision=0019_agent_api_keys；物理表落 `app/core/restock/models.py`，PG16 一次性容器 up/downgrade-1/up 实测）**：物理表名 `restock_retry_state`——request_id String36 PK（=requested/restock_auto 信号行 run_id）/ attempts Integer NOT NULL（默认 0，每次瞬态 +1）/ next_attempt_at timestamptz NOT NULL + 索引 `ix_restock_retry_state_next_attempt_at`（定时轮按 now 过滤）/ last_reason String64 NOT NULL（异常类名 BudgetExhausted|GenerationUpstreamError）/ updated_at timestamptz NOT NULL server_default now()。**执行态侧表而非业务事实日志**：skill_runs requested 行永不 mutate（Q87），重试态只 upsert 本表；信号成功或转终态删除游标行，审计轨迹（restock_deferred/restock_failed）在 audit_logs 不受影响。downgrade drop index + drop table。
 
 **dict_management（字典管理）** — Q25/Q38/Q43/Q46
-- 内容目的字典（contentGoals）/ 降级动作字典（REMOVE_BRAND/REMOVE_CLAIM/REMOVE_HOOK/REWRITE/…，Q38）/ 17 池选项字典 / 通用底座（Q46 权限单列）
+- 内容目的字典（contentGoals）/ 降级动作字典（REMOVE_BRAND/REMOVE_CLAIM/REMOVE_LINK/SOFT_CTA/SHORTEN/SUBST_WORD，Q38 六项初始动作；2026-10-06 Q295 经负责人授权按 docs/02 C1.6 订正——原举例 `REMOVE_HOOK`/`REWRITE` 系口径漂移，以 docs/02 为准）/ 17 池选项字典 / 通用底座（Q46 权限单列）
 - 全部 CRUD + 审计
 
 **memory_layers（Memory 6 层 M1–M6）** — 展示口径，09 §3.13
