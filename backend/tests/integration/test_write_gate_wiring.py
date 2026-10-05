@@ -47,6 +47,8 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/admin/slot-type-defaults", "PUT"): OPS,
     ("/api/product-spaces/{product_space_id}/pcp", "POST"): OPS,
     ("/api/pcp/{pcp_id}", "PUT"): OPS,
+    # 段7 PLATFORM-ADAPTER 只读预览口（Q296 甲：只读但走已验真身份闸，Q242 同族）
+    ("/api/admin/platform-adapter/preview", "POST"): OPS,
     # 段11 E1.1 发证（Q203）
     ("/api/fcw/assemble", "POST"): OPS,
     ("/api/fcw/assembly-tasks", "POST"): OPS,
