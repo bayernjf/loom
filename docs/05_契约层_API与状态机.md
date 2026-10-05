@@ -456,6 +456,11 @@
 | block | 阻断 | 最严 |
 | pending_review | 待审（AI 候选默认态） | 禁止生成 final_id、禁止输出成稿 |
 
+> **Q296（2026-10-06）登记：PLATFORM-ADAPTER 只读预览口 ＋ fit_score breakdown**
+> - `POST /api/admin/platform-adapter/preview`（甲，`require_internal_actor(OPERATIONS)`；快照不存在 404／无令牌 401）：body `{pws_snapshot_id, platform, slot_type, slot_id?, country?}`（无 actor，已验真身份回 `previewed_by`）；组三料经 synthetic 网关回四态＋组料视图，**零落库、零审计、不改判定、不产候选、不触 final_id**（PT 约束 4/6，与 Q249 FCW 预检口同型）。
+> - **五键归一**：Prompt v0.1 契约 `{missing, decision, reason, refs, gate}`；synthetic 无 frozen PWS 分支只返两键 `{missing, reason}`，预览口在消费方补齐 decision/refs/gate（None/[]/None，不造假）——Q293 形状缺口自此闭合。
+> - `GET /api/admin/publish-slots/{slot_id}/fit-score` 加法回 `breakdown` 四行（`{dim, score, weight, contribution}`，Σ 与 fit_score 自校验）；incomplete 时 score 可见、weight/contribution 为 None。端点形状不变。
+
 ### 2.8 发布位/平台规则 Gate 状态（段7）
 | 状态 | 说明 | 来源 |
 |---|---|---|

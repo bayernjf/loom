@@ -3,6 +3,10 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地＝Q295 裁决两件的甲案（2026-10-06；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）** —— Q295 两件「落码另点工」收口。
+  - **fit_score 可解释化**：`pa_rules.fit_score_breakdown()` 与 `compute_fit_score()` 共用权重同 `FIT_DIMS` 序、Σ(contribution) 与标量自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合）；聚合算法一字不改、派生值不落库。
+  - **PLATFORM-ADAPTER 只读预览口**：`POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／`_match_rule_rows` Q36 命中／`active_events_for` 事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）；synthetic 无 frozen PWS 两键在消费方归一为五键（Q293 形状缺口，decision/gate 为 None 不造假）。
+  - **判定**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
 - **Q295 beta 首批真证重发落成 ＋ ②「核心完全可用」翻正（2026-10-06；**纯运行时数据操作＋纯文档**，零代码零迁移零测试变化；基线不变 **1157 passed＋10 skipped**、头仍 0049；02 C1.238）** —— 负责人「按你推荐的来」：t-e2e 组合确认为首批真值＋Gate 裁决人＝负责人本人；owner Gate 三步出活证 `537a2f28`；另裁 Q278 三件（PCP 甲×甲已落地 Q294／fit_score 采甲／adapter 采甲）＋授权订正 docs/10 Q38 举例。
   - **重发三步**（每步 AskUserQuestion 明示批准）：v1.0 快照 revoke（零变化重冻被 Q29 三档判 409「no new version」，改走 Q32「作废后重冻新版」）→ 首冻 **PWS v2.0 `5277a9ad`**（readiness all_green）→ CCR 重扫 **clean**（bans/downgrades 全空）→ `POST /api/fcw/assemble`（operations 令牌）⇒ **活证 `final_id=537a2f28-c0e5-11f1-8218-9bc72af50592`**（七 Guard 现场全过、score 76.6；快照 v1 frozen/active；审计 fcw.issued by owner-gate-20261006；Q263 三包 usage_count 各 +1 首次实战验证）。
   - **判定**：docs/19「首批完成唯一标准＝真实部署库出一张 `final_id`、六路材料指向真实业务数据」自此满足 ⇒ **②「核心完全可用」＝✅ 达标（Q295 翻正）**；① 不变；③ 仍未达标（现网部署＋真实 ACME 未证＋待裁项③ 客户侧认证）。whitelist_owner 可签发性／docs/05 三写口角色／MCP discover 四处出入仍未裁。
