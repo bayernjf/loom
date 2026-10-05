@@ -96,6 +96,23 @@ def compute_fit_score(slot, weights: dict) -> float:
     )
 
 
+def fit_score_breakdown(slot, weights: dict) -> list[dict]:
+    """Q296 甲：compute_fit_score 的等价分项展开（design-v2-fit-score-selflearning §3.1）。
+
+    与聚合函数共用同一份权重、同一套维度序（FIT_DIMS），Σ(contribution) 与
+    compute_fit_score 逐位一致可自校验；派生值，不落库，不动聚合算法本身。
+    """
+    return [
+        {
+            "dim": dim,
+            "score": getattr(slot, dim),
+            "weight": weights[dim],
+            "contribution": getattr(slot, dim) * weights[dim],
+        }
+        for dim in FIT_DIMS
+    ]
+
+
 def condition_key(rule) -> tuple:
     """同层级同条件的身份键；country 为横切 modifier，参与同一格子的判定。"""
     return (
