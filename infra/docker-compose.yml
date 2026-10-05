@@ -93,6 +93,9 @@ services:
       LOOM_STAFF_AUTH_ENABLED: ${LOOM_STAFF_AUTH_ENABLED:-false}
       LOOM_DISCARD_PURGE_ENABLED: ${LOOM_DISCARD_PURGE_ENABLED:-false}
       LOOM_MCP_ENABLED: ${LOOM_MCP_ENABLED:-false}
+      # Q294：段8 每周重算**提醒**（第六个 sweep 作业，只开 OpsTodo、不产权重），默认关。
+      # 开启后周节奏读配置中心 platform.recalc_weekday/_hour/_tz_offset_hours（热更，不入 env）。
+      LOOM_PCP_WEEKLY_SCAN_ENABLED: ${LOOM_PCP_WEEKLY_SCAN_ENABLED:-false}
     expose: ["8000"]
     depends_on:
       postgres: {condition: service_healthy}

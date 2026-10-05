@@ -202,6 +202,7 @@ def test_topology_free_bool_switches_actually_reach_the_backend_container() -> N
       - LOOM_STAFF_AUTH_ENABLED（Q178/Q203 身份总闸，默认关）
       - LOOM_DISCARD_PURGE_ENABLED（Q187 discarded 物理清理，默认关）
       - LOOM_MCP_ENABLED（Q232 MCP 对外面，默认关）
+      - LOOM_PCP_WEEKLY_SCAN_ENABLED（Q294 每周重算提醒第六作业，默认关）
     判据＝旋钮经 base compose backend.environment 转发，且 `${VAR:-默认}` 与代码默认一致。
     刻意**不**进 base 的是 worker/锁/广播族（restock/export/import/fcw worker、
     distributed_lock、config_cache_broadcast）——它们只在多副本/演练时由 ha overlay 打开，
@@ -213,6 +214,7 @@ def test_topology_free_bool_switches_actually_reach_the_backend_container() -> N
         "LOOM_STAFF_AUTH_ENABLED": "false",
         "LOOM_DISCARD_PURGE_ENABLED": "false",
         "LOOM_MCP_ENABLED": "false",
+        "LOOM_PCP_WEEKLY_SCAN_ENABLED": "false",
     }
     for var, default in expected.items():
         assert env.get(var) == f"${{{var}:-{default}}}", (var, env.get(var))
