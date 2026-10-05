@@ -84,6 +84,15 @@ services:
       # 该字段自 Q238 存在）。此前 compose 从不转发 ⇒ 运维在 .env 里设了也不进容器，
       # 卡片对外报相对路径 `/api/a2a/tasks`，外部 Agent 无法使用。空值＝沿用相对路径（不改变门控语义）。
       LOOM_PUBLIC_BASE_URL: ${LOOM_PUBLIC_BASE_URL:-}
+      # Q291：四个与拓扑无关、文档已承诺部署期可拧的全局开关，此前 base/overlay 都不转发 ⇒
+      # 运维照 docs/17 §1、docs/22 在 .env 里设了也进不了容器（Q280 同型的"旋钮没接到制品"）。
+      # SLA sweep 总闸默认开（Q49/Q87），余三者默认关：staff 身份门控（Q178/Q203）、
+      # discarded 物理清理（Q187）、MCP 对外面（Q232）。显式可覆盖插值（不像 worker 开关只由
+      # ha overlay 打开）；默认值原样保留，V1 行为一字不变。
+      LOOM_SCHEDULER_ENABLED: ${LOOM_SCHEDULER_ENABLED:-true}
+      LOOM_STAFF_AUTH_ENABLED: ${LOOM_STAFF_AUTH_ENABLED:-false}
+      LOOM_DISCARD_PURGE_ENABLED: ${LOOM_DISCARD_PURGE_ENABLED:-false}
+      LOOM_MCP_ENABLED: ${LOOM_MCP_ENABLED:-false}
     expose: ["8000"]
     depends_on:
       postgres: {condition: service_healthy}
