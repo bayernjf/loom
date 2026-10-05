@@ -14,6 +14,8 @@
 #          ⇒ 卡片 `url` 变绝对。这一条就是 Q280 那个「compose 从不转发」缺陷的正向验证。
 #
 # 刻意不验真实 ACME 签发：那需要公网域名与 80/443 可达，属部署机动作（docs/17 §1.1 记此边界）。
+#   阶段 4 另含 Q287 同域预检：LOOM_PUBLIC_BASE_URL 的主机必须等于 LOOM_GATEWAY_DOMAIN，
+#   否则脚本 exit 2（应用对『卡片指向别域』不设防，这是部署前唯一能拦住它的地方）。
 # 站点地址取 localhost ⇒ Caddy 自动用内部 CA，不碰 Let's Encrypt 的签发速率限额。
 #
 # 用法（在 infra/ 目录）：
@@ -29,6 +31,19 @@ export LOOM_MASTER_KEY="${LOOM_MASTER_KEY:-loom-rehearsal-only-master-key}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-loom-rehearsal-only-pg}"
 export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-loom-rehearsal-only-minio}"
 export LOOM_GATEWAY_DOMAIN="${LOOM_GATEWAY_DOMAIN:-localhost}"
+
+# Q287：两个对外旋钮必须**同域**——LOOM_GATEWAY_DOMAIN 是 Caddy 收请求的站点地址，
+# LOOM_PUBLIC_BASE_URL 是 A2A 卡片对外报的地址。只设其一或设成不同域，应用不报错、
+# CI 也不红，外部 Agent 会拿到一张指向别处的卡片；演练在这里 fail-fast（docs/17 §1.1）。
+if [ -n "${LOOM_PUBLIC_BASE_URL:-}" ]; then
+  want_host="$LOOM_GATEWAY_DOMAIN"
+  got_host="$(printf '%s' "$LOOM_PUBLIC_BASE_URL" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##')"
+  if [ "$got_host" != "$want_host" ]; then
+    echo "配置冲突：LOOM_PUBLIC_BASE_URL 的主机（$got_host）≠ LOOM_GATEWAY_DOMAIN（$want_host）。" >&2
+    echo "两个旋钮必须同域（docs/17 §1.1）：否则对外 Agent 拿到的卡片指向别处。" >&2
+    exit 2
+  fi
+fi
 
 cd "$(dirname "$0")"
 PROJECT=loom-gateway
@@ -137,20 +152,35 @@ stage_block() {
 }
 
 stage_redirect_and_knob() {
-  echo "${c_bold}== 阶段 4：跳转与 LOOM_PUBLIC_BASE_URL 旋钮（Q280 缺陷的正向验证） =="${c_off}
+  echo "${c_bold}== 阶段 4：跳转与两个对外旋钮（Q280 正向验证＋Q287 同域不变量） =="${c_off}
   ci "http → 308 且 Location 是 https" \
     "curl -s --max-time 15 -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost/api/x" "308 https://localhost/api/x"
   ci "env 未注入 ⇒ 卡片 url 为相对路径（compose 的 :- 默认留空，仓内不预设域名）" \
     "curl -sk --max-time 15 https://localhost/.well-known/agent-card.json" '"url":"/api/a2a/tasks"'
 
-  echo "     重建 backend 并注入 LOOM_PUBLIC_BASE_URL=https://rehearsal.test …"
-  LOOM_PUBLIC_BASE_URL=https://rehearsal.test $COMPOSE up -d --no-deps backend >/dev/null 2>&1
+  want="https://${LOOM_GATEWAY_DOMAIN}"
+  echo "     重建 backend 并注入 LOOM_PUBLIC_BASE_URL=$want（与站点地址**同域**＝部署正确形态）…"
+  LOOM_PUBLIC_BASE_URL="$want" $COMPOSE up -d --no-deps backend >/dev/null 2>&1
   wait_backend || { echo "${c_red}  backend 重建后未 healthy${c_off}"; fail=$((fail+1)); return; }
   sleep 5
-  ci "旋钮经 compose 进入容器 ⇒ 卡片 url 变绝对（Q280 修复的实证）" \
-    "curl -sk --max-time 15 https://localhost/.well-known/agent-card.json" '"url":"https://rehearsal.test/api/a2a/tasks"'
-  ci "另一张卡片同样变绝对" \
-    "curl -sk --max-time 15 https://localhost/.well-known/agent.json" '"url":"https://rehearsal.test/api/a2a/tasks"'
+  ci "同域注入 ⇒ 卡片 url＝https://<站点地址>/api/a2a/tasks（Q280 修复实证＋Q287 不变量）" \
+    "curl -sk --max-time 15 https://localhost/.well-known/agent-card.json" "\"url\":\"$want/api/a2a/tasks\""
+  ci "另一张卡片同样同域" \
+    "curl -sk --max-time 15 https://localhost/.well-known/agent.json" "\"url\":\"$want/api/a2a/tasks\""
+
+  echo "     反向对照：故意把 env 指向别域（mismatch.test）…"
+  LOOM_PUBLIC_BASE_URL=https://mismatch.test $COMPOSE up -d --no-deps backend >/dev/null 2>&1
+  wait_backend || { echo "${c_red}  backend 重建后未 healthy${c_off}"; fail=$((fail+1)); return; }
+  sleep 5
+  ci "应用对『卡片指向别域』**不设防**（这正是部署前必须靠本演练预检拦下的原因）" \
+    "curl -sk --max-time 15 https://localhost/.well-known/agent-card.json" '"url":"https://mismatch.test/api/a2a/tasks"'
+
+  echo "     收尾＝恢复同域取值 …"
+  LOOM_PUBLIC_BASE_URL="$want" $COMPOSE up -d --no-deps backend >/dev/null 2>&1
+  wait_backend || { echo "${c_red}  backend 收尾重建后未 healthy${c_off}"; fail=$((fail+1)); return; }
+  sleep 5
+  ci "收尾＝卡片回到同域绝对地址" \
+    "curl -sk --max-time 15 https://localhost/.well-known/agent-card.json" "\"url\":\"$want/api/a2a/tasks\""
 }
 
 case "${1:-up}" in

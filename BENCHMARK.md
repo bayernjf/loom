@@ -15,7 +15,7 @@ Loom 的性能与容量基准登记表。**代码已实现并有实测台账**�
 | WAL 归档 + 对象存储 PITR | `./wal/pitr-rehearsal.sh`（自包含网络与命名卷） | docs/17 §7.5（Q182） |
 | 指标采集 → 规则求值 → 告警转发 → 看板 | `./alerting-rehearsal.sh up\|run\|down`（叠 staging + monitoring overlay） | docs/17 §7.6（Q185/Q188/Q192/Q193） |
 | 全链 golden path（真 PG 变体） | `./fullchain-rehearsal.sh`（一次性 pg16 容器；默认 synthetic 不花钱，`LOOM_E2E_REAL_LLM=1`＋`LOOM_E2E_AGNES_KEY` 才走真 agnes，需负责人授权） | docs/17 §7 的 Q169–Q172 补记段与 02 C1；**同一 golden path 的 sqlite 变体在后端 pytest 里进 CI**，真 PG 变体不进 |
-| 网关对外发布面／放行面／拦截面／`LOOM_PUBLIC_BASE_URL` 旋钮 | `./gateway-rehearsal.sh up|run|down`（真栈叠 base＋gateway，project=`loom-gateway`；四段 21 断言） | docs/17 §7.8（Q282） |
+| 网关对外发布面／放行面／拦截面／两旋钮**同域**不变量 | `./gateway-rehearsal.sh up|run|down`（真栈叠 base＋gateway，project=`loom-gateway`；四段 23 断言，含别域反向对照与预检） | docs/17 §7.8（Q282/Q287） |
 
 此外每次 push 由 CI 的 `Migration gate` 在真 PG16 上跑迁移往返与 ORM⇄DB 漂移检查（docs/17 §7.7，Q207）——那是**一致性门，不是基准**，不产出性能数字。
 
