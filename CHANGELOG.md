@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q285 项目文档对账（2026-10-05，**纯文档零代码零迁移零测试变化**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.228）** —— 不重抄，只把**与树对不上的活状态句子**量出来改，四处命中：
+  - **docs/16 测试基线行停在 Q235 的 1029**（中间 40 多批没落行）：补 Q284 时点行＝**1140＋10／收集 1150**，写清增量构成（1124→Q276 ＋0→Q277 ＋7→Q279 ＋8→Q280 ＋1）与判读口径（这类制品门**不进 `--cov=app` 分母** ⇒ 覆盖率不动是预期）。**自我更正一条**：初稿写成「Q235 以来新增全是制品门」并不实，中间含大量业务用例，已收窄为「最近五批」，逐片追溯交回 docs/02。
+  - **docs/08 §2.3 只有 P2 完成情况行、没有 P1 的**：补 **P1 完成情况（🟡 部分）**——已落＝静态底表写口 Q242／动态信号三口 Q259／PCP 重算候选·对照单三口 Q259／fit_score 派生值 Q34；未落＝fit_score 自学习、PLATFORM-ADAPTER 业务接入（**无 service 调用点**）、每周定时触发（无调度器），三件都改运行时行为、要负责人点头。
+  - **docs/README 文档地图把已裁决项仍标 ⬜**：`design-deployment-gateway-tls.md` 行仍写「⬜ 待 Q275 裁决／→ 负责人」，而裁决随 **Q279** 已落地 ⇒ 状态改 ✅ 并指向 docs/17 §1.1–1.2 与 §7.8。这类残句正是让人误判「还有一片没做」的源头（与 Q284 的「Q275 号未用」说明配成一对）。
+  - **docs/11 卡片 `url` 说明缺一句关键事实**：原文只说取值取决于网关裁决，没说 **Q280 之前 compose 从不转发该 env**（⇒ 设了也进不了容器）。已补齐并指到 docs/22 §2.1 与 docs/17 §1.1–1.2。
+  - 对账中确认**无需改**的：docs/19 §1、docs/14 第 7 项＋§2.7、docs/17 §7 名录与 §7.8、BENCHMARK 八套口径、docs/10 迁移登记、docs/22 §0。本批不新增任何判据。
 - **Q284 交两件不需裁决的收口件＝待裁项⑦ 的评审材料 ＋ Q275 预留号说明（2026-10-05，**纯文档，零代码零迁移零库操作**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.227）**
   - **⑦ 的材料**落 `docs/design-p2-package-reuse-reconfig.md` 新增 §6：只读盘点 SQL（判据与 `service.py:113-119` **逐字同键**——`product_space_id·platform·goal·kind`＋`status='active'`；`tenant_id` 只进投影不进键，因为 PS 已定租户，塞进键是换语义不是补守卫）＋`0048_packages_active_triple_unique.py` 迁移草案＋归档口径三案（甲 保 `usage_count` 最大者其余 archived 不删行／乙 全置 archived／丙 盘点 0 行直接建）＋并发形态提醒（走 DB 冲突后 `router.py:90` 须接 `IntegrityError` 并仍回 **409**，否则外部自动化看到 500，属破坏性变更）。
   - **材料里写死两条硬前提**：① **索引名刻意不复用 `uq_package_active_triple`**——那是 Q272 起被误当真事引用五处的幻影标识符，复用等于让「文档早就写了」继续掩盖「代码从来没有」；② 索引必须同时声明进 `packages.__table_args__` 且 `postgresql_where`＋`sqlite_where` **双写**（先例＝`platform_adaptation/models.py:221-226` 的 `uq_pcp_recalc_pending`、`content/models.py:50-56`），否则 Q207 的 ORM⇄DB 漂移门判红。
