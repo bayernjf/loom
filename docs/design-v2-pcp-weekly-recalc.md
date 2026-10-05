@@ -1,6 +1,6 @@
 # PCP 每周重算触发（段7/8 V2 余量）实现候选设计
 
-> **状态：⬜ 工程候选材料（2026-10-05 起草，未获裁决）**——本文只摆现状、候选与裁决点，**未写代码、未建迁移、未跑盘点**。
+> **状态：✅ 3.1 甲＋3.2 甲已落地（2026-10-06 Q294，负责人「按你推荐来」；02 C1.237）**——本文的候选与裁决点保持原样，**落地范围＝§3.1 甲（SweepScheduler 第 6 作业＋默认关 env）＋§3.2 甲（只开 OpsTodo 提醒、不产权重）**；**§3.2 乙/丙与 §4 的 4/5/6 三个待裁点仍未裁**（乙的硬阻塞＝业务方先给「事件→权重」映射规则；丙随 PCP-SCORE 模型网关接通）。落地实现：`core/sla/jobs.py` 作业 `pcp_weekly_recalc_scan`、`platform_adaptation/service.py::scan_weekly_recalc_reminders`、配置中心 `platform.recalc_weekday/_hour/_tz_offset_hours/recalc_todo_due_days`（迁移 0049 纯种子）、env `LOOM_PCP_WEEKLY_SCAN_ENABLED` 默认关；测试 `tests/integration/test_pcp_weekly_recalc_scan.py` 10 例。原文（2026-10-05 起草时点）如下，一字未改。
 > 对应待办：handoff「Q278 点名三件未落」之**每周定时触发（`recalc` 无调度器）**；权威需求见 docs/01 段7/8，台账锚点 docs/02 C1.203（Q259）。
 > 与已落地的三包重配（[design-p2-package-reuse-reconfig.md](design-p2-package-reuse-reconfig.md)）是两件事：那边是段9 三包 usage 重配（已落 Q262–Q264/Q288）；本文是段8 **PCP 17 字段权重表**的周期性重算。
 
