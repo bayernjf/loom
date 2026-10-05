@@ -49,7 +49,7 @@
 | [handoff-archive-2026-09-22.md](./handoff-archive-2026-09-22.md) | handoff 进度归档（2026-09-22；Q149、Q150–Q152、Q153–Q154 滚出条目原文） | 只读历史；权威逐片台账仍是 docs/02 C1 | 归档 |
 | [handoff-archive-2026-09-23.md](./handoff-archive-2026-09-23.md) | handoff 进度归档（2026-09-23；Q158 异机备份恢复、Q159–Q161 批量回填收口＋MVP 评审、Q162–Q165 一口气四片滚出原文） | 只读历史；权威逐片台账仍是 docs/02 C1 | 归档 |
 | [handoff-archive-2026-09-24.md](./handoff-archive-2026-09-24.md) | handoff 进度归档（2026-09-24；Q166–Q168 客户 analytics／Agent Key 治理页／导出 job 管理页三片＋文档合龙滚出原文） | 只读历史；权威逐片台账仍是 docs/02 C1 | 归档 |
-| [handoff-archive-2026-09-25.md](./handoff-archive-2026-09-25.md) | handoff 进度归档（2026-09-25 起持续续写，**共五十八次**：首块为 Q176/Q177 两条完整条目原文，其后为 Q188…Q289 各批按「最近 5 条」上限滚出的条目逐字搬入，滚出对象覆盖 Q162～Q242） | 只读历史；权威逐片台账仍是 docs/02 C1 | 归档 |
+| [handoff-archive-2026-09-25.md](./handoff-archive-2026-09-25.md) | handoff 进度归档（2026-09-25 起持续续写，**共五十九次**：首块为 Q176/Q177 两条完整条目原文，其后为 Q188…Q290 各批按「最近 5 条」上限滚出的条目逐字搬入，滚出对象覆盖 Q162～Q243） | 只读历史；权威逐片台账仍是 docs/02 C1 | 归档 |
 | [handoff-archive-2026-10-03.md](./handoff-archive-2026-10-03.md) | handoff 进度归档（2026-10-03；① AGENTS.md「当前阶段」压缩前 Q116–Q254 逐批旧原文整块；② handoff Q250/Q255–Q267 各批按「最近 5 条」滚出的 banner，续写） | 只读历史；权威逐片台账仍是 docs/02 C1 | 归档 |
 | [handoff-archive-2026-10-04.md](./handoff-archive-2026-10-04.md) | handoff 进度归档（2026-10-04；Q265/Q266 两条滚出 banner 原文） | 只读历史；权威逐片台账仍是 docs/02 C1 | 归档 |
 

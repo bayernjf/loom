@@ -1,5 +1,11 @@
 # Handoff — Loom
 
+> **最新（2026-10-05）：Q290 主数据自检器在本机开发库实测 **exit 0**（已找到可发证组合），但数据带 `t-e2e` 前缀 ⇒ ② 判定不变（**纯实测＋纯文档登记**，零代码零迁移零测试变化；后端基线仍 **1146 passed＋10 skipped**；02 C1.233）**
+> - **实测**：`python backend/scripts/check_master_data.py` ⇒ `publish_slots(active)=1／pcp_weight_tables(active)=1／packages(active)=3／content_goals=5／敏感领域=6／G1 类目=6`，并打出 **✅ 已可发证：(product_space=bd1e64ac-…, tenant=t-e2e-c174c8ee7f9f, platform=x_platform, goal=ENGAGEMENT)**，**exit 0**——Q245 以来「自检器恒 exit 1、三表零行」的状态已不再成立（旧读数按不回改保留，由本条纠偏）。
+> - **为什么 ② 判定仍未翻**：该组合的 `tenant_id` 前缀是 **`t-e2e`**（端到端造数痕迹），`platform=x_platform`／`slot_type=short_video` 亦非业务命名 ⇒ 按「禁工程臆造」红线与 docs/19「判定首批完成＝真实业务数据出一张 `final_id`」，**工程侧不得据此自推、不得据此跑链宣称跑通**。
+> - **① 的性质变了但没消失**：从「等三表填齐」变成「等**真值替换或确认**」——要么业务方给五个空（产品／平台／发布位类型／内容目的／**Gate 裁决人**），要么负责人明确「`t-e2e` 这组算真值」（本会话不代裁）。**跑链裁决的第二个人仍是硬卡点**。
+> - **本机口令事实（只记形状不记值）**：用 compose 容器里那个 32 位口令从宿主连会 `InvalidPasswordError`；可用的是 `LOOM_DATABASE_DSN=postgresql+asyncpg://loom:loom@localhost:5432/loom`（与 `alembic/env.py` 缺省同值），口令不入库不入文档。
+> - **【复判不变】**：① 达标／② 未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链第二人）／③ 未达标（现网部署＋真 ACME 未证，另有待裁项③）。
 > **最新（2026-10-05）：Q288/Q289 待裁项⑦ 裁「补」丙案落地 ＋ prometheus 9090 绑回环（**代码＋迁移＋测试＋配置＋文档**，迁移 **0047→0048**；后端 **1141→1146 passed＋10 skipped**〔Q288 ＋4 集成／Q289 ＋1 加固契约〕；真 PG16 往返实测；02 C1.231/C1.232）**——负责人「按你建议来」。
 > - **Q288（⑦ 裁「补」丙案）**：迁移 `0048_packages_active_triple_unique` 在 `packages` 上建**部分唯一索引** `uq_packages_active_triple`（product_space_id·platform·goal·kind，`WHERE status='active'`，双 where 双写）＋模型 `__table_args__` 成对＋router create/update 两路 `IntegrityError`→**409**。索引名刻意不复用幻影 `uq_package_active_triple`（Q278 勘误）。
 > - **真库实测（本机 `infra-postgres-1`）**：升级前 `packages` **3 行 active**（同一 PS×`x_platform`×`ENGAGEMENT` 的 csp/cstp/cep 三件套），重复三元组盘点 **0** ⇒ 建索引成功（有重复会当场失败）；重复插同 active 三元组被 DB 拒、archived 孪生放行（证 partial）；`0047→0048→0047→0048` 往返（`pg_indexes` **1→0→1**），head＝**0048**。
@@ -136,7 +142,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 | [docs/design-*.md](docs/README_文档地图与治理.md)（**6 份**：a2a-vassal／identity-layer-v2／d3.5-whitelist-assembly-remaining／fcw-freeze-management／p2-package-reuse-reconfig／deployment-gateway-tls） | 实现/裁决候选设计档。逐份的一句话描述与裁决状态**以 [docs/README 文档地图](docs/README_文档地图与治理.md) 行 40–45 为准（本表不重复维护，防两处漂移）**；已核实本会话内的三份：p2 §6 ＝ 待裁项⑦ 评审材料（Q284，未执行）、gateway-tls ＝ Q279 裁甲并落地、identity-layer-v2 ＝ Q196 落地 | ✅/🟡 按份不同 |
 | [docs/handoff-archive-2026-09-23.md](docs/handoff-archive-2026-09-23.md) | handoff 进度归档（2026-09-23：Q158 异机备份恢复/Q159–161 批量回填收口+MVP 评审/Q162–165 一口气四片滚出条目原文） | 归档 |
 | [docs/handoff-archive-2026-09-24.md](docs/handoff-archive-2026-09-24.md) | handoff 进度归档（2026-09-24：Q166–168 客户 analytics/Agent Key 治理页/导出 job 管理页三片＋文档合龙滚出条目原文） | 归档 |
-| [docs/handoff-archive-2026-09-25.md](docs/handoff-archive-2026-09-25.md) | handoff 进度归档（2026-09-25 起持续续写，共五十八次续写：首块为 Q176/Q177 两条完整条目原文，其后为 Q188…Q289 各批按「最近 5 条」上限滚出的条目逐字搬入，滚出对象覆盖 Q162～Q242（第二十六次只搬走 Q209 父条目，其六条 sub-bullets 由 Q221 批补搬并 `cmp` 证字节一致）；只读历史，权威台账见 docs/02 C1） | 归档 |
+| [docs/handoff-archive-2026-09-25.md](docs/handoff-archive-2026-09-25.md) | handoff 进度归档（2026-09-25 起持续续写，共五十九次续写：首块为 Q176/Q177 两条完整条目原文，其后为 Q188…Q290 各批按「最近 5 条」上限滚出的条目逐字搬入，滚出对象覆盖 Q162～Q243（第二十六次只搬走 Q209 父条目，其六条 sub-bullets 由 Q221 批补搬并 `cmp` 证字节一致）；只读历史，权威台账见 docs/02 C1） | 归档 |
 | [docs/handoff-archive-2026-09-22.md](docs/handoff-archive-2026-09-22.md) | handoff 进度归档（2026-09-22：Q149/Q150–Q152/Q153–Q154 滚出条目原文） | 归档 |
 | [docs/handoff-archive-2026-09-21.md](docs/handoff-archive-2026-09-21.md) | handoff 进度归档（2026-09-21：Q133–Q135 基建三件/Q136 批量 CSV/E DBA 复核/Q137–Q140 接线四件滚出条目原文；续写：Q141–Q143 三件、Q147 staging 彩排、Q148 真实 LLM 接线各一条滚出条目原文） | 归档 |
 | [docs/handoff-archive-2026-09-20.md](docs/handoff-archive-2026-09-20.md) | handoff 进度归档（2026-09-20：Q128 customer-backfill、Q129 批量认领/解绑、Q130 管理端认领台、Q131 客户回填岛滚出条目原文；续写：Q132 中台导出 JSON/异步任务滚出条目原文） | 归档 |
@@ -154,6 +160,13 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。
 
 ## 最近进度（2026-09-20 ~ 2026-10-04）
+- **Q290 主数据自检器在本机开发库实测 **exit 0**（已找到可发证组合），但数据带 `t-e2e` 前缀 ⇒ ② 判定不变（2026-10-05；**纯实测＋纯文档登记**，零代码零迁移零测试变化；后端基线仍 **1146 passed＋10 skipped**；02 C1.233）**
+  - **实测（权威工具＝`backend/scripts/check_master_data.py`，本机 `infra-postgres-1`，head=0048）**：`publish_slots(active)=1／pcp_weight_tables(active)=1／packages(active)=3／content_goals(active)=5／cp_law_sensitive_domains(active)=6／g1_categories(active)=6`，并打出 **✅ 已可发证：`(product_space=bd1e64ac-…, tenant=t-e2e-c174c8ee7f9f, platform=x_platform, goal=ENGAGEMENT)`**，**exit 0**。Q245 起的「自检器恒 exit 1、三表零行」状态**已不再成立**（旧读数按不回改保留，由本条点名纠偏）。
+  - **为什么 ② 判定仍未翻（本批唯一结论）**：该组合 `tenant_id` 前缀 **`t-e2e`**＝端到端造数痕迹；`platform=x_platform`、`slot_type=short_video` 亦非业务命名。按「禁工程臆造」红线与 docs/19 §清单一「判定『首批完成』唯一标准＝真实部署库出现一张 `final_id`、六路材料指向真实业务数据」，工程侧**不得据此自推、不得据此跑链宣称跑通**。
+  - **① 的卡点变形但没消失**：由「等三表填齐」变为「等**真值替换或确认**」——① 业务方给五个空（产品／发布平台／发布位类型／内容目的／**Gate 裁决人**）；② 或负责人明确「`t-e2e` 这组算真值」（本会话不代裁）。任意一条到位后，写库→自检→段1→6→10→Gate 裁决报告由工程侧全自动跑完。
+  - **本机口令事实（只记形状、不记值）**：本机开发库用 compose 容器里的 32 位口令从宿主连会 `InvalidPasswordError`；可用的是 `LOOM_DATABASE_DSN=postgresql+asyncpg://loom:loom@localhost:5432/loom`（与 `alembic/env.py` 缺省同值）。仓内不预设任何真实部署口令，口令不入库、不入任何文档。
+  - **范围**：零生产代码、零迁移、零测试改动、零新表零新 env；只改台账与活状态句子（docs/02／handoff／CHANGELOG／docs/19／AGENTS）。
+  - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝**真业务值替换 `t-e2e` 造数**＋跑链裁决的第二个人）／③ 可上线未达标（现网部署＋真实 ACME 未证，另有待裁项③）。
 - **Q288/Q289 待裁项⑦ 裁「补」丙案落地（`packages` 部分唯一索引）＋ prometheus 9090 绑回环（2026-10-05；**代码＋迁移＋测试＋配置＋文档**；迁移 **0047→0048**；后端 **1141→1146 passed＋10 skipped**〔＋4 集成／＋1 加固契约〕；真 PG16 往返实测；02 C1.231/C1.232）**
   - **负责人「按你建议来」**：⑦ 裁**「补」**并采取**丙案**（现网零行 ⇒ 无重复可盘 ⇒ 不做归档口径）；材料＝Q284 交的 design-p2 §6（盘点 SQL＋0048 草案＋三案＋`IntegrityError`→409 提醒）。
   - **Q288 交付**：迁移 `0048_packages_active_triple_unique`（双 where 双写）；`models.py` `__table_args__` 成对声明（缺一边 Q207 ORM⇄DB 漂移门即红）；`router.py` 的 create/update 两路 `IntegrityError`→**409**；守卫 `tests/integration/test_package_active_triple_guard.py` **4 例**（模型双写／重复 active 被 DB 拒／active＋archived 共存证 partial／**致盲 service 查重走 API 仍 409**）。
@@ -191,16 +204,6 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
   - **5 条事实缺口**一律标【原文未给出，待补】、禁臆造（含 `docs/08` §2.2 排期三列、候选池 20/50/100 是否为硬约束）。
   - **与 Q242 的边界**：PWS 冻结在**产品层**、FCW 冻结在**组装结果层**，对象不同、同族治理。
   - **【复判不变】**：① 功能覆盖达标／② 「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）——本批只产候选文档，不改变 ①②③ 任一层判定；**⬜ 待负责人 Gate 裁决后方可点工**，工期一律【待补】。
-- **Q243 已追认接缝的状态向活载体回灌 + 一处逐片记录口径由负责人裁决（2026-10-01；**纯文档＋源码注释**，零生产逻辑改动零迁移零新表零新 env；改 11 个文件＝`a09c2ad` 11 文件／13 插入 12 删除，加 `docs/08` 一处＝`c04b132`；基线沿用 **1057 passed＋10 skipped**〔总收集 1067〕；02 C1.187）**
-  - **来由＝状态回灌，非文字润色**：负责人「更新项目文档」。专查「本文件里已经追认过、活载体却仍写着『待负责人追认』」这一类漂移。先例是 Q190（2026-09-25 清掉三处同类措辞，02 C1.134），当时只覆盖**入口文档**；本次查出**源码注释／测试 docstring／YAML 注释**这一层载体仍有残余，加一处逐片记录。
-  - **A. 五处接缝的八个活载体仍写「待负责人追认」**（追认早已记在 02，只是没回灌）：**Q163**（客户读口派生 Onboarding 进度，2026-09-22 追认，02 C1.107）——4 处：`backend/app/core/tenants/schemas.py`、`backend/app/core/tenants/router.py`、`frontend/lib/api.ts`、`frontend/app/[locale]/(shell)/workbench/page.tsx`；**Q165**（后台消费按同一 operations 角色调 `assemble_one`，2026-09-22 追认，02 C1.109）——1 处：`backend/app/final/final_whitelist/service.py`；**Q187**（discarded 成品保留期清理，2026-09-25 追认，02 C1.134）——1 处：`backend/tests/integration/test_discard_purge.py` 模块 docstring；**Q188**（四类业务信号七族指标与告警规则，2026-09-25 追认，02 C1.134）——1 处：`infra/monitoring/alert_rules.yml` 阈值注释；**Q156**（客户批量回填服务端化三接缝，2026-09-22 追认，02 C1.100）——1 处：`docs/05_契约层_API与状态机.md` 的甲案登记块。
-  - **B. 「追认只结设计、不结校准」必须写在原地**：Q187 的 **180 天**保留窗口与 Q188 的 **100／5000／30s** 三个告警阈值，**设计接缝已追认、数值本身未校准**（待首批主数据落地后随真流量重看）⇒ 载体文字写成「接缝已追认（02 C1.134）；数值仍待校准」，不写成「已追认」了事。
-  - **C. 两处过期数字／口径**：① `README.md`「当前基线」块停在 2026-09-28 Q232 时点（1028 passed／卡点写「只剩主数据零行」）⇒ 刷到 2026-10-01 Q242 时点（**1057 passed＋10 默认 skip**／总收集 **1067**／卡点精确为**三表零行**〔`publish_slots`／`pcp_weight_tables`／`packages`〕＋一个真产品＋跑链裁决的第二个人），并补全 988→1057 的逐批链——**首稿那条链漏了 993／996／999／1003／1014 与 1029，读起来像完整链其实不是**，逐项回 docs/16 §4 源行才改对（枚举必须对源，不能凭印象拼）；② `AGENTS.md` 待裁项⑤只写「工程侧刻意不接 `--cov-fail-under`」，漏了 Q229 已发生的裁决事实 ⇒ 补「2026-09-28 Q229 负责人已答复『维持【建议】只测量』（docs/16 §4）」，使该项剩下的是「是否再升、定在多少、卡一层还是两层」。
-  - **D. 负责人裁决一处边界（本批唯一非纯文字的部分）**：`docs/08_迭代计划与任务包.md` 第 239 行是 Q122 的**逐片记录 blockquote**，仍写「按推荐（甲）落地、**待追认**」。工程侧初判按「逐片记录不回改」不动它并上报；负责人 2026-10-01 **「docs/08:239 那处也一起改了吧」**裁决**改**。故本批确立的边界＝**「逐片记录不回改」的例外是「已追认却仍写待追认」的状态词**：docs/08 的逐片 blockquote 属**活状态载体**，须订正；`CHANGELOG.md` 的历史条目按先例仍不回改（同 C1.134 条）。改法沿用本仓既有形制——原文加删除线保留 ＋ 补 ✅ 注记引 Q/C1 编号（`~~待追认~~ 已经负责人 2026-09-19 追认销账（02 C1.66【追认销账（2026-09-19）】条，无需返工）`）。
-  - **E. 与 Q190 的关系**：Q190 清的是**入口文档**措辞（docs/05 Q122 三接缝／docs/README 文档地图 Q122 行／docs/11 Q156 三接缝）；本批查出的是它**未覆盖的那一层**（源码注释／测试 docstring／YAML 注释）＋ docs/08 那处逐片记录。两批合起来，「已追认却仍写待追认」这类载体才算清干净；**同类缺陷本仓至此发作两次，判据都是「扫到『待追认』先回查 02 有没有后续销账条」**。
-  - **范围**：零生产逻辑改动（改的全是注释／文档／YAML 注释／测试 docstring）、零迁移、零新表、零新 env；后端基线沿用 **1057 passed＋10 skipped**（总收集 1067）——本批**不新增也不修改任何测试断言**；前端零改动（两处改动均在注释行，未重跑前端门）。
-  - **【复判不变】**：① 功能覆盖达标／② 「核心完全可用」未达标（卡点＝三表真值＋跑链第二个人）／③ 可上线未达标（网关/TLS 待裁）——本批只订正状态词与过期数字，不改变 ①②③ 任一层判定。
-  - **F. 收尾勘误（2026-10-01）**：本批台账提交 `38eea2b` 在**本文件顶部 banner** 引入一处形制缺陷——banner 真实形制是「**最近 5 条 ＋ Q209 常驻锚点**」6 槽（`c04b132` 时为 `Q242 Q241 Q240 Q239 Q238 Q209`），`38eea2b` 按纯 6 槽 FIFO 写入 `Q243` 时**挤掉常驻锚点 Q209、留下已滚档的 Q238** ⇒ 变为 `Q243 Q242 Q241 Q240 Q239 Q238`（banner 恒以 Q209 结尾，此为历史未见形制）。修复＝一笔（`f33dcd2`）：删掉已归档的 Q238 banner 行 ＋ 补回 Q209 常驻锚点，恢复行与 `c04b132` 第 13 行**逐字节一致**（`cmp`），现形制 ＝ `Q243 Q242 Q241 Q240 Q239 Q209`；另一笔（`29d6331`）刷新本文件与 `docs/README` 两处归档描述行（续写次数 →四十八、批次上界 →Q243、滚出上界 →Q238）。**留白上报 → 已收口**：该两行的滚出对象覆盖**下界不一致**（本文件 `Q162`／README `Q179`）经负责人 2026-10-01 指示**统一为 `Q162`**（改 `docs/README` 的 `Q179`→`Q162`；本文件原本即 `Q162`）。两笔均纯文档、基线不变（1057 passed＋10 skipped／总收集 1067／头 0042）；详见 02 C1.187【后记·勘误补记（2026-10-01）】及其 ⑦ 收口。
 - **09-26 第八次进度归档（Q210 批按「最近 5 条」上限滚出 Q205 文档对账批一条，逐字核验后搬入，原文见该档）** → [docs/handoff-archive-2026-09-25.md](docs/handoff-archive-2026-09-25.md)
 
 - **09-26 第九次进度归档（Q217 批按「最近 5 条」上限滚出 Q206 主数据清单批一条，逐字核验后搬入（`grep -F -c -f` = 1，2034 字节），原文见该档第二十三次续写）** → [docs/handoff-archive-2026-09-25.md](docs/handoff-archive-2026-09-25.md)
