@@ -114,6 +114,8 @@
 
 `LOOM_MCP_ENABLED=true` 才开（`app/core/config.py:126` 默认 `False`）。**刻意不写进 `backend/.env.example`**，与本仓运维旋钮同一惯例（Q161/Q178 同型）。回滚＝关掉该 env 重启，面即消失（404）。
 
+> **compose 接线（Q291）**：`LOOM_MCP_ENABLED` 自 Q291 起才经 base `infra/docker-compose.yml` 的 backend.environment 以 `${LOOM_MCP_ENABLED:-false}` 转发——此前 base 与全部 overlay 都不转发、容器内也无 `.env`，在官方 compose 形态下设 `true` 也进不了容器（面恒 404）。同批一并接通的还有 `LOOM_STAFF_AUTH_ENABLED`／`LOOM_DISCARD_PURGE_ENABLED`（默认 false）与 `LOOM_SCHEDULER_ENABLED`（默认 true）。worker/锁/广播六开关刻意仍只由 `docker-compose.ha.yml` 在多副本/演练时打开。本节其余启用步骤不变，仍**不入 `.env.example`**（惯例不变，转发≠登记进样例）。
+
 ### 3.2 方法与必带字段
 
 单一入口 `POST /mcp`，JSON-RPC 2.0。对端规范版本＝ **`2026-07-28`**（`app/core/mcp/server.py:23`），该修订的事实按官方页逐条取（本仓实现依赖这几条，均已在 §3.6 标注符合度）：

@@ -1,18 +1,25 @@
 # Handoff — Loom
 
-> **最新（2026-10-05）：Q290 主数据自检器在本机开发库实测 **exit 0**（已找到可发证组合），但数据带 `t-e2e` 前缀 ⇒ ② 判定不变（**纯实测＋纯文档登记**，零代码零迁移零测试变化；后端基线仍 **1146 passed＋10 skipped**；02 C1.233）**
+> **最新（2026-10-05）：Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**——工程侧自查可独立推进项，负责人「你自己可以搞吗」。
+> - **缺陷（反向枚举实测，非推理）**：把 `config.py` 全部字段对照 base compose 与 5 overlay 一次性盘点，查出四个**与拓扑无关、文档已承诺部署期可拧**的布尔开关谁都不转发、容器内又无 `.env` ⇒ 运维在 `.env` 设了也进不了容器。最要命 `LOOM_STAFF_AUTH_ENABLED`：docs/17 §1 启用引导第③步与 Q203 验收都要求「置 true 重启」，但官方 compose 形态下 env 永不到 backend（`staff_auth/deps.py:121` 凭证分支永不进），身份门控实际开不了。
+> - **交付**：`infra/docker-compose.yml` backend.environment 补 `LOOM_SCHEDULER_ENABLED`（默认 true）＋`LOOM_STAFF_AUTH_ENABLED`／`LOOM_DISCARD_PURGE_ENABLED`／`LOOM_MCP_ENABLED`（默认 false）四行 `${VAR:-字面默认}`（布尔 env 不用空串默认，空串会让 pydantic bool 启动校验失败）；默认值一字不变、纯加法可回滚。
+> - **守卫（反向枚举，不止补一个）**：`test_gateway_surface_contract.py` 新增 `test_topology_free_bool_switches_actually_reach_the_backend_container`——四开关必须转发且插值默认与 `config.py` 逐字一致；拓扑绑定族（restock/export/import/fcw 四 worker＋distributed_lock＋config_cache_broadcast 共 6 开关）**刻意不进 base**，谁挪进来即红（只由 ha overlay 在多副本/演练时打开）。两次种植（staff_auth 改空串／export worker 塞 base）各判红后还原；沙盒内 2 个 backup_monitoring socket.bind 失败经沙盒外复跑 22 passed 证实为环境假红。
+> - **刻意没做（守裁决边界）**：不改默认值、不加应用内启动校验（Q287 已注明属运行时行为变更须裁决）、不扩 worker 族转发面、不入 `backend/.env.example`（Q135/Q178/Q232 先例）。docs/17 §1＋docs/22 §3.1 已补接线事实，Q285 banner 按「最近 5 条」上限滚入 10-04 档案。
+> - **【复判不变】**：① 功能覆盖达标／② 未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链第二人）／③ 未达标（本批让 staff 门控在官方 compose 下**真能开**、补了 #7 验收链一处被文档掩盖的硬缝，但现网部署＋真 ACME 仍未证，另有待裁项③ 客户侧认证）。
+>
+> **其前（2026-10-05）：Q290 主数据自检器在本机开发库实测 **exit 0**（已找到可发证组合），但数据带 `t-e2e` 前缀 ⇒ ② 判定不变（**纯实测＋纯文档登记**，零代码零迁移零测试变化；后端基线仍 **1146 passed＋10 skipped**；02 C1.233）**
 > - **实测**：`python backend/scripts/check_master_data.py` ⇒ `publish_slots(active)=1／pcp_weight_tables(active)=1／packages(active)=3／content_goals=5／敏感领域=6／G1 类目=6`，并打出 **✅ 已可发证：(product_space=bd1e64ac-…, tenant=t-e2e-c174c8ee7f9f, platform=x_platform, goal=ENGAGEMENT)**，**exit 0**——Q245 以来「自检器恒 exit 1、三表零行」的状态已不再成立（旧读数按不回改保留，由本条纠偏）。
 > - **为什么 ② 判定仍未翻**：该组合的 `tenant_id` 前缀是 **`t-e2e`**（端到端造数痕迹），`platform=x_platform`／`slot_type=short_video` 亦非业务命名 ⇒ 按「禁工程臆造」红线与 docs/19「判定首批完成＝真实业务数据出一张 `final_id`」，**工程侧不得据此自推、不得据此跑链宣称跑通**。
 > - **① 的性质变了但没消失**：从「等三表填齐」变成「等**真值替换或确认**」——要么业务方给五个空（产品／平台／发布位类型／内容目的／**Gate 裁决人**），要么负责人明确「`t-e2e` 这组算真值」（本会话不代裁）。**跑链裁决的第二个人仍是硬卡点**。
 > - **本机口令事实（只记形状不记值）**：用 compose 容器里那个 32 位口令从宿主连会 `InvalidPasswordError`；可用的是 `LOOM_DATABASE_DSN=postgresql+asyncpg://loom:loom@localhost:5432/loom`（与 `alembic/env.py` 缺省同值），口令不入库不入文档。
 > - **【复判不变】**：① 达标／② 未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链第二人）／③ 未达标（现网部署＋真 ACME 未证，另有待裁项③）。
-> **最新（2026-10-05）：Q288/Q289 待裁项⑦ 裁「补」丙案落地 ＋ prometheus 9090 绑回环（**代码＋迁移＋测试＋配置＋文档**，迁移 **0047→0048**；后端 **1141→1146 passed＋10 skipped**〔Q288 ＋4 集成／Q289 ＋1 加固契约〕；真 PG16 往返实测；02 C1.231/C1.232）**——负责人「按你建议来」。
+> **其前（2026-10-05）：Q288/Q289 待裁项⑦ 裁「补」丙案落地 ＋ prometheus 9090 绑回环（**代码＋迁移＋测试＋配置＋文档**，迁移 **0047→0048**；后端 **1141→1146 passed＋10 skipped**〔Q288 ＋4 集成／Q289 ＋1 加固契约〕；真 PG16 往返实测；02 C1.231/C1.232）**——负责人「按你建议来」。
 > - **Q288（⑦ 裁「补」丙案）**：迁移 `0048_packages_active_triple_unique` 在 `packages` 上建**部分唯一索引** `uq_packages_active_triple`（product_space_id·platform·goal·kind，`WHERE status='active'`，双 where 双写）＋模型 `__table_args__` 成对＋router create/update 两路 `IntegrityError`→**409**。索引名刻意不复用幻影 `uq_package_active_triple`（Q278 勘误）。
 > - **真库实测（本机 `infra-postgres-1`）**：升级前 `packages` **3 行 active**（同一 PS×`x_platform`×`ENGAGEMENT` 的 csp/cstp/cep 三件套），重复三元组盘点 **0** ⇒ 建索引成功（有重复会当场失败）；重复插同 active 三元组被 DB 拒、archived 孪生放行（证 partial）；`0047→0048→0047→0048` 往返（`pg_indexes` **1→0→1**），head＝**0048**。
 > - **Q289**：`monitoring` overlay 的 prometheus 由 `9090:9090` 改绑 **`127.0.0.1:9090:9090`**（无认证无契约的抓取口不开宿主网卡，与 Q192 Grafana 同纪律）；既有测试改名并改判据、hardening 门新增「prometheus＋grafana 两口都必须回环」。
 > - **陈述精确化（与 Q280 同型）**：design-p2 §6「现网 `packages` 零行」指**生产环境**（无部署确为零行），本机**开发库**实测 3 行——两句话指的不是同一个库，已在设计文档就地注记。
 > - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝业务方回调首批主数据＋有人跑段1→6→10 在 Gate 裁决）／③ 可上线未达标（现网部署＋真实 ACME 未证，另有待裁项③）——本批是守卫加固，不改任一层判定。**⑦ 自本批退出活跃待裁项（余 ②③④⑤）**。
-> **最新（2026-10-05）：Q287 两个对外旋钮钉成同域不变量（**脚本＋测试＋文档；零生产代码零迁移**；后端 **1140→1141 passed＋10 skipped**（总收集 **1151**；＋1＝同域规则门）、ruff 净、前端零改动；02 C1.230）**——负责人「那你搞」＝工程侧最后一件不需裁决的事。**缺陷形态**＝`LOOM_GATEWAY_DOMAIN`（Caddy 站点地址）与 `LOOM_PUBLIC_BASE_URL`（A2A 卡片 base）互不约束：只设其一或把后者写成别域 ⇒ 应用不报错、CI 六道门与契约测试全绿，**外部 Agent 拿到一张指向别处的卡片**——Q280「旋钮没接到制品」一族里最后没钉死的一型。
+> **其前（2026-10-05）：Q287 两个对外旋钮钉成同域不变量（**脚本＋测试＋文档；零生产代码零迁移**；后端 **1140→1141 passed＋10 skipped**（总收集 **1151**；＋1＝同域规则门）、ruff 净、前端零改动；02 C1.230）**——负责人「那你搞」＝工程侧最后一件不需裁决的事。**缺陷形态**＝`LOOM_GATEWAY_DOMAIN`（Caddy 站点地址）与 `LOOM_PUBLIC_BASE_URL`（A2A 卡片 base）互不约束：只设其一或把后者写成别域 ⇒ 应用不报错、CI 六道门与契约测试全绿，**外部 Agent 拿到一张指向别处的卡片**——Q280「旋钮没接到制品」一族里最后没钉死的一型。
 > - **演练预检（部署前唯一能拦住人的地方）**：`gateway-rehearsal.sh` 开头 fail-fast＝env 已设且其主机 ≠ 站点地址 ⇒ **exit 2** 并打印冲突双方。实测别域注入回 **exit 2**、同域/未设放行；**第一次量 exit 被管道里的 `head` 掩蔽成 0**，去掉管道重测才拿到 2——老教训再中一次。
 > - **阶段 4 从 4 条增到 6 条**：同域注入（`https://<站点地址>`）⇒ 两张卡片 `url` 同域绝对；**反向对照**＝故意注入 `https://mismatch.test` ⇒ 卡片真的跟着指向别域，**实证应用对此不设防**（这正是预检存在的理由）；收尾恢复同域。复跑＝**23/23 PASS、FAIL=0**，拆除后本项目残留容器 0。
 > - **静态门 ＋1**：同域规则必须同现于运维读的 docs/17 与演练预检（规则丢任何一边即红）。**自摆乌龙一次**：断言初版按字面找「必须同域」，而 docs/17 正文写的是「必须与 `LOOM_GATEWAY_DOMAIN` 同域」⇒ 假红，改按语义断言。docs/17 §1.1 顺手更正「两件事」→「**三件事（前两件必须同域）**」（原文列三条自称两件）；§7.8／BENCHMARK 计数同步 23。
@@ -23,23 +30,11 @@
 > - **② docs/23 与 design-p2 的地图行只描述了第一版内容**：docs/23 行补上 §0.1（Q276 重扫）／§8.3 改判与勘误（Q278）／§0.2（Q283 活状态复扫）／§11.11–11.12（Q279 网关、Q280 首启）四层结构；design-p2 行补 **§6＝待裁项⑦ 评审材料（Q284：只读盘点 SQL＋0048 草案＋归档三案，未执行）**。目录层描述过期＝读者会以为这些文档没有后来的部分。
 > - **③ handoff「项目文档（完整清单，单一事实源）」表实测登记 0 份 design 档**（`ls docs/design-*.md`＝6 份：a2a-vassal／identity-layer-v2／d3.5-whitelist-assembly-remaining／fcw-freeze-management／p2-package-reuse-reconfig／deployment-gateway-tls）——补一行聚合行，逐份描述与状态**指回 docs/README 地图行 40–45**：两个目录都自称权威时，正确解法是让一个指另一个，而不是各抄一份再互相漂移；表内 docs/23 行同步补 §0.2/§11.11/§11.12。**确认无需改**：docs/19 §6／已结清单、docs/22 §6、docs/21、BENCHMARK、docs/10、docs/09。**三层判定不变**：① 达标／② 未达标（业务方主数据回填＋跑链第二人）／③ 未达标（现网未部署＋真 ACME 未签发）。
 >
-> **最新（2026-10-05）：Q285 项目文档对账＝把「与树对不上的活状态句子」量出来改（**纯文档零代码零迁移零测试变化**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.228）**——负责人「更新项目文档」。四处命中：① docs/16 的测试基线行停在 **Q235 的 1029**，补 Q284 时点行＝**1140＋10／收集 1150**；② docs/08 §2.3 有 P2 完成情况行**却没有 P1 的**；③ docs/README 文档地图把**已裁决**的网关候选仍标「⬜ 待 Q275 裁决」；④ docs/11 卡片 `url` 那句没说 **Q280 之前 compose 根本不转发这个 env**。
-> - **①** 新行把增量讲清＝1124（Q267 起 CI 实测）→ Q276 ＋0（改守卫数据不是用例）→ Q277 ＋7 → Q279 ＋8 → Q280 ＋1 ＝ **1140**，Q282／Q283／Q284 ＋0；判读口径也留下＝这类制品门**不进 `--cov=app` 分母**，覆盖率读数不动是预期不是退坡。**本批另有一次自我更正**：初稿写「Q235 以来新增全是制品门」不实（中间含大量业务用例），已收窄为「最近五批全是制品门」，逐片追溯交回 docs/02。
-> - **②** 补 **P1 完成情况（🟡 部分）**行＝已落：静态底表写口统一到 `require_internal_actor`（Q242）／动态信号三口（Q259，接线到 Q276 才进 `GATED`）／PCP 重算候选·对照单三口（`models.py:219`、`router.py:369,378`，步长受 `pcp.recalc_step` 守卫）／fit_score 派生值与读口（Q34 刻意不落库）；未落＝fit_score 自学习（`models.py:12` 明写仍随 V2）／PLATFORM-ADAPTER 业务接入（**全仓无 service 调用点**）／每周定时触发（无调度器）——三件都改运行时行为、要负责人点头。
-> - **③④** 文档地图那行改 ✅ 并指向 docs/17 §1.1–1.2（运行手册与空库首启实测）与 §7.8（演练）——「待 Q275 裁决」这类残句与 Q284 的「Q275 号未用」说明正好配成一对：都会让人误判还有一片没做。docs/11 则补上缺的那句关键事实：裁决已落地、且 Q280 之前**设了 env 也进不了容器**，现修复并由契约测试钉住，取值本身仍属部署期。
-> - **对账中确认无需改**：docs/19 §1、docs/14 第 7 项＋§2.7、docs/17 §7 名录与 §7.8、BENCHMARK 八套口径、docs/10 迁移登记、docs/22 §0。本批**不新增判据**（判据变更属裁决面）。**三层判定不变**：① 达标／② 未达标（业务方主数据回填＋跑链第二人）／③ 未达标（现网未部署＋真 ACME 未签发）。
+> ~~Q285 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-05 逐字滚入 [docs/handoff-archive-2026-10-04.md](docs/handoff-archive-2026-10-04.md)。
 >
-> **最新（2026-10-05）：Q284 交两件不需裁决的收口件＝待裁项⑦ 的评审材料 ＋ Q275 预留号说明（**纯文档，零代码零迁移零库操作**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.227）**
-> - **⑦ 的材料**落 `docs/design-p2-package-reuse-reconfig.md` 新增 §6：**只读盘点 SQL**（判据与 `service.py:113-119` 逐字同键＝`product_space_id·platform·goal·kind`＋`status='active'`；`tenant_id` 只进投影不进键，因 PS 已定租户，塞进键是**换语义不是补守卫**）＋`0048_packages_active_triple_unique.py` **迁移草案**＋归档口径三案（甲 保 `usage_count` 最大者、其余置 archived 不删行〔推荐〕／乙 全置 archived／丙 盘点 0 行直接建——最可能但那是「当下没数据」不是「语义已保证」）＋**并发形态提醒**（走 DB 冲突后 `router.py:90` 须接 `IntegrityError` 并仍回 **409**，否则外部自动化看到 500，属破坏性变更，须与实现批同做）。
-> - **材料里写死两条硬前提**：① **索引名刻意不复用 `uq_package_active_triple`**——Q272 起它被当既有事实引用了 5 处（Q278 已纠偏），复用会让「文档早就写了」继续掩盖「代码从来没有」；② 索引必须同时声明进 `packages.__table_args__` 且 `postgresql_where`＋`sqlite_where` **双写**（先例＝`platform_adaptation/models.py:221-226` 的 `uq_pcp_recalc_pending`、`content/models.py:50-56`），否则 **Q207 的 ORM⇄DB 漂移门判红**——「迁移建了、模型没写」在这仓里不是可选项。**本批未建迁移、未跑盘点、未改一行数据**：没有裁决就没有材料之外的任何动作。
-> - **Q275 预留号说明**：Q274 候选写「裁决点登记 Q275」、Q276 起刻意跳过该号，实际裁决随 **Q279** 落地登记 ⇒ **Q275 号保留未用**；台账不插号、不回填、不重编号（编号即时序），此后 Q280→Q284 连续。此行只为免得后来人以为漏了一片或去补一个「Q275 网关裁决」。
-> - **三层判定不变**：① 达标／② 未达标（业务方主数据回填＋跑链第二人）／③ 未达标（现网未部署＋真 ACME 未签发）。
+> ~~Q284 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-05 逐字滚入 [docs/handoff-archive-2026-10-04.md](docs/handoff-archive-2026-10-04.md)。
 >
-> **最新（2026-10-05）：Q283 全仓「活状态」复扫＝把每条「当前状态」句子回源码重测（**纯文档零代码零迁移零测试变化**；基线不变＝1140 passed＋10 skipped／总收集 1150；02 C1.226）**——负责人「搞」＝做我推荐的第一批；动机是 Q278 那一轮已经证明「活状态」句子最容易烂（当时抓到过期 18 批的状态行与一个根本不存在的约束名）。
-> - **数字全部现行，一处不用改**：188 路径／223 操作（写 128／读 95）／68 表／734 列／47 迁移／Alembic 头 `0047_layer_spaces`／sidebar 14／`tokens.css` 86 变量⇄`tokens.ts` 86 引用／客户 nav 8（6 v1＋2 v2）／docs/12 #21–24 确为 ⬜ 占位；另把基线补登成 runner 读数——**CI run `37229962678`（dev push）`1140 passed, 10 skipped`、Ruff 净、eval 101/101、六道门全 success**，infra-static 里 Q279 新加两步真跑（哨兵 `caddy: reverse_proxy 源文件=4 适配后=4`），此前只标本机实测。
-> - **抓到一个「在范围内却指错行」的锚点（本批唯一的更正）**：docs/23 §10 的 §4.1 行把「门控关 ⇒ `internal_gate` 闭包直接 `return True`」锚在 `app/core/staff_auth/deps.py:135-139`；实测真实位置＝**`deps.py:88-90`**（`def internal_gate` 自 `:80`），而 135-139 落在**另一个函数** `require_internal_actor`（`:104-141`，依赖体 `:117`、强制段 `121-141`）里面。活文档（docs/23）本批改锚；同一句话的另三处（CHANGELOG Q277 条／docs/02 C1.220／handoff 档案）属历史台账，按「逐片记录不回改」保留原文、由 docs/23 §0.2 与本条点名纠偏。
-> - **方法学留档（给下一轮当判据用）**：475 条 `file:line` 引用机械扫下来**行号越界 0**——但那恰恰说明「行号还在文件范围内」是**弱判据**；本批这个错锚就在范围内、只是指到了别的函数上。⇒ 活状态复扫必须**把锚点那一行打出来对内容**，否则「引用还在」会被误当成「引用还对」。另登记一类口径：15 处引用写作子项目相对路径（`scripts/coverage_report.py` 实为 `backend/scripts/…`、`scripts/check-*.mjs` 实为 `frontend/scripts/…`），文件都在、只差基准目录，不改写历史句子只立口径。**复扫脚本不入库**：它没有可钉的不变量（行号天生会漂），做成门只会制造每次改代码都要修文档的假红。
-> - **三层判定不变**：① 功能覆盖达标／② 未达标（业务方按 docs/19 §0.2 回填主数据＋录入一个真产品＋有人跑段1→6→10 在 Gate 裁决）／③ 未达标（现网未部署＋真实 ACME 未签发）。
+> ~~Q283 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-05 逐字滚入 [docs/handoff-archive-2026-10-04.md](docs/handoff-archive-2026-10-04.md)。
 >
 > ~~Q282 banner 原文~~（含其三条子项）已按「最近 5 条」上限于 2026-10-05 逐字滚入 [docs/handoff-archive-2026-10-04.md](docs/handoff-archive-2026-10-04.md)。
 >
@@ -159,7 +154,12 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **已定稿事实基线**：Q1–Q72 均已有决策记录（02，含正式采纳与"临时采纳"两类）；S 级红旗 4 条经 Q34/Q60 等解决（02 收官注、03 已标销账）。**M0 已于 2026-09-13 完成**：Q2/Q22/Q60(a/b/c) 转定稿（02 新增"✅定稿"状态与转正注记）；新裁 Q22a（分项打分口径）/Q22b（多样性函数 + AI 失败兜底），评分细则同步 01 段5、06 §1.1、§C2；业务方 3 份素材采纳经负责人确认（02 C1.16）；段 1-6 缺口实体 ProductSpace / g2FieldCandidates 已补字段（04/10）。挂账 4 子项（不阻塞 M1）：PS.lifecycle 迁移触发、~~18 通用字段值归属（M1 前定）~~ ✅ Q74 已裁决（两处落库 profile + profile_snapshot）、候选实体多租户可见性、候选状态枚举。**两套路线图口径冲突已于 2026-09-13 由负责人裁决合并（Q73，08 §1.3）：A7 为骨 + D9 厚度，段 12 后置 V2，V1 驾驶舱只留 Token 成本 + 人工审核 2 个；08 §2 已重排。至此原文挂起的待裁决事项全部清零。** 技术选型 6 项**已决策定稿**（14，2026-09-13：模块化单体 / 自研注册表编排器 / PG+pgvector+Redis / DB+广播热更新 / 进程内合规模块 / Evaluation+Golden 两件套），技术栈 = FastAPI + Next.js + YAML 编排；下游 15/17/08/10/06 已同步刷新。
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。
 
-## 最近进度（2026-09-20 ~ 2026-10-04）
+## 最近进度（2026-09-20 ~ 2026-10-05）
+- **Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口）（2026-10-05；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**
+  - **缺陷（反向枚举实测）**：`config.py` 全字段对照 base compose 与 5 overlay 盘点，查出 `LOOM_SCHEDULER_ENABLED`（默认 true）、`LOOM_STAFF_AUTH_ENABLED`、`LOOM_DISCARD_PURGE_ENABLED`、`LOOM_MCP_ENABLED`（均默认 false）四个**与拓扑无关、文档已承诺部署期可拧**的开关谁都不转发、容器内又无 `.env` ⇒ `.env` 设了也进不了容器；其中 staff 门控在 docs/17 §1 引导第③步与 Q203 验收都要求「置 true 重启」，官方 compose 形态下实际开不了。
+  - **交付**：`infra/docker-compose.yml` backend.environment 补四行 `${VAR:-字面默认}`（布尔 env 不用空串默认）；默认值一字不变、纯加法可回滚。
+  - **守卫**：`test_gateway_surface_contract.py` 新增 1 门反向枚举——四开关必须转发且插值默认与 `config.py` 逐字一致；拓扑绑定族（restock/export/import/fcw worker＋distributed_lock＋config_cache_broadcast 共 6 开关）刻意不进 base，挪入即红（只由 ha overlay 打开）。两次种植各判红后还原；沙盒内 2 个 backup_monitoring socket.bind 失败经沙盒外复跑证实为环境假红。
+  - **刻意没做**：不改默认值、不加应用内启动校验（须裁决）、不扩 worker 族转发面、不入 `.env.example`（Q135/Q178/Q232 先例）。Q285 banner 按「最近 5 条」滚入 10-04 档案。**三层判定不变**。
 - **Q290 主数据自检器在本机开发库实测 **exit 0**（已找到可发证组合），但数据带 `t-e2e` 前缀 ⇒ ② 判定不变（2026-10-05；**纯实测＋纯文档登记**，零代码零迁移零测试变化；后端基线仍 **1146 passed＋10 skipped**；02 C1.233）**
   - **实测（权威工具＝`backend/scripts/check_master_data.py`，本机 `infra-postgres-1`，head=0048）**：`publish_slots(active)=1／pcp_weight_tables(active)=1／packages(active)=3／content_goals(active)=5／cp_law_sensitive_domains(active)=6／g1_categories(active)=6`，并打出 **✅ 已可发证：`(product_space=bd1e64ac-…, tenant=t-e2e-c174c8ee7f9f, platform=x_platform, goal=ENGAGEMENT)`**，**exit 0**。Q245 起的「自检器恒 exit 1、三表零行」状态**已不再成立**（旧读数按不回改保留，由本条点名纠偏）。
   - **为什么 ② 判定仍未翻（本批唯一结论）**：该组合 `tenant_id` 前缀 **`t-e2e`**＝端到端造数痕迹；`platform=x_platform`、`slot_type=short_video` 亦非业务命名。按「禁工程臆造」红线与 docs/19 §清单一「判定『首批完成』唯一标准＝真实部署库出现一张 `final_id`、六路材料指向真实业务数据」，工程侧**不得据此自推、不得据此跑链宣称跑通**。

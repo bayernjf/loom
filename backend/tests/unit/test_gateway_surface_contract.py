@@ -193,6 +193,42 @@ def test_the_same_domain_rule_is_written_where_the_operator_will_read_it() -> No
     )
 
 
+def test_topology_free_bool_switches_actually_reach_the_backend_container() -> None:
+    """Q291＝Q280"旋钮没接到制品"一族的系统性收口（不是再补一个，是反向枚举）。
+
+    四个**与拓扑无关**、文档已承诺部署期可拧的布尔开关，此前 base/overlay 都不转发 ⇒
+    运维照 docs/17 §1、docs/22 在 `.env` 里设了也进不了容器：
+      - LOOM_SCHEDULER_ENABLED（SLA sweep 总闸，默认开，config.py:23）
+      - LOOM_STAFF_AUTH_ENABLED（Q178/Q203 身份总闸，默认关）
+      - LOOM_DISCARD_PURGE_ENABLED（Q187 discarded 物理清理，默认关）
+      - LOOM_MCP_ENABLED（Q232 MCP 对外面，默认关）
+    判据＝旋钮经 base compose backend.environment 转发，且 `${VAR:-默认}` 与代码默认一致。
+    刻意**不**进 base 的是 worker/锁/广播族（restock/export/import/fcw worker、
+    distributed_lock、config_cache_broadcast）——它们只在多副本/演练时由 ha overlay 打开，
+    放进 base 会让单机形态多起消费循环，属另一类旋钮，这里钉住分界不被顺手挪进来。
+    """
+    env = yaml.safe_load(BASE_COMPOSE.read_text())["services"]["backend"]["environment"]
+    expected = {
+        "LOOM_SCHEDULER_ENABLED": "true",
+        "LOOM_STAFF_AUTH_ENABLED": "false",
+        "LOOM_DISCARD_PURGE_ENABLED": "false",
+        "LOOM_MCP_ENABLED": "false",
+    }
+    for var, default in expected.items():
+        assert env.get(var) == f"${{{var}:-{default}}}", (var, env.get(var))
+
+    # 拓扑绑定族刻意留在 base 之外（只由 ha/演练 overlay 打开）。
+    topology_bound = {
+        "LOOM_RESTOCK_WORKER_ENABLED",
+        "LOOM_EXPORT_WORKER_ENABLED",
+        "LOOM_IMPORT_WORKER_ENABLED",
+        "LOOM_FCW_WORKER_ENABLED",
+        "LOOM_DISTRIBUTED_LOCK_ENABLED",
+        "LOOM_CONFIG_CACHE_BROADCAST_ENABLED",
+    }
+    assert not (topology_bound & set(env)), topology_bound & set(env)
+
+
 def test_reverse_proxy_targets_are_real_services_on_real_ports() -> None:
     base = yaml.safe_load(BASE_COMPOSE.read_text())["services"]
     backend_port = re.search(r"--port (\d+)", ENTRYPOINT.read_text()).group(1)
