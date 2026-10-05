@@ -3,12 +3,15 @@
 角色口径：后台档案 CRUD = operations（Q35）；所有写操作 writeAudit。
 """
 
+import json
 from datetime import UTC, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
 from app.core.audit import append_audit
 from app.core.config_center.knobs import knob
+from app.core.model_registry import gateway
+from app.core.model_registry.seeds import SCENE_PLATFORM_ADAPTER
 from app.decision.layer_strategy.models import Package
 from app.platform.platform_adaptation import pa_rules
 from app.platform.platform_adaptation.models import (
@@ -24,6 +27,7 @@ from app.platform.platform_adaptation.models import (
 from app.product.condition.models import ContentGoal
 from app.product.modeling.models import OpsTodo
 from app.product.product_intake.models import ProductSpace
+from app.product.whitelist_center.models import PwsSnapshot
 
 PLATFORM_TENANT = "_platform"
 ROLE_OPERATIONS = "operations"
@@ -109,6 +113,11 @@ class RecalcStepExceeded(Exception):
 
     def __init__(self, message: str):
         super().__init__(message)
+
+
+class PwsSnapshotNotFound(Exception):
+    """Q296 甲：预览口引用的 PWS 快照不存在（404，与 PT 约束 7 的「无 frozen」缺失
+    形状区分——前者是输入错误，后者是协议内的正常缺失结果）。"""
 
 
 def _now() -> datetime:
@@ -218,18 +227,31 @@ async def fit_score(session, slot_id: str, goal: str) -> dict:
 
     目的未配权重矩阵【原文未给出的目的】→ fit_score=None + incomplete 旗标，
     不凑分（对齐 Q22b AI 失败不凑分精神）。
+    Q296 甲加法扩展：回带 ``breakdown`` 四行分项（dim/score/weight/contribution，
+    与聚合函数同权重同序，Σ(contribution) == fit_score 可自校验；incomplete 时
+    weight/contribution 为 None——分可见、不造聚合）。
     """
     slot = await session.get(PublishSlot, slot_id)
     if slot is None:
         raise SlotNotFound(slot_id)
     row = await session.get(GoalFitWeight, goal)
     if row is None:
-        return {"slot_id": slot_id, "goal": goal, "fit_score": None, "incomplete": True}
+        return {
+            "slot_id": slot_id,
+            "goal": goal,
+            "fit_score": None,
+            "incomplete": True,
+            "breakdown": [
+                {"dim": dim, "score": getattr(slot, dim), "weight": None, "contribution": None}
+                for dim in pa_rules.FIT_DIMS
+            ],
+        }
     return {
         "slot_id": slot_id,
         "goal": goal,
         "fit_score": pa_rules.compute_fit_score(slot, row.weights),
         "incomplete": False,
+        "breakdown": pa_rules.fit_score_breakdown(slot, row.weights),
     }
 
 
@@ -346,6 +368,32 @@ async def archive_rule(session, rule_id: str, actor) -> None:
     )
 
 
+async def _match_rule_rows(
+    session,
+    *,
+    platform: str,
+    slot_type: str,
+    slot_id: str | None = None,
+    country: str | None = None,
+) -> list[PlatformRule]:
+    """Q36 四层选择器的行级命中（match_rules 与 Q296 预览口共用同一份匹配语义）。"""
+    rows = list(
+        (
+            await session.scalars(
+                select(PlatformRule).where(PlatformRule.status == "active")
+            )
+        ).all()
+    )
+    return [
+        r
+        for r in rows
+        if (r.platform is None or r.platform == platform)
+        and (r.slot_type is None or r.slot_type == slot_type)
+        and (r.slot_id is None or r.slot_id == slot_id)
+        and (r.country is None or r.country == country)
+    ]
+
+
 async def match_rules(
     session,
     *,
@@ -355,21 +403,9 @@ async def match_rules(
     country: str | None = None,
 ) -> dict:
     """按格子命中规则并给出 Q36 裁决（供段7 适配与调试查看）。"""
-    rows = list(
-        (
-            await session.scalars(
-                select(PlatformRule).where(PlatformRule.status == "active")
-            )
-        ).all()
+    matched = await _match_rule_rows(
+        session, platform=platform, slot_type=slot_type, slot_id=slot_id, country=country
     )
-    matched = [
-        r
-        for r in rows
-        if (r.platform is None or r.platform == platform)
-        and (r.slot_type is None or r.slot_type == slot_type)
-        and (r.slot_id is None or r.slot_id == slot_id)
-        and (r.country is None or r.country == country)
-    ]
     return {
         "effect": pa_rules.resolve_effect(matched),
         "matched_rule_ids": [r.rule_id for r in matched],
@@ -680,6 +716,91 @@ async def active_events_for(
             | (PlatformDynamicEvent.slot_id.is_(None))
         )
     return list((await session.scalars(stmt)).all())
+
+
+# ---------- Q296 甲：PLATFORM-ADAPTER 只读预览口 ----------
+
+
+async def platform_adapter_preview(
+    session,
+    *,
+    pws_snapshot_id: str,
+    platform: str,
+    slot_type: str,
+    slot_id: str | None = None,
+    country: str | None = None,
+    previewed_by: str,
+) -> dict:
+    """PLATFORM-ADAPTER 只读预览口（design-v2-platform-adapter-business §3.1，Q296 甲）。
+
+    组 Prompt v0.1 的三料（$pws←PWS 快照／$platform_rules←Q36 四层命中／
+    $dynamic_events←生效事件）→ 经模型网关按 ai_scene_routes 调 PLATFORM-ADAPTER
+    场景（V1 路由 synthetic，零写入；切真模型属丙批，届时预算/成本沿网关既有口径）→
+    四态建议直接回带。**零落库、零审计、不改任何判定、不产候选、不触 final_id**
+    （PT 约束 4/6；与 Q249 FCW 预检只读口同型）。无 frozen PWS 走协议内的缺失
+    形状（PT 约束 7），与「快照不存在」（PwsSnapshotNotFound→404）区分。
+    """
+    pws = await session.get(PwsSnapshot, pws_snapshot_id)
+    if pws is None:
+        raise PwsSnapshotNotFound(pws_snapshot_id)
+    matched = await _match_rule_rows(
+        session, platform=platform, slot_type=slot_type, slot_id=slot_id, country=country
+    )
+    events = await active_events_for(session, platform, slot_id=slot_id)
+    event_views = [
+        {
+            "event_id": e.event_id,
+            "platform": e.platform,
+            "slot_id": e.slot_id,
+            "event_type": e.event_type,
+            "severity": e.severity,
+            "effective_start": e.effective_start.isoformat(),
+            "effective_end": e.effective_end.isoformat() if e.effective_end else None,
+            "note": e.note,
+            "status": e.status,
+        }
+        for e in events
+    ]
+    variables = {
+        "pws": {
+            "pws_id": pws.pws_id,
+            "version": pws.version,
+            "product_space_id": pws.product_space_id,
+            "frozen": pws.status == "frozen",
+        },
+        "platform_rules": [
+            {
+                "rule_id": r.rule_id,
+                "effect": r.effect,
+                "selector_level": r.selector_level,
+                "country": r.country,
+            }
+            for r in matched
+        ],
+        "dynamic_events": event_views,
+    }
+    invocation = await gateway.invoke(session, SCENE_PLATFORM_ADAPTER, variables)
+    result = json.loads(invocation.text)
+    if "decision" not in result:
+        # synthetic 无 frozen PWS 分支 V1 只返两键（Q246）；预览口是第一个真实消费方，
+        # 按 Prompt v0.1 五键契约在消费方归一（Q293 §2.5 形状缺口，docs/05 登记）。
+        result = {**result, "decision": None, "refs": [], "gate": None}
+    return {
+        "pws": variables["pws"],
+        "input": {
+            "platform": platform,
+            "slot_type": slot_type,
+            "slot_id": slot_id,
+            "country": country,
+        },
+        "platform_rules": {
+            "effect": pa_rules.resolve_effect(matched),
+            "matched_rule_ids": [r.rule_id for r in matched],
+        },
+        "dynamic_events": event_views,
+        "adapter": result,
+        "previewed_by": previewed_by,
+    }
 
 
 # ---------- Q41/Q42 PCP 重算候选 HumanGate ----------
