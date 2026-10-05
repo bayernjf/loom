@@ -3,9 +3,9 @@
 角色口径：后台档案 CRUD = operations（Q35）；所有写操作 writeAudit。
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.audit import append_audit
 from app.core.config_center.knobs import knob
@@ -22,6 +22,7 @@ from app.platform.platform_adaptation.models import (
     SlotTypeDefault,
 )
 from app.product.condition.models import ContentGoal
+from app.product.modeling.models import OpsTodo
 from app.product.product_intake.models import ProductSpace
 
 PLATFORM_TENANT = "_platform"
@@ -33,6 +34,18 @@ SOURCE_MANUAL = "manual"
 CAND_PENDING = "pending"
 CAND_APPROVED = "approved"
 CAND_REJECTED = "rejected"
+
+# ---- Q294：PCP 每周重算提醒（SweepScheduler 第 6 作业，只提醒、不产权重）----
+# 提醒待办类型/实体；审计动作与 SLA 升级动作（升级沿用引擎默认 sla.todo_escalated）。
+TODO_TYPE_PCP_WEEKLY_RECALC = "pcp_weekly_recalc"
+ENTITY_TYPE_PCP = "pcp_weight_table"
+RECALC_TODO_ACTION = "signal.pcp_weekly_recalc_todo"
+# 周节奏与提醒截止时长（配置中心热更；默认值见 seeds.py，Q294 甲案）。
+WEEKDAY_KEY = "platform.recalc_weekday"
+HOUR_KEY = "platform.recalc_hour"
+TZ_OFFSET_KEY = "platform.recalc_tz_offset_hours"
+TODO_DUE_DAYS_KEY = "platform.recalc_todo_due_days"
+CYCLE = timedelta(days=7)
 
 
 class RoleNotAllowed(Exception):
@@ -828,3 +841,182 @@ async def reject_candidate(
         detail={"reason": reason},
     )
     return cand
+
+
+# ---------- Q294：每周重算提醒（PT-PCP-V1.5「动态信号每周更新触发重算」V2 第一切片）----------
+
+
+def weekly_recalc_anchor(
+    now: datetime, weekday: int, hour: int, tz_offset_hours: int
+) -> datetime:
+    """本地周节奏 ``(weekday, hour)`` 对应的**最近一次已到点锚点**（返回 UTC）。
+
+    ``weekday`` 以周一=0（``datetime.weekday()`` 同口径）。钟点未到则退回上一周期，
+    保证同一周期内任意 tick 得到同一个锚点（周节奏只认锚点、不认 tick 次数）。
+
+    Q294 甲案：固定 UTC 偏移口径。中国自 1991 年起无夏令时，固定偏移与 Asia/Shanghai
+    恒等；镜像 ``python:3.12-slim`` 无系统 tz 数据库，用具名时区会 ZoneInfoNotFound，
+    故刻意不引 tzdata 依赖（带 DST 的时区须另裁）。
+    """
+    local = now.astimezone(timezone(timedelta(hours=tz_offset_hours)))
+    anchor = local.replace(hour=hour, minute=0, second=0, microsecond=0)
+    anchor -= timedelta(days=(local.weekday() - weekday) % 7)
+    if anchor > local:
+        anchor -= CYCLE
+    return anchor.astimezone(UTC)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """读回的日期时间归一为 UTC。
+
+    PG timestamptz 读回即 aware；SQLite 读回落掉偏移为 naive（存储串不含 offset），
+    而 server_default=now() 两侧都记 UTC ⇒ naive 一律按 UTC 解释（Q294）。
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+async def _pending_candidate_exists(session, pcp_id: str) -> bool:
+    """该 PCP 是否已有在途（pending）重算候选——有则运营已在处理，不再打扰。"""
+    return (
+        await session.scalar(
+            select(PcpRecalcCandidate.candidate_id)
+            .where(
+                PcpRecalcCandidate.pcp_id == pcp_id,
+                PcpRecalcCandidate.status == CAND_PENDING,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+async def scan_weekly_recalc_reminders(session, now: datetime) -> int:
+    """Q294：为一周内「新生效动态事件」对应的 PCP 开/续一条重算提醒待办。
+
+    触发机制 3.1 甲（SweepScheduler 登记作业，门控见 config）+ 产出 3.2 甲（只提醒），
+    闭合 docs/01 段8 PT-PCP-V1.5「动态信号每周更新触发重算」的**产品内节奏**缺口：
+
+    1. 只扫**本周期窗口内新生效**的 active 事件（上一锚点之后、本锚点及之前）；
+       无新事件的周直接跳过（Q294 待裁点 3 推荐口径）。
+    2. 事件命中平台的每个 active PCP：已有 pending 候选的不打扰（人工 Gate 红线：
+       提醒不得与在途裁决叠加）。
+    3. 开/续一条 ``pcp_weekly_recalc`` OpsTodo（assignee=operations）：无开放待办则新建，
+       有开放/escalated 待办则续期（刷新命中事件与 due_at，不重复开条）；本周期内已提醒过
+       （含已 resolved）的不再重复。
+    4. **不生成权重、不建候选、不写回 pcp_weight_tables**——事件→17 字段权重的映射规则
+       原文未给出（禁臆造），运营据提醒走既有 manual 候选 → 人工 Gate。
+
+    不自行提交（提交边界由统一 sweep runner 负责）；单轮影响行数（新建+续期）为返回值。
+    """
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    weekday = int(knob(WEEKDAY_KEY))
+    hour = int(knob(HOUR_KEY))
+    tz_offset = int(knob(TZ_OFFSET_KEY))
+    due_days = int(knob(TODO_DUE_DAYS_KEY))
+    anchor = weekly_recalc_anchor(now, weekday, hour, tz_offset)
+    cycle_start = anchor - CYCLE
+
+    events = list(
+        (
+            await session.scalars(
+                select(PlatformDynamicEvent)
+                .where(
+                    PlatformDynamicEvent.status == "active",
+                    PlatformDynamicEvent.effective_start > cycle_start,
+                    PlatformDynamicEvent.effective_start <= anchor,
+                )
+                .order_by(
+                    PlatformDynamicEvent.platform, PlatformDynamicEvent.effective_start
+                )
+            )
+        ).all()
+    )
+    if not events:
+        return 0
+
+    hits_by_platform: dict[str, list[PlatformDynamicEvent]] = {}
+    for ev in events:
+        hits_by_platform.setdefault(ev.platform, []).append(ev)
+
+    acted = 0
+    for platform in sorted(hits_by_platform):
+        hits = hits_by_platform[platform]
+        event_ids = [ev.event_id for ev in hits]
+        pcps = list(
+            (
+                await session.scalars(
+                    select(PcpWeightTable)
+                    .where(
+                        PcpWeightTable.platform == platform,
+                        PcpWeightTable.status == "active",
+                    )
+                    .order_by(PcpWeightTable.pcp_id)
+                )
+            ).all()
+        )
+        for pcp in pcps:
+            if await _pending_candidate_exists(session, pcp.pcp_id):
+                continue
+            open_todo = await session.scalar(
+                select(OpsTodo)
+                .where(
+                    OpsTodo.todo_type == TODO_TYPE_PCP_WEEKLY_RECALC,
+                    OpsTodo.entity_type == ENTITY_TYPE_PCP,
+                    OpsTodo.entity_id == pcp.pcp_id,
+                    OpsTodo.status.in_(["open", "escalated"]),
+                )
+                .order_by(OpsTodo.created_at.desc())
+            )
+            if open_todo is None:
+                last_at = await session.scalar(
+                    select(func.max(OpsTodo.created_at)).where(
+                        OpsTodo.todo_type == TODO_TYPE_PCP_WEEKLY_RECALC,
+                        OpsTodo.entity_type == ENTITY_TYPE_PCP,
+                        OpsTodo.entity_id == pcp.pcp_id,
+                    )
+                )
+                if last_at is not None and _as_utc(last_at) >= cycle_start:
+                    # 本周期已提醒过（无论是否已被 resolved），不重复打扰。
+                    continue
+            detail = {
+                "platform": platform,
+                "product_space_id": pcp.product_space_id,
+                "pcp_id": pcp.pcp_id,
+                "event_ids": event_ids,
+                "event_count": len(event_ids),
+                "cycle_start": cycle_start.isoformat(),
+                "anchor": anchor.isoformat(),
+                "next_step": "人工提交 recalc 候选并过 Gate（不自动改权重）",
+            }
+            if open_todo is None:
+                todo = OpsTodo(
+                    tenant_id=pcp.tenant_id,
+                    todo_type=TODO_TYPE_PCP_WEEKLY_RECALC,
+                    entity_type=ENTITY_TYPE_PCP,
+                    entity_id=pcp.pcp_id,
+                    assignee_role=ROLE_OPERATIONS,
+                    detail={**detail, "renewed": False},
+                    due_at=now + timedelta(days=due_days),
+                )
+                session.add(todo)
+                await session.flush()
+            else:
+                # 续期：跨周期仍未处理 ⇒ 刷新命中事件并顺延截止，不另开新条。
+                open_todo.detail = {**detail, "renewed": True}
+                open_todo.due_at = now + timedelta(days=due_days)
+                open_todo.assignee_role = ROLE_OPERATIONS
+            await append_audit(
+                session,
+                tenant_id=pcp.tenant_id,
+                actor_id=None,
+                actor_roles=None,
+                action=RECALC_TODO_ACTION,
+                entity_type=ENTITY_TYPE_PCP,
+                entity_id=pcp.pcp_id,
+                detail={**detail, "renewed": open_todo is not None},
+            )
+            acted += 1
+    return acted

@@ -120,6 +120,15 @@ class Settings(BaseSettings):
     # 单轮 sweep 最多清理的行数（运维防护参数，非 Q9 业务旋钮），防单事务过大。
     discard_purge_batch: int = 200
 
+    # Q294 段8「动态信号每周更新触发重算」（PT-PCP-V1.5）V2 第一切片（甲案）：默认关。
+    # 关闭时第六个 sweep 作业 `pcp_weekly_recalc_scan` 空转返回 0，V1 现有 sweep 行为
+    # 一字不变；开启后每周按配置中心 `platform.recalc_weekday`/`_hour`/`_tz_offset_hours`
+    # 锚点扫一遍「窗口内新生效的动态事件 → 对应 active PCP」，只为尚无 pending 重算候选
+    # 的 PCP 开/续一条 `pcp_weekly_recalc` OpsTodo 提醒——**不生成权重、不建候选、不写回
+    # pcp_weight_tables**（AI 只产候选、人工 Gate 裁决；事件→权重映射规则原文未给，禁臆造）。
+    # 周节奏是业务口径（原文未给），故走配置中心热更而非 env（Q9 旋钮纪律）。
+    pcp_weekly_scan_enabled: bool = False
+
     # Q232 MCP 对外面（docs/22）：默认关＝纯加法、可回滚。关闭时 `POST /mcp` 回 404，
     # 开启后仍需 Q88 Agent Key（缺失/错误/吊销 401），且工具面只有 plan 模式三件：
     # 不生成正文、不发 final_id、不代替人工 Gate。

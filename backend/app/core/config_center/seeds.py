@@ -91,6 +91,17 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("review.sla_hours.c7_layer4", "review", "float", 72, "Q70②/Q114", {"min": 1}),
     # ---- 段7/8 动态信号与 PCP 重算（Q42 单项单次幅度上限，Q259 起消费）----
     ("platform.recalc_step", "platform", "float", 0.05, "Q42", {"min": 0.001}),
+    # Q294：PCP 每周重算**提醒**的周节奏（段8 PT-PCP-V1.5「动态信号每周更新触发重算」的
+    # V2 第一切片）。原文只给「每周」二字，星期几/钟点/时区【原文未给出，待补】，默认值为
+    # 工程甲案推荐（周一 02:00、UTC+8＝Asia/Shanghai），业务方定值后走配置中心热更，不改码。
+    # 时区用**固定 UTC 偏移**而非 IANA 名：中国自 1991 年起无夏令时，固定偏移与具名时区
+    # 恒等，且免引 tzdata 依赖（Q294 刻意不做：镜像 python:3.12-slim 无系统 tz 数据库）。
+    ("platform.recalc_weekday", "platform", "int", 0, "Q294 甲案（原文未给出）", {"min": 0, "max": 6}),
+    ("platform.recalc_hour", "platform", "int", 2, "Q294 甲案（原文未给出）", {"min": 0, "max": 23}),
+    ("platform.recalc_tz_offset_hours", "platform", "int", 8, "Q294 甲案（原文未给出）", {"min": -12, "max": 14}),
+    # 提醒待办的截止时长（天）：与 PWS 就绪提醒同型（pws.ready_todo_due_days=7），到期经
+    # sweep 置 escalated（审计动作沿用默认 sla.todo_escalated，docs/10 §4）。
+    ("platform.recalc_todo_due_days", "platform", "int", 7, "Q294 甲案（原文未给出）", {"min": 1}),
 ]
 
 SEED_BY_KEY = {row[0]: row for row in CONFIG_SEEDS}
