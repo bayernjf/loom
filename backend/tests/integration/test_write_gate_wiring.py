@@ -87,6 +87,11 @@ UNGATED: tuple[tuple[str, str], ...] = (
     # Q262 读口：query actor 闸（require_layer_spaces_view），非凭证依赖。
     ("/api/admin/layer-spaces", "GET"),
     ("/api/admin/layer-spaces/items/{item_id}/impact", "GET"),
+    # Q297：PWS 冻结/吊销要求客户角色 whitelist_owner（BO-07 红线），该角色刻意
+    # 不可签发 staff 令牌（Q178），故两口当前无内部凭证闸；身份模型悬空归待裁项③
+    # （客户侧真实认证）承接，裁决后须整条移进 GATED 并写期望角色。
+    ("/api/product-spaces/{product_space_id}/pws/freeze", "POST"),
+    ("/api/pws/{pws_id}/revoke", "POST"),
 )
 
 

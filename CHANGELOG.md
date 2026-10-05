@@ -3,6 +3,9 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q297 新增内部角色与可签发性（V2 三件事公共前置）实现候选设计（2026-10-06；**测试＋文档**，零生产代码零迁移；写口守卫 UNGATED 补登 PWS 冻结/吊销两口、用例数不变，基线仍 **1169 passed＋10 skipped**、head=0049；02 C1.240）** —— 汇总 fit_score 校准、adapter 候选裁决、`whitelist_owner` 三处共同卡的角色前置（新档 `docs/design-v2-internal-roles-rbac.md`），不写码不裁决。
+  - **grounding**：内部 5 角色可绑 staff PAT、`whitelist_owner` 刻意不可签发（`rbac.INTERNAL_ROLES` 与 `staff_auth INTERNAL_STAFF_ROLES` 两处须逐字一致）；守卫矩阵只用 4 种角色、`dictionary_admin` 定义但 0 写口；docs/06 §7 无 fit_score 行、平台适配为「平台审核员（展示口径）」均无权威角色码；PWS 冻结/吊销两口既无 `require_internal_actor` 也不在 GATED/UNGATED 名单（身份模型悬空，Q242 归并待裁项③）。
+  - **推荐**：fit 校准与 adapter 裁决均**甲＝复用 operations**（零新角色、零迁移，§7 把展示口径映射到权威码）；`whitelist_owner` **甲＝维持客户角色随③客户认证解决**，本批只把冻结两口补进守卫 UNGATED 显式登记（盲区变判据）。乙案＝新设 fit_admin/platform_reviewer，本质是"要不要独立审计身份"的组织裁决。红线：不把客户角色塞进内部令牌集、adapter 裁决不新增硬 Guard。
 - **Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地＝Q295 裁决两件的甲案（2026-10-06；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）** —— Q295 两件「落码另点工」收口。
   - **fit_score 可解释化**：`pa_rules.fit_score_breakdown()` 与 `compute_fit_score()` 共用权重同 `FIT_DIMS` 序、Σ(contribution) 与标量自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合）；聚合算法一字不改、派生值不落库。
   - **PLATFORM-ADAPTER 只读预览口**：`POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／`_match_rule_rows` Q36 命中／`active_events_for` 事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）；synthetic 无 frozen PWS 两键在消费方归一为五键（Q293 形状缺口，decision/gate 为 None 不造假）。

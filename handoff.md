@@ -1,6 +1,12 @@
 # Handoff — Loom
 
-> **最新（2026-10-06）：Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地（Q295 裁决两件的甲案；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）**——负责人「接手 Q296，把剩下的收口」。
+> **最新（2026-10-06）：Q297 新增内部角色与可签发性（V2 三件事公共前置）实现候选设计（**测试＋文档**，零生产代码零迁移；写口守卫 UNGATED 补登 PWS 冻结/吊销两口〔盲区变判据、用例数不变〕，基线仍 **1169 passed＋10 skipped**、head=0049；02 C1.240）**——负责人「好的」，工程侧挑的不需裁决可独立推进项。
+> - **为何汇总**：fit_score 校准（fit 乙）、adapter 候选裁决（adapter 乙）、待裁项③ 的 `whitelist_owner` 可签发性——三件 V2 余量**共同卡在同一契约前置**（要不要新角色码／能否签发 staff 令牌／守哪些写口），拆三次裁决会造成两三次契约变更，故按 Q274/Q284/Q292/Q293 同型合成一份。
+> - **grounding（head=0049 实测）**：内部 5 角色可绑 staff PAT、客户角色 `whitelist_owner` 刻意不可签发（`rbac.INTERNAL_ROLES` 与 `staff_auth INTERNAL_STAFF_ROLES` 两处须逐字一致）；守卫矩阵只用 4 种角色，`dictionary_admin` 定义但 **0 写口**挂它（可复用）；docs/06 §7 Gate 总览**无 fit_score 行**、平台适配是「平台审核员（展示口径）」均无权威角色码；PWS 冻结/吊销两口（router :78/:109）**既无 `require_internal_actor`、也不在 GATED/UNGATED 任一名单**（身份模型悬空，Q242 归并③）。
+> - **推荐**：fit 校准与 adapter 裁决均**甲＝复用 operations**（零新角色零迁移，§7 把展示口径映射到权威码）；`whitelist_owner` **甲＝维持客户角色随③客户认证解决**，本批只把冻结两口补进守卫 UNGATED 显式登记（盲区变判据）。乙案（新设 fit_admin/platform_reviewer）本质是「要不要独立审计身份」的组织裁决，工程不代裁；红线＝不把客户角色塞进内部令牌集、adapter 裁决不新增硬 Guard。
+> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批只把③的一个子问题材料化。
+>
+> **其前（2026-10-06）：Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地（Q295 裁决两件的甲案；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）**——负责人「接手 Q296，把剩下的收口」。
 > - **两件甲案**：① **fit_score 可解释化**：`pa_rules.fit_score_breakdown()` 与聚合函数共用权重同维度序、Σ 自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合），算法不落库不改。② **PLATFORM-ADAPTER 只读预览口**：`POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／Q36 `_match_rule_rows` 命中／生效事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）。
 > - **五键归一**：synthetic 无 frozen PWS 两键在消费方归一为 Prompt v0.1 五键（Q293 形状缺口闭合，decision/gate 为 None 不造假）；docs/05 已登记。新端点已进 `test_write_gate_wiring` 的 `GATED`。
 > - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
@@ -32,12 +38,7 @@
 > - **同批登记 Q291 CI**：run `37324727725`（dev `22e6c60`）六道门全 **success**，本机 1147＋10 skip 与 CI 一致。锚点按 Q283 教训逐行对内容（`approve_candidate` 实为 `service.py:760`，非初稿 773）。
 > - **【复判不变】**：① 达标／② 未达标（真业务值替换 `t-e2e`＋跑链第二人）／③ 未达标（现网部署＋真 ACME 未证，另有待裁项③）——本批把一件 V2 余量从「无调度器」精确化为「权重来源缺失」并交可裁决材料，不改任一层判定。
 >
-> **其前（2026-10-05）：Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**——工程侧自查可独立推进项，负责人「你自己可以搞吗」。
-> - **缺陷（反向枚举实测，非推理）**：把 `config.py` 全部字段对照 base compose 与 5 overlay 一次性盘点，查出四个**与拓扑无关、文档已承诺部署期可拧**的布尔开关谁都不转发、容器内又无 `.env` ⇒ 运维在 `.env` 设了也进不了容器。最要命 `LOOM_STAFF_AUTH_ENABLED`：docs/17 §1 启用引导第③步与 Q203 验收都要求「置 true 重启」，但官方 compose 形态下 env 永不到 backend（`staff_auth/deps.py:121` 凭证分支永不进），身份门控实际开不了。
-> - **交付**：`infra/docker-compose.yml` backend.environment 补 `LOOM_SCHEDULER_ENABLED`（默认 true）＋`LOOM_STAFF_AUTH_ENABLED`／`LOOM_DISCARD_PURGE_ENABLED`／`LOOM_MCP_ENABLED`（默认 false）四行 `${VAR:-字面默认}`（布尔 env 不用空串默认，空串会让 pydantic bool 启动校验失败）；默认值一字不变、纯加法可回滚。
-> - **守卫（反向枚举，不止补一个）**：`test_gateway_surface_contract.py` 新增 `test_topology_free_bool_switches_actually_reach_the_backend_container`——四开关必须转发且插值默认与 `config.py` 逐字一致；拓扑绑定族（restock/export/import/fcw 四 worker＋distributed_lock＋config_cache_broadcast 共 6 开关）**刻意不进 base**，谁挪进来即红（只由 ha overlay 在多副本/演练时打开）。两次种植（staff_auth 改空串／export worker 塞 base）各判红后还原；沙盒内 2 个 backup_monitoring socket.bind 失败经沙盒外复跑 22 passed 证实为环境假红。
-> - **刻意没做（守裁决边界）**：不改默认值、不加应用内启动校验（Q287 已注明属运行时行为变更须裁决）、不扩 worker 族转发面、不入 `backend/.env.example`（Q135/Q178/Q232 先例）。docs/17 §1＋docs/22 §3.1 已补接线事实，Q285 banner 按「最近 5 条」上限滚入 10-04 档案。
-> - **【复判不变】**：① 功能覆盖达标／② 未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链第二人）／③ 未达标（本批让 staff 门控在官方 compose 下**真能开**、补了 #7 验收链一处被文档掩盖的硬缝，但现网部署＋真 ACME 仍未证，另有待裁项③ 客户侧认证）。
+> ~~Q291 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
 > ~~Q290 banner 原文~~（含其五条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 > ~~Q288/Q289 banner 原文~~（含其五条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
@@ -170,6 +171,12 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。
 
 ## 最近进度（2026-09-20 ~ 2026-10-06）
+- **Q297 内部角色与可签发性（V2 三件事公共前置）实现候选设计（2026-10-06；**测试＋文档**，零生产代码零迁移；守卫 UNGATED 补登 PWS 冻结/吊销两口、用例数不变，基线仍 **1169 passed＋10 skipped**、头仍 0049；02 C1.240）** —— 负责人「好的」，工程侧挑的不需裁决可独立推进项；新档 `docs/design-v2-internal-roles-rbac.md`。
+  - **为何汇总**：fit_score 人工校准（fit 乙）、adapter 候选表＋Gate（adapter 乙）、待裁项③ 的 `whitelist_owner` 可签发性——三件 V2 余量共同卡在同一契约前置（要不要新角色码／能否签发 staff 令牌／守哪些写口），拆三次裁决会造成两三次契约变更，按 Q274/Q284/Q292/Q293 同型合成一份。
+  - **grounding（head=0049 实测）**：内部 5 角色可绑 staff PAT、客户角色 `whitelist_owner` 刻意不可签发（`rbac.INTERNAL_ROLES` 与 `staff_auth INTERNAL_STAFF_ROLES` 两处须逐字一致）；守卫矩阵只用 4 种角色，`dictionary_admin` 定义但 0 写口挂它（可复用）；docs/06 §7 Gate 总览无 fit_score 行、平台适配无权威角色码；PWS 冻结/吊销两口（router :78/:109）既无 `require_internal_actor`、也不在 GATED/UNGATED 任一名单（身份模型悬空，Q242 归并③）。
+  - **推荐**：fit 校准与 adapter 裁决均**甲＝复用 operations**（零新角色零迁移，展示口径映射到权威码）；`whitelist_owner` **甲＝维持客户角色随③客户认证解决**，本批只把冻结两口补进守卫 UNGATED 显式登记（盲区变判据）。乙案（新设 fit_admin/platform_reviewer）本质是「要不要独立审计身份」的组织裁决，工程不代裁；红线＝不把客户角色塞进内部令牌集、adapter 裁决不新增硬 Guard。
+  - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批只把③的一个子问题材料化。
+  - **已落的一件诚实化小改**：`test_write_gate_wiring.py` UNGATED 补两口（`/api/product-spaces/{id}/pws/freeze`、`/api/pws/{id}/revoke`）并注释待裁项③承接，守卫 3 例绿；无生产行为变化。
 - **Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地（Q295 裁决两件的甲案；2026-10-06；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）** —— 负责人「接手 Q296，把剩下的收口」。
   - **两件甲案**：① fit_score：`pa_rules.fit_score_breakdown()` 与聚合函数共用权重同 `FIT_DIMS` 序、Σ 自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合），算法不落库不改。② `POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／Q36 `_match_rule_rows` 命中／生效事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）；synthetic 无 frozen PWS 两键在消费方归一为五键（Q293 形状缺口闭合），已进 `GATED`、docs/05 登记。
   - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
