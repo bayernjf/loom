@@ -1,6 +1,12 @@
 # Handoff — Loom
 
-> **最新（2026-10-05）：Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**——工程侧自查可独立推进项，负责人「你自己可以搞吗」。
+> **最新（2026-10-05）：Q292 PCP「每周重算触发」实现候选设计（**纯文档交材料**，零代码零迁移零测试变化；基线不变 **1147 passed＋10 skipped**；02 C1.235）**——承接 Q278 点名三件未落之一，只做 Q274/Q284 同型候选材料，不写码不裁决。
+> - **grounding 改变问题形状**：真缺口不是「周调度器」而是「每周触发后**新权重从哪来**」。重算候选＋人工 Gate 三件套已全（`pcp_recalc_candidates` partial unique、create/approve/reject、Σ≤1.0＋`recalc_step`），但 `proposed_weights` 的 17 个新值 V1 只能人填——`source=ai|manual`、V1 仅 manual、PCP-SCORE 生成器随 V2（`models.py:215-216`）；`pa_rules.py` 无「事件→权重」派生函数；动态事件唯一消费是 match advisory 回带、不改判定（`service.py:652`）；原文（docs/01 line 2057 痕迹）只说「每周触发重算」未给映射算法。⇒ 只加周循环而无权重来源＝每周醒来无合法动作，自造映射即违反禁臆造。
+> - **交付**：新档 `docs/design-v2-pcp-weekly-recalc.md`，两层候选——3.1 触发机制（甲＝复用 `SweepScheduler` 第 6 登记作业＋默认关 env〔推荐，白拿 Q89/Q139/Q151 多副本安全〕／乙独立循环／丙外部 cron）× 3.2 触发后产出（甲＝只开 OpsTodo「待重算提醒」不产权重〔推荐的 V2 第一切片，与 PWS 就绪提醒同型、零臆造〕／乙确定性派生候选，硬阻塞＝业务方先给事件→权重映射规则／丙 PCP-SCORE AI 候选，接模型网关＋eval/golden）；§4 列 6 待裁点。任何路径都不自动 approve（人工 Gate 红线）。
+> - **同批登记 Q291 CI**：run `37324727725`（dev `22e6c60`）六道门全 **success**，本机 1147＋10 skip 与 CI 一致。锚点按 Q283 教训逐行对内容（`approve_candidate` 实为 `service.py:760`，非初稿 773）。
+> - **【复判不变】**：① 达标／② 未达标（真业务值替换 `t-e2e`＋跑链第二人）／③ 未达标（现网部署＋真 ACME 未证，另有待裁项③）——本批把一件 V2 余量从「无调度器」精确化为「权重来源缺失」并交可裁决材料，不改任一层判定。
+>
+> **其前（2026-10-05）：Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**——工程侧自查可独立推进项，负责人「你自己可以搞吗」。
 > - **缺陷（反向枚举实测，非推理）**：把 `config.py` 全部字段对照 base compose 与 5 overlay 一次性盘点，查出四个**与拓扑无关、文档已承诺部署期可拧**的布尔开关谁都不转发、容器内又无 `.env` ⇒ 运维在 `.env` 设了也进不了容器。最要命 `LOOM_STAFF_AUTH_ENABLED`：docs/17 §1 启用引导第③步与 Q203 验收都要求「置 true 重启」，但官方 compose 形态下 env 永不到 backend（`staff_auth/deps.py:121` 凭证分支永不进），身份门控实际开不了。
 > - **交付**：`infra/docker-compose.yml` backend.environment 补 `LOOM_SCHEDULER_ENABLED`（默认 true）＋`LOOM_STAFF_AUTH_ENABLED`／`LOOM_DISCARD_PURGE_ENABLED`／`LOOM_MCP_ENABLED`（默认 false）四行 `${VAR:-字面默认}`（布尔 env 不用空串默认，空串会让 pydantic bool 启动校验失败）；默认值一字不变、纯加法可回滚。
 > - **守卫（反向枚举，不止补一个）**：`test_gateway_surface_contract.py` 新增 `test_topology_free_bool_switches_actually_reach_the_backend_container`——四开关必须转发且插值默认与 `config.py` 逐字一致；拓扑绑定族（restock/export/import/fcw 四 worker＋distributed_lock＋config_cache_broadcast 共 6 开关）**刻意不进 base**，谁挪进来即红（只由 ha overlay 在多副本/演练时打开）。两次种植（staff_auth 改空串／export worker 塞 base）各判红后还原；沙盒内 2 个 backup_monitoring socket.bind 失败经沙盒外复跑 22 passed 证实为环境假红。
@@ -25,10 +31,7 @@
 > - **静态门 ＋1**：同域规则必须同现于运维读的 docs/17 与演练预检（规则丢任何一边即红）。**自摆乌龙一次**：断言初版按字面找「必须同域」，而 docs/17 正文写的是「必须与 `LOOM_GATEWAY_DOMAIN` 同域」⇒ 假红，改按语义断言。docs/17 §1.1 顺手更正「两件事」→「**三件事（前两件必须同域）**」（原文列三条自称两件）；§7.8／BENCHMARK 计数同步 23。
 > - **刻意没做**＝应用内启动校验（backend 读两个 env 自查属运行时行为变更，未获裁决不动）。**三层判定不变**：① 达标／② 未达标（业务方按 docs/19 §0.2 回填主数据＋录入一个真产品＋有人跑段1→6→10 在 Gate 裁决）／③ 未达标（现网未部署＋真实 ACME 未签发）。
 >
-> **其前（2026-10-05）：Q286 项目文档对账第二刀＝这次对的是**目录层**（**纯文档零代码零迁移零测试变化**；基线不变 1140 passed＋10 skipped／总收集 1150；02 C1.229）**——Q285 对的是正文层的活状态句子，这轮量地图与 handoff 文档表，三处命中：
-> - **① docs/README 的 docs/02 行把决策日志范围写停在 Q251／C1.195**——实测（`grep -o` 取最大）最新 **Q285／roster 至 C1.228**，落后 34 批，已改并指「Q275 预留未用」（02 C1.227）。这是「数字被原样抄走后没人再量」的第三个实例（前两个＝docs/16 的 1029、docs/23 §8.3 的 ⬜）。
-> - **② docs/23 与 design-p2 的地图行只描述了第一版内容**：docs/23 行补上 §0.1（Q276 重扫）／§8.3 改判与勘误（Q278）／§0.2（Q283 活状态复扫）／§11.11–11.12（Q279 网关、Q280 首启）四层结构；design-p2 行补 **§6＝待裁项⑦ 评审材料（Q284：只读盘点 SQL＋0048 草案＋归档三案，未执行）**。目录层描述过期＝读者会以为这些文档没有后来的部分。
-> - **③ handoff「项目文档（完整清单，单一事实源）」表实测登记 0 份 design 档**（`ls docs/design-*.md`＝6 份：a2a-vassal／identity-layer-v2／d3.5-whitelist-assembly-remaining／fcw-freeze-management／p2-package-reuse-reconfig／deployment-gateway-tls）——补一行聚合行，逐份描述与状态**指回 docs/README 地图行 40–45**：两个目录都自称权威时，正确解法是让一个指另一个，而不是各抄一份再互相漂移；表内 docs/23 行同步补 §0.2/§11.11/§11.12。**确认无需改**：docs/19 §6／已结清单、docs/22 §6、docs/21、BENCHMARK、docs/10、docs/09。**三层判定不变**：① 达标／② 未达标（业务方主数据回填＋跑链第二人）／③ 未达标（现网未部署＋真 ACME 未签发）。
+> ~~Q286 banner 原文~~（含其三条子项）已按「最近 5 条」上限于 2026-10-05 逐字滚入 [docs/handoff-archive-2026-10-04.md](docs/handoff-archive-2026-10-04.md)。
 >
 > ~~Q285 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-05 逐字滚入 [docs/handoff-archive-2026-10-04.md](docs/handoff-archive-2026-10-04.md)。
 >
@@ -155,6 +158,10 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。
 
 ## 最近进度（2026-09-20 ~ 2026-10-05）
+- **Q292 PCP「每周重算触发」实现候选设计（2026-10-05；**纯文档交材料**，零代码零迁移零测试变化；基线不变 **1147 passed＋10 skipped**；02 C1.235）** —— 承接 Q278 三件未落之一，只做候选材料（新档 `docs/design-v2-pcp-weekly-recalc.md`），不写码不裁决。
+  - **grounding 改变问题形状**：真缺口不是「周调度器」而是「触发后新权重从哪来」。候选＋Gate 三件套已全，但 `source` V1 仅 manual、PCP-SCORE 随 V2、`pa_rules` 无事件→权重派生、事件现仅 advisory；原文（line 2057 痕迹）未给映射算法。
+  - **两层候选**：3.1 触发（甲＝复用 SweepScheduler 第 6 作业＋默认关 env〔推荐〕／乙独立循环／丙外部 cron）× 3.2 产出（甲＝只开 OpsTodo 提醒不产权重〔推荐的 V2 第一切片〕／乙确定性派生须业务先给映射规则／丙 PCP-SCORE AI 候选）；§4 列 6 待裁点，任何路径不自动 approve。
+  - 同批登记 Q291 CI：run `37324727725` 六道门全 success。锚点按 Q283 教训逐行对内容（`approve_candidate` 实为 `service.py:760`）。**三层判定不变**。
 - **Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口）（2026-10-05；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**
   - **缺陷（反向枚举实测）**：`config.py` 全字段对照 base compose 与 5 overlay 盘点，查出 `LOOM_SCHEDULER_ENABLED`（默认 true）、`LOOM_STAFF_AUTH_ENABLED`、`LOOM_DISCARD_PURGE_ENABLED`、`LOOM_MCP_ENABLED`（均默认 false）四个**与拓扑无关、文档已承诺部署期可拧**的开关谁都不转发、容器内又无 `.env` ⇒ `.env` 设了也进不了容器；其中 staff 门控在 docs/17 §1 引导第③步与 Q203 验收都要求「置 true 重启」，官方 compose 形态下实际开不了。
   - **交付**：`infra/docker-compose.yml` backend.environment 补四行 `${VAR:-字面默认}`（布尔 env 不用空串默认）；默认值一字不变、纯加法可回滚。

@@ -3,6 +3,10 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q292 PCP「每周重算触发」实现候选设计（2026-10-05；**纯文档交材料**，零代码零迁移零测试变化；基线不变 **1147 passed＋10 skipped**；02 C1.235）** —— 承接 Q278 点名三件未落之一，只做 Q274/Q284 同型候选材料（新档 `docs/design-v2-pcp-weekly-recalc.md`），不写码不裁决。
+  - **grounding 改变问题形状**：真缺口不是「周调度器」而是「每周触发后新权重从哪来」。重算候选＋人工 Gate 三件套已全（`pcp_recalc_candidates`、create/approve/reject、Σ≤1.0＋`recalc_step`），但 `proposed_weights` 的 17 个新值 V1 只能人填——`source=ai|manual`、V1 仅 manual、PCP-SCORE AI 生成器随 V2；`pa_rules.py` 无「事件→权重」派生函数；动态事件唯一消费是 match advisory 回带、不改判定；原文（line 2057 痕迹）只说「每周触发重算」未给映射算法。
+  - **两层候选**：3.1 触发机制（甲＝复用 `SweepScheduler` 第 6 登记作业＋默认关 env〔推荐，白拿多副本锁/fence〕／乙独立循环／丙外部 cron）；3.2 触发后产出（甲＝只开 OpsTodo「待重算提醒」不产权重〔推荐的 V2 第一切片，零臆造〕／乙确定性派生候选，硬阻塞＝业务方先给事件→权重映射规则／丙 PCP-SCORE AI 候选）。§4 列 6 待裁点；任何路径都不自动 approve（人工 Gate 红线）。
+  - **同批登记 Q291 CI**：run `37324727725`（dev `22e6c60`）六道门全 success，本机 1147＋10 skip 与 CI 一致。锚点按 Q283 教训逐行对内容（`approve_candidate` 实为 `service.py:760`）。
 - **Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口）（2026-10-05；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**
   - **来由（反向枚举，非推理）**：把 `app/core/config.py` 全部字段对照 base compose 与 5 个 overlay 一次性盘点，查出四个**与拓扑无关、文档已承诺部署期可拧**的布尔开关谁都不转发，容器内又无 `env_file` ⇒ 运维在 `.env` 里设了也进不了容器。最要命的是 `LOOM_STAFF_AUTH_ENABLED`：docs/17 §1 启用引导第③步与 Q203 验收都要求「置 true 重启」，但官方 compose 形态下该 env 永不到 backend（`staff_auth/deps.py:121` 凭证分支永不进），身份门控实际开不了。
   - **交付**：`infra/docker-compose.yml` backend.environment 补 `LOOM_SCHEDULER_ENABLED`（默认 true）、`LOOM_STAFF_AUTH_ENABLED`／`LOOM_DISCARD_PURGE_ENABLED`／`LOOM_MCP_ENABLED`（默认 false）四行 `${VAR:-字面默认}`（布尔 env 不用空串默认，空串会让 pydantic bool 启动校验失败）。默认值一字不变，纯加法可回滚。
