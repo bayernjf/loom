@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口）（2026-10-05；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**
+  - **来由（反向枚举，非推理）**：把 `app/core/config.py` 全部字段对照 base compose 与 5 个 overlay 一次性盘点，查出四个**与拓扑无关、文档已承诺部署期可拧**的布尔开关谁都不转发，容器内又无 `env_file` ⇒ 运维在 `.env` 里设了也进不了容器。最要命的是 `LOOM_STAFF_AUTH_ENABLED`：docs/17 §1 启用引导第③步与 Q203 验收都要求「置 true 重启」，但官方 compose 形态下该 env 永不到 backend（`staff_auth/deps.py:121` 凭证分支永不进），身份门控实际开不了。
+  - **交付**：`infra/docker-compose.yml` backend.environment 补 `LOOM_SCHEDULER_ENABLED`（默认 true）、`LOOM_STAFF_AUTH_ENABLED`／`LOOM_DISCARD_PURGE_ENABLED`／`LOOM_MCP_ENABLED`（默认 false）四行 `${VAR:-字面默认}`（布尔 env 不用空串默认，空串会让 pydantic bool 启动校验失败）。默认值一字不变，纯加法可回滚。
+  - **守卫**：`test_gateway_surface_contract.py` 新增 `test_topology_free_bool_switches_actually_reach_the_backend_container`，反向枚举钉两件事——四开关必须转发且插值默认与 `config.py` 逐字一致；拓扑绑定族（restock/export/import/fcw 四 worker＋distributed_lock＋config_cache_broadcast 共 6 开关）刻意不进 base（只由 `docker-compose.ha.yml` 在多副本/演练时打开），谁挪进来即红。两次种植（staff_auth 改空串／export worker 塞进 base）各判红后按备份还原。沙盒内 2 个 backup_monitoring socket.bind 失败经沙盒外复跑 22 passed 证实为环境假红。
+  - **刻意没做**：不改默认值、不加应用内启动校验（运行时行为变更，Q287 已注明须裁决）、不扩 worker 族转发面、不入 `backend/.env.example`（Q135/Q178/Q232 先例）。
 - **Q290 主数据自检器在本机开发库实测 **exit 0**（已找到可发证组合），但数据带 `t-e2e` 前缀 ⇒ ② 判定不变（2026-10-05；**纯实测＋纯文档登记**，零代码零迁移零测试变化；后端基线仍 **1146 passed＋10 skipped**；02 C1.233）**
   - **实测（权威工具＝`backend/scripts/check_master_data.py`，本机 `infra-postgres-1`，head=0048）**：`publish_slots(active)=1／pcp_weight_tables(active)=1／packages(active)=3／content_goals(active)=5／cp_law_sensitive_domains(active)=6／g1_categories(active)=6`，并打出 **✅ 已可发证：`(product_space=bd1e64ac-…, tenant=t-e2e-c174c8ee7f9f, platform=x_platform, goal=ENGAGEMENT)`**，**exit 0**。Q245 起的「自检器恒 exit 1、三表零行」状态**已不再成立**（旧读数按不回改保留，由本条点名纠偏）。
   - **为什么 ② 判定仍未翻（本批唯一结论）**：该组合 `tenant_id` 前缀 **`t-e2e`**＝端到端造数痕迹；`platform=x_platform`、`slot_type=short_video` 亦非业务命名。按「禁工程臆造」红线与 docs/19 §清单一「判定『首批完成』唯一标准＝真实部署库出现一张 `final_id`、六路材料指向真实业务数据」，工程侧**不得据此自推、不得据此跑链宣称跑通**。
