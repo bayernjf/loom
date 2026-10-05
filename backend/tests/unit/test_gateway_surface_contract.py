@@ -179,6 +179,20 @@ def test_the_public_base_url_actually_reaches_the_backend_container() -> None:
     assert env.get("LOOM_PUBLIC_BASE_URL") == "${LOOM_PUBLIC_BASE_URL:-}", env.get("LOOM_PUBLIC_BASE_URL")
 
 
+def test_the_same_domain_rule_is_written_where_the_operator_will_read_it() -> None:
+    """Q287：两个对外旋钮（LOOM_GATEWAY_DOMAIN＝站点地址、LOOM_PUBLIC_BASE_URL＝卡片 base）
+    必须**同域**。应用对『卡片指向别域』不设防（演练已实证），所以规则必须活在两处：
+    运维读的运行手册（docs/17 §1.1）与部署前唯一能拦住人的演练预检（gateway-rehearsal.sh）。"""
+    docs17 = DOCS_DEPLOY.read_text()
+    assert "同域" in docs17 and "LOOM_GATEWAY_DOMAIN" in docs17 and "LOOM_PUBLIC_BASE_URL" in docs17, (
+        "docs/17 没把两个对外旋钮写成同域规则"
+    )
+    harness = (REPO_ROOT / "infra" / "gateway-rehearsal.sh").read_text()
+    assert "配置冲突" in harness and "LOOM_PUBLIC_BASE_URL 的主机" in harness, (
+        "演练预检丢了同域检查——别域卡片会静默上线"
+    )
+
+
 def test_reverse_proxy_targets_are_real_services_on_real_ports() -> None:
     base = yaml.safe_load(BASE_COMPOSE.read_text())["services"]
     backend_port = re.search(r"--port (\d+)", ENTRYPOINT.read_text()).group(1)
