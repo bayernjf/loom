@@ -9,7 +9,7 @@ Q45：按（产品×平台×目的）三元组配一份并缓存复用；满 20 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, Index, Integer, String, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, JSONType
@@ -68,6 +68,24 @@ class Package(Base):
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), onupdate=func.now(), nullable=True
+    )
+
+    # Q288（待裁项⑦ 裁「补」，丙案）：与迁移 0048 成对——同三元组仅一个 active 的
+    # DB 级守卫。键与 service 层查重逐字一致（product_space_id·platform·goal·kind，
+    # tenant_id 刻意不进键：PS 已定租户）；索引名刻意不复用幻影
+    # `uq_package_active_triple`（Q272 起被误当既有事实引用 5 处，Q278 勘误）。
+    # postgresql_where/sqlite_where 必须双写——缺一边 Q207 的 ORM⇄DB 漂移门即红。
+    __table_args__ = (
+        Index(
+            "uq_packages_active_triple",
+            "product_space_id",
+            "platform",
+            "goal",
+            "kind",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
     )
 
 

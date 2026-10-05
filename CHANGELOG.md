@@ -3,6 +3,23 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q290 主数据自检器在本机开发库实测 **exit 0**（已找到可发证组合），但数据带 `t-e2e` 前缀 ⇒ ② 判定不变（2026-10-05；**纯实测＋纯文档登记**，零代码零迁移零测试变化；后端基线仍 **1146 passed＋10 skipped**；02 C1.233）**
+  - **实测（权威工具＝`backend/scripts/check_master_data.py`，本机 `infra-postgres-1`，head=0048）**：`publish_slots(active)=1／pcp_weight_tables(active)=1／packages(active)=3／content_goals(active)=5／cp_law_sensitive_domains(active)=6／g1_categories(active)=6`，并打出 **✅ 已可发证：`(product_space=bd1e64ac-…, tenant=t-e2e-c174c8ee7f9f, platform=x_platform, goal=ENGAGEMENT)`**，**exit 0**。Q245 起的「自检器恒 exit 1、三表零行」状态**已不再成立**（旧读数按不回改保留，由本条点名纠偏）。
+  - **为什么 ② 判定仍未翻（本批唯一结论）**：该组合 `tenant_id` 前缀 **`t-e2e`**＝端到端造数痕迹；`platform=x_platform`、`slot_type=short_video` 亦非业务命名。按「禁工程臆造」红线与 docs/19 §清单一「判定『首批完成』唯一标准＝真实部署库出现一张 `final_id`、六路材料指向真实业务数据」，工程侧**不得据此自推、不得据此跑链宣称跑通**。
+  - **① 的卡点变形但没消失**：由「等三表填齐」变为「等**真值替换或确认**」——① 业务方给五个空（产品／发布平台／发布位类型／内容目的／**Gate 裁决人**）；② 或负责人明确「`t-e2e` 这组算真值」（本会话不代裁）。任意一条到位后，写库→自检→段1→6→10→Gate 裁决报告由工程侧全自动跑完。
+  - **本机口令事实（只记形状、不记值）**：本机开发库用 compose 容器里的 32 位口令从宿主连会 `InvalidPasswordError`；可用的是 `LOOM_DATABASE_DSN=postgresql+asyncpg://loom:loom@localhost:5432/loom`（与 `alembic/env.py` 缺省同值）。仓内不预设任何真实部署口令，口令不入库、不入任何文档。
+  - **范围**：零生产代码、零迁移、零测试改动、零新表零新 env；只改台账与活状态句子（docs/02／handoff／CHANGELOG／docs/19／AGENTS）。
+  - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝**真业务值替换 `t-e2e` 造数**＋跑链裁决的第二个人）／③ 可上线未达标（现网部署＋真实 ACME 未证，另有待裁项③）。
+- **Q288/Q289 待裁项⑦ 裁「补」丙案落地（`packages` 部分唯一索引）＋ prometheus 9090 绑回环（2026-10-05；**代码＋迁移＋测试＋配置＋文档**；迁移 **0047→0048**；后端 **1141→1146 passed＋10 skipped**〔＋4 集成／＋1 加固契约〕；真 PG16 往返实测；02 C1.231/C1.232）**
+  - **负责人「按你建议来」**：⑦ 裁**「补」**并采取**丙案**（现网零行 ⇒ 无重复可盘 ⇒ 不做归档口径）；材料＝Q284 交的 design-p2 §6（盘点 SQL＋0048 草案＋三案＋`IntegrityError`→409 提醒）。
+  - **Q288 交付**：迁移 `0048_packages_active_triple_unique`（双 where 双写）；`models.py` `__table_args__` 成对声明（缺一边 Q207 ORM⇄DB 漂移门即红）；`router.py` 的 create/update 两路 `IntegrityError`→**409**；守卫 `tests/integration/test_package_active_triple_guard.py` **4 例**（模型双写／重复 active 被 DB 拒／active＋archived 共存证 partial／**致盲 service 查重走 API 仍 409**）。
+  - **键与命名**：`(product_space_id, platform, goal, kind) WHERE status='active'`，与 service 查重逐字一致；`tenant_id` 刻意不进键；索引名刻意**不复用**幻影 `uq_package_active_triple`（Q272 起五份文档误当既有事实，Q278 勘误）。
+  - **真 PG16 实测**：升级前 `packages` **3 行 active**＝同一 PS（`bd1e64ac-…`）×`x_platform`×`ENGAGEMENT` 的 csp/cstp/cep；重复三元组 **0** ⇒ `alembic upgrade head` 建索引成功（有重复当场失败＝把盘点并进建索引动作）；重复插被 `duplicate key value violates unique constraint` 拒、archived 孪生放行；探针行已删（回到 3 行）；**0047→0048→0047→0048 往返**（`pg_indexes` **1→0→1**），`current`＝0048 head。
+  - **Q289 交付**：`infra/docker-compose.monitoring.yml` 的 prometheus `9090:9090` → **`127.0.0.1:9090:9090`**；`test_prometheus_keeps_its_port_and_no_other_service_publishes` 改名 `test_prometheus_is_loopback_only_and_no_other_service_publishes` 改判据；新增 `test_monitoring_overlay_web_ports_are_loopback_only`（prometheus＋grafana 两口都必须回环）。网格内消费／容器内健康检查／alerting 演练探针均不受影响。
+  - **影响面（对外可见）**：这是**并发形态变化**——并发双建同三元组从「都成功」变「后者 409」；日常单请求路径的 409 语义不变（service 先查后插仍先拦）。属 design-p2 §6 预告过的错误形态变更。
+  - **陈述精确化（与 Q280 同型）**：design-p2 §6「现网零行」指**生产环境**（无部署确为零行），本机**开发持久库**实测 3 行；两句话都对、指的不是同一个库，已在设计文档就地注记。
+  - **范围与接手**：零新表零新 env，业务物理表仍 **68**、迁移文件 **48**；本批实施半成品由并行会话起草，本会话接手做 ruff 修正（`C408`）＋全套验真（pytest 全量／真 PG 往返／重复拦截）＋台账登记。**⑦ 退出活跃待裁项（余 ②③④⑤）**。
+  - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝业务方回调首批主数据＋有人跑段1→6→10 在 Gate 裁决）／③ 可上线未达标（现网部署＋真实 ACME 未证，另有待裁项③）——本批是守卫加固，不改任一层判定。
 - **Q287 两个对外旋钮钉成同域不变量（2026-10-05，**脚本＋测试＋文档；零生产代码零迁移**；后端 **1140→1141 passed＋10 skipped**（总收集 **1151**；＋1＝同域规则门）、ruff 净、前端零改动；02 C1.230）** —— `LOOM_GATEWAY_DOMAIN`（Caddy 站点地址）与 `LOOM_PUBLIC_BASE_URL`（A2A 卡片 base）此前互不约束：只设其一或写成别域，应用不报错、CI 与契约测试全绿，**外部 Agent 会拿到一张指向别处的卡片**——Q280「旋钮没接到制品」一族里最后没钉死的一型。
   - **演练预检**：`gateway-rehearsal.sh` 开头 fail-fast——env 主机 ≠ 站点地址 ⇒ **exit 2** 并打印冲突双方（实测；第一次量 exit 被管道里的 `head` 掩蔽成 0，去掉管道重测才拿到 2——老教训再中一次）。
   - **阶段 4 增到 6 条**：同域注入 ⇒ 两张卡片 `url` 同域绝对；**反向对照**＝故意注入 `https://mismatch.test` ⇒ 卡片真的跟着指向别域，**实证应用对此不设防**（这正是预检必须存在于部署前的理由）；收尾恢复同域。复跑 **23/23 PASS、FAIL=0**、拆除后残留 0。

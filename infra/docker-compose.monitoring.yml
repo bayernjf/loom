@@ -20,7 +20,9 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheusdata:/prometheus
-    ports: ["9090:9090"]
+    # Q289：绑回环——无认证无契约的抓取口不该开在宿主网卡上；网格内消费
+    # （watchdog/Grafana 走 http://prometheus:9090）与容器内健康检查不受影响。
+    ports: ["127.0.0.1:9090:9090"]
     depends_on:
       backend: {condition: service_healthy}
     healthcheck:

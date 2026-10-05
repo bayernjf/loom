@@ -1,7 +1,10 @@
 # 部署候选：网关与 TLS 归属（待裁项① → 候选三案）
 
-> 状态：⬜ **待负责人裁决**（工程侧只产候选，不代裁）
+> 状态：✅ **已裁决并落地**——负责人 2026-10-04 选**甲**（02 C1.222／Q279），仓内反代产物＋入站面契约门已上线；
+> §1 末两个非业务暴露面亦各自收口（文档面由 Q279 网关 404 拦截、prometheus 宿主口由 **Q289** 绑回环）。
+> 本文其余部分保留为裁决前的候选材料（逐片记录不回改）。
 > 产出批次：Q274（2026-10-04，02 C1.218）
+> 运行手册：docs/17 §1.1–1.2（启动与实测读数）、§7.8（`infra/gateway-rehearsal.sh` 演练）；门：`tests/unit/test_gateway_surface_contract.py`。
 > 目的：把 AGENTS/handoff 待裁项①「网关与 TLS 归属」从一句话待裁变成可一键裁决的三案，裁决后 private beta 前提「后端在网关后」即有仓内落地路径。
 
 ## 1. 来由与现状（事实，均可溯源）
@@ -19,8 +22,8 @@
   | `/`、`/_next/*` 等前端静态面 | frontend SSR 全部路径 | Q145 |
   | `/docs`、`/redoc`、`/openapi.json` | FastAPI 自带交互式文档/OpenAPI 模式，**应用默认开启**（`backend/app/main.py:145` 实例化未传 `docs_url/redoc_url/openapi_url`，2026-10-04 复核实证）；生产建议网关**默认拦截**或应用侧 env 门控关闭，**不在放行之列** | main.py:145（实证） |
 - **两个待清理的非业务暴露面（2026-10-04 复核新发现，三案共同前置，工程侧不代裁）**：
-  1. **FastAPI 交互式文档面**：`backend/app/main.py:145` 的 `FastAPI(...)` 未禁用文档，故 `/docs`（Swagger UI）、`/redoc`、`/openapi.json` 在任何部署形态下默认开放且无鉴权——网关上线时若不显式拦截，等于把完整 API 目录公开到公网。
-  2. **monitoring overlay 的 prometheus 宿主口**：`infra/docker-compose.monitoring.yml:23` 为 `ports: ["9090:9090"]`（发布到所有网卡）；同 overlay 的 Grafana 已按 **Q192 负责人决策**绑 `127.0.0.1:3001` 且有契约测试 `test_grafana_is_loopback_only` 硬守，而 prometheus（无认证、含 `/api/v1/query` 查询面）**无回环绑定、无契约**；alerting 演练探针一律 `docker exec` 走容器网格内（docs/17 §7.6），宿主 9090 无已知消费者。监控 profile 默认不启，不阻塞 beta，但与 Q192 同纪律的处置（绑回环）建议一并裁决。
+  1. **FastAPI 交互式文档面**：`backend/app/main.py:145` 的 `FastAPI(...)` 未禁用文档，故 `/docs`（Swagger UI）、`/redoc`、`/openapi.json` 在任何部署形态下默认开放且无鉴权——网关上线时若不显式拦截，等于把完整 API 目录公开到公网。 **✅ 随 Q279 甲案落地收口**：`infra/caddy/Caddyfile` 对六条面（`/docs`·`/docs/*`·`/redoc`·`/openapi.json`·`/healthz`·`/metrics`）返回 404，应用侧不改；形状由 `tests/unit/test_gateway_surface_contract.py` 逐路径钉住（判 body 不判状态码）。
+  2. **monitoring overlay 的 prometheus 宿主口**：`infra/docker-compose.monitoring.yml:23` 为 `ports: ["9090:9090"]`（发布到所有网卡）；同 overlay 的 Grafana 已按 **Q192 负责人决策**绑 `127.0.0.1:3001` 且有契约测试 `test_grafana_is_loopback_only` 硬守，而 prometheus（无认证、含 `/api/v1/query` 查询面）**无回环绑定、无契约**；alerting 演练探针一律 `docker exec` 走容器网格内（docs/17 §7.6），宿主 9090 无已知消费者。监控 profile 默认不启，不阻塞 beta，但与 Q192 同纪律的处置（绑回环）建议一并裁决。 **✅ Q289 已裁决并落地（2026-10-05「按你建议来」）**：现同一位置在 `:25`＝`ports: ["127.0.0.1:9090:9090"]`（本批新增两行注释使锚点下移），网格内消费不受影响，hardening 门断言 prometheus＋grafana 两口绑回环。
 - **Q238 已就位机制**：`LOOM_PUBLIC_BASE_URL` 是 `Settings` 真字段（默认空⇒A2A 卡片 `url` 为相对路径）；**设对外公网域名即输出绝对地址——取值正取决于本裁决**（docs/22 §2.1）。
 - **判定影响**：docs/20 §7.4/#1：③ 可上线（受控 private beta）未达标的主因之一＝「后端在网关后」仓内无产物。本裁决落地后该主因即消（剩余 ② 主数据回填与跑链人手仍为外部卡点）。
 
@@ -75,6 +78,17 @@
 2. 域名：`loom.bayjf.com` 或指定其他（裁决后我改 `LOOM_PUBLIC_BASE_URL` 一处即可生效，机制已在 Q238 就位）。
 3. 五套演练是否纳入网关 overlay（甲/丙时默认纳入，乙时跳过）。
 4. 两个非业务暴露面的处置（建议随网关案一并裁决，见 §1 末）：① `/docs`·`/redoc`·`/openapi.json`——网关默认拦截，还是应用侧加 env 门控在生产关闭（工程侧倾向前者零应用改动，或两者都做纵深防御）；② prometheus `9090` 是否按 Q192 Grafana 同纪律绑回环（一行配置＋一条契约测试，工程侧可即落）。
+
+**裁决结果（四点全部有主，工程侧未代裁）**：
+
+| 点 | 裁决 | 落地 |
+|---|---|---|
+| 1 选案 | **甲**（负责人 2026-10-04「好的，你搞吧」） | Q279＝`infra/caddy/Caddyfile`＋`infra/docker-compose.gateway.yml`（第 5 个 overlay），02 C1.222 |
+| 2 域名 | 沿用 `loom.bayjf.com`（建议随甲案采纳） | `LOOM_GATEWAY_DOMAIN` 默认值⇄`LOOM_PUBLIC_BASE_URL` 同域不变式由 Q287 三条门守着（docs/17 §1.1） |
+| 3 演练纳入 | 纳入 | Q282＝第八套 `infra/gateway-rehearsal.sh`（四段 23 断言，docs/17 §7.8） |
+| 4 两个暴露面 | ① 网关默认拦截（甲案自带）／② 绑回环（负责人 2026-10-05「按你建议来」） | ① 随 Q279 落地；② **Q289**＝`127.0.0.1:9090:9090`＋契约门，02 C1.232 |
+
+**真实 ACME 签发仍未证**——本机只以 `localhost`＋Caddy 内部 CA 验过路由／拦截／308 跳转；须部署机执行 `-f docker-compose.gateway.yml up -d`＋设 `LOOM_PUBLIC_BASE_URL`（docs/17 §1.2 首启实测）。
 
 ## 6. 落地后动作（工程侧待命，不预执行）
 

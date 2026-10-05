@@ -124,3 +124,5 @@ def downgrade() -> None:
 
 **④ 我需要的东西**：一句「补／不补」。裁「补」后我按上面顺序交实现批（盘点脚本先跑真库→归档口径按你选的案→0048 迁移＋`IntegrityError`→409 接线＋门），全程不碰业务真值。
 
+> **✅ Q288 已落地（2026-10-05，负责人「按你建议来」裁「补」丙案）**：迁移 `0048_packages_active_triple_unique`（`op.create_index` 双 where 双写）＋模型 `__table_args__` 成对声明＋router create/update 两路 `IntegrityError`→**409**＋守卫判据 `tests/integration/test_package_active_triple_guard.py` 4 例（含「致盲查重走 API 仍 409」的并发形态实证）。盘点按丙案跳过（现网 `packages` 零行，无重复可盘）；真库若未来出现重复行，索引创建会**当场失败**而非静默——这是刻意的。**陈述精确化（2026-10-05 Q288 实测，与 Q280 同型）**：这里的「现网零行」指**生产环境**（尚无部署，确为零行）；本机**开发持久库** `infra-postgres-1` 实测为 **3 行 active**（同一 product_space×`x_platform`×`ENGAGEMENT` 的 csp／cstp／cep 三件套），重复三元组 **0** ⇒ 索引在该库上同样建得起来（`CREATE UNIQUE INDEX` 自带盘点性质：有重复必失败）。两句话都对，指的不是同一个库。
+

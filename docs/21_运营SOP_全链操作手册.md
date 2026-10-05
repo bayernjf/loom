@@ -204,12 +204,12 @@
 - **只绑回环是刻意的**：Grafana 唯一的门就是那个管理员口令，绑 `0.0.0.0` 等于把它裸露在网卡上。
   代价是**远程看盘需要自己起隧道**（例如 `ssh -L 3001:127.0.0.1:3001 <host>`），
   该做法本仓未实测，不在此充当标准步骤。
-- 不想开 Grafana 时的替代：Prometheus 仍发布 `9090`，其 `/graph` 表达式页可直接查这 10 条规则用到的
-  全部序列；`GET /metrics` 是原始文本。
+- 不想开 Grafana 时的替代：Prometheus 同样**只绑回环**发布 `127.0.0.1:9090`（Q289），在宿主机开
+  其 `/graph` 表达式页可直接查这 10 条规则用到的全部序列；`GET /metrics` 是原始文本。
 - **可达性由演练守着**：`infra/alerting-rehearsal.sh` 阶段 3 有两条宿主侧断言——从宿主机 `curl`
   `127.0.0.1:3001/api/health` 必须 200，且 `docker port grafana` 必须显示只绑 `127.0.0.1`。
   2026-09-25 全量演练 **39/39 PASS**（含阶段 5「业务告警实触发」：停 redis 让导出作业真失败，断言 `LoomJobFailed` 曾 firing 且带 `kind=export`、watchdog 恰转发一次——七条业务规则唯有此处被端到端证明过）。发布口形状另有契约测试硬守
-  （`test_grafana_is_loopback_only`：绑错网卡、撞 3000、多开口子都判红）。
+  （`test_grafana_is_loopback_only` 与 Q289 的 `test_prometheus_is_loopback_only_and_no_other_service_publishes`：绑错网卡、撞 3000、多开口子都判红）。
 
 > 起监控栈需要 `LOOM_GRAFANA_ADMIN_PASSWORD`（**无默认值、缺失即 compose 报错**）——这是 Q185 有意为之，
 > 拒绝内置弱口令；该变量只在监控 overlay 里必填，不开监控栈的默认部署不受影响。

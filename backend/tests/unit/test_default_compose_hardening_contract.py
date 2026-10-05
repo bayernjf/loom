@@ -120,6 +120,16 @@ def test_rehearsal_scripts_supply_datastore_passwords() -> None:
             assert f"${{{var}:-" in content, (path.name, var)
 
 
+def test_monitoring_overlay_web_ports_are_loopback_only() -> None:
+    """Q289：opt-in overlay 也要守同一条规矩——prometheus 9090 无认证无契约，
+    Q192 已把 Grafana 绑回环，这里把 prometheus 一并钉住（改回公网绑定即红）。"""
+    loader = yaml.SafeLoader
+    overlay = yaml.load((REPO_ROOT / "infra" / "docker-compose.monitoring.yml").read_text(), Loader=loader)
+    for svc, port in (("prometheus", "9090"), ("grafana", "3001")):
+        published = overlay["services"][svc]["ports"]
+        assert all(str(p_).startswith("127.0.0.1:") for p_ in published), (svc, published)
+
+
 def test_backend_entrypoint_fails_fast_on_empty_master_key() -> None:
     content = BACKEND_ENTRYPOINT.read_text()
     # The check must exist and run before migrations/serving (fail-fast at boot,
