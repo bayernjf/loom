@@ -74,3 +74,53 @@
 - 发证引用三包：backend/app/final/final_whitelist/service.py（assemble_one，csp/cstp/cep_package_id）；docs/05 §1.3。
 - PCP 更新先例：Q41/Q42（docs/02）；pcp_recalc_candidates 先例 Q259。
 - 本片已落码（Q263）：service.py 递增＋审计块；tests/integration/test_fcw_package_usage.py。
+
+## 6. 待裁项⑦ 的评审材料（Q284 交付；**只出材料，未建迁移、未动库、未改代码**）
+
+负责人若裁「补」，本节就是可直接评审的两块：盘点语句与迁移草案。裁「不补」则本节留档即可。
+
+**① 先盘点（只读，不改任何行）**
+
+```sql
+-- 同三元组存在多个 active 包＝草案里会被索引拒绝的那批行
+SELECT tenant_id, product_space_id, platform, goal, kind,
+       count(*) AS n,
+       array_agg(package_id ORDER BY created_at) AS ids,
+       array_agg(usage_count ORDER BY created_at) AS usages
+FROM packages
+WHERE status = 'active'
+GROUP BY tenant_id, product_space_id, platform, goal, kind
+HAVING count(*) > 1
+ORDER BY n DESC;
+```
+
+判据与 service 层查重**逐字同键**（`app/decision/layer_strategy/service.py:113-119`：`product_space_id`·`platform`·`goal`·`kind`＋`status='active'`）。
+`tenant_id` 只出现在投影里、**不进键**——PS 本身已定租户，把租户塞进键会造出一个比现语义更宽的约束，那不是「补守卫」而是换语义。
+
+**② 迁移草案（若裁「补」＝新文件 `0048_packages_active_triple_unique.py`）**
+
+```python
+def upgrade() -> None:
+    op.execute(
+        "CREATE UNIQUE INDEX uq_packages_active_triple ON packages "
+        "(product_space_id, platform, goal, kind) WHERE status = 'active'"
+    )
+
+def downgrade() -> None:
+    op.drop_index("uq_packages_active_triple", table_name="packages")
+```
+
+- **索引名刻意不叫 `uq_package_active_triple`**：那个名字是 Q272 起被误当作既有事实引用了 5 处的**幻影标识符**（Q278 已纠偏）。补上真约束时若复用旧名，等于让「文档早就写了」掩盖「代码从来没有」，后续读史的人会再次上当。
+- PG 与 SQLite 都支持带 `WHERE` 的部分唯一索引，但**光在迁移里建会撞自己的门**：Q207 的 Migration gate 在真 PG16 上比 ORM⇄DB 漂移，所以索引必须同时声明进 `packages.__table_args__`，且要 `postgresql_where` ＋ `sqlite_where` **双写**——先例就是本仓已有的两条部分唯一索引：`uq_pcp_recalc_pending`（`app/platform/platform_adaptation/models.py:221-226`）与 Q124 释放同键的那条（`app/content/models.py:50-56`）。「迁移建了、模型没写」＝漂移门判红，这条不是可选项。
+- 建成后并发形态会变：两个请求同时插同三元组 active 包，**后到的会拿到 DB 的约束冲突**而不是现在的 409——`router.py:90` 目前把 `PackageExists` 译成 409，走 DB 冲突路径则需一并接 `IntegrityError` 并仍回 **409**（否则外部自动化看到 500，属破坏性变更）。这条要在裁「补」的实现批里一起处理。
+
+**③ 盘点若查出重复，归档口径三案（要负责人／业务定，工程不代选）**
+
+| 案 | 做法 | 代价 |
+|---|---|---|
+| 甲（工程侧推荐） | 每组保留 `usage_count` 最大的一条 active，其余置 `archived`（**不删行**） | 需要一条一次性数据修补脚本＋审计留痕；「哪条代表历史发证」按计数判，可能与真实使用序有偏差 |
+| 乙 | 全部置 `archived`，由业务重配 | 现网若已有依赖这些包的成品，取包路径会立刻 `MaterialMissing` |
+| 丙 | 盘点为 0 行重复 ⇒ 直接建索引，无需归档 | **最可能情形**（三表现为零行）；但它是「当下没数据」而非「语义已保证」，索引价值在写入口变多之后才显现 |
+
+**④ 我需要的东西**：一句「补／不补」。裁「补」后我按上面顺序交实现批（盘点脚本先跑真库→归档口径按你选的案→0048 迁移＋`IntegrityError`→409 接线＋门），全程不碰业务真值。
+
