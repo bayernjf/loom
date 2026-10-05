@@ -295,10 +295,18 @@ def _parse_port(spec: str) -> tuple[str, str, str]:
     return "0.0.0.0", parts[0], parts[1]
 
 
-def test_prometheus_keeps_its_port_and_no_other_service_publishes() -> None:
-    """Q181/Q185：监控栈里只有 Prometheus 沿用既有 9090，其余服务不得悄悄加发布口。"""
+def test_prometheus_is_loopback_only_and_no_other_service_publishes() -> None:
+    """Q181/Q185 的"只有 Prometheus 发布 9090"由 Q289 负责人裁决收窄为**绑回环**。
+
+    /metrics 无认证，9090 裸露网卡＝把内部指标、目标清单与查询 API 交给全网扫描；
+    Q192 已把 Grafana 钉在 127.0.0.1，Prometheus 同口同策。改的是决定，不是绕门。
+    """
     services = yaml.safe_load(MONITORING_COMPOSE.read_text())["services"]
-    assert services["prometheus"]["ports"] == ["9090:9090"]
+    prometheus_ports = services["prometheus"]["ports"]
+    assert len(prometheus_ports) == 1, f"prometheus publishes {len(prometheus_ports)} ports"
+    bind_ip, host_port, container_port = _parse_port(prometheus_ports[0])
+    assert bind_ip == "127.0.0.1", f"prometheus bound to {bind_ip!r}; loopback only"
+    assert (host_port, container_port) == ("9090", "9090")
     for name, service in services.items():
         if name in {"prometheus", "grafana"}:
             continue

@@ -1,6 +1,7 @@
 """段9 三包配置实例 + Q262 layerSpaces 通用底座 REST 端点（V1 静态切片 08 M11 / Q46）。"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.actor import Actor
@@ -90,7 +91,16 @@ async def create_package(
         raise HTTPException(409, f"active package exists for triple: {exc}") from exc
     except service.ValidationFailed as exc:
         raise HTTPException(422, {"violations": exc.violations}) from exc
-    await session.commit()
+    try:
+        # Q288：并发双建时两个请求都能通过 service 的先查后插，冲突到 commit 才浮出
+        # ⇒ DB 级唯一索引（0048）在此接住，仍译成 409（否则自动化从 409 变 500，
+        # 破坏性变更——design-p2 §6 预告过这个形态变更）。
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            409, f"active package exists for triple (concurrent insert): {exc.orig}"
+        ) from exc
     return _package_view(package)
 
 
@@ -109,7 +119,14 @@ async def update_package(
         raise HTTPException(404, f"package not found: {exc}") from exc
     except service.ValidationFailed as exc:
         raise HTTPException(422, {"violations": exc.violations}) from exc
-    await session.commit()
+    try:
+        # Q288：PUT 把包改成既有三元组同样撞 0048 的部分唯一索引 ⇒ 409。
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            409, f"active package exists for triple (concurrent update): {exc.orig}"
+        ) from exc
     return _package_view(package)
 
 
