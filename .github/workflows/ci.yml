@@ -5,6 +5,12 @@ on:
     branches: [main, dev]
   pull_request:
 
+# Q301：同一 ref 连推时取消旧 run——PR #150 曾堆出一串 cancelled 重复 run，
+# 旧 run 继续跑完只烧 CI 额度且让红叉状态难以判读。不同 ref（如并发 PR）互不取消。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend gates (pytest, ruff, eval)
