@@ -11,6 +11,7 @@ from app.core.staff_auth.deps import require_internal_actor
 from app.platform.platform_adaptation import service
 from app.platform.platform_adaptation.schemas import (
     ActorOnly,
+    AdapterCandidateCreate,
     CandidateApprove,
     CandidateReject,
     EventUpsert,
@@ -335,6 +336,99 @@ async def platform_adapter_preview(
         raise HTTPException(409, str(exc)) from exc
     except gateway.GenerationUpstreamError as exc:
         raise HTTPException(502, str(exc)) from exc
+
+
+# ---------- Q300 PLATFORM-ADAPTER 候选 + HumanGate（advisory）----------
+
+def _adapter_candidate_view(c) -> dict:
+    return {
+        "candidate_id": c.candidate_id,
+        "pws_snapshot_id": c.pws_snapshot_id,
+        "platform": c.platform,
+        "slot_type": c.slot_type,
+        "slot_id": c.slot_id,
+        "country": c.country,
+        "source": c.source,
+        "decision": c.decision,
+        "reason": c.reason,
+        "refs": c.refs,
+        "missing": c.missing,
+        "status": c.status,
+        "rejected_reason": c.rejected_reason,
+        "created_by": c.created_by,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "approved_by": c.approved_by,
+        "approved_at": c.approved_at.isoformat() if c.approved_at else None,
+    }
+
+
+@router.get("/api/admin/platform-adapter/candidates")
+async def list_adapter_candidates(
+    status_filter: str | None = Query(default=None, alias="status"),
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_operations_view),
+) -> list[dict]:
+    rows = await service.list_adapter_candidates(session, status=status_filter)
+    return [_adapter_candidate_view(c) for c in rows]
+
+
+@router.post(
+    "/api/admin/platform-adapter/candidates",
+    status_code=201,
+)
+async def create_adapter_candidate(
+    body: AdapterCandidateCreate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        cand = await service.create_adapter_candidate(session, body, verified)
+    except service.PwsSnapshotNotFound as exc:
+        raise HTTPException(404, f"pws snapshot not found: {exc}") from exc
+    except service.PendingCandidateExists as exc:
+        raise HTTPException(409, f"pending candidate exists: {exc}") from exc
+    except gateway.ModelConfigError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except gateway.ModelUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except gateway.GenerationUpstreamError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    await session.commit()
+    return _adapter_candidate_view(cand)
+
+
+@router.post("/api/admin/platform-adapter/candidates/{candidate_id}/approve")
+async def approve_adapter_candidate(
+    candidate_id: str,
+    body: CandidateApprove,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        cand = await service.approve_adapter_candidate(session, candidate_id, verified)
+    except service.AdapterCandidateNotFound as exc:
+        raise HTTPException(404, f"candidate not found or not pending: {exc}") from exc
+    await session.commit()
+    return _adapter_candidate_view(cand)
+
+
+@router.post("/api/admin/platform-adapter/candidates/{candidate_id}/reject")
+async def reject_adapter_candidate(
+    candidate_id: str,
+    body: CandidateReject,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    try:
+        cand = await service.reject_adapter_candidate(
+            session, candidate_id, body.reason, verified
+        )
+    except service.AdapterCandidateNotFound as exc:
+        raise HTTPException(404, f"candidate not found or not pending: {exc}") from exc
+    except service.AdapterDecisionRequired as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await session.commit()
+    return _adapter_candidate_view(cand)
 
 
 # ---------- Q37 动态信号事件 ----------

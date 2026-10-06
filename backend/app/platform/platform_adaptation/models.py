@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -240,6 +241,58 @@ class PcpRecalcCandidate(Base):
     source: Mapped[str] = mapped_column(String(8), nullable=False, default="manual")
     proposed_weights: Mapped[dict] = mapped_column(JSONType, nullable=False)
     change_list: Mapped[dict] = mapped_column(JSONType, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    rejected_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = _created_at()
+    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejected_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class PlatformAdapterCandidate(Base):
+    """PLATFORM-ADAPTER 候选 + HumanGate（Q300，design-v2-platform-adapter-business §3.2 乙）。
+
+    AI/synthetic 只产候选（四态建议），运营裁决。status=pending→approved/rejected；
+    **approve 只解除 pending 并留痕**——不改写平台规则/发布位、不生成 final_id、
+    不影响段11 七 Guard（PT 约束 4/6，advisory 红线）。同 (pws_snapshot_id,
+    platform, slot_type, slot_id) 仅一条 pending（partial unique，照
+    uq_pcp_recalc_pending 写法，双 where 双写）。source=synthetic|ai|manual，
+    V1 仅 synthetic（Q296 预览口同一路由）。
+    """
+
+    __tablename__ = "platform_adapter_candidates"
+    __table_args__ = (
+        Index(
+            "uq_platform_adapter_pending",
+            "pws_snapshot_id",
+            "platform",
+            "slot_type",
+            "coalesce_slot_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+            sqlite_where=text("status = 'pending'"),
+        ),
+    )
+
+    candidate_id: Mapped[str] = _uuid_pk()
+    pws_snapshot_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    slot_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    slot_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # partial unique 需要稳定列：slot_id 可空，落库时归一为空串占位（不暴露到 API）。
+    coalesce_slot_id: Mapped[str] = mapped_column(String(36), nullable=False, default="")
+    country: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="synthetic")
+    decision: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    refs: Mapped[dict] = mapped_column(JSONType, nullable=False, default=list)
+    missing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
     rejected_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)

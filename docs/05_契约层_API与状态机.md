@@ -461,6 +461,14 @@
 > - **五键归一**：Prompt v0.1 契约 `{missing, decision, reason, refs, gate}`；synthetic 无 frozen PWS 分支只返两键 `{missing, reason}`，预览口在消费方补齐 decision/refs/gate（None/[]/None，不造假）——Q293 形状缺口自此闭合。
 > - `GET /api/admin/publish-slots/{slot_id}/fit-score` 加法回 `breakdown` 四行（`{dim, score, weight, contribution}`，Σ 与 fit_score 自校验）；incomplete 时 score 可见、weight/contribution 为 None。端点形状不变。
 
+> **Q299（2026-10-06）登记：fit_score 人工校准审计闭环（乙案，非「自学习」）**
+> - `PUT /api/admin/publish-slots/{slot_id}` 端点形状不变；`slot.update` 审计 detail 新增 `fit_dim_changes`（仅含实际变化的维度，形如 `{traffic:{before,after},…}`，四维原样则为 `{}`）。
+> - `PUT /api/admin/fit-weights` 的 `fit_weights.put` 审计 detail 新增 `weights_before`（首次新建为 `null`）。两写口仍 `require_internal_actor(OPERATIONS)`；不设单次幅度上限（原文未给，不代拟）、不自动触发下游重算。
+
+> **Q300（2026-10-06）登记：PLATFORM-ADAPTER 候选表 ＋ HumanGate（乙案，advisory）**
+> - `GET /api/admin/platform-adapter/candidates?status=`（运营读口）、`POST /api/admin/platform-adapter/candidates`（body `{pws_snapshot_id, platform, slot_type, slot_id?, country?, actor}`，`require_internal_actor(OPERATIONS)`，201；快照不存在 404、同 (pws,platform,slot_type,slot_id) 已有 pending 409、无令牌 401/越权 403）：复用 Q296 组料＋synthetic 网关，把四态建议落为 pending 候选，写 `platform_adapter.candidate_created` 审计。V1 仅 `source=synthetic`。
+> - `POST .../candidates/{id}/approve|reject`（均 OPS；已裁决/不存在 404；reject reason 必填、空串 422）：approve **只解除 pending 并留痕**（`platform_adapter.approved`，detail `{decision, advisory_only:true}`）——不改平台规则/发布位、不产 final_id、不影响段11 七 Guard（PT 约束 4/6）；reject 记 `platform_adapter.rejected`。载体表 `platform_adapter_candidates`（迁移 0050，partial unique `uq_platform_adapter_pending`，slot_id 可空以 `coalesce_slot_id` 空串入键）。
+
 ### 2.8 发布位/平台规则 Gate 状态（段7）
 | 状态 | 说明 | 来源 |
 |---|---|---|

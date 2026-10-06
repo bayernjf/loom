@@ -19,6 +19,7 @@ from app.platform.platform_adaptation.models import (
     PcpRecalcCandidate,
     PcpTemplate,
     PcpWeightTable,
+    PlatformAdapterCandidate,
     PlatformDynamicEvent,
     PlatformRule,
     PublishSlot,
@@ -120,6 +121,14 @@ class PwsSnapshotNotFound(Exception):
     形状区分——前者是输入错误，后者是协议内的正常缺失结果）。"""
 
 
+class AdapterCandidateNotFound(Exception):
+    """Q300：adapter 候选不存在或已裁决（404，照 Q259 EventNotFound 口径）。"""
+
+
+class AdapterDecisionRequired(Exception):
+    """Q300：reject 必须给 reason（照 Q259 reject_candidate）。"""
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -187,9 +196,19 @@ async def update_slot(session, slot_id: str, body, actor) -> PublishSlot:
     ).first()
     if clash is not None:
         raise SlotCodeTaken(body.item.code)
+    # Q299 fit 人工校准闭环：四维分（0-100 主观静态分）的 before/after 必须进
+    # slot.update 审计，使运营对 fit_score 输入的每次校准可追溯（不新增端点、
+    # 不改变 fit_score 派生时现算的口径；本切片是「人工校准」不是「自学习」）。
+    dims_before = {dim: getattr(slot, dim) for dim in pa_rules.FIT_DIMS}
     for key, value in body.item.model_dump().items():
         setattr(slot, key, value)
     slot.updated_at = _now()
+    dims_after = {dim: getattr(slot, dim) for dim in pa_rules.FIT_DIMS}
+    dim_changes = {
+        dim: {"before": dims_before[dim], "after": dims_after[dim]}
+        for dim in pa_rules.FIT_DIMS
+        if dims_before[dim] != dims_after[dim]
+    }
     await append_audit(
         session,
         tenant_id=PLATFORM_TENANT,
@@ -198,7 +217,7 @@ async def update_slot(session, slot_id: str, body, actor) -> PublishSlot:
         action="slot.update",
         entity_type="publish_slot",
         entity_id=slot_id,
-        detail={"code": slot.code},
+        detail={"code": slot.code, "fit_dim_changes": dim_changes},
     )
     return slot
 
@@ -270,6 +289,7 @@ async def put_fit_weights(session, body, actor) -> GoalFitWeight:
     if violations:
         raise ValidationFailed(violations)
     row = await session.get(GoalFitWeight, body.goal)
+    weights_before = dict(row.weights) if row is not None else None
     if row is None:
         row = GoalFitWeight(goal=body.goal, weights=body.weights, updated_by=actor.id)
         session.add(row)
@@ -286,7 +306,11 @@ async def put_fit_weights(session, body, actor) -> GoalFitWeight:
         action="fit_weights.put",
         entity_type="goal_fit_weight",
         entity_id=body.goal,
-        detail={"weights": body.weights},
+        detail={
+            "weights": body.weights,
+            # Q299：目的权重矩阵也是 fit_score 的人工校准面，before/after 留痕。
+            "weights_before": weights_before,
+        },
     )
     return row
 
@@ -801,6 +825,145 @@ async def platform_adapter_preview(
         "adapter": result,
         "previewed_by": previewed_by,
     }
+
+
+# ---------- Q300 PLATFORM-ADAPTER 候选 + HumanGate（advisory，不产 final_id）----------
+
+ADAPTER_SOURCE_SYNTHETIC = "synthetic"
+
+
+async def list_adapter_candidates(
+    session, status: str | None = None
+) -> list[PlatformAdapterCandidate]:
+    stmt = select(PlatformAdapterCandidate).order_by(
+        PlatformAdapterCandidate.created_at.desc()
+    )
+    if status is not None:
+        stmt = stmt.where(PlatformAdapterCandidate.status == status)
+    return list((await session.scalars(stmt)).all())
+
+
+async def create_adapter_candidate(session, body, actor) -> PlatformAdapterCandidate:
+    """运营显式触发：复用 Q296 预览口的组料 + synthetic 网关，把四态建议落成
+    pending 候选（design-v2-platform-adapter §3.2 乙，PT 约束 1-7）。
+
+    只登记建议，不改任何判定；同 (pws, platform, slot_type, slot_id) 仅一条
+    pending（partial unique，service 先查给 409）。
+    """
+    _require_ops(actor)
+    pws = await session.get(PwsSnapshot, body.pws_snapshot_id)
+    if pws is None:
+        raise PwsSnapshotNotFound(body.pws_snapshot_id)
+    coalesced_slot_id = body.slot_id or ""
+    existing = (
+        await session.scalars(
+            select(PlatformAdapterCandidate).where(
+                PlatformAdapterCandidate.pws_snapshot_id == body.pws_snapshot_id,
+                PlatformAdapterCandidate.platform == body.platform,
+                PlatformAdapterCandidate.slot_type == body.slot_type,
+                PlatformAdapterCandidate.coalesce_slot_id == coalesced_slot_id,
+                PlatformAdapterCandidate.status == CAND_PENDING,
+            )
+        )
+    ).first()
+    if existing is not None:
+        raise PendingCandidateExists(existing.candidate_id)
+
+    preview = await platform_adapter_preview(
+        session,
+        pws_snapshot_id=body.pws_snapshot_id,
+        platform=body.platform,
+        slot_type=body.slot_type,
+        slot_id=body.slot_id,
+        country=body.country,
+        previewed_by=actor.id,
+    )
+    adapter = preview["adapter"]
+    cand = PlatformAdapterCandidate(
+        pws_snapshot_id=body.pws_snapshot_id,
+        platform=body.platform,
+        slot_type=body.slot_type,
+        slot_id=body.slot_id,
+        coalesce_slot_id=coalesced_slot_id,
+        country=body.country,
+        source=ADAPTER_SOURCE_SYNTHETIC,
+        decision=adapter.get("decision"),
+        reason=adapter.get("reason") or "",
+        refs=list(adapter.get("refs") or []),
+        missing=bool(adapter.get("missing")),
+        status=CAND_PENDING,
+        created_by=actor.id,
+    )
+    session.add(cand)
+    await session.flush()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="platform_adapter.candidate_created",
+        entity_type="platform_adapter_candidate",
+        entity_id=cand.candidate_id,
+        detail={
+            "pws_snapshot_id": body.pws_snapshot_id,
+            "platform": body.platform,
+            "decision": cand.decision,
+            "missing": cand.missing,
+            "source": ADAPTER_SOURCE_SYNTHETIC,
+        },
+    )
+    return cand
+
+
+async def approve_adapter_candidate(
+    session, candidate_id: str, actor
+) -> PlatformAdapterCandidate:
+    """PT 约束 6：approve 只解除 pending 并留痕——不放行到 final_id、不改平台
+    规则/发布位、不触发任何下游（唯一出口仍是段11 publishFCW）。"""
+    _require_ops(actor)
+    cand = await session.get(PlatformAdapterCandidate, candidate_id)
+    if cand is None or cand.status != CAND_PENDING:
+        raise AdapterCandidateNotFound(candidate_id)
+    cand.status = CAND_APPROVED
+    cand.approved_by = actor.id
+    cand.approved_at = _now()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="platform_adapter.approved",
+        entity_type="platform_adapter_candidate",
+        entity_id=candidate_id,
+        detail={"decision": cand.decision, "advisory_only": True},
+    )
+    return cand
+
+
+async def reject_adapter_candidate(
+    session, candidate_id: str, reason: str, actor
+) -> PlatformAdapterCandidate:
+    _require_ops(actor)
+    if not reason or not reason.strip():
+        raise AdapterDecisionRequired("reject reason is required")
+    cand = await session.get(PlatformAdapterCandidate, candidate_id)
+    if cand is None or cand.status != CAND_PENDING:
+        raise AdapterCandidateNotFound(candidate_id)
+    cand.status = CAND_REJECTED
+    cand.rejected_reason = reason
+    cand.rejected_by = actor.id
+    cand.rejected_at = _now()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="platform_adapter.rejected",
+        entity_type="platform_adapter_candidate",
+        entity_id=candidate_id,
+        detail={"reason": reason},
+    )
+    return cand
 
 
 # ---------- Q41/Q42 PCP 重算候选 HumanGate ----------

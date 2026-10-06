@@ -184,7 +184,8 @@
 | 字段池规划 Gate | 段3 / WF-02 | 产品审核员（展示口径） | 0.85 细看线 | PT-FP-PLAN / Q9 |
 | 原子审核（approveAtomGuard） | 段4 / WF-03 | 产品审核员（展示口径） | high/critical 单条，其余可批量（Q70） | line 2633 / Q70 |
 | PWS 冻结 | 段6 / WF-05 | BO-07 | 单条（红线） | line 7674 |
-| 平台适配候选 | 段7 / WF-06 | 平台审核员（展示口径） | AI 输出一律 pending_review | PT-PLATFORM-ADAPTER |
+| 平台适配候选 | 段7 / WF-06 | 运营（权威码 `operations`；「平台审核员」为展示口径，Q297 裁决全甲映射，候选裁决一律 advisory 不新增硬 Guard） | AI 输出一律 pending_review | PT-PLATFORM-ADAPTER / Q297/Q300 |
+| fit_score 人工校准 | 段7/8 | 运营（权威码 `operations`；校准四维静态分与目的权重矩阵，非「自学习」） | 单条，每次校准 before/after 审计 | Q297/Q299 |
 | PCP 权重重算 | 段8 | 运营 | 候选+对照单 | Q41 |
 | 三包（D0） | 段9 / WF-07 | 内容审核员（展示口径） | 0.85 细看线（复用 Q9） | Q47 |
 | 法审（law_review） | 段10/11 | internal_compliance 角色 | 单条 | Q49 |

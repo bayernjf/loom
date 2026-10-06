@@ -135,3 +135,17 @@ class CandidateApprove(BaseModel):
 class CandidateReject(BaseModel):
     reason: str = Field(min_length=1, max_length=512)
     actor: Actor
+
+
+class AdapterCandidateCreate(BaseModel):
+    """Q300 PLATFORM-ADAPTER 候选提交（运营显式触发，V1 仅 synthetic 来源）。
+
+    复用 Q296 预览口入参形状；裁决结果由网关四态机械生成，客户端不提供。
+    """
+
+    pws_snapshot_id: str
+    platform: str
+    slot_type: str
+    slot_id: str | None = None
+    country: str | None = None
+    actor: Actor
