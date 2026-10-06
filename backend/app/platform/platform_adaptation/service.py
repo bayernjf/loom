@@ -187,9 +187,19 @@ async def update_slot(session, slot_id: str, body, actor) -> PublishSlot:
     ).first()
     if clash is not None:
         raise SlotCodeTaken(body.item.code)
+    # Q299 fit 人工校准闭环：四维分（0-100 主观静态分）的 before/after 必须进
+    # slot.update 审计，使运营对 fit_score 输入的每次校准可追溯（不新增端点、
+    # 不改变 fit_score 派生时现算的口径；本切片是「人工校准」不是「自学习」）。
+    dims_before = {dim: getattr(slot, dim) for dim in pa_rules.FIT_DIMS}
     for key, value in body.item.model_dump().items():
         setattr(slot, key, value)
     slot.updated_at = _now()
+    dims_after = {dim: getattr(slot, dim) for dim in pa_rules.FIT_DIMS}
+    dim_changes = {
+        dim: {"before": dims_before[dim], "after": dims_after[dim]}
+        for dim in pa_rules.FIT_DIMS
+        if dims_before[dim] != dims_after[dim]
+    }
     await append_audit(
         session,
         tenant_id=PLATFORM_TENANT,
@@ -198,7 +208,7 @@ async def update_slot(session, slot_id: str, body, actor) -> PublishSlot:
         action="slot.update",
         entity_type="publish_slot",
         entity_id=slot_id,
-        detail={"code": slot.code},
+        detail={"code": slot.code, "fit_dim_changes": dim_changes},
     )
     return slot
 
@@ -270,6 +280,7 @@ async def put_fit_weights(session, body, actor) -> GoalFitWeight:
     if violations:
         raise ValidationFailed(violations)
     row = await session.get(GoalFitWeight, body.goal)
+    weights_before = dict(row.weights) if row is not None else None
     if row is None:
         row = GoalFitWeight(goal=body.goal, weights=body.weights, updated_by=actor.id)
         session.add(row)
@@ -286,7 +297,11 @@ async def put_fit_weights(session, body, actor) -> GoalFitWeight:
         action="fit_weights.put",
         entity_type="goal_fit_weight",
         entity_id=body.goal,
-        detail={"weights": body.weights},
+        detail={
+            "weights": body.weights,
+            # Q299：目的权重矩阵也是 fit_score 的人工校准面，before/after 留痕。
+            "weights_before": weights_before,
+        },
     )
     return row
 
