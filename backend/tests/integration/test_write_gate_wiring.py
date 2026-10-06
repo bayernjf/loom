@@ -49,6 +49,10 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/pcp/{pcp_id}", "PUT"): OPS,
     # 段7 PLATFORM-ADAPTER 只读预览口（Q296 甲：只读但走已验真身份闸，Q242 同族）
     ("/api/admin/platform-adapter/preview", "POST"): OPS,
+    # 段7 PLATFORM-ADAPTER 候选 + HumanGate（Q300 乙：advisory，approve 不触 final_id）
+    ("/api/admin/platform-adapter/candidates", "POST"): OPS,
+    ("/api/admin/platform-adapter/candidates/{candidate_id}/approve", "POST"): OPS,
+    ("/api/admin/platform-adapter/candidates/{candidate_id}/reject", "POST"): OPS,
     # 段11 E1.1 发证（Q203）
     ("/api/fcw/assemble", "POST"): OPS,
     ("/api/fcw/assembly-tasks", "POST"): OPS,
