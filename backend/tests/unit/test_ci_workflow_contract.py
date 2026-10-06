@@ -31,6 +31,18 @@ def test_workflow_wires_every_agreed_gate() -> None:
     push_branches = data[True]["push"]["branches"]
     assert "main" in push_branches and "dev" in push_branches
 
+
+def test_superseded_runs_are_cancelled_per_ref() -> None:
+    """Q301：同一 ref 上的新推送必须取消旧 run（PR #150 曾堆出一串 cancelled 重复 run）。"""
+    data = yaml.safe_load(WORKFLOW.read_text())
+    concurrency = data.get("concurrency")
+    assert concurrency is not None, "缺 concurrency 组 ⇒ 连推多次会把同 ref 的旧 run 全跑完"
+    assert concurrency.get("cancel-in-progress") is True, (
+        "cancel-in-progress 必须为 true：同 ref 新推送时旧 run 应立即取消，而不是排队烧额度"
+    )
+    group = concurrency.get("group", "")
+    assert group == "ci-${{ github.ref }}", f"并发组应按 ref 隔离，实际为 {group!r}"
+
     jobs = data["jobs"]
     backend_runs = _steps(jobs["backend"])
     assert "ruff check ." in backend_runs
