@@ -1,6 +1,12 @@
 # Handoff — Loom
 
-> **最新（2026-10-06）：Q298 覆盖率读数复测（**纯测量**，零代码零迁移零测试改动；基线不变 **1169 passed＋10 skipped**、head=0049；02 C1.241）**——Q294/Q296 两批新增真实 `app/` 语句后的例行复测，工程侧独立推进。
+> **最新（2026-10-06）：Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环 ＋ Q299 fit_score 人工校准审计（Q297 裁决全甲的两个乙案落地；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**、业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**〔＋11＝adapter 候选 8／fit 校准 3〕、ruff 净、eval 101/101、前端零改动；真 PG16 宿主 55460 往返实测 **69 表/754 列 NO DRIFT**；02 C1.242/C1.243）**——负责人「好的，你搞」＝Q297 三件候选全按甲。
+> - **Q299 fit 人工校准（乙案，零迁移）**：`slot.update` 审计 detail 加 `fit_dim_changes`（只记变化维度 before/after，原样为 `{}`）、`fit_weights.put` 加 `weights_before`（首次 null）；端点形状不变。口径是**人工校准非「自学习」**：不设幅度上限（原文未给）、不触发下游、fit_score 仍派生不落库、Q54 0.4/0.3/0.3 不动。
+> - **Q300 adapter 候选＋Gate（乙案，迁移 0050）**：新表 `platform_adapter_candidates`（partial unique `uq_platform_adapter_pending` 双 where，slot_id 可空以 coalesce 空串入键）＋四端点（候选列表/提交/approve/reject，三写口全 OPS、进守卫 GATED）；提交复用 Q296 组料＋synthetic 网关落 pending 候选，V1 仅 source=synthetic。
+> - **advisory 红线**：approve 只解除 pending 留痕（审计带 `advisory_only:true`）——不改平台规则/发布位、不产 final_id、不动段11 七 Guard（PT 约束 4/6）；reject reason 必填；Q38 降级动作字典另点工（docs/02:141 vs docs/10:369 口径漂移未订正前不落码），丙案真模型仍以补 eval/golden 为硬前置。docs/06 §7 已补 fit 校准行并把「平台审核员（展示口径）」映射到 operations。
+> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批闭红旗 S2 的业务接线缺口，不改可上线判定。
+>
+> **其前（2026-10-06）：Q298 覆盖率读数复测（**纯测量**，零代码零迁移零测试改动；基线不变 **1169 passed＋10 skipped**、head=0049；02 C1.241）**——Q294/Q296 两批新增真实 `app/` 语句后的例行复测，工程侧独立推进。
 > - **读数（head=0049，命令照 CI 原样抄）**：全系统 `app/` **71.83%**（**13,220** 条语句／missed 3,724；term 取整 72%）；核心规则层（9 个 `*_rules.py`＋`statemachine.py`）**99.34%**（**604** 条）。较 Q281（71.78%／13,100；核心 99.34%／602）：分母 **＋120**＝Q294 周扫描作业＋Q296 service/router/breakdown，全系统 **＋0.05pp**（新代码基本被同批测试覆盖、无摊薄）；核心层 602→604、读数持平。
 > - **沙箱假红**：同跑 1167 passed＋2 failed＋10 skipped（143.23s），两条失败均为 `test_backup_monitoring_contract` 的 `socket.bind` EPERM（沙箱禁绑回环口）；沙箱外单跑该文件 **22 passed in 0.21s** 全绿（Q291 同型已记录），非回归、不影响读数。
 > - **政策不变**：≥90%／≥70% 仍【建议】、仍刻意不接 `--cov-fail-under`（Q229 负责人裁决；是否升门＝待裁项⑤）；读数已同步 docs/16 §4，`coverage.json` 为产物不入库。
@@ -17,20 +23,10 @@
 > - **五键归一**：synthetic 无 frozen PWS 两键在消费方归一为 Prompt v0.1 五键（Q293 形状缺口闭合，decision/gate 为 None 不造假）；docs/05 已登记。新端点已进 `test_write_gate_wiring` 的 `GATED`。
 > - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
 >
-> **其前（2026-10-06）：Q295 beta 首批真证重发落成 ＋ ②「核心完全可用」翻正（owner Gate 三步＝Q32 作废重冻 v2.0 → 段10 CCR 重扫 clean → E1.1 真发证口出活证 `537a2f28`；**纯运行时数据操作＋纯文档**，零代码零迁移零测试变化；后端基线不变 **1157 passed＋10 skipped**、头仍 0049；02 C1.238）**——负责人「按你推荐的来」一次性给齐三刀。
-> - **三刀登记**：① **t-e2e 组合确认为 beta 首批真值**（ps=bd1e64ac-…／tenant=t-e2e-c174c8ee7f9f／x_platform／short_video／ENGAGEMENT）＋**Gate 裁决人＝负责人本人**——Q290「真值确认＋跑链第二人」两卡点解除；② Q278 三件裁决＝PCP 3.1甲×3.2甲（Q294 已落地，追认）／fit_score 采**甲（可解释化）**／PLATFORM-ADAPTER 采**甲（只读预览口）**（后两件落码另点工）；③ 授权按 docs/02 C1.6 订正 docs/10 Q38 举例。**whitelist_owner 可签发性、docs/05 三写口角色、MCP discover 四处出入仍未裁**。
-> - **盘点与活体预检**：段3 pool approved／3 原子 approved／组合 30e9948e approved·ready（0.82）／PWS v1.0 frozen／CCR clean，但唯一 final_id `43d5b9e6` 的快照 **revoked**（e2e 发证 4 分钟后测回滚流）⇒ **库内无活证**；Q249 只读预检口同材料重评**七 Guard 全 PASS**、76.6 与原证逐位一致（干净 worktree `d65bd3b` 起 uvicorn :8001，避开并行 WIP）。
-> - **owner Gate 三步（每步 AskUserQuestion 明示批准）**：零变化重冻被 Q29 判 409「no new version」⇒ 经批准改走 **Q32 作废后重冻**（v1.0 revoke → 首冻 **v2.0 `5277a9ad`** all_green）→ CCR 重扫 **clean** → `POST /api/fcw/assemble`（operations 令牌）⇒ **活证 `final_id=537a2f28-c0e5-11f1-8218-9bc72af50592`**（七 Guard 现场全过、76.6、published；快照 v1 frozen/active；审计 fcw.issued by owner-gate-20261006；Q263 三包 usage_count 各 +1 首次实战验证）。
-> - **② 翻正依据**：docs/19「首批完成唯一标准＝真实部署库出一张 `final_id`、六路材料指向真实业务数据」满足——真值经负责人确认＋六路材料（PWS v2.0／PCP `be069bc0`／三包 `2b7acfd7`·`3ae7764a`·`2269ab13`／CCR `4cbafa0a`）全落库＋人工 Gate。**刻意没做**＝不重造产品内容（重录新链需臆造素材）、不自动 Gate、Q294 批独立落账不混装。
-> - **【复判更新】**：① 功能覆盖达标／② **「核心完全可用」＝✅ 达标（本批翻正）**／③ 可上线未达标（现网部署＋真 ACME 未证，另有待裁项③）。
+> ~~Q295 banner 原文~~（含其五条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
-> **其前（2026-10-06）：Q294 PCP 每周重算提醒落地＝Q292 候选的 3.1 甲＋3.2 甲（Q278「三件未落」第一件由材料变代码；**代码＋迁移＋测试＋配置＋文档**，迁移 **0048→0049**〔纯种子〕；后端 **1147→1157 passed＋10 skipped**（总收集 **1167**；＋10＝新集成测试档）、ruff 净、eval 仍 101/101、前端零改动；真 PG16 up／down／up 往返＋功能往返实测、DBA 脚本 **NO DRIFT**〔68 表／734 列一字不变〕；02 C1.237）**——负责人「按你推荐来」＝落地 Q292 自己给出的「V2 第一切片」推荐顺序，**不产权重、不替业务方裁映射规则**。
-> - **缺陷形状（承接 Q292 grounding）**：docs/01 段8 PT-PCP-V1.5 要求「动态信号每周更新触发重算」，但真缺口不是「周调度器」而是「**触发后新权重从哪来**」——`pa_rules.py` 无「事件→权重」派生函数、原文未给算法。故本批只把「每周」落到**产品内节奏**：每周把「窗口内新生效动态事件、且对应 active PCP 尚无 pending 候选」摆成运营待办，权重仍由人走既有 manual 候选 → 人工 Gate。
-> - **交付**：① `config.py` 新 env `LOOM_PCP_WEEKLY_SCAN_ENABLED` **默认 false**（同 Q187 门控纪律，关时空转返回 0、V1 sweep 行为一字不变）；② `core/sla/jobs.py` `JOBS` 追加第 6 作业 `pcp_weekly_recalc_scan`（复用 300s tick＋Q89 leader 锁＋Q139 协作中止＋Q151 commit_guard＋既有手工 `/api/admin/sla/run`，**不新建第二个 asyncio 循环**）；③ `platform_adaptation/service.py` 新 `scan_weekly_recalc_reminders()`＋`weekly_recalc_anchor()`；④ `config_center/seeds.py` 四个**热更旋钮** `platform.recalc_weekday`(0)／`_hour`(2)／`_tz_offset_hours`(8)／`recalc_todo_due_days`(7)（周节奏属业务口径，按 Q9 纪律走配置中心不占 env）；⑤ 迁移 **0049_pcp_weekly_recalc_seed**（纯种子、幂等，同 0041 先例）；⑥ compose 转发新 env＋Q291 反向枚举门加第五开关。
-> - **语义（逐条可判）**：锚点＝本地 `(weekday, hour)` 周时刻，**固定 UTC 偏移口径**（中国自 1991 年无夏令时，固定偏移与 Asia/Shanghai 恒等；镜像 `python:3.12-slim` 无系统 tz 数据库，刻意不引 tzdata 依赖），钟点未到退回上一周期 ⇒ 同周期任意 tick 同一锚点；窗口＝**(上一锚点, 本锚点]** 内新生效的 active 事件；命中平台每个 active PCP：**已有 pending 候选则跳过**（提醒不得与在途 Gate 叠加），**开/续**一条 `pcp_weekly_recalc` OpsTodo（assignee=operations，detail 带 platform/ps/pcp_id/event_ids/anchor/cycle_start/next_step）；本周期已提醒过（含 resolved）不重复；**无新事件的周直接跳过**。审计 `signal.pcp_weekly_recalc_todo`（actor 空＝系统作业）。
-> - **红线与种植**：**不建候选、不写回 `pcp.weights`**（测试逐字节钉住）。三次种植均判红后还原：门控默认翻 true、去掉 pending 候选检查、compose 删新开关行。真 PG16（一次性 pg16 容器宿主 55451）实测：4 键落库 version 1、`downgrade -1` 只删本批 4 键（未伤 `platform.recalc_step`）、head=0049、DBA 脚本 NO DRIFT；同容器**功能往返**（显式事务后回滚）＝开 1 条提醒＋同周期续期不重复＋回滚后两表 0 行。
-> - **刻意没做**：不自动 approve、不写回权重表；不自造「事件→权重」映射（3.2 乙硬阻塞＝业务方先给规则，原样保留）；不碰 fit_score 自学习与 PLATFORM-ADAPTER 业务接入（Q293 同批另两件，各自待裁）；不入 `.env.example`；前端零改动（提醒经既有待办 SLA 看板可见）。
-> - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链第二人）／③ 可上线未达标（现网部署＋真 ACME 未证，另有待裁项③）——本批不改任一层判定。
+> ~~Q294 banner 原文~~（含其六条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
+>
 
 > ~~Q293 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
@@ -169,6 +165,10 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。
 
 ## 最近进度（2026-09-20 ~ 2026-10-06）
+- **Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环 ＋ Q299 fit_score 人工校准审计（2026-10-06；Q297 裁决全甲的两个乙案；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**、业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**〔＋11＝`test_platform_adapter_candidates.py` 8／`test_fit_calibration_audit.py` 3〕、ruff 净、eval 101/101、前端零改动；真 PG16 宿主 55460 实测 69 表/754 列 NO DRIFT、up/down/up 对称；02 C1.242/C1.243）** —— 负责人「好的，你搞」＝Q297 三件候选全按甲。
+  - **Q299 fit 人工校准（零迁移，非「自学习」）**：`PUT publish-slots/{id}` 的 `slot.update` 审计加 `fit_dim_changes`（只记变化维度 before/after，原样 `{}`）、`PUT fit-weights` 的 `fit_weights.put` 加 `weights_before`（首次 null）；端点形状不变，不设幅度上限、不触发下游、fit_score 仍派生不落库。
+  - **Q300 adapter 候选＋Gate（0050）**：新表 `platform_adapter_candidates`（partial unique `uq_platform_adapter_pending` 双 where，slot_id 可空以 `coalesce_slot_id` 空串入键）＋`GET/POST .../platform-adapter/candidates`、`POST .../{id}/approve|reject`（三写口 OPS、进守卫 GATED；快照不存在 404／同键 pending 409／已裁决 404／reject 空 reason 422／无令牌 401／越权 403）；提交复用 Q296 组料＋synthetic 网关，V1 仅 source=synthetic。
+  - **红线**：approve 只解除 pending 留痕（`platform_adapter.approved` 带 `advisory_only:true`），不改规则/发布位、不产 final_id、不动七 Guard；Q38 降级字典另点工（docs/02:141 vs docs/10:369 漂移未订正前不落码），丙案真模型仍须先补 eval/golden。docs/06 §7 补 fit 校准行＋「平台审核员（展示口径）」→operations 映射。**三层判定不变**（③ 仍卡现网部署＋真 ACME＋待裁项③）。
 - **Q298 覆盖率读数复测（2026-10-06；**纯测量**，零代码零迁移零测试改动；基线不变 **1169 passed＋10 skipped**、头仍 0049；02 C1.241）** —— Q294/Q296 两批新增真实 `app/` 语句后的例行复测。
   - **读数**：全系统 `app/` **71.83%**（13,220 条语句／missed 3,724；Q281＝71.78%／13,100，分母 ＋120＝周扫描作业＋fit/adapter service/router，读数 ＋0.05pp 无摊薄）；核心规则层 **99.34%**（604 条／9 文件；Q281＝602 条，Q296 breakdown ＋2）。
   - **沙箱假红**：沙箱内全量报 2 例 `test_backup_monitoring_contract` 的 socket.bind EPERM 失败（1167 passed＋2 failed＋10 skipped in 143.23s），沙箱外单跑该文件 **22 passed in 0.21s** 全绿（Q291 同型），非回归、不影响读数。
