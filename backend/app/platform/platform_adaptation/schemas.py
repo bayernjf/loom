@@ -29,6 +29,21 @@ class SlotUpsert(BaseModel):
     actor: Actor
 
 
+class PlatformAdapterPreviewRequest(BaseModel):
+    """Q296 甲（design-v2-platform-adapter-business §3.1）：只读预览口入参。
+
+    复用 match_rules 的入参形状（platform/slot_type/slot_id/country）＋ PWS 快照
+    定位；不带 actor——写身份闸 `require_internal_actor(OPERATIONS)` 返回的已验真
+    身份即预览人（只读口不写审计，身份仅回显在 `previewed_by`）。
+    """
+
+    pws_snapshot_id: str
+    platform: str
+    slot_type: str
+    slot_id: str | None = None
+    country: str | None = None
+
+
 class FitWeightPut(BaseModel):
     goal: str
     weights: dict

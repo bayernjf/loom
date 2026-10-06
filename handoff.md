@@ -1,6 +1,23 @@
 # Handoff — Loom
 
-> **最新（2026-10-06）：Q295 beta 首批真证重发落成 ＋ ②「核心完全可用」翻正（owner Gate 三步＝Q32 作废重冻 v2.0 → 段10 CCR 重扫 clean → E1.1 真发证口出活证 `537a2f28`；**纯运行时数据操作＋纯文档**，零代码零迁移零测试变化；后端基线不变 **1157 passed＋10 skipped**、头仍 0049；02 C1.238）**——负责人「按你推荐的来」一次性给齐三刀。
+> **最新（2026-10-06）：Q298 覆盖率读数复测（**纯测量**，零代码零迁移零测试改动；基线不变 **1169 passed＋10 skipped**、head=0049；02 C1.241）**——Q294/Q296 两批新增真实 `app/` 语句后的例行复测，工程侧独立推进。
+> - **读数（head=0049，命令照 CI 原样抄）**：全系统 `app/` **71.83%**（**13,220** 条语句／missed 3,724；term 取整 72%）；核心规则层（9 个 `*_rules.py`＋`statemachine.py`）**99.34%**（**604** 条）。较 Q281（71.78%／13,100；核心 99.34%／602）：分母 **＋120**＝Q294 周扫描作业＋Q296 service/router/breakdown，全系统 **＋0.05pp**（新代码基本被同批测试覆盖、无摊薄）；核心层 602→604、读数持平。
+> - **沙箱假红**：同跑 1167 passed＋2 failed＋10 skipped（143.23s），两条失败均为 `test_backup_monitoring_contract` 的 `socket.bind` EPERM（沙箱禁绑回环口）；沙箱外单跑该文件 **22 passed in 0.21s** 全绿（Q291 同型已记录），非回归、不影响读数。
+> - **政策不变**：≥90%／≥70% 仍【建议】、仍刻意不接 `--cov-fail-under`（Q229 负责人裁决；是否升门＝待裁项⑤）；读数已同步 docs/16 §4，`coverage.json` 为产物不入库。
+> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。纯测量批不改任一层判定。
+>
+> **其前（2026-10-06）：Q297 新增内部角色与可签发性（V2 三件事公共前置）实现候选设计（**测试＋文档**，零生产代码零迁移；写口守卫 UNGATED 补登 PWS 冻结/吊销两口〔盲区变判据、用例数不变〕，基线仍 **1169 passed＋10 skipped**、head=0049；02 C1.240）**——负责人「好的」，工程侧挑的不需裁决可独立推进项。
+> - **为何汇总**：fit_score 校准（fit 乙）、adapter 候选裁决（adapter 乙）、待裁项③ 的 `whitelist_owner` 可签发性——三件 V2 余量**共同卡在同一契约前置**（要不要新角色码／能否签发 staff 令牌／守哪些写口），拆三次裁决会造成两三次契约变更，故按 Q274/Q284/Q292/Q293 同型合成一份。
+> - **grounding（head=0049 实测）**：内部 5 角色可绑 staff PAT、客户角色 `whitelist_owner` 刻意不可签发（`rbac.INTERNAL_ROLES` 与 `staff_auth INTERNAL_STAFF_ROLES` 两处须逐字一致）；守卫矩阵只用 4 种角色，`dictionary_admin` 定义但 **0 写口**挂它（可复用）；docs/06 §7 Gate 总览**无 fit_score 行**、平台适配是「平台审核员（展示口径）」均无权威角色码；PWS 冻结/吊销两口（router :78/:109）**既无 `require_internal_actor`、也不在 GATED/UNGATED 任一名单**（身份模型悬空，Q242 归并③）。
+> - **推荐**：fit 校准与 adapter 裁决均**甲＝复用 operations**（零新角色零迁移，§7 把展示口径映射到权威码）；`whitelist_owner` **甲＝维持客户角色随③客户认证解决**，本批只把冻结两口补进守卫 UNGATED 显式登记（盲区变判据）。乙案（新设 fit_admin/platform_reviewer）本质是「要不要独立审计身份」的组织裁决，工程不代裁；红线＝不把客户角色塞进内部令牌集、adapter 裁决不新增硬 Guard。
+> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批只把③的一个子问题材料化。
+>
+> **其前（2026-10-06）：Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地（Q295 裁决两件的甲案；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）**——负责人「接手 Q296，把剩下的收口」。
+> - **两件甲案**：① **fit_score 可解释化**：`pa_rules.fit_score_breakdown()` 与聚合函数共用权重同维度序、Σ 自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合），算法不落库不改。② **PLATFORM-ADAPTER 只读预览口**：`POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／Q36 `_match_rule_rows` 命中／生效事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）。
+> - **五键归一**：synthetic 无 frozen PWS 两键在消费方归一为 Prompt v0.1 五键（Q293 形状缺口闭合，decision/gate 为 None 不造假）；docs/05 已登记。新端点已进 `test_write_gate_wiring` 的 `GATED`。
+> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
+>
+> **其前（2026-10-06）：Q295 beta 首批真证重发落成 ＋ ②「核心完全可用」翻正（owner Gate 三步＝Q32 作废重冻 v2.0 → 段10 CCR 重扫 clean → E1.1 真发证口出活证 `537a2f28`；**纯运行时数据操作＋纯文档**，零代码零迁移零测试变化；后端基线不变 **1157 passed＋10 skipped**、头仍 0049；02 C1.238）**——负责人「按你推荐的来」一次性给齐三刀。
 > - **三刀登记**：① **t-e2e 组合确认为 beta 首批真值**（ps=bd1e64ac-…／tenant=t-e2e-c174c8ee7f9f／x_platform／short_video／ENGAGEMENT）＋**Gate 裁决人＝负责人本人**——Q290「真值确认＋跑链第二人」两卡点解除；② Q278 三件裁决＝PCP 3.1甲×3.2甲（Q294 已落地，追认）／fit_score 采**甲（可解释化）**／PLATFORM-ADAPTER 采**甲（只读预览口）**（后两件落码另点工）；③ 授权按 docs/02 C1.6 订正 docs/10 Q38 举例。**whitelist_owner 可签发性、docs/05 三写口角色、MCP discover 四处出入仍未裁**。
 > - **盘点与活体预检**：段3 pool approved／3 原子 approved／组合 30e9948e approved·ready（0.82）／PWS v1.0 frozen／CCR clean，但唯一 final_id `43d5b9e6` 的快照 **revoked**（e2e 发证 4 分钟后测回滚流）⇒ **库内无活证**；Q249 只读预检口同材料重评**七 Guard 全 PASS**、76.6 与原证逐位一致（干净 worktree `d65bd3b` 起 uvicorn :8001，避开并行 WIP）。
 > - **owner Gate 三步（每步 AskUserQuestion 明示批准）**：零变化重冻被 Q29 判 409「no new version」⇒ 经批准改走 **Q32 作废后重冻**（v1.0 revoke → 首冻 **v2.0 `5277a9ad`** all_green）→ CCR 重扫 **clean** → `POST /api/fcw/assemble`（operations 令牌）⇒ **活证 `final_id=537a2f28-c0e5-11f1-8218-9bc72af50592`**（七 Guard 现场全过、76.6、published；快照 v1 frozen/active；审计 fcw.issued by owner-gate-20261006；Q263 三包 usage_count 各 +1 首次实战验证）。
@@ -15,24 +32,11 @@
 > - **刻意没做**：不自动 approve、不写回权重表；不自造「事件→权重」映射（3.2 乙硬阻塞＝业务方先给规则，原样保留）；不碰 fit_score 自学习与 PLATFORM-ADAPTER 业务接入（Q293 同批另两件，各自待裁）；不入 `.env.example`；前端零改动（提醒经既有待办 SLA 看板可见）。
 > - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链第二人）／③ 可上线未达标（现网部署＋真 ACME 未证，另有待裁项③）——本批不改任一层判定。
 
-> **其前（2026-10-06）：Q293 Q278「三件未落」之另两件实现候选设计——fit_score 自学习 ＋ PLATFORM-ADAPTER 业务接入（**纯文档交材料**，零代码零迁移零测试变化；基线不变 **1147 passed＋10 skipped**；02 C1.236）**——负责人「那你搞」；Q292 已交三件之第一件，本批把**剩下两件**按 Q274/Q284/Q292 同型补齐，不写码不裁决。**至此 Q278 三件未落全部有可裁决材料。**
-> - **【fit_score 自学习】**（新档 `docs/design-v2-fit-score-selflearning.md`）：grounding 先纠前提——红旗 B1.1 原文挂的「四维如何聚合成 fit_score」该半**已由 Q34 落地**（`pa_rules.py:89-96`），**未答的另一半才是「学习」**。四维 `traffic/safe/conv/load` 与 `goal_fit_weights` **全部纯人工**；平台适配 8 张表**无候选表**；docs/06 §7 Gate 总览十二行**无 fit_score 行**；`GET /fit-score` 只回标量**不可解释**（看不见就没法校准）。**硬阻塞＝唯一候选数据源段13 `effect_records.metrics` 七键**（`plays/likes/comments/shares/inquiries/conversions`＋`read_rate`，稀疏、缺席不补 0、不许估算）**与四维对不上**：`safe`（安全）/`load`（承载）**零候选源**（合规在系统内是机械判定 Q48/Q49，不是效果数据能给的量）、另两维映射原文未给；且段13 属 V2（Q73 V1 不含段12/13）、生产零行。⇒ **结论比 PCP 那件更硬：不是「怎么做学习」，而是「被学的量本身没有数据源」。** 候选：**甲＝可解释化**（回带 breakdown，不动算法不落库）／**乙＝人工校准闭环**（复用既有 PUT 两口、只补四维 before/after 审计，并立**口径诚实条款：不得表述为「自学习」**）／**丙＝真自学习**须业务先给四份规则、到位后仿 Q259 候选＋Gate。§4 列 6 待裁点。
-> - **【PLATFORM-ADAPTER 业务接入】**（新档 `docs/design-v2-platform-adapter-business.md`）：**规格不缺、缺业务接线**——PT-PLATFORM-ADAPTER-V1.0 七条约束**已定稿 ✅**（docs/12:19 标 ✅）、Q246/0046 已落引擎三件套（`ai_scene_routes`→synthetic＋Prompt v0.1＋`build_platform_adapter()` 四态构造器），`synthetic.py:307` 自述「业务接线随 V2」。反向枚举四处缺口＝**无调用方**（全仓仅 **5** 个 `llm-*` 端点（llm-invoke/llm-plan/llm-expand/llm-build/llm-resolve），平台适配自身 **25** 端点无一涉及 adapter ⇒ Prompt 三变量至今无人组料）／**无结果载体**／**无 HumanGate 面**／**无 eval/golden**（9 案例无此项 ⇒ 红旗 S2「只有协议没有运行证据」零回归证据，**无 golden 不许切真模型**）。**最有利事实＝三料源全在且都有现成生产消费方**（`PwsSnapshot`＋`match_rules()`＋`active_events_for()`）⇒ 组料零臆造，真缺口只在触发方式/载体/Gate 面/护栏四处。三段候选：**甲＝只读预览口**（仿 Q249 FCW 预检，零落库不改判定）／**乙＝候选表＋Gate 闭环**（仿 Q259 `pcp_recalc_candidates`，`approve` **只解除 pending 留痕、不自动放行到 `final_id`**）／**丙＝接真模型**（硬前置先补 golden）。§4 列 7 待裁点。
-> - **三处自查订正（照 Q283 教训逐行对内容，不留初稿误判）**：① **Q38 降级动作字典口径「已定稿 ✅」——初稿曾误判为「原文未给」**（docs/02 C1.6 已给六个初始动作，原话红线「不许 AI 自由发挥」），但**全仓零命中＝载体零落地**（`content_goals` 属 Q25 已落，Q38 与 Q25/Q43/Q46 同入 docs/10:368 字典管理区但尚无实现）⇒ 乙若要落人工审核降级动作须先落 Q38 载体（**已定稿口径的欠实现，非新裁决**）；② **docs 口径漂移待订正**：docs/02:141 六项 vs docs/10:369 举例（`REMOVE_HOOK`/`REWRITE`）**后四项对不上**，以 docs/02 为准、**工程侧不擅自改 Q 记录**；③ 照 Q288 同型**陈述精确化**：docs/13:123「截至 Q116 代码未实现适配判定端点、`platform_dynamic/` 为空包」**已被 Q246/Q259 超越**（旧读数按不回改保留、由本条点名纠偏）。另实测**形状缺口**：Prompt v0.1 要求五键 `{missing,decision,reason,refs,gate}`，synthetic 无 PWS 分支**只返两键** `{missing,reason}` ⇒ 消费方取 `decision` 会 KeyError，接线须归一并登记进 docs/05。
-> - **【复判不变】**：① 功能覆盖达标／② 未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链裁决第二人）／③ 未达标（现网部署＋真 ACME 未证，另有待裁项③ 客户侧认证）——两件的硬阻塞被定位到**业务规则供给**（映射规则、审核角色码、Q38 字典口径漂移）而非工程实现，不改任一层判定。
+> ~~Q293 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
-> **其前（2026-10-05）：Q292 PCP「每周重算触发」实现候选设计（**纯文档交材料**，零代码零迁移零测试变化；基线不变 **1147 passed＋10 skipped**；02 C1.235）**——承接 Q278 点名三件未落之一，只做 Q274/Q284 同型候选材料，不写码不裁决。
-> - **grounding 改变问题形状**：真缺口不是「周调度器」而是「每周触发后**新权重从哪来**」。重算候选＋人工 Gate 三件套已全（`pcp_recalc_candidates` partial unique、create/approve/reject、Σ≤1.0＋`recalc_step`），但 `proposed_weights` 的 17 个新值 V1 只能人填——`source=ai|manual`、V1 仅 manual、PCP-SCORE 生成器随 V2（`models.py:215-216`）；`pa_rules.py` 无「事件→权重」派生函数；动态事件唯一消费是 match advisory 回带、不改判定（`service.py:652`）；原文（docs/01 line 2057 痕迹）只说「每周触发重算」未给映射算法。⇒ 只加周循环而无权重来源＝每周醒来无合法动作，自造映射即违反禁臆造。
-> - **交付**：新档 `docs/design-v2-pcp-weekly-recalc.md`，两层候选——3.1 触发机制（甲＝复用 `SweepScheduler` 第 6 登记作业＋默认关 env〔推荐，白拿 Q89/Q139/Q151 多副本安全〕／乙独立循环／丙外部 cron）× 3.2 触发后产出（甲＝只开 OpsTodo「待重算提醒」不产权重〔推荐的 V2 第一切片，与 PWS 就绪提醒同型、零臆造〕／乙确定性派生候选，硬阻塞＝业务方先给事件→权重映射规则／丙 PCP-SCORE AI 候选，接模型网关＋eval/golden）；§4 列 6 待裁点。任何路径都不自动 approve（人工 Gate 红线）。
-> - **同批登记 Q291 CI**：run `37324727725`（dev `22e6c60`）六道门全 **success**，本机 1147＋10 skip 与 CI 一致。锚点按 Q283 教训逐行对内容（`approve_candidate` 实为 `service.py:760`，非初稿 773）。
-> - **【复判不变】**：① 达标／② 未达标（真业务值替换 `t-e2e`＋跑链第二人）／③ 未达标（现网部署＋真 ACME 未证，另有待裁项③）——本批把一件 V2 余量从「无调度器」精确化为「权重来源缺失」并交可裁决材料，不改任一层判定。
+> ~~Q292 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
-> **其前（2026-10-05）：Q291 四个拓扑无关布尔开关经 base compose 转发（Q280「旋钮没接到制品」一族的系统性收口；**配置＋测试＋文档**，零生产代码零迁移；后端 **1146→1147 passed＋10 skipped**〔＋1 可达性契约门〕；02 C1.234）**——工程侧自查可独立推进项，负责人「你自己可以搞吗」。
-> - **缺陷（反向枚举实测，非推理）**：把 `config.py` 全部字段对照 base compose 与 5 overlay 一次性盘点，查出四个**与拓扑无关、文档已承诺部署期可拧**的布尔开关谁都不转发、容器内又无 `.env` ⇒ 运维在 `.env` 设了也进不了容器。最要命 `LOOM_STAFF_AUTH_ENABLED`：docs/17 §1 启用引导第③步与 Q203 验收都要求「置 true 重启」，但官方 compose 形态下 env 永不到 backend（`staff_auth/deps.py:121` 凭证分支永不进），身份门控实际开不了。
-> - **交付**：`infra/docker-compose.yml` backend.environment 补 `LOOM_SCHEDULER_ENABLED`（默认 true）＋`LOOM_STAFF_AUTH_ENABLED`／`LOOM_DISCARD_PURGE_ENABLED`／`LOOM_MCP_ENABLED`（默认 false）四行 `${VAR:-字面默认}`（布尔 env 不用空串默认，空串会让 pydantic bool 启动校验失败）；默认值一字不变、纯加法可回滚。
-> - **守卫（反向枚举，不止补一个）**：`test_gateway_surface_contract.py` 新增 `test_topology_free_bool_switches_actually_reach_the_backend_container`——四开关必须转发且插值默认与 `config.py` 逐字一致；拓扑绑定族（restock/export/import/fcw 四 worker＋distributed_lock＋config_cache_broadcast 共 6 开关）**刻意不进 base**，谁挪进来即红（只由 ha overlay 在多副本/演练时打开）。两次种植（staff_auth 改空串／export worker 塞 base）各判红后还原；沙盒内 2 个 backup_monitoring socket.bind 失败经沙盒外复跑 22 passed 证实为环境假红。
-> - **刻意没做（守裁决边界）**：不改默认值、不加应用内启动校验（Q287 已注明属运行时行为变更须裁决）、不扩 worker 族转发面、不入 `backend/.env.example`（Q135/Q178/Q232 先例）。docs/17 §1＋docs/22 §3.1 已补接线事实，Q285 banner 按「最近 5 条」上限滚入 10-04 档案。
-> - **【复判不变】**：① 功能覆盖达标／② 未达标（卡点＝真业务值替换 `t-e2e` 造数＋跑链第二人）／③ 未达标（本批让 staff 门控在官方 compose 下**真能开**、补了 #7 验收链一处被文档掩盖的硬缝，但现网部署＋真 ACME 仍未证，另有待裁项③ 客户侧认证）。
+> ~~Q291 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
 > ~~Q290 banner 原文~~（含其五条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 > ~~Q288/Q289 banner 原文~~（含其五条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
@@ -165,6 +169,19 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。
 
 ## 最近进度（2026-09-20 ~ 2026-10-06）
+- **Q298 覆盖率读数复测（2026-10-06；**纯测量**，零代码零迁移零测试改动；基线不变 **1169 passed＋10 skipped**、头仍 0049；02 C1.241）** —— Q294/Q296 两批新增真实 `app/` 语句后的例行复测。
+  - **读数**：全系统 `app/` **71.83%**（13,220 条语句／missed 3,724；Q281＝71.78%／13,100，分母 ＋120＝周扫描作业＋fit/adapter service/router，读数 ＋0.05pp 无摊薄）；核心规则层 **99.34%**（604 条／9 文件；Q281＝602 条，Q296 breakdown ＋2）。
+  - **沙箱假红**：沙箱内全量报 2 例 `test_backup_monitoring_contract` 的 socket.bind EPERM 失败（1167 passed＋2 failed＋10 skipped in 143.23s），沙箱外单跑该文件 **22 passed in 0.21s** 全绿（Q291 同型），非回归、不影响读数。
+  - **政策不变**：≥90%／≥70% 仍【建议】、不接 `--cov-fail-under`（Q229，待裁项⑤）；读数同步 docs/16 §4，`coverage.json` 为 gitignored 产物不入库。**三层判定不变**。
+- **Q297 内部角色与可签发性（V2 三件事公共前置）实现候选设计（2026-10-06；**测试＋文档**，零生产代码零迁移；守卫 UNGATED 补登 PWS 冻结/吊销两口、用例数不变，基线仍 **1169 passed＋10 skipped**、头仍 0049；02 C1.240）** —— 负责人「好的」，工程侧挑的不需裁决可独立推进项；新档 `docs/design-v2-internal-roles-rbac.md`。
+  - **为何汇总**：fit_score 人工校准（fit 乙）、adapter 候选表＋Gate（adapter 乙）、待裁项③ 的 `whitelist_owner` 可签发性——三件 V2 余量共同卡在同一契约前置（要不要新角色码／能否签发 staff 令牌／守哪些写口），拆三次裁决会造成两三次契约变更，按 Q274/Q284/Q292/Q293 同型合成一份。
+  - **grounding（head=0049 实测）**：内部 5 角色可绑 staff PAT、客户角色 `whitelist_owner` 刻意不可签发（`rbac.INTERNAL_ROLES` 与 `staff_auth INTERNAL_STAFF_ROLES` 两处须逐字一致）；守卫矩阵只用 4 种角色，`dictionary_admin` 定义但 0 写口挂它（可复用）；docs/06 §7 Gate 总览无 fit_score 行、平台适配无权威角色码；PWS 冻结/吊销两口（router :78/:109）既无 `require_internal_actor`、也不在 GATED/UNGATED 任一名单（身份模型悬空，Q242 归并③）。
+  - **推荐**：fit 校准与 adapter 裁决均**甲＝复用 operations**（零新角色零迁移，展示口径映射到权威码）；`whitelist_owner` **甲＝维持客户角色随③客户认证解决**，本批只把冻结两口补进守卫 UNGATED 显式登记（盲区变判据）。乙案（新设 fit_admin/platform_reviewer）本质是「要不要独立审计身份」的组织裁决，工程不代裁；红线＝不把客户角色塞进内部令牌集、adapter 裁决不新增硬 Guard。
+  - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批只把③的一个子问题材料化。
+  - **已落的一件诚实化小改**：`test_write_gate_wiring.py` UNGATED 补两口（`/api/product-spaces/{id}/pws/freeze`、`/api/pws/{id}/revoke`）并注释待裁项③承接，守卫 3 例绿；无生产行为变化。
+- **Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地（Q295 裁决两件的甲案；2026-10-06；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）** —— 负责人「接手 Q296，把剩下的收口」。
+  - **两件甲案**：① fit_score：`pa_rules.fit_score_breakdown()` 与聚合函数共用权重同 `FIT_DIMS` 序、Σ 自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合），算法不落库不改。② `POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／Q36 `_match_rule_rows` 命中／生效事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）；synthetic 无 frozen PWS 两键在消费方归一为五键（Q293 形状缺口闭合），已进 `GATED`、docs/05 登记。
+  - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
 - **Q295 beta 首批真证重发落成＋② 翻正（2026-10-06；**纯运行时数据操作＋纯文档**，零代码零迁移零测试变化；基线不变 **1157 passed＋10 skipped**、头仍 0049；02 C1.238）** —— 负责人「按你推荐的来」。① **t-e2e 组合确认为首批真值**＋**Gate 裁决人＝负责人本人**（Q290 两卡点解除）；② Q278 三件裁决＝PCP 甲×甲（Q294 落地）／fit_score 采甲／adapter 采甲（落码另点工）；③ 授权订正 docs/10 Q38 举例。**重发三步**（每步 AskUserQuestion 明示批准）：Q29 判零变化重冻 409「no new version」→ 改走 **Q32 作废重冻**（v1.0 revoke → **v2.0 `5277a9ad`** all_green）→ CCR **clean** → E1.1 发证 ⇒ **活证 `537a2f28`**（七 Guard 全过 76.6；快照 v1 frozen/active；审计 by owner-gate-20261006；Q263 三包 usage_count 各 +1 首次实战验证）。**②「核心完全可用」＝✅ 达标（本批翻正）**；③ 未达标（现网部署＋真 ACME＋待裁项③）。
 - **Q293 Q278「三件未落」之另两件实现候选设计：fit_score 自学习 ＋ PLATFORM-ADAPTER 业务接入（2026-10-06；**纯文档交材料**，零代码零迁移零测试变化；基线不变 **1147 passed＋10 skipped**；02 C1.236）** —— 负责人「那你搞」；Q292 已交三件之第一件，本批把剩下两件按同型补齐，**Q278 三件未落至此全部有可裁决材料**。
   - **【fit_score 自学习】**（新档 `docs/design-v2-fit-score-selflearning.md`）：grounding 先纠前提——B1.1 原文挂的「四维如何聚合成 fit_score」该半**已由 Q34 落地**（`pa_rules.py:89-96`），未答的另一半才是「学习」。四维与 `goal_fit_weights` **全部纯人工**、无候选表、docs/06 §7 Gate 总览无 fit_score 行、只读口只回标量不可解释。**硬阻塞＝唯一候选数据源段13 `effect_records.metrics` 七键与四维对不上**：`safe`（安全）/`load`（承载）**零候选源**、另两维映射原文未给、段13 属 V2 生产零行。候选甲＝可解释化／乙＝人工校准（**口径诚实条款：不得称「自学习」**）／丙＝真自学习须业务先给四份规则。§4 列 6 待裁点。
@@ -186,16 +203,18 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
   - **本机口令事实（只记形状、不记值）**：本机开发库用 compose 容器里的 32 位口令从宿主连会 `InvalidPasswordError`；可用的是 `LOOM_DATABASE_DSN=postgresql+asyncpg://loom:loom@localhost:5432/loom`（与 `alembic/env.py` 缺省同值）。仓内不预设任何真实部署口令，口令不入库、不入任何文档。
   - **范围**：零生产代码、零迁移、零测试改动、零新表零新 env；只改台账与活状态句子（docs/02／handoff／CHANGELOG／docs/19／AGENTS）。
   - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝**真业务值替换 `t-e2e` 造数**＋跑链裁决的第二个人）／③ 可上线未达标（现网部署＋真实 ACME 未证，另有待裁项③）。
+
 - **Q288/Q289 待裁项⑦ 裁「补」丙案落地（`packages` 部分唯一索引）＋ prometheus 9090 绑回环（2026-10-05；**代码＋迁移＋测试＋配置＋文档**；迁移 **0047→0048**；后端 **1141→1146 passed＋10 skipped**〔＋4 集成／＋1 加固契约〕；真 PG16 往返实测；02 C1.231/C1.232）**
   - **负责人「按你建议来」**：⑦ 裁**「补」**并采取**丙案**（现网零行 ⇒ 无重复可盘 ⇒ 不做归档口径）；材料＝Q284 交的 design-p2 §6（盘点 SQL＋0048 草案＋三案＋`IntegrityError`→409 提醒）。
   - **Q288 交付**：迁移 `0048_packages_active_triple_unique`（双 where 双写）；`models.py` `__table_args__` 成对声明（缺一边 Q207 ORM⇄DB 漂移门即红）；`router.py` 的 create/update 两路 `IntegrityError`→**409**；守卫 `tests/integration/test_package_active_triple_guard.py` **4 例**（模型双写／重复 active 被 DB 拒／active＋archived 共存证 partial／**致盲 service 查重走 API 仍 409**）。
   - **键与命名**：`(product_space_id, platform, goal, kind) WHERE status='active'`，与 service 查重逐字一致；`tenant_id` 刻意不进键；索引名刻意**不复用**幻影 `uq_package_active_triple`（Q272 起五份文档误当既有事实，Q278 勘误）。
   - **真 PG16 实测**：升级前 `packages` **3 行 active**＝同一 PS（`bd1e64ac-…`）×`x_platform`×`ENGAGEMENT` 的 csp/cstp/cep；重复三元组 **0** ⇒ `alembic upgrade head` 建索引成功（有重复当场失败＝把盘点并进建索引动作）；重复插被 `duplicate key value violates unique constraint` 拒、archived 孪生放行；探针行已删（回到 3 行）；**0047→0048→0047→0048 往返**（`pg_indexes` **1→0→1**），`current`＝0048 head。
-  - **Q289 交付**：`infra/docker-compose.monitoring.yml` 的 prometheus `9090:9090` → **`127.0.0.1:9090:9090`**；`test_prometheus_keeps_its_port_and_no_other_service_publishes` 改名 `test_prometheus_is_loopback_only_and_no_other_service_publishes` 改判据；新增 `test_monitoring_overlay_web_ports_are_loopback_only`（prometheus＋grafana 两口都必须回环）。网格内消费／容器内健康检查／alerting 演练探针均不受影响。
+  - **Q289 交付**：`infra/docker-compose.monitoring.yml` 的 prometheus `9090:9090` → **`127.0.01:9090:9090`**；`test_prometheus_keeps_its_port_and_no_other_service_publishes` 改名 `test_prometheus_is_loopback_only_and_no_other_service_publishes` 改判据；新增 `test_monitoring_overlay_web_ports_are_loopback_only`（prometheus＋grafana 两口都必须回环）。网格内消费／容器内健康检查／alerting 演练探针均不受影响。
   - **影响面（对外可见）**：这是**并发形态变化**——并发双建同三元组从「都成功」变「后者 409」；日常单请求路径的 409 语义不变（service 先查后插仍先拦）。属 design-p2 §6 预告过的错误形态变更。
   - **陈述精确化（与 Q280 同型）**：design-p2 §6「现网零行」指**生产环境**（无部署确为零行），本机**开发持久库**实测 3 行；两句话都对、指的不是同一个库，已在设计文档就地注记。
   - **范围与接手**：零新表零新 env，业务物理表仍 **68**、迁移文件 **48**；本批实施半成品由并行会话起草，本会话接手做 ruff 修正（`C408`）＋全套验真（pytest 全量／真 PG 往返／重复拦截）＋台账登记。**⑦ 退出活跃待裁项（余 ②③④⑤）**。
   - **【复判不变】**：① 功能覆盖达标／②「核心完全可用」未达标（卡点＝业务方回调首批主数据＋有人跑段1→6→10 在 Gate 裁决）／③ 可上线未达标（现网部署＋真实 ACME 未证，另有待裁项③）——本批是守卫加固，不改任一层判定。
+
 - **Q254 agnes 三模（文本／图像／视频）真模型连通性实测 ＋ 本机凭证载体模型编码订正（2026-10-03；**纯实测＋载体注释订正**，零生产代码零迁移零新表零新 env、零测试改动；后端基线不变 **1080 passed＋10 skipped**；唯一文件改动＝`backend/.env.shell` 备查注释行〔被 `.gitignore` 忽略、不入库、不入提交〕；02 C1.198）**
   - **来由**：负责人「模型你配置如下：Base URL／Key／文本·图像·视频三模」→ 先核对本机凭证载体，再逐模发最小请求实测。**Key 值不写入任何文档**（Q82／Q148 既有纪律，本批只记读数不记值）。
   - **载体核对与订正**：`backend/.env.shell` 内 `LOOM_LLM_BASE_URL_AGNES` 与 `LOOM_E2E_AGNES_KEY` 与口供一致；备查注释三处订正——图像 `agnes-image-2.1-flash / agnes-image-2.0-flash` → **`agnes-image-2.5-flash`**、视频收敛为 **`agnes-video-2.5-flash`**、文本 `agnes-2.5-flash` 核对一致无需改。
@@ -305,7 +324,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **09-25 进度归档（2026-09-25 按「最近 5 条」上限滚出 Q176/Q177 追认批 ＋ Q177 D3.5 运营只读首片两条完整条目，原文见该档）** → [docs/handoff-archive-2026-09-25.md](docs/handoff-archive-2026-09-25.md)。
 - **09-24 进度归档（2026-09-24 滚出 Q166–Q168 客户 analytics/Agent Key 治理页/导出 job 管理页三片＋文档合龙一条，原文见该档）** → [docs/handoff-archive-2026-09-24.md](docs/handoff-archive-2026-09-24.md)。
 - **09-23 进度归档（2026-09-23 滚出 Q158 异机恢复演练一条；续写滚出 Q159–Q161 批量回填收口/Excel/异步导入＋MVP 评审一条，原文见该档）** → [docs/handoff-archive-2026-09-23.md](docs/handoff-archive-2026-09-23.md)。
-- **Q155–Q157 台内 6 层原料包 JSON / 批量回填服务端化 / 多副本持续负载演练三片已落地**（2026-09-21，02 C1.99–C1.101，后端 747→761，Q157 16/16；原文已归档见 [docs/handoff-archive-2026-09-22.md](docs/handoff-archive-2026-09-22.md)）。
+- **Q155–Q157 台内 6 层原料包 JSON / 批量回填服务端化 / 多副本持续负载演练三片已落地**（2026-09-21，02 C1.99–C1.101，后端 747→761，Q157 16/16；原文已归档见 [docs/handoff-archive-2026-09-22.md](docs/handoff-archive-2026-09-22.md)；**Q296 批补滚**：本区长文长期超「最近 5 条」（Q296 前已积 10 条），本批加 Q296 长文时把这条最旧的重复长文就地收成一行，不新造归档副本）。
 - **09-22 进度归档（2026-09-22 滚出 Q149 阈值确认/录入模板一条；续写滚出 Q150–Q152 A2A/SLA fence/导出多 consumer 三件一条、Q153–Q154 DBA 第二轮全量列复核/真容器多副本锁易主一条，原文见该档）** → [docs/handoff-archive-2026-09-22.md](docs/handoff-archive-2026-09-22.md)。
 - **09-21 进度归档（2026-09-21 滚出 Q133–Q135 基建三件/Q136 批量 CSV 回填/E DBA 复核/Q137–Q140 接线四件共四条；续写滚出 Q141–Q143 三件一条、Q147 staging 彩排一条，原文见该档）** → [docs/handoff-archive-2026-09-21.md](docs/handoff-archive-2026-09-21.md)。
 - **09-20 进度归档（2026-09-20 滚出 Q128 customer-backfill、Q129 批量认领/解绑、Q130 管理端认领台、Q131 客户回填岛四条；续写滚出 Q132 中台导出 JSON/异步任务一条，原文见该档）** → [docs/handoff-archive-2026-09-20.md](docs/handoff-archive-2026-09-20.md)。

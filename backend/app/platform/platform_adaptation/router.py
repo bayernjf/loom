@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.actor import Actor
 from app.core.db import get_session
+from app.core.model_registry import gateway
 from app.core.rbac import OPERATIONS, PermissionDenied, require_any_role
 from app.core.staff_auth.deps import require_internal_actor
 from app.platform.platform_adaptation import service
@@ -16,6 +17,7 @@ from app.platform.platform_adaptation.schemas import (
     FitWeightPut,
     PcpCreate,
     PcpUpdate,
+    PlatformAdapterPreviewRequest,
     RecalcCandidateCreate,
     RuleCreate,
     SlotTypeDefaultPut,
@@ -299,6 +301,40 @@ async def match_rules(
     events = await service.active_events_for(session, platform, slot_id=slot_id)
     result["events"] = [_event_view(e) for e in events]
     return result
+
+
+@router.post("/api/admin/platform-adapter/preview")
+async def platform_adapter_preview(
+    body: PlatformAdapterPreviewRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    """Q296 甲（design-v2-platform-adapter-business §3.1）：PLATFORM-ADAPTER 只读预览口。
+
+    组三料（PWS 快照／Q36 规则命中／生效动态事件）→ 经模型网关调 PLATFORM-ADAPTER
+    场景（V1 路由 synthetic）→ 四态建议直接回带。**零落库、零审计、不改任何判定、
+    不产候选、不触 final_id**（PT 约束 4/6；Q249 FCW 预检只读口同型）。快照不存在
+    404；无 frozen PWS 是协议内缺失形状（missing=true 五键、decision/gate 为 None
+    不造假），不是错误。
+    """
+    try:
+        return await service.platform_adapter_preview(
+            session,
+            pws_snapshot_id=body.pws_snapshot_id,
+            platform=body.platform,
+            slot_type=body.slot_type,
+            slot_id=body.slot_id,
+            country=body.country,
+            previewed_by=verified.id,
+        )
+    except service.PwsSnapshotNotFound as exc:
+        raise HTTPException(404, f"pws snapshot not found: {exc}") from exc
+    except gateway.ModelConfigError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except gateway.ModelUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except gateway.GenerationUpstreamError as exc:
+        raise HTTPException(502, str(exc)) from exc
 
 
 # ---------- Q37 动态信号事件 ----------
