@@ -1,6 +1,11 @@
 # Handoff — Loom
 
-> **最新（2026-10-06）：Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环 ＋ Q299 fit_score 人工校准审计（Q297 裁决全甲的两个乙案落地；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**、业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**〔＋11＝adapter 候选 8／fit 校准 3〕、ruff 净、eval 101/101、前端零改动；真 PG16 宿主 55460 往返实测 **69 表/754 列 NO DRIFT**；02 C1.242/C1.243）**——负责人「好的，你搞」＝Q297 三件候选全按甲。
+> **最新（2026-10-06）：Q301 CI 同 ref 连推自动取消旧 run（PR #150 红叉根因收口；**配置＋测试＋文档**，零迁移零生产代码；后端收集 1190→**1191**（**1181 passed**＋10 skipped，＋1＝ci.yml concurrency 契约，先红后绿）、ruff 净、前端零改动；02 C1.244）**——工程侧独立推进，门集合一字不动。
+> - **根因**：PR #150（dev→main）红叉实为**被取消的重复 run**非测试失败（rerun attempt 2 六道门全绿）；GitHub Actions 默认把同 ref 每次推送的 run 全跑完，烧额度且 cancelled 叉号污染状态。
+> - **交付**：`.github/workflows/ci.yml` 顶层 `concurrency: group ci-${{ github.ref }} / cancel-in-progress: true`——同 ref 新推送立即取消旧 run，不同 ref（并发 PR、dev/main）互不取消；新契约例 `test_superseded_runs_are_cancelled_per_ref` 钉组名与开关恰为该值（`test_ci_workflow_contract.py` 现 21 例）。沙箱内 2 例 backup_monitoring socket.bind EPERM 为已知假红（Q291/Q298 同型）。
+> - **【复判不变】**：① 达标／② 达标／③ 未达标（现网部署＋真 ACME＋待裁项③）。只改调度不改门，不改任一层判定。
+>
+> **其前（2026-10-06）：Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环 ＋ Q299 fit_score 人工校准审计（Q297 裁决全甲的两个乙案落地；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**、业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**〔＋11＝adapter 候选 8／fit 校准 3〕、ruff 净、eval 101/101、前端零改动；真 PG16 宿主 55460 往返实测 **69 表/754 列 NO DRIFT**；02 C1.242/C1.243）**——负责人「好的，你搞」＝Q297 三件候选全按甲。
 > - **Q299 fit 人工校准（乙案，零迁移）**：`slot.update` 审计 detail 加 `fit_dim_changes`（只记变化维度 before/after，原样为 `{}`）、`fit_weights.put` 加 `weights_before`（首次 null）；端点形状不变。口径是**人工校准非「自学习」**：不设幅度上限（原文未给）、不触发下游、fit_score 仍派生不落库、Q54 0.4/0.3/0.3 不动。
 > - **Q300 adapter 候选＋Gate（乙案，迁移 0050）**：新表 `platform_adapter_candidates`（partial unique `uq_platform_adapter_pending` 双 where，slot_id 可空以 coalesce 空串入键）＋四端点（候选列表/提交/approve/reject，三写口全 OPS、进守卫 GATED）；提交复用 Q296 组料＋synthetic 网关落 pending 候选，V1 仅 source=synthetic。
 > - **advisory 红线**：approve 只解除 pending 留痕（审计带 `advisory_only:true`）——不改平台规则/发布位、不产 final_id、不动段11 七 Guard（PT 约束 4/6）；reject reason 必填；Q38 降级动作字典另点工（docs/02:141 vs docs/10:369 口径漂移未订正前不落码），丙案真模型仍以补 eval/golden 为硬前置。docs/06 §7 已补 fit 校准行并把「平台审核员（展示口径）」映射到 operations。
@@ -18,10 +23,7 @@
 > - **推荐**：fit 校准与 adapter 裁决均**甲＝复用 operations**（零新角色零迁移，§7 把展示口径映射到权威码）；`whitelist_owner` **甲＝维持客户角色随③客户认证解决**，本批只把冻结两口补进守卫 UNGATED 显式登记（盲区变判据）。乙案（新设 fit_admin/platform_reviewer）本质是「要不要独立审计身份」的组织裁决，工程不代裁；红线＝不把客户角色塞进内部令牌集、adapter 裁决不新增硬 Guard。
 > - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批只把③的一个子问题材料化。
 >
-> **其前（2026-10-06）：Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地（Q295 裁决两件的甲案；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）**——负责人「接手 Q296，把剩下的收口」。
-> - **两件甲案**：① **fit_score 可解释化**：`pa_rules.fit_score_breakdown()` 与聚合函数共用权重同维度序、Σ 自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合），算法不落库不改。② **PLATFORM-ADAPTER 只读预览口**：`POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／Q36 `_match_rule_rows` 命中／生效事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）。
-> - **五键归一**：synthetic 无 frozen PWS 两键在消费方归一为 Prompt v0.1 五键（Q293 形状缺口闭合，decision/gate 为 None 不造假）；docs/05 已登记。新端点已进 `test_write_gate_wiring` 的 `GATED`。
-> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
+> ~~Q296 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
 > ~~Q295 banner 原文~~（含其五条子项）已按「最近 5 条」上限于 2026-10-06 逐字滚入 [docs/handoff-archive-2026-10-06.md](docs/handoff-archive-2026-10-06.md)。
 >
@@ -165,6 +167,10 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 - **V1 范围（Q73 合并后权威）**：0–3 月 / 5–10 客户；主链段 1→6→10→**11**（到 `final_id` 发证闭环，**不含段 12**）；段 7/8 仅 FCW 必需的静态底表基础版（M11，无动态信号/fit_score 学习）；横切 skill7/writeAudit/RBAC/配置中心/SLA + 审核工作台 + 租户/Onboarding + 前端 8 菜单基础版 + CSV（M12）+ M10-Q 质量两件套 + 2 驾驶舱。段 12/13 与段 7/8/9 完整版在 V2。
 
 ## 最近进度（2026-09-20 ~ 2026-10-06）
+- **Q301 CI 同 ref 连推自动取消旧 run（PR #150 红叉根因收口；2026-10-06；**配置＋测试＋文档**，零迁移零生产代码；后端收集 1190→**1191**（**1180→1181 passed＋10 skipped**，＋1＝ci.yml concurrency 契约，先红后绿）、ruff 净、前端零改动；02 C1.244）** —— 工程侧独立推进，门集合一字不动。
+  - **根因**：PR #150（dev→main）红叉实为**被取消的重复 run** 非测试失败（rerun attempt 2 六道门全绿）；GitHub Actions 默认把同 ref 每次推送的 run 全跑完，烧额度且 cancelled 叉号污染状态。
+  - **交付**：`.github/workflows/ci.yml` 顶层 `concurrency: group ci-${{ github.ref }} / cancel-in-progress: true`——同 ref 新推送立即取消旧 run，不同 ref（并发 PR、dev/main）互不取消；新契约例 `test_superseded_runs_are_cancelled_per_ref` 钉组名与开关恰为该值（`test_ci_workflow_contract.py` 现 21 例）。**只改调度不改门**；docs/08 §2.2 权威行、docs/16 §4 基线行、AGENTS、docs/README 地图同批刷新。
+  - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。
 - **Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环 ＋ Q299 fit_score 人工校准审计（2026-10-06；Q297 裁决全甲的两个乙案；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**、业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**〔＋11＝`test_platform_adapter_candidates.py` 8／`test_fit_calibration_audit.py` 3〕、ruff 净、eval 101/101、前端零改动；真 PG16 宿主 55460 实测 69 表/754 列 NO DRIFT、up/down/up 对称；02 C1.242/C1.243）** —— 负责人「好的，你搞」＝Q297 三件候选全按甲。
   - **Q299 fit 人工校准（零迁移，非「自学习」）**：`PUT publish-slots/{id}` 的 `slot.update` 审计加 `fit_dim_changes`（只记变化维度 before/after，原样 `{}`）、`PUT fit-weights` 的 `fit_weights.put` 加 `weights_before`（首次 null）；端点形状不变，不设幅度上限、不触发下游、fit_score 仍派生不落库。
   - **Q300 adapter 候选＋Gate（0050）**：新表 `platform_adapter_candidates`（partial unique `uq_platform_adapter_pending` 双 where，slot_id 可空以 `coalesce_slot_id` 空串入键）＋`GET/POST .../platform-adapter/candidates`、`POST .../{id}/approve|reject`（三写口 OPS、进守卫 GATED；快照不存在 404／同键 pending 409／已裁决 404／reject 空 reason 422／无令牌 401／越权 403）；提交复用 Q296 组料＋synthetic 网关，V1 仅 source=synthetic。

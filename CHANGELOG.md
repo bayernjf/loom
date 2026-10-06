@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q301 CI 同 ref 连推自动取消旧 run（2026-10-06；**配置＋测试＋文档**，零迁移零生产代码；后端收集 1190→**1191**（1180→**1181 passed**＋10 skipped，＋1＝`test_ci_workflow_contract.py` concurrency 契约）、ruff 净；02 C1.244）** —— PR #150 红叉根因（被取消的重复 run 而非测试失败）收口。
+  - `.github/workflows/ci.yml` 顶层加 `concurrency: group ci-${{ github.ref }} / cancel-in-progress: true`：同 ref 新推送立即取消旧 run（省 CI 额度、状态不被 cancelled 叉号污染），不同 ref（并发 PR）互不取消；契约先红后绿，门集合一字不动。
 - **Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环（2026-10-06；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**，业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**（＋8＝`test_platform_adapter_candidates.py`，另有 Q299 ＋3）；真 PG16 宿主 55460 往返实测 69 表/754 列 NO DRIFT、eval 101/101、ruff 净；02 C1.243）** —— Q297 全甲裁决之 adapter 乙案。
   - 新表 `platform_adapter_candidates`（0050，partial unique `uq_platform_adapter_pending` 双 where，slot_id 可空以 coalesce 空串入键）；四端点：候选列表、提交（复用 Q296 组料＋synthetic 落 pending）、approve/reject，三写口全 `require_internal_actor(OPERATIONS)` 并进守卫 GATED。
   - **advisory 红线**：approve 只解除 pending 留痕（`platform_adapter.approved` 带 `advisory_only:true`），不改规则/发布位、不产 final_id、不动七 Guard；reject reason 必填。Q38 降级动作字典另点工（docs 口径漂移未订正前不落码）。丙（真模型）仍须先补 eval/golden。

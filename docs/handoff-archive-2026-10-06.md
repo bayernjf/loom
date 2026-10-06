@@ -75,3 +75,11 @@
 > - **② 翻正依据**：docs/19「首批完成唯一标准＝真实部署库出一张 `final_id`、六路材料指向真实业务数据」满足——真值经负责人确认＋六路材料（PWS v2.0／PCP `be069bc0`／三包 `2b7acfd7`·`3ae7764a`·`2269ab13`／CCR `4cbafa0a`）全落库＋人工 Gate。**刻意没做**＝不重造产品内容（重录新链需臆造素材）、不自动 Gate、Q294 批独立落账不混装。
 > - **【复判更新】**：① 功能覆盖达标／② **「核心完全可用」＝✅ 达标（本批翻正）**／③ 可上线未达标（现网部署＋真 ACME 未证，另有待裁项③）。
 >
+
+## Q296 banner（2026-10-06 滚入）
+
+> **其前（2026-10-06）：Q296 fit_score 可解释化 ＋ PLATFORM-ADAPTER 只读预览口落地（Q295 裁决两件的甲案；**代码＋测试＋文档**，零迁移零新表零新 env；后端 **1157→1169 passed＋10 skipped**（总收集 1179；＋12＝`test_fit_score_breakdown.py` 4／`test_platform_adapter_preview.py` 8）、ruff 净、eval 101/101、前端零改动、头仍 0049；02 C1.239）**——负责人「接手 Q296，把剩下的收口」。
+> - **两件甲案**：① **fit_score 可解释化**：`pa_rules.fit_score_breakdown()` 与聚合函数共用权重同维度序、Σ 自校验；`service.fit_score()` 加法回 `breakdown`（incomplete 时 score 可见、weight/contribution 为 None 不造聚合），算法不落库不改。② **PLATFORM-ADAPTER 只读预览口**：`POST /api/admin/platform-adapter/preview`（`require_internal_actor(OPERATIONS)`，无令牌 401、快照不存在 404）组三料（frozen PWS／Q36 `_match_rule_rows` 命中／生效事件）经 synthetic 网关回四态，**零落库零审计不改判定不触 final_id**（与 Q249 FCW 预检口同型）。
+> - **五键归一**：synthetic 无 frozen PWS 两键在消费方归一为 Prompt v0.1 五键（Q293 形状缺口闭合，decision/gate 为 None 不造假）；docs/05 已登记。新端点已进 `test_write_gate_wiring` 的 `GATED`。
+> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③ 客户侧认证）。乙（候选表＋Gate）丙（真模型，须先补 eval/golden）后置。
+>
