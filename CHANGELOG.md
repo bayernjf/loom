@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q310 结构档与全景补登＋Q309 候选尾巴读完（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.253**）——负责人第二次「更新项目文档」。结构档不是台账，是下一个人找代码的地图。
+  - **候选读完、订正 4 处**：`docs/22` 的 `config.py:126`→**`:135`**（`mcp_enabled` 真位）；`docs/23 §3` 裸 except 证据 `main.py:68,119`→**`:67-71,118-121`**（按 `try:` 起算，否则读者找不到 `except`）；`docs/23 §10` Q241 复核表 `layer_strategy/router.py:49,71,87`→**`:75,107,133`**、`service.py:49-51`→`_require_ops` 在 `:81,100,153,191`（**结论不变，指针要换**）；`附录C` 种缺陷配方 `router.py:320`→**`:330`**（照抄旧行号种不出缺陷）。dated 记录一律加日期注不回改。
+  - **docs/09 全景从来没有「字典管理」屏**：D3.1~D3.13 搜不到它，而它是今天侧栏第 15 项 `/admin/dictionaries`。补登四族字典两表两屏、读放行 `platform_admin`／写只认 `dictionary_admin`、**只给可选集不给拦截**；**不动 D3.x 编号**（菜单口径合并属裁决）。
+  - **docs/15 三笔实测**：实现补登停在 **Q240**（约 70 批未进档）；树里那句「`core/` 横切 25 包（2026-09-28 实测点名）」今日＝**27**（缺的正是 Q306／Q308 两包，已补齐并逐名对齐：枚举 27＝盘上 27）；49 包里只有 **1** 个从未被点名，真正的病是 **8 个 0 行空壳包**（`core/dict_management`／`core/gates`／`core/candidate_channel`／`platform/platform_dynamic`／`product/dimension`／`content/content_manage`／`feedback`＋`feedback_loop`，脚手架 commit `5d5f726` 遗留）——**docs/10 的 §dict_management 对应的包是空的**，四族字典真实住在别处。
+  - **一处自查更正**：本节初稿写「14 个包在 docs/15 找不到名字」是**错的**——匹配器漏比裸包名，`pool_options`／`mcp`／`gates` 都在文中；重测＝**1 个**。错误数字未进任何提交，留痕以免被当成第二次真相。
+  - **待点工（本批不擅自做）**：结构档修法两案＝**甲（推荐）按代码反向生成「包→职责→入口」清单接管该节**／乙继续逐批手工补登（已证明会再漂移）；**8 个空壳包删不删属代码变更，一个没动**。**复判不变**：① 达标／② 达标／③ 未达标（现网＋真 ACME＋待裁③）。
 - **Q309 活文档 `file:line` 锚点全量复扫＝落空指针清零（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.252**）——负责人「更新项目文档」。六道门都是"文档↔文档／代码↔代码"的一致性门，**没有一门核对"文档指的那一行今天内容是否还成立"**；而 Q306／Q307／Q308 每批都在往上插行，下游每条行号引用都会静默失准。
   - **方法**：穷举 docs 全部＋6 份设计档＋README／AGENTS／handoff／CHANGELOG 的 `path.ext:N[-M]`（**623 条**），按后缀解析到真实文件，打三种信号：越界／空行空区间（＝硬落空）、目标文件自 2026-10-04 被改过（＝候选，须对句子读代码）。**改 10 个活文档**，旧→新对照全表见 docs/23 §11.18。
   - **一处比行号漂更重**：docs/23 §4.2 的证据列 `platform_adaptation/service.py:75-77`＝"service 自判角色"，**实测该模块 service 层今日零 `require_any_role`**（Q242 把裁决整体搬到 router 的 `_ops_gate`＝`router.py:32`）；同行"9 个写端点"今日＝**18 个**，权威清单在 `test_write_gate_wiring.py` 的 `GATED`（全仓受闸 46）。
