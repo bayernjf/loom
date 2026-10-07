@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import gateway
-from app.core.rbac import OPERATIONS, PermissionDenied, require_any_role
+from app.core.rbac import OPERATIONS, PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.core.staff_auth.deps import require_internal_actor
 from app.platform.platform_adaptation import service
 from app.platform.platform_adaptation.schemas import (
@@ -41,6 +41,25 @@ def require_operations_view(
     actor = Actor(id=actor_id, roles=roles)
     try:
         require_any_role(actor, OPERATIONS)
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return actor
+
+
+def require_ops_admin_view(
+    actor_id: str = Query(...),
+    roles: list[str] = Query(default_factory=list),
+) -> Actor:
+    # Q307：只给**发布位读口**放行 platform_admin——D3.5 组装工作台首屏要读发布位清单，
+    # 而管理端唯一保证存在的身份就是 compose 里 `LOOM_ADMIN_ROLES` 的默认值
+    # platform_admin（`frontend/lib/api.ts` 只用这一组身份自报）。
+    # 同组另外五个读口（fit-weights／slot-type-defaults／动态信号／PCP 重算候选／
+    # adapter 候选）前端零消费，**不跟着放宽**，仍按 Q109/Q118 表行只认 operations；
+    # 哪天管理端真要读它，`tests/unit/test_admin_surface_read_contract.py` 会先判红。
+    # 写口一律不动（仍 `require_internal_actor(OPERATIONS)`）。
+    actor = Actor(id=actor_id, roles=roles)
+    try:
+        require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return actor
@@ -134,7 +153,7 @@ async def list_slots(
     platform: str | None = None,
     status: str | None = "active",
     session: AsyncSession = Depends(get_session),
-    _: Actor = Depends(require_operations_view),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
     return [_slot_view(s) for s in await service.list_slots(session, platform=platform, status=status)]
 
