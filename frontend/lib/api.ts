@@ -1562,6 +1562,42 @@ export async function archiveDowngradeAction(code: string): Promise<DowngradeAct
   );
 }
 
+// Q308：Q43 17 池选项字典（docs/02:155）。池名是闭合集（＝Q40 权重校验器认的 17 个键），
+// 界面只能往既有池里回填可选值；口径同 Q306——读口走管理端自报身份，写口走 staff 令牌。
+export interface PoolOptionView {
+  pool: string;
+  options: string[];
+  status: string;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+export async function listPoolOptions(
+  opts: { includeArchived?: boolean } = {},
+): Promise<PoolOptionView[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.includeArchived) params.set("include_archived", "true");
+  return request<PoolOptionView[]>(`/api/admin/pool-options?${params.toString()}`);
+}
+
+export async function upsertPoolOption(input: {
+  pool: string;
+  options: string[];
+}): Promise<PoolOptionView> {
+  return request<PoolOptionView>("/api/admin/pool-options", {
+    method: "PUT",
+    body: JSON.stringify({ pool: input.pool, options: input.options }),
+  });
+}
+
+export async function archivePoolOption(pool: string): Promise<PoolOptionView> {
+  return request<PoolOptionView>(
+    `/api/admin/pool-options/${encodeURIComponent(pool)}/archive`,
+    { method: "POST" },
+  );
+}
+
 // Q178：内部运营个人访问令牌（PAT，甲案第一切片）。门控开启后请求由 request 底层统一
 // 注入 httpOnly staff Bearer，且后端以令牌身份覆盖 query/body 自报 actor；门控关闭时
 // 沿用 V1 env 自报（用于引导签发首个 platform_admin 令牌）。明文 secret 仅签发返回一次。
