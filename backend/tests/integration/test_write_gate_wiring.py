@@ -53,9 +53,12 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/admin/platform-adapter/candidates", "POST"): OPS,
     ("/api/admin/platform-adapter/candidates/{candidate_id}/approve", "POST"): OPS,
     ("/api/admin/platform-adapter/candidates/{candidate_id}/reject", "POST"): OPS,
+    # 字典管理 Q38 降级动作字典（Q306）：字典族新写口一律走 Q203/Q242 现行凭证标准，
+    # 不再复制 content_goals／content_languages 的 body 自报角色旧口径。
+    ("/api/admin/downgrade-actions", "PUT"): ("dictionary_admin",),
+    ("/api/admin/downgrade-actions/{code}/archive", "POST"): ("dictionary_admin",),
     # 段11 E1.1 发证（Q203）
-    ("/api/fcw/assemble", "POST"): OPS,
-    ("/api/fcw/assembly-tasks", "POST"): OPS,
+    ("/api/fcw/assemble", "POST"): OPS,    ("/api/fcw/assembly-tasks", "POST"): OPS,
     # 段9 layerSpaces 通用底座（Q262/Q46）：增删改仅平台级管理员。
     ("/api/admin/layer-spaces/items", "POST"): ("platform_admin",),
     ("/api/admin/layer-spaces/items/{item_id}", "PUT"): ("platform_admin",),

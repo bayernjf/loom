@@ -20,6 +20,7 @@ from app.core.api_keys import models as _api_key_models  # noqa: F401  (Q88 agen
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
 from app.core.config_center import models as _config_models  # noqa: F401
 from app.core.db import Base
+from app.core.downgrade_actions import models as _downgrade_models  # noqa: F401  (Q306)
 from app.core.effects import models as _effects_models  # noqa: F401  (Q126/Q127 时序与认领)
 from app.core.exports import models as _export_models  # noqa: F401  (Q132 export_jobs)
 from app.core.imports import models as _import_models  # noqa: F401  (Q161 import_jobs)
