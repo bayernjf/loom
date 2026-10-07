@@ -1519,6 +1519,49 @@ export async function getAdminContentGoals(): Promise<AdminContentGoal[]> {
   return request<AdminContentGoal[]>(`/api/admin/content-goals?${params}`);
 }
 
+// Q306：Q38 降级动作字典（docs/02:141 的六码）。读口沿用管理端自报身份（Q118 同型 query 闸）；
+// 两个写口走 Q203/Q242 的 staff 令牌，身份由服务端派生，所以正文里不再塞 actor。
+export interface DowngradeActionView {
+  code: string;
+  name: string | null;
+  why: string | null;
+  status: string;
+  updated_at: string | null;
+}
+
+export async function listDowngradeActions(
+  opts: { includeArchived?: boolean } = {},
+): Promise<DowngradeActionView[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.includeArchived) params.set("include_archived", "true");
+  return request<DowngradeActionView[]>(
+    `/api/admin/downgrade-actions?${params.toString()}`,
+  );
+}
+
+export async function upsertDowngradeAction(input: {
+  code: string;
+  name?: string | null;
+  why?: string | null;
+}): Promise<DowngradeActionView> {
+  return request<DowngradeActionView>("/api/admin/downgrade-actions", {
+    method: "PUT",
+    body: JSON.stringify({
+      code: input.code,
+      name: input.name?.trim() || null,
+      why: input.why?.trim() || null,
+    }),
+  });
+}
+
+export async function archiveDowngradeAction(code: string): Promise<DowngradeActionView> {
+  return request<DowngradeActionView>(
+    `/api/admin/downgrade-actions/${encodeURIComponent(code)}/archive`,
+    { method: "POST" },
+  );
+}
+
 // Q178：内部运营个人访问令牌（PAT，甲案第一切片）。门控开启后请求由 request 底层统一
 // 注入 httpOnly staff Bearer，且后端以令牌身份覆盖 query/body 自报 actor；门控关闭时
 // 沿用 V1 env 自报（用于引导签发首个 platform_admin 令牌）。明文 secret 仅签发返回一次。

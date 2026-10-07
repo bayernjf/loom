@@ -20,6 +20,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/fcw", labelKey: "admin.fcwNav" },
   { href: "/admin/fcw/assemble", labelKey: "admin.fcwAssembleNav" },
   { href: "/admin/fcw/review", labelKey: "admin.fcwReviewNav" },
+  { href: "/admin/dictionaries", labelKey: "admin.dictionariesNav" },
 ] as const;
 
 export function AdminSidebar() {
