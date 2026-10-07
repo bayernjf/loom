@@ -17,11 +17,11 @@
 | 1 | 全仓 **205 条路由**（`grep -rhoE "@router\.(get\|post\|put\|patch\|delete)\(" app` 去重计数＝204，另 `@customer_router.get` 1 条）＋ `@app.get("/healthz")` | `backend/app/**/router.py` |
 | 2 | **只有 4 处**校验真实凭证：Q88 Agent Key 两处（`core/effects/router.py:39` 依赖 `:71`、`core/a2a/router.py:30`）、Q178 `internal_gate` 一处（`core/api_keys/router.py:59`）、`/api/auth/me` 一处（`core/staff_auth/router.py:123`）。其余全部依赖调用方**自报**身份 | 同左 |
 | 3 | **92 个**请求体模型自带 `actor` 字段并绑在路由入参上，**7 个**自带 `tenant_id`（其中 6 个两者都有）；分布最密的模块＝atom 16／content 11／modeling 10／platform_adaptation 9／condition 9／effects 9 | AST 扫描：按类字段命中，再要求该类名出现在路由函数形参注解里 |
-| 4 | `append_audit(` 调用点 **122 处**，`actor_id` 多来自上述自报字段。客户写路径**不经** `require_any_role`，故无覆盖：`core/effects/service.py:393-401` 把 `batch.actor.id/roles` 原样写进审计 | `core/audit/__init__.py:10` |
+| 4 | `append_audit(` 调用点 **122 处**，`actor_id` 多来自上述自报字段。客户写路径**不经** `require_any_role`，故无覆盖：`core/effects/service.py:393-401` 把 `batch.actor.id/roles` 原样写进审计 | `core/audit/__init__.py:3-8` |
 | 5 | Q178 的覆盖只发生在 RBAC 里：`core/rbac/__init__.py:56-57` `actor.id = authn.id; actor.roles = list(authn.roles)`，且**仅当** `settings.staff_auth_enabled`（`core/config.py:112`，默认 False）且所需角色属内部角色集（同文件 `:46`）；客户角色 `whitelist_owner` 被刻意排除在 PAT 可签发范围外（`:22,26-34`） | 同左 |
 | 6 | `tenant_id` 的**存在性/暂停**校验收敛在一个函数：`core/tenants/service.py:199 assert_intake_admitted`，全仓**只有 1 个**业务入口调它（`app/product/product_intake/service.py:38`，段1 准入）。其余租户隔离一律是 `WHERE tenant_id = :declared` | grep 实测 |
 | 7 | 客户读口无一处鉴权：`GET /api/effects/analytics?tenant_id=`（`core/effects/router.py:329`）、`GET /api/fcw?tenant_id=`（`final/final_whitelist/router.py:161`）等按**声明的** tenant 过滤 | 同左 |
-| 8 | **导出的两个任务口既不鉴权也不按租户收**：`GET /api/exports/jobs/{job_id}` 与 `/jobs/{job_id}/download`（`core/exports/router.py:166,179`）只按 `job_id` 直查，`service.get_job`（`core/exports/service.py:443`）无租户条件——而同族的 Q161 导入口有 `get_scoped_job(session, job_id, tenant_id)`（`core/imports/router.py:87`、`service.py:319`）。**这是两处实现不对称**，属既有缺口而非本次新增 | 同左 |
+| 8 | **导出的两个任务口既不鉴权也不按租户收**：`GET /api/exports/jobs/{job_id}` 与 `/jobs/{job_id}/download`（`core/exports/router.py:166,179`）只按 `job_id` 直查，`service.get_job`（`core/exports/service.py:458`）无租户条件——而同族的 Q161 导入口有 `get_scoped_job(session, job_id, tenant_id)`（`core/imports/router.py:87`、`service.py:319`）。**这是两处实现不对称**，属既有缺口而非本次新增 | 同左 |
 | 9 | 前端：staff 令牌走 httpOnly cookie `loom_staff_token`＋服务端注入 `Authorization: Bearer`（`frontend/lib/staff-auth.ts:7,14-22`、`lib/api.ts:54-56`）；客户侧**无任何对应物**，tenant/actor 直接取宿主 env（`lib/api.ts:44,48`，客户写口连 `roles` 都是硬编码空数组 `:140`；注释自陈"V1 无真实认证…V2 改会话派生"） | 同左 |
 | 10 | 改造代价（测试面）：`tests` 下 **53/96** 个文件显式传 `actor_id=`/`roles=`/`tenant_id=`，关键字形态 **143 处**，JSON body 里 `"actor"` 形态 **714 处** | grep 实测 |
 

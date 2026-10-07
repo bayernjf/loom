@@ -204,7 +204,7 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 
 **唯一出口是运行期事实，不是注释（Q203）**：`final_content_whitelists` 的 mapper `before_insert` 要求当前处于 `service.assemble_one` 打开的签发作用域（`exit_guard.py:33` 作用域、`:42` 装载实现、装载调用 `models.py:80`），作用域外 INSERT 抛 `OutsidePublishFCW`。边界：只覆盖 ORM flush，Core `insert()`／裸 SQL 不经 mapper 事件——由 `test_core_insert_bypasses_the_mapper_guard` 钉成实测事实；全仓今日对该表无 Core 写入。
 
-**错误码**（两口一致；`router.py` 局部映射 ＋ `app/main.py:158/163` 全局兜底）：401 无有效凭证、403 角色不足、404 PWS／slot／goal 未知、409 Guard 败（回带逐项明细，失败尝试仍写 `fcw.assembly_blocked` 审计并提交）、409 同键重复发证、409 材料缺失、422 入参非法；异步门控开时入流失败 fail-closed → **503** 且不留半完成任务。
+**错误码**（两口一致；`router.py` 局部映射 ＋ `app/main.py:161/:166` 全局兜底）：401 无有效凭证、403 角色不足、404 PWS／slot／goal 未知、409 Guard 败（回带逐项明细，失败尝试仍写 `fcw.assembly_blocked` 审计并提交）、409 同键重复发证、409 材料缺失、422 入参非法；异步门控开时入流失败 fail-closed → **503** 且不留半完成任务。
 
 **审计**：成功 `fcw.issued`（六路材料＋Guard 结果＋`E1_owner=publishFCW`），失败 `fcw.assembly_blocked`。零迁移、无新增表。
 

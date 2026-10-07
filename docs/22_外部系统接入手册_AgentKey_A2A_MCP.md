@@ -118,7 +118,7 @@
 
 ### 3.2 方法与必带字段
 
-单一入口 `POST /mcp`，JSON-RPC 2.0。对端规范版本＝ **`2026-07-28`**（`app/core/mcp/server.py:23`），该修订的事实按官方页逐条取（本仓实现依赖这几条，均已在 §3.6 标注符合度）：
+单一入口 `POST /mcp`，JSON-RPC 2.0。对端规范版本＝ **`2026-07-28`**（`app/core/mcp/server.py:24`），该修订的事实按官方页逐条取（本仓实现依赖这几条，均已在 §3.6 标注符合度）：
 
 - **移除协议级 sessions 与 `Mcp-Session-Id` 头** ⇒ 本面无状态，不需要 sticky routing；
 - **移除 `initialize`／`notifications/initialized` 握手**，服务端 **MUST** 实现 `server/discover` ⇒ 调 `initialize` 得 `-32601` 并在 message 里指明改用 `server/discover`；
@@ -131,7 +131,7 @@
 
 ### 3.3 三个工具 ↔ skill 映射
 
-`server.py:34-80`。工具名是 skill id 的下划线化，内部 `skill` 键不外泄（`server.py:82`）。
+`server.py:35-82`。工具名是 skill id 的下划线化，内部 `skill` 键不外泄（`server.py:84`）。
 
 | MCP 工具 | A2A skill | 必填 arguments |
 |---|---|---|
