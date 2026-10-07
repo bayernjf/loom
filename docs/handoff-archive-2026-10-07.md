@@ -10,3 +10,10 @@
 > - **grounding（head=0049 实测）**：内部 5 角色可绑 staff PAT、客户角色 `whitelist_owner` 刻意不可签发（`rbac.INTERNAL_ROLES` 与 `staff_auth INTERNAL_STAFF_ROLES` 两处须逐字一致）；守卫矩阵只用 4 种角色，`dictionary_admin` 定义但 **0 写口**挂它（可复用）；docs/06 §7 Gate 总览**无 fit_score 行**、平台适配是「平台审核员（展示口径）」均无权威角色码；PWS 冻结/吊销两口（router :78/:109）**既无 `require_internal_actor`、也不在 GATED/UNGATED 任一名单**（身份模型悬空，Q242 归并③）。
 > - **推荐**：fit 校准与 adapter 裁决均**甲＝复用 operations**（零新角色零迁移，§7 把展示口径映射到权威码）；`whitelist_owner` **甲＝维持客户角色随③客户认证解决**，本批只把冻结两口补进守卫 UNGATED 显式登记（盲区变判据）。乙案（新设 fit_admin/platform_reviewer）本质是「要不要独立审计身份」的组织裁决，工程不代裁；红线＝不把客户角色塞进内部令牌集、adapter 裁决不新增硬 Guard。
 > - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批只把③的一个子问题材料化。
+
+## Q303 banner 原文（于 2026-10-07 按「最近 5 条」上限滚出）
+
+> **其前（2026-10-07）：Q303 覆盖率读数复测（**纯测量**，零代码零迁移零测试改动；基线不变 **1181 passed＋10 skipped／收集 1191**、头 `0050_platform_adapter_candidates`；02 C1.246）**——「推进你自己能搞的」＝工程侧独立推进，Q298 后 Q299–Q302 四批新增真实 `app/` 语句后的例行复测。
+> - **读数（head=0050，命令照 CI 原样抄＝`python -m pytest -q --cov=app --cov-report=json --cov-report=term`＋`coverage_report.py`）**：全系统 `app/` **71.71%**（**13,341** 条语句／missed 3,774；term 取整 72%）；核心规则层（9 个 `*_rules.py`＋`statemachine.py`）**99.34%**（**604** 条）。较 Q298（71.83%／13,220；核心 99.34%／604）：分母 **＋121**＝Q299 fit 校准审计＋Q300 adapter 候选 service/router 真实 `app/` 语句（覆盖 **＋71**／未覆盖 **＋50**），全系统 **−0.12pp**；核心层持平。
+> - **政策不变**：≥90%／≥70% 仍【建议】、仍刻意不接 `--cov-fail-under`（Q229 负责人裁决；是否升门＝待裁项⑤）；读数已同步 docs/23 §0.1 与 docs/08 §2.2 权威行，`coverage.json` 为产物不入库。
+> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME 签发未证＋待裁项③）。纯测量批不改任一层判定。
