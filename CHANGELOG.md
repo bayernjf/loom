@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q309 活文档 `file:line` 锚点全量复扫＝落空指针清零（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.252**）——负责人「更新项目文档」。六道门都是"文档↔文档／代码↔代码"的一致性门，**没有一门核对"文档指的那一行今天内容是否还成立"**；而 Q306／Q307／Q308 每批都在往上插行，下游每条行号引用都会静默失准。
+  - **方法**：穷举 docs 全部＋6 份设计档＋README／AGENTS／handoff／CHANGELOG 的 `path.ext:N[-M]`（**623 条**），按后缀解析到真实文件，打三种信号：越界／空行空区间（＝硬落空）、目标文件自 2026-10-04 被改过（＝候选，须对句子读代码）。**改 10 个活文档**，旧→新对照全表见 docs/23 §11.18。
+  - **一处比行号漂更重**：docs/23 §4.2 的证据列 `platform_adaptation/service.py:75-77`＝"service 自判角色"，**实测该模块 service 层今日零 `require_any_role`**（Q242 把裁决整体搬到 router 的 `_ops_gate`＝`router.py:32`）；同行"9 个写端点"今日＝**18 个**，权威清单在 `test_write_gate_wiring.py` 的 `GATED`（全仓受闸 46）。
+  - **高频污染源定位**：`docs/README` 地图行与「当前落地状态」权威行每加一行，就把它下方所有引用推一行（`docs/08:99`→`116` 波及 6 处、`docs/10:368/369`→`372-374` 波及 8 处、`app/main.py:145`→`147` 波及 4 处）。
+  - **纪律**：历史台账（docs/02 各处、CHANGELOG 旧条、handoff 已滚档段、四份 archive）**一律不回改**，由 §11.18 点名代替；扫描脚本刻意**不落仓**（避免第二套权威真相），方法写在 docs/23；**没接 CI 门**——行号门随任何正常插行变红，设不设门属裁决（同待裁项⑤口径）。
+  - **顺带**：docs/23 §2 前端读数 90 → **94**（`find frontend/app \( -name '*.ts' -o -name '*.tsx' \) \| wc -l` 实测；Q306 加 3、Q308 加 1）。**复判不变**：① 达标／② 达标／③ 未达标（现网＋真 ACME＋待裁③）。
 - **Q308 Q43 17 池选项字典载体落地＝字典族第二刀（2026-10-08；**迁移＋代码＋测试＋前端＋文档**；迁移 **0051→0052**、业务物理表 70→**71**／列 760→**766**；后端 **1197→1205 passed＋10 skipped／收集 1215**、ruff 净、eval 101/101、前端 tsc＋八门净；受闸写口 **44→46**、操作面 **234**（写 136／读 98、路径 196）；02 C1.251**）——接 Q306 报告里工程侧自己登记的同型欠账（"Q43 只登记不顺手做"）。
   - **交付**：表 `pool_options`（`pool` PK／`options` JSONB／`status`＋索引／`updated_by`／两时间戳）＋**种子 17 行、options 全 `'[]'`**；`GET/PUT /api/admin/pool-options`＋`POST /{pool}/archive`，写口 `require_internal_actor(DICTIONARY_ADMIN)`、读闸按 Q307 规矩放行 `platform_admin`；审计两键 `pool_option.upsert`/`.archive`。前端零新增路由＝`/admin/dictionaries` 第二区（侧栏仍 15 项）。
   - **两条是设计不是顺手**：① **池名闭合集**——seeds **re-export** `pa_rules.WEIGHT_KEYS_17`（不重抄），未知池 422，Q43「第一期不开放第 18 池」成代码事实，并有同源锁用例；② **候选值原文未给 ⇒ 种子留空**、界面「待运营回填」，写口只校形状（空串／重复／非字符串 422）**不校语义**（禁臆造业务事实）。
