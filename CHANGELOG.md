@@ -3,6 +3,13 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q308 Q43 17 池选项字典载体落地＝字典族第二刀（2026-10-08；**迁移＋代码＋测试＋前端＋文档**；迁移 **0051→0052**、业务物理表 70→**71**／列 760→**766**；后端 **1197→1205 passed＋10 skipped／收集 1215**、ruff 净、eval 101/101、前端 tsc＋八门净；受闸写口 **44→46**、操作面 **234**（写 136／读 98、路径 196）；02 C1.251**）——接 Q306 报告里工程侧自己登记的同型欠账（"Q43 只登记不顺手做"）。
+  - **交付**：表 `pool_options`（`pool` PK／`options` JSONB／`status`＋索引／`updated_by`／两时间戳）＋**种子 17 行、options 全 `'[]'`**；`GET/PUT /api/admin/pool-options`＋`POST /{pool}/archive`，写口 `require_internal_actor(DICTIONARY_ADMIN)`、读闸按 Q307 规矩放行 `platform_admin`；审计两键 `pool_option.upsert`/`.archive`。前端零新增路由＝`/admin/dictionaries` 第二区（侧栏仍 15 项）。
+  - **两条是设计不是顺手**：① **池名闭合集**——seeds **re-export** `pa_rules.WEIGHT_KEYS_17`（不重抄），未知池 422，Q43「第一期不开放第 18 池」成代码事实，并有同源锁用例；② **候选值原文未给 ⇒ 种子留空**、界面「待运营回填」，写口只校形状（空串／重复／非字符串 422）**不校语义**（禁臆造业务事实）。
+  - **两条既有守卫各种一次红再还原**：`test_write_gate_wiring.py` 因两口未登记判红（受闸写口 44→46）；`test_admin_surface_read_contract.py`（Q307 门）**一行未改**就把新读口纳入判据——`listPoolOptions` 走 `ADMIN_ROLE_LIST` 即被要求"默认身份读得动"。
+  - **双证**：一次性真 PG16（宿主 `127.0.0.1:5549`，`docker port` 实测后使用、跑完 `docker rm -f` 零残留）＝`count(*)=17`、options 全 `'[]'`、**NO DRIFT**（71 表／766 列／pg_indexes 253／env.py 未注册 0）、0052⇄0051 往返对称；真 uvicorn＋真 PG 冒烟八条（422/403/401/422×2/200×2，含**正文塞 `actor:{id:"impostor"}` 时审计仍记令牌主体 `s-q308`**）；前端 SSR＝17 池全渲染、回填值成 chip、「回填」按钮 **23＝17 池＋6 动作码**。
+  - **覆盖率刷成现行**（本批有真实 `app/` 语句）：照 CI 原样命令复测＝全系统 `app/` **71.85%**（**13,585** 语句／missed 3,824）／核心层 **99.34%**（**604**，持平）；较 Q303（71.71%／13,341）分母 ＋244、读数 ＋0.14pp，**Q307 零生产代码不进分母**。四处"现行读数"句子（handoff 待裁⑤／AGENTS 待裁⑤／docs/19 §5／docs/16 §4）同步刷到 Q308，docs/16 另加一条复测记录、Q303 那条按「逐片记录不回改」保留。阈值仍【建议】、仍不接 `--cov-fail-under`（待裁项⑤）。
+  - **刻意不做**：段9「选料只能从字典里选」的运行期强校验随段9/12 点工（docs/02:155 约束一字未改）；AI 选包不碰；这张表不进 `config_center`（其 `seeds.py:4-5` 本就写明自带 CRUD 表的 C2 项不收）。
 - **Q307 管理面读口"默认身份可达性"收口＝docs/19 #7 按甲裁并落地（2026-10-07；**代码＋测试＋文档**，零迁移零新表；后端 **1193→1197 passed＋10 skipped**（总收集 **1207**，＋4＝新契约门）、ruff 净、eval 101/101、前端零改动；02 C1.250）** —— 负责人「按你建议的来」。
   - **先量边界再动闸**：从 `frontend/lib/api.ts` 抽出"用 `ADMIN_ROLE_LIST` 自报身份发起的 GET"共 **11 条**，用**只带 platform_admin** 的身份逐条实测——compose 默认（`LOOM_ADMIN_ROLES:-platform_admin`）下 **3 条**读不动。
   - **只放宽真有人读的两个**：`GET /api/admin/content-goals`（写口 upsert/archive **仍只认 dictionary_admin**）＋`GET /api/admin/publish-slots`（新挂 `require_ops_admin_view`）。**同组另外五个只读口不跟着放宽**（fit-weights／slot-type-defaults／动态信号／PCP 重算候选／adapter 候选，前端零消费）——判据是"有人读"，不是"顺手一致"；真进程复测两个 200、三个仍 403。
