@@ -1,6 +1,14 @@
 # Handoff — Loom
 
-> **最新（2026-10-07）：Q305 Q304 登记尾欠回补批（**纯文档零代码零迁移零测试变化**；基线不变 **1181 passed＋10 skipped／收集 1191**、头 `0050_platform_adapter_candidates`；02 C1.248）**——负责人「开搞」，Q304 批登记后的尾欠一次性回补。
+> **最新（2026-10-07）：Q306 Q38 降级动作字典载体落地＝字典族第一刀（**迁移＋代码＋测试＋前端＋文档**；迁移 **0050→0051**、业务物理表 69→**70**／列 754→**760**；后端 **1181→1193 passed＋10 skipped／收集 1203**、ruff 净、前端 tsc＋八门净；02 C1.249）**——负责人「你自己能搞吗」，接另一会话的 Q38 grounding 接力。
+> - **接力先复验，两条被推翻**：① 它给的「或复用 config_center 字典机制」**被仓内既有口径直接否掉**——`config_center/seeds.py:4-5` 明写「自带 CRUD 表的 C2 项不收（…降级动作字典／17 池选项字典）」，即这张字典**本该有自己的表**，建表不是设计选择；② 「`dictionary_admin` 定义但 0 写口」是过期陈述——实测 **8 处**写口挂它（`content/languages.py:94,132`、`product/modeling/service.py:372,386`、`product/condition/router.py:36`、`product/fieldpool/router.py:43`）⇒ 角色照先例，不需人裁。先例壳位置也纠正：`content_goals` 在 `product/condition/`（`models.py:43`），不在 content 域。docs/02:141 六码原文／docs/10 §dict_management 行位（370-372）／「全仓零命中」三条复验属实。
+> - **交付**：表 `downgrade_actions`＋**种子六码逐字取自 docs/02:141**（单一事实源 `app/core/downgrade_actions/seeds.py`，迁移与测试同读，照 0046 先例）；`name`/`why` **原文未给文案 ⇒ 种子留 NULL**、界面显示「待运营回填」（禁臆造）；`GET/PUT /api/admin/downgrade-actions`＋`POST /{code}/archive`——写口**升到 Q203/Q242 现行凭证标准 `require_internal_actor`**（不再 body 自报角色），审计两键 `downgrade_action.upsert`/`.archive`；「联动段10 CP-DOWN」**不另造字段**（词级映射目标已由 Q48 `compliance_wordlist.downgrade_target` 承载）。**前端新增后台一屏 `/admin/dictionaries`**＝侧栏第 15 项（`check-admin.mjs` 计数钉 14→15 ＋一条入口断言；`status` 枚举原样直出，被「枚举码不许翻译」门当场纠过一次）。Q277 反向枚举门先把两口判红（清单漏登）再转绿，**受闸写口 42→44**。
+> - **两处真实缺陷**：① 跑 0051 时 **Q207 漂移门当场判红**——`alembic/env.py` 没导入新模型模块，正是"表没被迁移看见也能绿"那一类，补导入后 NO DRIFT（70 表／760 列）；② 真进程实测 `GET /api/admin/content-goals?roles=platform_admin` **403**，而 compose `LOOM_ADMIN_ROLES` 默认只有 `platform_admin`（`docker-compose.yml:112`，`.env.example:13` 亦不含）⇒ **D3.5 组装工作台首屏 `Promise.all` 整体失败**（`admin/fcw/assemble/actions.ts:43-49`）。②改的是既有端点授权面，**工程侧不代修**，已登记 [docs/19 清单二第 7 项](docs/19_待办清单.md)（甲＝读闸放行 platform_admin〔推荐〕／乙＝扩默认角色）；本批新口读闸按「放行 platform_admin、写口仍只认字典管理员」落，并写进 docs/05。
+> - **双证**：一次性真 PG16（宿主 5545/5546/5547，跑完即删、零残留）＝`count(*)=6`、name/why 皆 NULL、**NO DRIFT**、`downgrade -1` 表消失→`upgrade head` 复建（往返对称）；真 uvicorn＋真 PG 冒烟＝GET 六码直出／缺 `actor_id` 422／越权 403／匿名 PUT 401／`dictionary_admin` 令牌 PUT 200／**正文塞 `actor:{id:"impostor"}` 时审计仍记令牌主体 `demo-dict`**；前端 SSR HTML 实测渲染出回填值「缩短篇幅」。
+> - **边界与不顺手做的**：只落"可选集＋管理面"，**段12 执行器与「AI 建议必须命中字典」的运行期强校验随段12 点工**（规格未给执行细节；docs/13:128 那行约束一字未改、只加 Q306 注记）；AI 选包不碰；**Q43 17 池选项字典同型欠账只登记不顺手做**（docs/10 §dict_management 现状行标 ⬜）。
+> - **【复判】③ 精确化一格**：① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）；本轮另外查实"组装工作台在默认角色下打不开"（docs/19 #7），属③内可用性的新增事实，不改判定档位。
+>
+> **其前（2026-10-07）：Q305 Q304 登记尾欠回补批（**纯文档零代码零迁移零测试变化**；基线不变 **1181 passed＋10 skipped／收集 1191**、头 `0050_platform_adapter_candidates`；02 C1.248）**——负责人「开搞」，Q304 批登记后的尾欠一次性回补。
 > - **AGENTS 顶部基线段置顶 Q304**（上批只刷 L31 待裁⑤、顶部仍以 Q302 为权威主体）；**docs/README 地图 docs/02 行前移 Q304/C1.247**（Q304 登记后未回补）。
 > - **docs/23 §0.1 TL;DR 三行刷现读数**：规模 62/666/43/1056/114 → **69/754/50/1181/130**（head=0050）；技术债 84 → **104**（Q276 实测）；功能进度 V2 → **至 Q304**。
 > - **Q38 降级动作字典挂账句精确化**：六项动作全仓零命中、config_center 无载体、wordlist 系 Q48 合规词库 → 「动作项 Q295 已订正、载体未落待点工」，docs/10 行号引用 369→371。
@@ -21,22 +29,14 @@
 > - **README 状态段**停在 **Q293** → 补 **Q294–Q301** 八批与逐批测试增量分解（1147→1181）。**纪律**：历史台账／评审快照／已被取代的待办段一律不回改；未新增待裁项。
 > - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME 签发未证＋待裁项③）。纯文档批不改任何一层判定。
 >
-> **其前（2026-10-06）：Q301 CI 同 ref 连推自动取消旧 run（PR #150 红叉根因收口；**配置＋测试＋文档**，零迁移零生产代码；后端收集 1190→**1191**（**1181 passed**＋10 skipped，＋1＝ci.yml concurrency 契约，先红后绿）、ruff 净、前端零改动；02 C1.244）**——工程侧独立推进，门集合一字不动。
-> - **根因**：PR #150（dev→main）红叉实为**被取消的重复 run**非测试失败（rerun attempt 2 六道门全绿）；GitHub Actions 默认把同 ref 每次推送的 run 全跑完，烧额度且 cancelled 叉号污染状态。
-> - **交付**：`.github/workflows/ci.yml` 顶层 `concurrency: group ci-${{ github.ref }} / cancel-in-progress: true`——同 ref 新推送立即取消旧 run，不同 ref（并发 PR、dev/main）互不取消；新契约例 `test_superseded_runs_are_cancelled_per_ref` 钉组名与开关恰为该值（`test_ci_workflow_contract.py` 现 21 例）。沙箱内 2 例 backup_monitoring socket.bind EPERM 为已知假红（Q291/Q298 同型）。
-> - **【复判不变】**：① 达标／② 达标／③ 未达标（现网部署＋真 ACME＋待裁项③）。只改调度不改门，不改任一层判定。
 >
-> **其前（2026-10-06）：Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环 ＋ Q299 fit_score 人工校准审计（Q297 裁决全甲的两个乙案落地；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**、业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**〔＋11＝adapter 候选 8／fit 校准 3〕、ruff 净、eval 101/101、前端零改动；真 PG16 宿主 55460 往返实测 **69 表/754 列 NO DRIFT**；02 C1.242/C1.243）**——负责人「好的，你搞」＝Q297 三件候选全按甲。
-> - **Q299 fit 人工校准（乙案，零迁移）**：`slot.update` 审计 detail 加 `fit_dim_changes`（只记变化维度 before/after，原样为 `{}`）、`fit_weights.put` 加 `weights_before`（首次 null）；端点形状不变。口径是**人工校准非「自学习」**：不设幅度上限（原文未给）、不触发下游、fit_score 仍派生不落库、Q54 0.4/0.3/0.3 不动。
-> - **Q300 adapter 候选＋Gate（乙案，迁移 0050）**：新表 `platform_adapter_candidates`（partial unique `uq_platform_adapter_pending` 双 where，slot_id 可空以 coalesce 空串入键）＋四端点（候选列表/提交/approve/reject，三写口全 OPS、进守卫 GATED）；提交复用 Q296 组料＋synthetic 网关落 pending 候选，V1 仅 source=synthetic。
-> - **advisory 红线**：approve 只解除 pending 留痕（审计带 `advisory_only:true`）——不改平台规则/发布位、不产 final_id、不动段11 七 Guard（PT 约束 4/6）；reject reason 必填；Q38 降级动作字典另点工（docs/02:141 vs docs/10:369 口径漂移未订正前不落码），丙案真模型仍以补 eval/golden 为硬前置。docs/06 §7 已补 fit 校准行并把「平台审核员（展示口径）」映射到 operations。
-> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批闭红旗 S2 的业务接线缺口，不改可上线判定。
 >
-> **其前（2026-10-06）：Q298 覆盖率读数复测（**纯测量**，零代码零迁移零测试改动；基线不变 **1169 passed＋10 skipped**、head=0049；02 C1.241）**——Q294/Q296 两批新增真实 `app/` 语句后的例行复测，工程侧独立推进。
-> - **读数（head=0049，命令照 CI 原样抄）**：全系统 `app/` **71.83%**（**13,220** 条语句／missed 3,724；term 取整 72%）；核心规则层（9 个 `*_rules.py`＋`statemachine.py`）**99.34%**（**604** 条）。较 Q281（71.78%／13,100；核心 99.34%／602）：分母 **＋120**＝Q294 周扫描作业＋Q296 service/router/breakdown，全系统 **＋0.05pp**（新代码基本被同批测试覆盖、无摊薄）；核心层 602→604、读数持平。
-> - **沙箱假红**：同跑 1167 passed＋2 failed＋10 skipped（143.23s），两条失败均为 `test_backup_monitoring_contract` 的 `socket.bind` EPERM（沙箱禁绑回环口）；沙箱外单跑该文件 **22 passed in 0.21s** 全绿（Q291 同型已记录），非回归、不影响读数。
-> - **政策不变**：≥90%／≥70% 仍【建议】、仍刻意不接 `--cov-fail-under`（Q229 负责人裁决；是否升门＝待裁项⑤）；读数已同步 docs/16 §4，`coverage.json` 为产物不入库。
-> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。纯测量批不改任一层判定。
+>
+> ~~Q301 banner 原文~~（含其三条子项）已按「最近 5 条」上限于 2026-10-07 逐字滚入 [docs/handoff-archive-2026-10-07.md](docs/handoff-archive-2026-10-07.md)。
+>
+> ~~Q300／Q299 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-07 逐字滚入 [docs/handoff-archive-2026-10-07.md](docs/handoff-archive-2026-10-07.md)。
+>
+> ~~Q298 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-07 逐字滚入 [docs/handoff-archive-2026-10-07.md](docs/handoff-archive-2026-10-07.md)。
 >
 > ~~Q297 banner 原文~~（含其四条子项）已按「最近 5 条」上限于 2026-10-07 逐字滚入 [docs/handoff-archive-2026-10-07.md](docs/handoff-archive-2026-10-07.md)。
 >
@@ -357,7 +357,7 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 ## 待办 / 下一步（按依赖顺序）
 
 > **等负责人／业务方给东西的（2026-10-06 Q295 后）＝活跃三项 ③④⑤；② 已于 2026-10-06 由 Q295 翻正销项（t-e2e 组合经负责人确认为首批真值＋owner Gate 重发流出活证 `537a2f28`，详见 02 C1.238）；⑦ 已于 2026-10-05 由 Q288 裁「补」（丙案）并落地、退出活跃项；① 已裁决并落地（甲案反代入仓），只剩部署机执行一次；⑥ 早已归并进 ③；工程侧一律不得代裁**：① ~~**网关与 TLS 归属**~~（**Q279 已选甲并落地**，剩部署：`-f docker-compose.gateway.yml up -d`＋`LOOM_PUBLIC_BASE_URL`＋验真 ACME；**可执行步骤与必填 env 见 [docs/17 §1.3 投产最小清单](docs/17_部署与运维.md)**）——候选三案曾由 **Q274** 产 [docs/design-deployment-gateway-tls.md](docs/design-deployment-gateway-tls.md)（甲 仓内 Caddy〔工程侧推荐〕／乙 仓外边缘／丙 nginx＋手动证书），**裁决登记 Q275**；含 `POST /mcp` 等顶层路径的放行清单（反代若按 `/api/*` 前缀放行会漏掉它）；② **首批主数据＝两个人**（三表零行＋录入一个真产品＋有人跑段1→6→10 并在 Gate 裁决，禁工程臆造；`platform_rules` 空但不卡发证，Q220）＝**唯一硬阻塞**，docs/19 §0.2（**✅ 2026-10-06 Q295 销项**：负责人确认 t-e2e 组合算真值＋自任裁决人，Q250 重发流三步出活证 `537a2f28`）；③ **V2 第一项＝客户侧真实认证与 `actor↔tenant` 绑定**（Q178 只做内部令牌，Q196 C 甲刻意不做客户登录；Q242 改判归并进来的 PWS 冻结/吊销两口也在此项下）；④ **docs/08 §2.2 排期三列（工期／人员／起止）原文未给**，禁止倒推编造；⑤ **覆盖率阈值是否升为阻断门**（现行读数＝**2026-10-07 Q303 复测（head=0050）**：全系统 `app/` **71.71%**〔13,341 语句／missed 3,774〕／核心层 **99.34%**〔604 语句〕，只测不门；较 Q298〔71.83%／13,220〕分母 ＋121〔Q299/Q300 真实语句〕、读数 −0.12pp；Q229 已答"维持【建议】只测量"，剩下的是"是否再升、定多少、卡一层还是两层"）。⑦ ~~**`packages`「同三元组仅一个 active」是否补 DB 级 partial unique index**~~（2026-10-04 **Q278** 登记；**✅ 2026-10-05 负责人「按你建议来」裁「补」并落地＝丙案**，02 C1.231）——裁决前的现状描述：唯一性只由 service 层先查后插保证（`decision/layer_strategy/service.py:113-124`→`PackageExists`→409），`alembic/versions/0008_m11_stage78.py:127-143` 建表时**零唯一约束** ⇒ **并发双建无守卫**。已落＝迁移 **0048_packages_active_triple_unique**（`uq_packages_active_triple`，PS×platform×goal×kind，`WHERE status='active'`，双 where 双写）＋模型 `__table_args__` 成对声明＋router create/update 两路 `IntegrityError`→**409**＋守卫 4 例；真 PG16 实测：升级前重复三元组 0 ⇒ 建索引成功，植入重复行后 `alembic upgrade head` **当场 exit 1 且整体回滚**（版本停 0047、索引零残留）。
-> 另：**Q232 四条 MCP 接缝与 Q276 的两条建议中「docs/05 补角色列」仍须点工／追认**（另一条「守卫反向枚举」已由 Q277 落地，此处更正）。
+> 另：**Q232 四条 MCP 接缝与 Q276 的两条建议中「docs/05 补角色列」仍须点工／追认**（另一条「守卫反向枚举」已由 Q277 落地，此处更正）。**Q306 新增一件要裁的**＝组装工作台读目的字典在默认角色下 403（真进程实测；`Promise.all` 让整屏取不到数据），两案与推荐见 [docs/19 清单二第 7 项](docs/19_待办清单.md)——改的是既有端点授权面，工程侧不代修。
 
 > **Q278 三件 V2 余量裁决进度（2026-10-06 Q295 更新）——三件全部有裁决**：① PCP 周重算＝采 3.1甲×3.2甲并已落地（Q294，02 C1.237）；② fit_score 自学习＝采**甲（可解释化）**为第一刀，乙（人工校准闭环）后置、丙（真自学习）待业务四份规则，**落码待点工**；③ PLATFORM-ADAPTER 业务接入＝采**甲（只读预览口）**为第一刀，乙丙后置，**落码待点工**。各件硬阻塞（映射规则／golden／审核角色码）原样保留。
 > **Q278 点名的三件 V2 余量（段7/8 完整版）——① 已按推荐落地、余两件只等你裁**（2026-10-06 Q294 收口第一件，另两件仍有可裁决材料、零代码零迁移）：① ~~**PCP 每周重算触发**~~（**2026-10-06 Q294 已按推荐落地**＝3.1 甲 SweepScheduler 第 6 作业＋3.2 甲 只开 OpsTodo 提醒、**不产权重**，周节奏走配置中心 `platform.recalc_weekday/_hour/_tz_offset_hours`，env `LOOM_PCP_WEEKLY_SCAN_ENABLED` 默认关；**仍未裁的只剩 3.2 乙/丙**——乙须业务方先给「事件→权重」映射规则〔硬阻塞原样保留〕、丙随 PCP-SCORE 模型网关接通另裁）；② **fit_score 自学习**＝[docs/design-v2-fit-score-selflearning.md](docs/design-v2-fit-score-selflearning.md)（Q293，6 待裁点，真缺口＝**被学的量本身没有数据源**：段13 七键对不上四维，`safe`/`load` 零候选源）；③ **PLATFORM-ADAPTER 业务接入**＝[docs/design-v2-platform-adapter-business.md](docs/design-v2-platform-adapter-business.md)（Q293，7 待裁点，真缺口＝**有协议有引擎、没人接线**：无调用方/无载体/无 Gate 面/无 eval 护栏）。**三件的硬阻塞均落在业务规则供给**（事件→权重映射、审核角色码可签发性、Q38 字典口径漂移）而非工程实现——**建议与待裁项③ 客户侧认证的「`whitelist_owner` 能否签发」一并裁**（同型前置问题，避免两次改契约）。
