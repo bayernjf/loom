@@ -23,6 +23,7 @@ from app.core.mcp.router import router as mcp_router
 from app.core.metrics import MetricsMiddleware
 from app.core.metrics.router import router as metrics_router
 from app.core.model_registry.router import router as model_registry_router
+from app.core.pool_options.router import router as pool_options_router
 from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
@@ -172,6 +173,7 @@ app.include_router(modeling_router)
 app.include_router(fieldpool_router)
 app.include_router(wordlist_router)
 app.include_router(downgrade_actions_router)
+app.include_router(pool_options_router)
 app.include_router(config_router)
 app.include_router(a2a_router)
 app.include_router(mcp_router)

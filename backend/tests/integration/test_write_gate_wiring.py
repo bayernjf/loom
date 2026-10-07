@@ -57,6 +57,9 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     # 不再复制 content_goals／content_languages 的 body 自报角色旧口径。
     ("/api/admin/downgrade-actions", "PUT"): ("dictionary_admin",),
     ("/api/admin/downgrade-actions/{code}/archive", "POST"): ("dictionary_admin",),
+    # 字典管理 Q43 17 池选项字典（Q308）：同一族，写口只认字典管理员。
+    ("/api/admin/pool-options", "PUT"): ("dictionary_admin",),
+    ("/api/admin/pool-options/{pool}/archive", "POST"): ("dictionary_admin",),
     # 段11 E1.1 发证（Q203）
     ("/api/fcw/assemble", "POST"): OPS,    ("/api/fcw/assembly-tasks", "POST"): OPS,
     # 段9 layerSpaces 通用底座（Q262/Q46）：增删改仅平台级管理员。
