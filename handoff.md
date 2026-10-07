@@ -1,6 +1,15 @@
 # Handoff — Loom
 
-> **最新（2026-10-07）：Q306 Q38 降级动作字典载体落地＝字典族第一刀（**迁移＋代码＋测试＋前端＋文档**；迁移 **0050→0051**、业务物理表 69→**70**／列 754→**760**；后端 **1181→1193 passed＋10 skipped／收集 1203**、ruff 净、前端 tsc＋八门净；02 C1.249）**——负责人「你自己能搞吗」，接另一会话的 Q38 grounding 接力。
+> **最新（2026-10-07）：Q307 管理面读口"默认身份可达性"收口（**代码＋测试＋文档**，零迁移零新表；后端 **1193→1197 passed＋10 skipped／收集 1207**、ruff 净、eval 101/101、前端零改动；02 C1.250）**——负责人「按你建议的来」＝docs/19 #7 采甲。
+> - **先量边界再动闸**：把 `frontend/lib/api.ts` 里"用 `ADMIN_ROLE_LIST` 自报身份的 GET"全数抽出（11 条），用**只带 platform_admin** 的身份逐条打——compose 默认（`LOOM_ADMIN_ROLES:-platform_admin`）下 3 条读不动。
+> - **只放宽真有人读的两个**：`GET /api/admin/content-goals`（goal 的 upsert/archive **写口仍只认 dictionary_admin**）＋`GET /api/admin/publish-slots`（新挂 `require_ops_admin_view`）。**同组另外五个只读口不跟着放宽**（fit-weights／slot-type-defaults／动态信号／PCP 重算候选／adapter 候选，前端零消费）——放宽的判据是"有人读"，不是"顺手一致"。真进程复测：两个 200，未放宽的三个仍 403。
+> - **一处当场收回**：`GET /api/review-workbench/candidates` 试过放宽，被既有用例判红——它钉的是**接缝③**（Q232，负责人 2026-10-01 追认，02 C1.176：platform_admin 不是队列角色，读队列也不放行）。闸与用例一字未改，改成登记 **[docs/19 清单二第 8 项](docs/19_待办清单.md)** 待裁（甲＝读队列与下裁决分权、需重新追认接缝③／乙＝给管理端配队列角色、但会连带放大 Q242 未收敛的 90＋ 自报写口；**工程侧推荐甲**）。
+> - **上一批我说错了一句**：Q306 报告里"这一屏打不开"只归因到目的字典，实测发布位读口同样 403——`Promise.all` 是两个口一起塌。本轮一并修掉并在此更正。
+> - **立成判据**：新 `tests/unit/test_admin_surface_read_contract.py` 4 例从前端自己的调用清单反推"管理端该读得动的口"，行为级实测 401/403 即红；三条防退化＝清单为空判红／路径解析不到真实路由判红／已裁接缝例外写死且断言"它确实仍 403"。**这族缺陷的形态是"能力都在、没人能驱动"，六道门此前看不见。**
+> - **【复判不变】**：① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。本批不动判定档位，只把两屏的"能看"接通、一屏的"能看"留给你裁。
+>
+
+> **其前（2026-10-07）：Q306 Q38 降级动作字典载体落地＝字典族第一刀（**迁移＋代码＋测试＋前端＋文档**；迁移 **0050→0051**、业务物理表 69→**70**／列 754→**760**；后端 **1181→1193 passed＋10 skipped／收集 1203**、ruff 净、前端 tsc＋八门净；02 C1.249）**——负责人「你自己能搞吗」，接另一会话的 Q38 grounding 接力。
 > - **接力先复验，两条被推翻**：① 它给的「或复用 config_center 字典机制」**被仓内既有口径直接否掉**——`config_center/seeds.py:4-5` 明写「自带 CRUD 表的 C2 项不收（…降级动作字典／17 池选项字典）」，即这张字典**本该有自己的表**，建表不是设计选择；② 「`dictionary_admin` 定义但 0 写口」是过期陈述——实测 **8 处**写口挂它（`content/languages.py:94,132`、`product/modeling/service.py:372,386`、`product/condition/router.py:36`、`product/fieldpool/router.py:43`）⇒ 角色照先例，不需人裁。先例壳位置也纠正：`content_goals` 在 `product/condition/`（`models.py:43`），不在 content 域。docs/02:141 六码原文／docs/10 §dict_management 行位（370-372）／「全仓零命中」三条复验属实。
 > - **交付**：表 `downgrade_actions`＋**种子六码逐字取自 docs/02:141**（单一事实源 `app/core/downgrade_actions/seeds.py`，迁移与测试同读，照 0046 先例）；`name`/`why` **原文未给文案 ⇒ 种子留 NULL**、界面显示「待运营回填」（禁臆造）；`GET/PUT /api/admin/downgrade-actions`＋`POST /{code}/archive`——写口**升到 Q203/Q242 现行凭证标准 `require_internal_actor`**（不再 body 自报角色），审计两键 `downgrade_action.upsert`/`.archive`；「联动段10 CP-DOWN」**不另造字段**（词级映射目标已由 Q48 `compliance_wordlist.downgrade_target` 承载）。**前端新增后台一屏 `/admin/dictionaries`**＝侧栏第 15 项（`check-admin.mjs` 计数钉 14→15 ＋一条入口断言；`status` 枚举原样直出，被「枚举码不许翻译」门当场纠过一次）。Q277 反向枚举门先把两口判红（清单漏登）再转绿，**受闸写口 42→44**。
 > - **两处真实缺陷**：① 跑 0051 时 **Q207 漂移门当场判红**——`alembic/env.py` 没导入新模型模块，正是"表没被迁移看见也能绿"那一类，补导入后 NO DRIFT（70 表／760 列）；② 真进程实测 `GET /api/admin/content-goals?roles=platform_admin` **403**，而 compose `LOOM_ADMIN_ROLES` 默认只有 `platform_admin`（`docker-compose.yml:112`，`.env.example:13` 亦不含）⇒ **D3.5 组装工作台首屏 `Promise.all` 整体失败**（`admin/fcw/assemble/actions.ts:43-49`）。②改的是既有端点授权面，**工程侧不代修**，已登记 [docs/19 清单二第 7 项](docs/19_待办清单.md)（甲＝读闸放行 platform_admin〔推荐〕／乙＝扩默认角色）；本批新口读闸按「放行 platform_admin、写口仍只认字典管理员」落，并写进 docs/05。
@@ -21,16 +30,8 @@
 > - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME＋待裁项③）。
 >
 > **其前（2026-10-07）：Q303 覆盖率读数复测（**纯测量**，71.71%／13,341 语句／核心 99.34%·604，基线 1181 passed＋10 skipped 不变，02 C1.246）**——原文已逐字滚档至 [docs/handoff-archive-2026-10-07.md](docs/handoff-archive-2026-10-07.md)。
->
-> **其前（2026-10-07）：Q302 入口文档对账＝docs/17 §1.3「投产最小清单」验真入账 ＋ 六处活状态句子回源码重测（**纯文档零代码零迁移零测试变化**；本机全量复跑 **1181 passed＋10 skipped／收集 1191**、头 `0050_platform_adapter_candidates`、迁移文件 50、`Base.metadata` **69 表／754 列**、测试文件 130；02 C1.245）**——负责人「看看 handoff.md 和相关文档是否需要更新」。先量后改（Q283 方法学：docs 比 docs 的一致性门挡不住过期句子）。
-> - **查出一批没入账的活产物**：`docs/17` §1.3「投产最小清单」（07 日 15:24 落盘、**无 Q 编号、未提交**）＝第 0–4 步可执行清单＋「这个清单解决不了的三条」。本批把八处锚点逐条回制品验真才入账：`docker-entrypoint.sh:8-10`（空 `LOOM_MASTER_KEY` ⇒ FATAL＋`exit 1`）与 `:14`→`:19`（迁移自动跑再 exec uvicorn）／`docker-compose.yml:25/66`（两 datastore 口令裸插值无 `:-`）／`:123`（`db-backup`，`RETENTION_DAYS:-7`／`86400`）／`docker-compose.monitoring.yml:41`（grafana 口令 `${VAR:?}`＝缺失即报错）／`admin/login/page.tsx:11-12`（staff PAT→`/api/auth/me`→httpOnly cookie；`find app -type d -name '*login*'` **只命中 admin 一支**＝客户侧确无登录页）／`config.py:23`（`scheduler_enabled: bool = True`）／`product_intake/router.py:57`（客户读口 `tenant_id=Query(...)`＋零认证依赖＝**待裁项③ 的源码出处**）。
-> - **六处活状态句子与树对不上，已按实测更正**：① handoff 待办 ⑤ 写「现行读数 `app/` 71.78%／核心 99.34%，Q273」→ **Q298 复测 71.83%（13,220 语句）／核心 99.34%（604）**，并标 Q299–Q301 后未再复测；② handoff 待办 ⑦ 段首已写「Q288 裁补并落地」、正文却仍写「现仅 service 层先查后插…零唯一约束…工程侧不代做」＝**同一段自相矛盾**，已改判为裁决前现状＋已落四件；③④ docs/19 清单二 §2 缺 ② 已由 **Q295** 翻正的注记、§5 覆盖率停在 2026-09-27 首读；⑤ docs/19「已经结掉的」缺 ②（Q295）与 ⑦（Q288）两行；⑥ docs/23 §0.1 测试/覆盖率两行＋§2 规模表三行（68→**69 表**、迁移 49→**50**／头 **0050**、1157→**1181**、128→**130** 测试文件）。
-> - **docs/23 §11.13 追加真 PG16 复测四条**（一次性容器宿主 5543/5544，跑完即删零残留）：`pg_indexes.indexdef` 原文含 `WHERE ((status)::text = 'active'::text)`／重复 active 第二条被拒、`archived` 与异 `kind` 放行（证索引确为**部分**且键含 `kind`）／**fail-loud 实证**＝退 0047 植两行重复后 `upgrade head` **exit 1**，且 PG 事务性 DDL 使 `alembic current` 停 0047、`pg_indexes` 零残留（**不是半应用状态**），删重复行即复建／0047⇄0048 往返对称；索引计数 243→**244**（业务表闭合口径 68+29+147，含 `alembic_version` 则 245）。**该轮读数跑时工作树 head＝0048**（同日稍晚 Q300 落进同一共享工作树使 head 前移），口径已在 §11.13 就地声明。
-> - **README 状态段**停在 **Q293** → 补 **Q294–Q301** 八批与逐批测试增量分解（1147→1181）。**纪律**：历史台账／评审快照／已被取代的待办段一律不回改；未新增待裁项。
-> - **【复判不变】**：① 达标／② 达标（Q295 翻正后保持）／③ 未达标（现网部署＋真 ACME 签发未证＋待裁项③）。纯文档批不改任何一层判定。
->
->
->
+
+> ~~Q302 banner 原文~~（含其五条子项）已按「最近 5 条」上限于 2026-10-07 逐字滚入 [docs/handoff-archive-2026-10-07.md](docs/handoff-archive-2026-10-07.md)。
 >
 > ~~Q301 banner 原文~~（含其三条子项）已按「最近 5 条」上限于 2026-10-07 逐字滚入 [docs/handoff-archive-2026-10-07.md](docs/handoff-archive-2026-10-07.md)。
 >
