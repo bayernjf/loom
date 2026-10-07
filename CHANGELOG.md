@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q302 入口文档对账：投产最小清单入账 ＋ 六处活状态句子回源码重测（2026-10-07；**纯文档零代码零迁移零测试变化**；基线不变 **1181 passed＋10 skipped／收集 1191**、头 `0050_platform_adapter_candidates`、业务物理表 **69／列 754**；02 C1.245）** —— 负责人「看看 handoff.md 和相关文档是否需要更新」；先量后改（Q283 方法学：docs 比 docs 的门挡不住过期句子）。
+  - **未提交产物验真后入账**：`docs/17` §1.3「投产最小清单」（07 日 15:24 落盘、无编号）八处锚点逐条回制品核对——`docker-entrypoint.sh:8-10/14/19`、`docker-compose.yml:25/66/123`、`docker-compose.monitoring.yml:41`、`admin/login/page.tsx:11-12`、`config.py:23`、`product_intake/router.py:57`（客户读口零认证＝待裁项③ 出处）。
+  - **活状态失真五处更正**：handoff 待办 ⑤（覆盖率读数 71.78%/Q273 → **Q298 71.83%／13,220／核心 604**）、handoff 待办 ⑦（段首标已落地、正文仍写"零唯一约束/工程侧不代做"的自相矛盾）、docs/19 §2（缺 ② 已由 **Q295** 翻正注记）、docs/19 §5（停在 2026-09-27 首读）、docs/19「已经结掉的」（缺 ②／⑦）。
+  - **docs/23 三处刷新**：§0.1 测试/覆盖率两行、§2 规模表（69 表／754 列／50 迁移／头 0050／1181 passed／130 测试文件）、§11.13 追加**真 PG16 复测四条**（`indexdef` 原文、重复 active 被拒／archived 与异 `kind` 放行、**fail-loud exit 1 ＋ 事务性整体回滚**、0047⇄0048 往返对称；索引计数 **243→244**，读数为 0048 时点口径已就地声明）。**README** 状态段停在 Q293 → 补 Q294–Q301 八批与逐批测试增量分解。
+  - **纪律**：历史台账与评审快照不回改；不改任何判定档位（③ 仍未达标＝现网未部署＋真 ACME 未签发＋待裁项③）；未新增待裁项。
 - **Q301 CI 同 ref 连推自动取消旧 run（2026-10-06；**配置＋测试＋文档**，零迁移零生产代码；后端收集 1190→**1191**（1180→**1181 passed**＋10 skipped，＋1＝`test_ci_workflow_contract.py` concurrency 契约）、ruff 净；02 C1.244）** —— PR #150 红叉根因（被取消的重复 run 而非测试失败）收口。
   - `.github/workflows/ci.yml` 顶层加 `concurrency: group ci-${{ github.ref }} / cancel-in-progress: true`：同 ref 新推送立即取消旧 run（省 CI 额度、状态不被 cancelled 叉号污染），不同 ref（并发 PR）互不取消；契约先红后绿，门集合一字不动。
 - **Q300 PLATFORM-ADAPTER 候选表＋HumanGate 闭环（2026-10-06；**代码＋迁移＋测试＋文档**，迁移 **0049→0050**，业务物理表 68→**69**；后端 **1169→1180 passed＋10 skipped**（＋8＝`test_platform_adapter_candidates.py`，另有 Q299 ＋3）；真 PG16 宿主 55460 往返实测 69 表/754 列 NO DRIFT、eval 101/101、ruff 净；02 C1.243）** —— Q297 全甲裁决之 adapter 乙案。
