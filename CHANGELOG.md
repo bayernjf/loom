@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q314 审核台读/裁分权＝docs/19 清单二第 8 项按甲裁并落地（2026-10-08；**代码＋测试＋文档**，零迁移零新表；基线不变 **1205 passed＋10 skipped／收集 1215**、ruff 净、eval 101/101、前端零改动；02 C1.257）**——负责人「按推荐来」，把 Q307 登记的第 8 项待裁按推荐甲案执行（接缝③重新追认为「读/裁分权」）。
+  - **读/裁分权**：`GET /api/review-workbench/candidates` 的 `require_workbench_view` 读队列**放行 `platform_admin`**（管理端默认身份能打开统一审核台）；`POST /batch-approve` 裁决面不动（逐候选按 `registry.review_role(cand.wf_id)` 判，platform_admin 仍 403，service.py:214）。
+  - **先红后绿**：先改 `test_queue_requires_actor_and_any_wf_gate_role` 断言（ADMIN 读 200）跑红 → 改 `require_workbench_view` 放行 → 绿；补「batch-approve 对 ADMIN 仍 403」断言钉死分权。
+  - **契约门**：`test_admin_surface_read_contract.py` 的 `RATIFIED_SEAM_BLOCKED` 移出该路径、集合归空；`test_the_ratified_seam_exception_cannot_silently_grow` 空集即 return（塞回路径仍判红）。
+  - **同步**：docs/19 第 8 项销账、docs/05 Q307 补登块内追加 Q314 追认、docs/02 续编 C1.257 Q314。**复判不变**：① 达标／② 达标／③ 未达标。
 - **Q313 docs/12 占位协议补齐批（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.256**）——负责人「按你推荐来」，把「已实现但 docs/12 状态列仍 ⬜ 占位」的 PT 协议按 §3 模板从代码反推补齐。
   - **名单对账（docs/12 §1.2 注记）**：35 推断候选 × 06 定稿 7 份同义重叠＝#19 PCP-BUILD≈PT-PCP-V1.5、#27 FCW-SCORE≈PT-FCW-ASM-V1.0、#28 ARTICLE-GEN≈PT-ART-GEN-V1.5（生成执行器显式引用后者）→ 注记勿重复补齐；#29 VIDEO-SCRIPT 为 Q252 已落骨架、真视频 mode 取值【待补】→ 注记不标补齐；其余 26 个候选无实现无规格维持 ⬜。
   - **补齐 7 份（docs/12 §3.1，按 §3 六字段、每项标代码/Q 来源）**：PT-MISSING-INFO（#5，C7 必填覆盖检测）、PT-CAT-RECOG（#3，真模型 Q148 635/231 tokens，端点 `POST /api/intakes/{id}/c1-recognition/llm-invoke`）、PT-ATOM-AFFINITY（#10，Q86 本地确定性重算、模型字段剥离）、PT-PWC-BUILDER（#12，combo 原子≥2 且≥2 维度、restock 唯一 requested 写者 Q83）、PT-CLAIM-DOWNGRADE（#25，Q38 六码字典 Q306 载体、人工 approve 生效、AI 输出 schema【待补】如实标注）、PT-LAW-REVIEW（#26，Q49/Q217 六领域＋48h 幂等法审单＋Guard⑥）、PT-CONTENT-COMPLIANCE（#31，Q59 四项复检：词库硬阻断＋语义 advisory Q121、施工指令/国家规则仍【待补】）。
