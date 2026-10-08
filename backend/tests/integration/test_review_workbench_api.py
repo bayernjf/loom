@@ -215,17 +215,25 @@ async def test_queue_requires_actor_and_any_wf_gate_role(client, session_factory
     )
     assert resp.status_code == 403
 
-    # platform_admin 不是裁决角色，不放行（接缝③）。
+    # platform_admin 不是裁决角色；Q314（负责人 2026-10-08「按推荐来」）重新追认
+    # 接缝③为「读/裁分权」：读队列放行 platform_admin，裁决仍按 queue_roles/WF 角色。
     resp = await client.get(
         "/api/review-workbench/candidates", params=_params(ADMIN)
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200, resp.text
 
     for actor in (OPS, REVIEWER):
         resp = await client.get(
             "/api/review-workbench/candidates", params=_params(actor)
         )
         assert resp.status_code == 200, resp.text
+
+    # 裁决面不放行 platform_admin：batch-approve 逐候选按所属 WF 审核角色判（service.py:214）。
+    resp = await client.post(
+        "/api/review-workbench/batch-approve",
+        json={"candidate_ids": ["c-c1-low"], "actor": ADMIN},
+    )
+    assert resp.status_code == 403, resp.text
 
 
 # ---------- 风险归一 / 排序 / 筛选 / 分页 ----------

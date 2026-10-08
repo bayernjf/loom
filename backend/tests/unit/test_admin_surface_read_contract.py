@@ -115,11 +115,10 @@ def test_every_admin_surface_read_resolves_to_a_real_route() -> None:
 
 # 已裁授权口径把默认管理身份挡在外面的读口：不是漏网，是**已裁的接缝**，
 # 放宽它需要重新裁决，故本门把它们排除在"必须可读"之外、同时钉死这个集合不许长大。
-# /api/review-workbench/candidates ＝ 接缝③（Q232，负责人 2026-10-01 追认，02 C1.176）：
-# platform_admin 不是队列角色，读队列也不放行。本批试过放宽，被
-# tests/integration/test_review_workbench_api.py::test_queue_requires_actor_and_any_wf_gate_role
-# 当场判红 ⇒ 收回，改登记 docs/19 清单二第 8 项待裁。
-RATIFIED_SEAM_BLOCKED = {"/api/review-workbench/candidates"}
+# 集合当前为空：/api/review-workbench/candidates 原为接缝③（Q232，负责人 2026-10-01
+# 追认，02 C1.176），经 **Q314（负责人 2026-10-08「按推荐来」）重新追认为读/裁分权**
+# （读放行 platform_admin、裁决仍按 queue_roles/WF 角色）后已放行、移出本集合。
+RATIFIED_SEAM_BLOCKED: set[str] = set()
 
 
 def test_platform_admin_can_read_every_admin_surface_endpoint() -> None:
@@ -137,9 +136,16 @@ def test_platform_admin_can_read_every_admin_surface_endpoint() -> None:
 
 
 def test_the_ratified_seam_exception_cannot_silently_grow() -> None:
-    """例外必须是"确实存在、确实被前端读、确实仍 403"的口——不许拿它当后门。"""
+    """例外必须是"确实存在、确实被前端读、确实仍 403"的口——不许拿它当后门。
+
+    集合为空＝当前没有已裁接缝（Q314 放行 candidates 后归零），空集上没有例外可当
+    后门；「读口被挡必须判红」已由 test_platform_admin_can_read_every_admin_surface_endpoint
+    兜底。一旦有人再往里塞路径，下列断言立即生效。
+    """
     paths = _admin_surface_get_paths()
     assert RATIFIED_SEAM_BLOCKED <= paths, sorted(RATIFIED_SEAM_BLOCKED - paths)
+    if not RATIFIED_SEAM_BLOCKED:
+        return
     targets = sorted({c for path in RATIFIED_SEAM_BLOCKED for _, c in _routes_for(path)})
     assert targets, "例外清单里的路径没解析到真实路由"
     for path, (code, _) in _probe(targets).items():
