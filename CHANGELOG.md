@@ -3,6 +3,7 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q322 功能点比对报告落地（对照 ContentOS 产品基准）（2026-10-09；纯文档零代码零迁移零测试变化；基线不变 **1207 passed＋10 skipped／收集 1217**、头 `0052_pool_options`；02 C1.265）**——负责人「把这个完整报告落到项目文档里」，把「和 /Users/jiangfeng/Downloads/项目2-loom-重要 产品功能点比，都搞完了吗」的比对结论落档为 **docs/24_功能点比对_ContentOS产品基准.md**（基准＝产品主链 md 13 段＋Q1–Q72 定稿＋HTML 全景图 33 项，外部只读未改动）：核心结论＝13 段链 **9 段闭环**（段1/2/4/5/6/8/10/11/13）、**4 段部分**（段3 DIM-SOURCE 来源规格待补／段7 真模型接入与 fit_score 自学习未落／段9 WF-07 4 Skill ⬜／段12 video-studio 未点工）；横切五条 ✅＋资金 HumanGate 随计费 V2；未做项全部属 V2 厚度／V3 辅助系统／周边／3 个已定位待规格或未点工项，不阻塞已判定核心可用（docs/20 ① 功能覆盖达标／② 核心完全可用达标不变）。合龙＝02 C1.265＋续编索引、CHANGELOG 本条、handoff 顶部 Q322 banner（Q321 转「其前」）、AGENTS 权威行前移 Q322、docs/README docs/02 行前移 Q322/C1.265、README 状态段尾追加 Q322 段。【复判不变】① 达标／② 达标／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
 - **Q321 待裁项③④⑤收口批（2026-10-08；纯文档零代码零迁移零测试变化；基线不变 **1207 passed＋10 skipped／收集 1217**、头 `0052_pool_options`；02 C1.264）**——负责人「那按你推荐的来」就三项全局待裁项按推荐裁决：
   - **③ 客户侧认证剩余（V2 第一项：客户门户登录/会话/注册）＝维持 beta「代运营＋无客户登录」**：客户侧真实认证、actor↔tenant 绑定、账号密码/会话/注册（乙案）继续后置 V2，等业务方给注册/会话/密码策略规格（docs 无一条，禁臆造）；Q200 #32 声明租户过滤的已接受风险维持。**Q242 并入项（`whitelist_owner` 是否可签发／由谁持有）未随本批裁决、仍待裁**（docs/19 §3、docs/23 §10.4）。
   - **④ docs/08 §2.2 排期三列（工期/人员/起止）＝维持现状不填**：暂无排期口径，禁止倒推编造。
