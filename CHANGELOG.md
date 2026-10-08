@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q318 部署前自检批＋docs/05 审核台角色指针注记＋权威行同步收口（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.261）**——负责人「一口气」＝三件可自推文档任务一次合龙：
+  - **① 部署前自检批**：核对 `infra/docker-compose.gateway.yml`／`infra/caddy/Caddyfile`／`tests/unit/test_gateway_surface_contract.py`（11 例）／`infra/gateway-rehearsal.sh`（23 断言）与 docs/17 §1.3 投产最小清单逐项一致（放行面 `/api/*`·顶层 `POST /mcp`·`/.well-known/*`→backend、拦截面 `/docs`·`/redoc`·`/openapi.json`·`/healthz`·`/metrics` 网关 404 判 body、caddy 唯一发布 80/443、域名默认值三处同值、同域不变量 exit 2〔Q287〕、拓扑无关四开关转发默认逐字一致〔Q291〕）；**订正 §1.3 一处过时句**（统一审核台读口「待负责人裁」→「Q314 已裁读/裁分权并落地：读队列放行 platform_admin、裁决按 `registry.review_role(wf_id)`、ADMIN 403」）并新增**「部署执行前检查单」**（第 0–4 步勾选清单＋`gateway-rehearsal.sh` 预检 23/23、本机 localhost＋内部 CA 可跑不碰 LE 速率限额）。
+  - **② docs/05 补审核台角色指针**：Q93 补登块（历史原文「platform_admin 不放行」）尾部追加 **Q314 追认指针注记**（读放行 platform_admin、裁决仍按 `registry.review_role(wf_id)`、403 不变），历史原文一字不改（docs/09 Q317 先例）；handoff 待办 7 过时附注同步订正。
+  - **③ 权威行同步收口**：README 补 Q317/Q318、AGENTS 顶部权威行 Q316→Q318、docs/08 §2.2 权威行前移 Q318、docs/README 地图 docs/02 行前移 Q318/C1.261（CHANGELOG 与 docs/08 已到 Q317 复核通过）。
+  - **合龙**：docs/02 C1.261＋续编索引、CHANGELOG 本条、handoff 顶部加 Q318 banner（Q317 转「其前」）、docs/08 权威行前移、docs/README 地图行前移。**复判不变**：① 达标／② 达标／③ 未达标（现网部署＋真 ACME＋待裁项③④⑤）。
 - **Q317 文档对账批＋handoff 滚档（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.260）**——当场重扫后四件纯文档缺口一次收口：
   - **① README 状态段补 Q310–Q316**（原停在 Q309/C1.252、落后 7 批）：结构档/全景补登、38 真实包清单＋8 空壳清理、docs/12 补齐 7 份 PT 协议、审核台读/裁分权、权威行漂移收口、docs/21 §0.2 审核队列段。
   - **② docs/09 审核队列补登块追加 Q314 注记**：读队列 `GET /api/review-workbench/candidates` 放行 `platform_admin`、`POST /batch-approve` 裁决面仍逐候选按 `registry.review_role(wf_id)` 判、ADMIN 能看不能裁 403；Q93/Q103/Q104 历史补登原文不改、不动 D3.x 编号。
