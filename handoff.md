@@ -1,6 +1,7 @@
 # Handoff — Loom
 
-> **最新（2026-10-08）：Q314 审核台读/裁分权＝docs/19 清单二第 8 项按甲裁并落地（**代码＋测试＋文档**，零迁移零新表；基线不变 **1205 passed＋10 skipped／收集 1215**、ruff 净、eval 101/101、前端零改动；02 C1.257）**——负责人「按推荐来」，把 Q307 登记的第 8 项待裁按推荐甲案执行（接缝③重新追认为「读/裁分权」）。
+> **最新（2026-10-08）：Q315 入口文档对账＝权威行漂移收口（**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.258）**——负责人「还有啥要推进的」触发当场重扫，扫出 Q313/Q314 两批漏掉的同一族高频污染源：**docs/08 §2.2 权威行停在 Q311**（落后三批，已前移到 Q314，Q311 行标历史快照并保留原文待办句）、**docs/README docs/02 行停在 Q310/C1.253**（落后 4 批，已改 Q73–Q314／C1.17–C1.257）；复扫 docs/16、docs/23、docs/17 实测仍现行（Q313/Q314 零测试/schema 变化）。【复判不变】① 达标／② 达标／③ 未达标。
+> **其前（2026-10-08）：Q314 审核台读/裁分权＝docs/19 清单二第 8 项按甲裁并落地（**代码＋测试＋文档**，零迁移零新表；基线不变 **1205 passed＋10 skipped／收集 1215**、ruff 净、eval 101/101、前端零改动；02 C1.257）**——负责人「按推荐来」，把 Q307 登记的第 8 项待裁按推荐甲案执行（接缝③重新追认为「读/裁分权」）。
 > - **读/裁分权**：`GET /api/review-workbench/candidates` 的 `require_workbench_view` **读队列放行 `platform_admin`**（管理端默认身份能打开统一审核台这一屏）；`POST /batch-approve` **裁决面不动**（逐候选按 `registry.review_role(cand.wf_id)` 判，platform_admin 仍 403，workbench/service.py:214）。
 > - **先红后绿**：先只改 `test_queue_requires_actor_and_any_wf_gate_role` 断言（ADMIN 读 200）跑红（1 failed）→ 改 `require_workbench_view` 放行 → 绿（workbench 7 passed）；补「batch-approve 对 ADMIN 仍 403」断言钉死分权。
 > - **契约门**：`test_admin_surface_read_contract.py` 的 `RATIFIED_SEAM_BLOCKED` 移出该路径、**集合归空**（Q314 后无「已裁接缝把默认身份挡在门外」的读口）；`test_the_ratified_seam_exception_cannot_silently_grow` 空集即 return（塞回路径仍判红）。
