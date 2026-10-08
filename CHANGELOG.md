@@ -3,6 +3,9 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q312 空壳删除后文档收口（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.255**）——负责人「按你推荐的搞」，把 Q311 批自己造成的两处入口/审计文档漂移一次收口。
+  - **① AGENTS.md 顶部基线段置顶 Q311**：此前权威行仍停 Q310 时点、内文还写「8 个空壳包删不删本批一个没动」，Q311 已把两件待点工做掉；Q310 行改标「其前」降为历史快照、正文一字不动。
+  - **② docs/23 三处空壳句订正**：汇总表「空壳模块零测试」→ 标注已随 Q311 清理；§4 技术债条（原指向已删 `core/candidate_channel/`／`core/dict_management/`）→ 改为「已删」并指四族字典真实落点；L240 技术债清单行 → 划线注记。全仓按 8 个已删包名复扫：仅此三处活状态引用，其余为历史台账/文档段引用、按「不回改」保留。**复判不变**：① 达标／② 达标／③ 未达标（现网＋真 ACME＋待裁③）。
 - **Q311 结构档甲案＋8 空壳包清理＋文档对账（2026-10-08；**代码（仅删 8 个 0 字节 `__init__.py`）＋文档**；零迁移零新表零新 env，测试数不变＝基线 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.254**）——负责人「好的，开搞」，把 Q310 批登记的「结构档两案待点工＋8 空壳包删不删」一口气三件全落。
   - **① docs/15 甲案落地**：新增 §3.1「包→职责→入口清单」（按代码反向生成、机械可复跑；真实包＝目录内 .py 总字节 > 0，职责取模块 docstring、表取 `__tablename__`、入口取 router 路由）；实测 **38 个真实包**＝横切 26（app 根＋core 根＋25 包，含 audit／rbac 两单文件包）＋业务域 12（product 6／platform 1／decision 2／final 2／content 1）。目录树 core 注释同步改：27 包枚举 → **25 真实包＋2 单文件包**＋空壳已删标注。
   - **② 8 个空壳包 git rm**：`core/dict_management`／`core/gates`／`core/candidate_channel`／`platform/platform_dynamic`／`product/dimension`／`content/content_manage`／`feedback`／`feedback/feedback_loop` 的 8 个 0 字节 `__init__.py`（脚手架 commit `5d5f726` 遗留）；删除前 grep 全仓**零 import 引用**（唯一"命中"是无害字符串），目录连 `__pycache__` 一并清除。
