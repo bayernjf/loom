@@ -3,6 +3,9 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q316 运营 SOP 补审核队列段（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.259）**——当场重扫（先核 docs/10 迁移登记到 0052 无缺口、全仓 `docs/02:NNN` 行号引用落点不受尾部插入影响），按 Q309 纪律逐档查活状态，扫出**唯一缺口：docs/21 全档 grep `审核台|review-workbench|读队列|batch-approve` 零命中**——统一审核台（Q70/Q93 落地、Q314 刚定读/裁分权）在运营手册无操作段。
+  - **docs/21 新增 §0.2「审核队列（统一审核台 /admin/review-queue）」**，事实逐条回代码核验：聚合段1/3/4/5 五类 target_type 的 skill7 pending 候选（风险降序＋创建升序）；读面 Q314 起放行 platform_admin（默认身份能开屏）；裁决面只认 `queue_roles()` 并集＝WF-01 `operations`＋WF-02/03/04 `product_reviewer`，**platform_admin 能看不能裁（403）**；单条三态 confirmed（critical 二次确认）／modified／rejected（reason 必填）、批量逐候选过所属 WF Gate 角色与适配器全部规则（service.py:214），置信度低于 `review.batch_pass_confidence` 或风险不达标整批 422／非 pending 409／id 缺失 404；与各段 Gate 互不取代、与 Q249 白名单组装审核 `/admin/fcw/review` 不同对象不同权限面勿混。
+  - **同步**：docs/02 续编 C1.259 Q316。**复判不变**：① 达标／② 达标／③ 未达标。
 - **Q315 入口文档对账＝权威行漂移收口（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.258）**——负责人「还有啥要推进的」触发当场重扫，扫出 Q313/Q314 两批漏掉的同一族高频污染源（Q309 纪律点名对象）：
   - **docs/08 §2.2 权威行停在 Q311**（落后三批）：前移到 Q314（含 Q312–Q314 摘要与第 8 项销账），Q311 行标历史快照、保留原文待办句。
   - **docs/README docs/02 行停在 Q310/C1.253**（落后 4 批）：改 Q73–Q314／C1.17–C1.257。

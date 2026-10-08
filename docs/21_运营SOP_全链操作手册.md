@@ -32,6 +32,14 @@
 
 **日常管理**（/admin/staff-keys，sidebar 第 12 项；/admin/login 不进 sidebar）：platform_admin 签发/列表/吊销（revoke 为 platform_admin 红线），一人可发多令牌便于轮换；吊销即 401 不可恢复。机器 Agent Key 的签发仍在 /admin/agent-keys（见段 13 步骤 1）。
 
+### 0.2 审核队列（统一审核台 /admin/review-queue，sidebar「审核队列」；Q70/Q93 一期、Q314 读/裁分权）
+
+- **这屏是什么**：跨 WF 的 skill7 候选统一出队台（不是某一段的专属 Gate）。聚合段 1（`c1_recognition`／`c7_layer4`）、段 3（`field_plan`）、段 4（`atom_batch`）、段 5（`pwc_combo`）五类 target_type 的 `pending_review` 候选，按风险等级（critical→low）降序、同风险按创建时间升序排队；候选状态 `pending_review → applied（通过）／archived（驳回）`。
+- **谁能看（读面，Q314 起）**：读队列放行 `platform_admin`——管理端 compose 默认身份 `LOOM_ADMIN_ROLES:-platform_admin` 打开本屏即可见全队列；其余内部角色按 `queue_roles()` 并集（见下）判，角色不足 403。
+- **谁能裁（裁决面，一字未放行）**：批量/单条裁决只认各 WF 的 skill7 Gate 角色，数据驱动自 `runtime/workflows/*.yaml`——**WF-01（段1 冷启动/段3 字段池）＝`operations`，WF-02/03/04（段3/4/5）＝`product_reviewer`**，并集 `{operations, product_reviewer}`。**`platform_admin` 无任何队列角色 ⇒ 能看不能裁，点裁决即 403**（Q314 分权就是钉这个：默认身份可以开屏，但不等于拥有裁决权）。要裁先保证当前令牌角色含 `operations` 或 `product_reviewer`（§0.1 签发口径，门控关着也自行验真）。
+- **怎么裁**：单条三态 `confirmed`（通过；critical 风险需二次确认）／`modified`（改后通过，reason 可空）／`rejected`（驳回，reason 必填）；批量 `POST /api/review-workbench/batch-approve` 只收 `pending_review`——每条仍逐候选过**所属 WF 的 Gate 角色**与适配器全部规则（`service.py:214` 起逐候选判），置信度低于配置键 `review.batch_pass_confidence` 或风险不达标整批 **422**、候选非 pending **409**、候选 id 不存在 **404**；通过即 `applied`、驳回即 `archived`（留审计）。
+- **与各段 Gate 的关系**：各段自己的 Gate 口（段 3 字段池 Gate、段 5 PWC Gate 等）仍照常可用、互不取代；本屏是把散在各段的 pending 候选**拉到一张表**做统一裁决的入口。Q249 之后新增的**白名单组装审核**是另一条线——`/admin/fcw/review` 只读审 FCW 组装候选（见段 11「组装工作台与只读审核队列」），与本屏（skill7 候选裁决）不同对象、不同权限面，勿混。
+
 ---
 
 ## 1. 标准操作流程（一个产品从录入到发证）
