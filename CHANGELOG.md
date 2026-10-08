@@ -3,6 +3,10 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q313 docs/12 占位协议补齐批（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.256**）——负责人「按你推荐来」，把「已实现但 docs/12 状态列仍 ⬜ 占位」的 PT 协议按 §3 模板从代码反推补齐。
+  - **名单对账（docs/12 §1.2 注记）**：35 推断候选 × 06 定稿 7 份同义重叠＝#19 PCP-BUILD≈PT-PCP-V1.5、#27 FCW-SCORE≈PT-FCW-ASM-V1.0、#28 ARTICLE-GEN≈PT-ART-GEN-V1.5（生成执行器显式引用后者）→ 注记勿重复补齐；#29 VIDEO-SCRIPT 为 Q252 已落骨架、真视频 mode 取值【待补】→ 注记不标补齐；其余 26 个候选无实现无规格维持 ⬜。
+  - **补齐 7 份（docs/12 §3.1，按 §3 六字段、每项标代码/Q 来源）**：PT-MISSING-INFO（#5，C7 必填覆盖检测）、PT-CAT-RECOG（#3，真模型 Q148 635/231 tokens，端点 `POST /api/intakes/{id}/c1-recognition/llm-invoke`）、PT-ATOM-AFFINITY（#10，Q86 本地确定性重算、模型字段剥离）、PT-PWC-BUILDER（#12，combo 原子≥2 且≥2 维度、restock 唯一 requested 写者 Q83）、PT-CLAIM-DOWNGRADE（#25，Q38 六码字典 Q306 载体、人工 approve 生效、AI 输出 schema【待补】如实标注）、PT-LAW-REVIEW（#26，Q49/Q217 六领域＋48h 幂等法审单＋Guard⑥）、PT-CONTENT-COMPLIANCE（#31，Q59 四项复检：词库硬阻断＋语义 advisory Q121、施工指令/国家规则仍【待补】）。
+  - **同步**：docs/12 §1 状态列回填 7 行 ✅＋3 行注记、§4 核对项第 4 条打勾；docs/06 §3 补「已补齐 7 份」索引行；docs/02 续编 C1.256 Q313。**复判不变**：① 达标／② 达标／③ 未达标（现网＋真 ACME＋待裁③）。
 - **Q312 空壳删除后文档收口（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.255**）——负责人「按你推荐的搞」，把 Q311 批自己造成的两处入口/审计文档漂移一次收口。
   - **① AGENTS.md 顶部基线段置顶 Q311**：此前权威行仍停 Q310 时点、内文还写「8 个空壳包删不删本批一个没动」，Q311 已把两件待点工做掉；Q310 行改标「其前」降为历史快照、正文一字不动。
   - **② docs/23 三处空壳句订正**：汇总表「空壳模块零测试」→ 标注已随 Q311 清理；§4 技术债条（原指向已删 `core/candidate_channel/`／`core/dict_management/`）→ 改为「已删」并指四族字典真实落点；L240 技术债清单行 → 划线注记。全仓按 8 个已删包名复扫：仅此三处活状态引用，其余为历史台账/文档段引用、按「不回改」保留。**复判不变**：① 达标／② 达标／③ 未达标（现网＋真 ACME＋待裁③）。
