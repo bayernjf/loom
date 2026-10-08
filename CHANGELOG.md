@@ -3,6 +3,17 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q321 待裁项③④⑤收口批（2026-10-08；纯文档零代码零迁移零测试变化；基线不变 **1207 passed＋10 skipped／收集 1217**、头 `0052_pool_options`；02 C1.264）**——负责人「那按你推荐的来」就三项全局待裁项按推荐裁决：
+  - **③ 客户侧认证剩余（V2 第一项：客户门户登录/会话/注册）＝维持 beta「代运营＋无客户登录」**：客户侧真实认证、actor↔tenant 绑定、账号密码/会话/注册（乙案）继续后置 V2，等业务方给注册/会话/密码策略规格（docs 无一条，禁臆造）；Q200 #32 声明租户过滤的已接受风险维持。**Q242 并入项（`whitelist_owner` 是否可签发／由谁持有）未随本批裁决、仍待裁**（docs/19 §3、docs/23 §10.4）。
+  - **④ docs/08 §2.2 排期三列（工期/人员/起止）＝维持现状不填**：暂无排期口径，禁止倒推编造。
+  - **⑤ 覆盖率阈值＝不设阻断门**：维持 Q281 只测量口径，`--cov-fail-under` 不接，docs/16 §4 ≥90%／≥70% 保持【建议】。
+  - **合龙**：docs/02 C1.264＋续编索引、CHANGELOG 本条、handoff 顶部 Q321 banner（Q320 转「其前」）、AGENTS 权威行前移 Q321、docs/08 权威行前移（Q320 行标历史快照）、docs/README docs/02 行前移 Q321/C1.264、README 状态段尾追加 Q321 段、docs/19 §3/§4/§5 逐节标裁决、docs/20 §6.6 需重裁块划线注记。**复判不变**：① 达标／② 达标／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+- **Q320 冻结管理 UI 过时表述订正＋测试基线刷 1207＋冻结管理岛浏览器验收（2026-10-08；纯文档零代码零迁移零测试变化；基线不变 **1207 passed＋10 skipped／收集 1217**、头 `0052_pool_options`；02 C1.263）**——负责人「好的，开搞」授权 A–D 四件一起推进：
+  - **① A＝六处「冻结管理专用 UI 仍随 V2」过时表述订正**：handoff Q250 追记、docs/20 三处（Q250 十一次更新句尾加 Q319 订正注记／「不可一口气推进」摘要清单冻结管理条目划线＋✅／§6.6 #10 表行）、docs/09 两处（候选池条目逐项标 Q180/Q186/Q319 已落、仅 6 层可视化编辑与合理性校验待补；冻结管理条目）；docs/08 L126 的 Q250 权威行为历史快照按纪律不回改。
+  - **② B＝docs/23 测试基线刷 1207**：L13 规模行、L33/L79 测试行（Q319 后全量 **62.13s**）。
+  - **③ C＝docs/16 补 Q319 基线刷新行**：收集 1215→**1217**、常规 1205→**1207 passed＋10 skipped**（＋2＝`test_fcw_freeze.py` 冻结管理岛列表快照状态两例）。
+  - **④ D＝冻结管理岛内置浏览器功能测试**：豆包内置浏览器逐页验收 `/admin/fcw`——frozen 态「生效」chip＋作废入口、作废面板 reason 必填＋确认留痕、revoked 态「已作废」＋作废时间＋「重冻新版」链接跳组装台 final_id 预填；后端列表口带 actor_id/roles query 返回 200 与 snapshot_status/revoked_at/revoke_reason；测试前后快照/日志零数据改动；hydration mismatch 为 DevTools 注入噪音不判缺陷。
+  - **合龙**：docs/02 C1.263＋续编索引、CHANGELOG 本条、handoff 顶部 Q320 banner（Q319 转「其前」）、AGENTS 权威行前移 Q320、docs/08 权威行前移（Q319 行标历史快照）、docs/README docs/02 行前移 Q320/C1.263、README 状态段尾追加 Q320 段。**复判不变**：① 达标／② 达标／③ 未达标（现网部署＋真 ACME＋待裁项③④⑤）。
 - **Q319 冻结管理 UI 片＋PLATFORM-ADAPTER/fit_score 已落声明（2026-10-08；**代码＋测试＋前端**，零迁移零新表；测试 1205→**1207 passed＋10 skipped**（＋2＝管理端列表快照状态两例）、ruff 净、前端 tsc＋check-admin 净、eval 101/101；02 C1.262）**——负责人「A、B、C 都搞」，实测核代码：**A（PLATFORM-ADAPTER 甲案预览口）与 C（fit_score 可解释化 breakdown）已在 Q296/Q300 落地**（02 C1.239/C1.243，handoff「Q278 三件余量」banner「落码待点工」旧表述订正销账）；**B（D3.5 冻结管理专用 UI）本批落地**：
   - **① 后端 fcw_view 加法扩展**：`GET /api/admin/fcw` 列表项带 `snapshot_status`／`snapshot_revoked_at`／`revoke_reason`（`latest_snapshots_for` 批量 IN 查询，revoked 快照 is_active=false 仍展示；既有消费方不传快照零影响）。
   - **② 前端冻结管理岛**：`/admin/fcw` 行内 FreezeIsland——frozen 展示「生效」＋作废入口（reason 必填 1..2000，Server Action `revokeFcwAction` 调 revoke 写口，operations 闸）；作废成功留痕并提示重冻走组装台「复用」预填（Q250 裁决 c）；revoked 展示作废时间与原因；不跳转不刷新列表零其它写操作。

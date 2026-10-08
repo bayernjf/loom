@@ -23,7 +23,7 @@
 | 中台 SDK 嵌入 | 中台 | D4 | 🔶 V3 项【待补】 |
 | CSV / JSON 导出 + 异步导出任务 | GET /api/exports/fcw.csv（Q100）、fcw.json（Q132）、POST /api/exports/jobs + 状态/下载口（Q132；**Q196 起两条任务口 `tenant_id` 必填并按任务行归属收口**） | D4 | 🟢 CSV/JSON 同步导出 + 导出任务记录已落地（见 §2.3/§2.4）；queued/running 真后台 worker（Streams 消费组）+ 任务列表口已随 Q137 落地（env 默认关，门控关走同步）；limit/offset 分页与行数硬上限已随 Q142 落地（env `LOOM_EXPORT_MAX_ROWS` 默认 10 万，超限 422） |
 | 台内白名单 6 层原料包 JSON | GET /api/fcw/{final_id}/material.json（Q155） | 09:87 / 01 line14 | 🟢 后端全量 JSON 已落地（见 §2.5，台内卡片口径、非中台 final_id-only 面）；台内卡片前端随 D3.5 点工 |
-| 管理端白名单卡片只读台（跨租户列表 + 六层内嵌） | GET /api/admin/fcw、GET /api/admin/fcw/{final_id}/material（Q177）＋ **POST /api/admin/fcw/{final_id}/revoke（Q250 冻结 revoke 写口）** | 09:87（D3.5） | 🟢 D3.5 运营只读首片已落地（见 §2.6，读闸 operations\|platform_admin、零迁移）；组装工作台/预检口/六层回放/冲突映射/只读审核队列随 Q249 落地（见 §2.8）；**FCW 冻结管理（第 6 项）revoke 写口＋段12 断消费随 Q250 落地（迁移 0043，见 §2.8），冻结管理专用 UI 仍随 V2**；客户卡片视图等 D3.5 余项随菜单点工 |
+| 管理端白名单卡片只读台（跨租户列表 + 六层内嵌） | GET /api/admin/fcw、GET /api/admin/fcw/{final_id}/material（Q177）＋ **POST /api/admin/fcw/{final_id}/revoke（Q250 冻结 revoke 写口）** | 09:87（D3.5） | 🟢 D3.5 运营只读首片已落地（见 §2.6，读闸 operations\|platform_admin、零迁移）；组装工作台/预检口/六层回放/冲突映射/只读审核队列随 Q249 落地（见 §2.8）；**FCW 冻结管理（第 6 项）revoke 写口＋段12 断消费随 Q250 落地（迁移 0043，见 §2.8），冻结管理专用 UI 已随 Q319 落地（2026-10-08，02 C1.262：`/admin/fcw` 行内冻结管理岛，见 docs/05 Q319 补登）**；客户卡片视图等 D3.5 余项随菜单点工 |
 
 ---
 
