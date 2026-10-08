@@ -3,6 +3,11 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q319 冻结管理 UI 片＋PLATFORM-ADAPTER/fit_score 已落声明（2026-10-08；**代码＋测试＋前端**，零迁移零新表；测试 1205→**1207 passed＋10 skipped**（＋2＝管理端列表快照状态两例）、ruff 净、前端 tsc＋check-admin 净、eval 101/101；02 C1.262）**——负责人「A、B、C 都搞」，实测核代码：**A（PLATFORM-ADAPTER 甲案预览口）与 C（fit_score 可解释化 breakdown）已在 Q296/Q300 落地**（02 C1.239/C1.243，handoff「Q278 三件余量」banner「落码待点工」旧表述订正销账）；**B（D3.5 冻结管理专用 UI）本批落地**：
+  - **① 后端 fcw_view 加法扩展**：`GET /api/admin/fcw` 列表项带 `snapshot_status`／`snapshot_revoked_at`／`revoke_reason`（`latest_snapshots_for` 批量 IN 查询，revoked 快照 is_active=false 仍展示；既有消费方不传快照零影响）。
+  - **② 前端冻结管理岛**：`/admin/fcw` 行内 FreezeIsland——frozen 展示「生效」＋作废入口（reason 必填 1..2000，Server Action `revokeFcwAction` 调 revoke 写口，operations 闸）；作废成功留痕并提示重冻走组装台「复用」预填（Q250 裁决 c）；revoked 展示作废时间与原因；不跳转不刷新列表零其它写操作。
+  - **③ 契约与验证**：docs/05 revoke 补登块追加 Q319 注记；集成测试 ＋2；全量 **1207 passed＋10 skipped in 62.13s**。
+  - **合龙**：docs/02 C1.262＋续编索引、CHANGELOG 本条、handoff 顶部 Q319 banner（Q318 转「其前」）＋Q278 余量 banner 订正、AGENTS 权威行前移 Q319、docs/08 权威行前移、docs/README docs/02 行前移 Q319/C1.262。**复判不变**：① 达标／② 达标／③ 未达标（现网部署＋真 ACME＋待裁项③④⑤）。
 - **Q318 部署前自检批＋docs/05 审核台角色指针注记＋权威行同步收口（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.261）**——负责人「一口气」＝三件可自推文档任务一次合龙：
   - **① 部署前自检批**：核对 `infra/docker-compose.gateway.yml`／`infra/caddy/Caddyfile`／`tests/unit/test_gateway_surface_contract.py`（11 例）／`infra/gateway-rehearsal.sh`（23 断言）与 docs/17 §1.3 投产最小清单逐项一致（放行面 `/api/*`·顶层 `POST /mcp`·`/.well-known/*`→backend、拦截面 `/docs`·`/redoc`·`/openapi.json`·`/healthz`·`/metrics` 网关 404 判 body、caddy 唯一发布 80/443、域名默认值三处同值、同域不变量 exit 2〔Q287〕、拓扑无关四开关转发默认逐字一致〔Q291〕）；**订正 §1.3 一处过时句**（统一审核台读口「待负责人裁」→「Q314 已裁读/裁分权并落地：读队列放行 platform_admin、裁决按 `registry.review_role(wf_id)`、ADMIN 403」）并新增**「部署执行前检查单」**（第 0–4 步勾选清单＋`gateway-rehearsal.sh` 预检 23/23、本机 localhost＋内部 CA 可跑不碰 LE 速率限额）。
   - **② docs/05 补审核台角色指针**：Q93 补登块（历史原文「platform_admin 不放行」）尾部追加 **Q314 追认指针注记**（读放行 platform_admin、裁决仍按 `registry.review_role(wf_id)`、403 不变），历史原文一字不改（docs/09 Q317 先例）；handoff 待办 7 过时附注同步订正。
