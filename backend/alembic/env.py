@@ -20,10 +20,12 @@ from app.core.api_keys import models as _api_key_models  # noqa: F401  (Q88 agen
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
 from app.core.config_center import models as _config_models  # noqa: F401
 from app.core.db import Base
+from app.core.downgrade_actions import models as _downgrade_models  # noqa: F401  (Q306)
 from app.core.effects import models as _effects_models  # noqa: F401  (Q126/Q127 时序与认领)
 from app.core.exports import models as _export_models  # noqa: F401  (Q132 export_jobs)
 from app.core.imports import models as _import_models  # noqa: F401  (Q161 import_jobs)
 from app.core.model_registry import models as _registry_models  # noqa: F401  (Q82 五表)
+from app.core.pool_options import models as _pool_models  # noqa: F401  (Q308)
 from app.core.restock import models as _restock_models  # noqa: F401  (Q143/Q144 fence 两表)
 from app.core.skill7 import models as _skill7_models  # noqa: F401  (Q76 skill 候选/运行)
 from app.core.sla import models as _sla_models  # noqa: F401  (Q85/Q151 SLA 与 tick fence)

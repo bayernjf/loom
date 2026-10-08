@@ -620,10 +620,13 @@ if (!sidebarText.includes("/admin/fcw/assemble"))
   problems.push("admin sidebar must link the assembly workbench (Q249)");
 if (!sidebarText.includes("/admin/fcw/review"))
   problems.push("admin sidebar must link the whitelist review queue (Q249)");
+if (!sidebarText.includes("/admin/dictionaries"))
+  problems.push("admin sidebar must link the dictionary surface (Q306/Q38)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  if (navCount !== 14)
-    problems.push(`admin sidebar must keep exactly 14 admin entries, got ${navCount}`);
+  // 15＝Q306 起加入字典管理入口（此前为 14）。改这个数字必须对应一次真实的入口增删。
+  if (navCount !== 15)
+    problems.push(`admin sidebar must keep exactly 15 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");

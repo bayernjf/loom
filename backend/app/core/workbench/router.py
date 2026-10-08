@@ -36,6 +36,10 @@ def require_workbench_view(
     actor_id: str = Query(...),
     roles: list[str] = Query(default_factory=list),
 ) -> Actor:
+    # 接缝③（Q232，负责人 2026-10-01 追认，02 C1.176）：platform_admin **不是**队列角色，
+    # 读队列也不放行——"能看队列"在这里等于进入裁决漏斗的前一步。本批试过放宽，
+    # 被 `test_queue_requires_actor_and_any_wf_gate_role` 当场判红，故原样保留；
+    # 管理端这一屏怎么通，登记 docs/19 清单二第 8 项待裁（甲＝读/裁分权，需重新追认接缝③）。
     actor = Actor(id=actor_id, roles=roles)
     try:
         require_any_role(actor, *service.queue_roles())

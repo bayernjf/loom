@@ -33,11 +33,11 @@
   - 有 active 动态信号 → `pending_review`
   - 其余 → `allow`；返回体 `gate` 恒 `pending_review`
 - **构造器自述缺口（最权威的一句）**：`synthetic.py:307`——「**业务接线（候选投递/HumanGate 裁决/平台审核员界面）随 V2 后续片**」。
-- docs/08:99（Q260 落地行）逐字同义：「**候选投递/HumanGate/平台审核员界面随 V2**」。
+- docs/08:116（Q260 落地行）逐字同义：「**候选投递/HumanGate/平台审核员界面随 V2**」。
 
 ### 2.2 未落（反向枚举实测，非推理）
 
-1. **无调用方**。全仓 `llm-*` 触发端点只有 **5** 个（**Q293 逐行点清，初稿误写 4——漏了 CAT-RECOG 的 `llm-invoke`**）：`llm-invoke`（`core/model_registry/router.py:297`，C1 识别，Q82）、`llm-plan`（`product/fieldpool/router.py:157`）、`llm-expand`（`product/atom/router.py:145`）、`llm-build`（`product/condition/router.py:148`）、`llm-resolve`（`core/model_registry/router.py:339`）——**无一为 PLATFORM-ADAPTER**。平台适配自身 **25** 个端点（`platform/platform_adaptation/router.py` 逐行点清，**初稿误写 24**）**无一涉及 adapter**。⇒ Prompt 的三个变量 `$pws`/`$platform_rules`/`$dynamic_events` **至今无人组料**。
+1. **无调用方**。全仓 `llm-*` 触发端点只有 **5** 个（**Q293 逐行点清，初稿误写 4——漏了 CAT-RECOG 的 `llm-invoke`**）：`llm-invoke`（`core/model_registry/router.py:297`，C1 识别，Q82）、`llm-plan`（`product/fieldpool/router.py:157`）、`llm-expand`（`product/atom/router.py:145`）、`llm-build`（`product/condition/router.py:152`）、`llm-resolve`（`core/model_registry/router.py:339`）——**无一为 PLATFORM-ADAPTER**。平台适配自身 **25** 个端点（`platform/platform_adaptation/router.py` 逐行点清，**初稿误写 24**）**无一涉及 adapter**。⇒ Prompt 的三个变量 `$pws`/`$platform_rules`/`$dynamic_events` **至今无人组料**。
 2. **无结果载体**。平台适配 8 张表（`models.py` 全量 `__tablename__` 枚举：`publish_slots` / `goal_fit_weights` / `platform_rules` / `slot_type_defaults` / `pcp_templates` / `pcp_weight_tables` / `platform_dynamic_events` / `pcp_recalc_candidates`）**无任何 adapter 候选或决策表**。四态算出来后无处可放。
 3. **无 HumanGate 面**。docs/06 §7 登记的「平台适配候选」审核点无端点、无队列、无界面；Q242 收口的 27 个受闸写口里也没有它。
 4. **无 eval/golden 护栏**。`eval/datasets/skills/` 与 `eval/golden_cases/skills/` 各 9 个案例（ATOM-AFFINITY / ATOM-CANON / ATOM-EXPAND / CAT-RECOG / COMBO-VALIDATE / CONFLICT-PRECHECK / DIM-MERGE / PWC-SCORING / TYPE-MATCH），**无 PLATFORM-ADAPTER**。⇒ 红旗 S2 的「runs_7d=0」至今**没有任何回归证据**，且切真模型前无 golden 就无法防漂移。
@@ -48,9 +48,9 @@
 ### 2.3 降级动作字典：口径已定稿 ✅，但**载体零落地**（Q293 实测，初稿曾误判为「原文未给」）
 
 - **口径已定稿，不是待裁项**：docs/02 C1.6 **Q38 ✅**（用户原话口径）——「降级建议必须从预设动作字典里选（字典可配置），**不许 AI 自由发挥**。字典初始项：**REMOVE_BRAND / REMOVE_CLAIM / REMOVE_LINK / SOFT_CTA / SHORTEN / SUBST_WORD**（联动段10 CP-DOWN 映射）。AI 输出 = 动作组合 ＋ 中文理由；段12 按结构化指令执行。」docs/13:128 与 docs/12:104 均指向同一字典。
-- **但全仓零代码落地**：反向枚举 `REMOVE_BRAND` / `SOFT_CTA` / `SUBST_WORD` / `downgrade_action` / `action_dict` 于 `backend/` **零命中**；平台适配 8 张表无字典表（`content_goals` 属 Q25、已落 `product/condition/models.py:43`；Q38 与 Q25/Q43/Q46 同入 docs/10:368「字典管理 dict_management」后台区，docs/10:369 标注「全部 CRUD ＋ 审计」**尚无实现**）。
+- **但全仓零代码落地**：反向枚举 `REMOVE_BRAND` / `SOFT_CTA` / `SUBST_WORD` / `downgrade_action` / `action_dict` 于 `backend/` **零命中**；平台适配 8 张表无字典表（`content_goals` 属 Q25、已落 `product/condition/models.py:36`；Q38 与 Q25/Q43/Q46 同入 docs/10:372-374「字典管理 dict_management」后台区，docs/10:372-374 标注「全部 CRUD ＋ 审计」**尚无实现**）。〔**Q309 注：本行的「尚无实现」前提已过期**——Q38 载体随 **Q306** 落（`downgrade_actions`，迁移 0051）、Q43 载体随 **Q308** 落（`pool_options`，迁移 0052），docs/10 §dict_management 现状行两者均 ✅；本文其余「PLATFORM-ADAPTER 真模型业务接入」待裁事实不受影响。旧行号 `docs/10:368`／`:369` 系本节上方新增迁移登记行所致〕
 - ⇒ **乙方案若要落 docs/13:128 的「人工审核时从 Q38 动作字典选降级动作」，必须先落 Q38 字典载体**（CRUD ＋ 审计），否则审核人无处可选。**这不是新裁决，是已定稿口径的欠实现**。
-- ⚠ **docs 内部口径漂移（须登记，工程侧不擅自改 Q 记录）**：docs/02:141 六项为 `REMOVE_BRAND / REMOVE_CLAIM / REMOVE_LINK / SOFT_CTA / SHORTEN / SUBST_WORD`；docs/10:369 举例为 `REMOVE_BRAND / REMOVE_CLAIM / REMOVE_HOOK / REWRITE/…`——**后四项对不上**（`REMOVE_LINK`·`SOFT_CTA`·`SHORTEN`·`SUBST_WORD` vs `REMOVE_HOOK`·`REWRITE`）。按 AGENTS「唯一事实源＝docs」且 docs/02 是决策记录，**以 docs/02 为准**；docs/10 的差异列为**待订正项**，须负责人确认是 docs/10 抄漏还是另有增补。
+- ⚠ **docs 内部口径漂移（须登记，工程侧不擅自改 Q 记录）**：docs/02:141 六项为 `REMOVE_BRAND / REMOVE_CLAIM / REMOVE_LINK / SOFT_CTA / SHORTEN / SUBST_WORD`；docs/10:372-374 举例为 `REMOVE_BRAND / REMOVE_CLAIM / REMOVE_HOOK / REWRITE/…`——**后四项对不上**（`REMOVE_LINK`·`SOFT_CTA`·`SHORTEN`·`SUBST_WORD` vs `REMOVE_HOOK`·`REWRITE`）。按 AGENTS「唯一事实源＝docs」且 docs/02 是决策记录，**以 docs/02 为准**；docs/10 的差异列为**待订正项**，须负责人确认是 docs/10 抄漏还是另有增补。
 
 ### 2.4 组料三源全部已存在（本文最有利的一条事实，零臆造）
 
@@ -59,8 +59,8 @@ Prompt v0.1 要的三个变量，在仓内**都已有生产消费方的现成函
 | 变量 | 现成来源 | 现状 |
 |---|---|---|
 | `$pws` | `PwsSnapshot`（`product/whitelist_center/models.py`），段6 冻结件 | 已被段11 消费（`final_whitelist` 走 `ensure_fcw_consumable`）；PT 约束「只读 frozen」天然满足 |
-| `$platform_rules` | `service.match_rules()`（`platform/platform_adaptation/service.py`） | 已有端点 `GET /api/admin/platform-rules/match`（`router.py:286`），Q36 四层选择器＋country 横切已实现 |
-| `$dynamic_events` | `service.active_events_for()`（`service.py:652-667`） | **已被 Q259 match advisory 消费**（`router.py:297-300`），生效期过滤（`effective_start ≤ now ≤ effective_end`）已实现 |
+| `$platform_rules` | `service.match_rules()`（`platform/platform_adaptation/service.py`） | 已有端点 `GET /api/admin/platform-rules/match`（`router.py:308`，Q309 复扫订正：旧作 `:286`），Q36 四层选择器＋country 横切已实现 |
+| `$dynamic_events` | `service.active_events_for()`（`service.py:725`） | **已被 Q259 match advisory 消费**（`router.py:319`），生效期过滤（`effective_start ≤ now ≤ effective_end`）已实现 |
 
 ⇒ **"谁调"这一层的输入齐备**。真缺口只在「触发方式 / 结果载体 / Gate 面 / 护栏」四处。
 
@@ -108,7 +108,7 @@ Prompt v0.1 要求的返回契约（`seeds.py:281`）是五键：`{"missing", "d
 3. **审核角色口径**：docs/06 §7 的「平台审核员」是**展示口径**，权威角色码原文未给。是否新增角色码？Q178 限五角色，**可签发性须先定**——与待裁项③ 的 `whitelist_owner` 是**同一类前置问题**（建议一并裁，避免两次改契约）。
 4. **`approve` 是否要落到具体降级动作**？⚠ **初稿曾把此项误判为「降级动作原文未给」，Q293 核对后订正**：口径**已定稿 ✅**（Q38 六动作，禁 AI 自由文本，见 2.3）。真问题是两个：
    - **a 是否在乙批同带 Q38 字典载体**（`approve` 时让人从字典选动作）？还是乙只解除 pending、字典另点工？——工程侧倾向**另点工**，避免一批里混两张表两套审计。
-   - **b docs 口径漂移须先订正**（docs/02:141 与 docs/10:369 四项动作名对不上，见 2.3）。**这是文档事实冲突，按纪律须负责人确认，工程侧不擅自改 Q 记录**。字典未订正前不宜落代码，否则等于把漂移固化进表。
+   - **b docs 口径漂移须先订正**（docs/02:141 与 docs/10:372-374 四项动作名对不上，见 2.3）。**这是文档事实冲突，按纪律须负责人确认，工程侧不擅自改 Q 记录**。字典未订正前不宜落代码，否则等于把漂移固化进表。
 5. **触发方式**：operations 显式手工触发（仿 Q83 `llm-build`「restock_auto 不自动消费」纪律，**推荐**）／段7 链内自动调用。前者可控可测，后者会与「AI 只产候选」的节奏混在一起。
 6. **谁在什么时机产生第一批候选**：甲乙都只提供能力，不产生候选。首批触发口径（每个新 frozen PWS 自动产一条？运营手工触发？）属业务节奏，**原文未给**。
 7. **是否纳入 V1 private beta**：docs/08:50 现明确 V1「无 PLATFORM-ADAPTER AI Skill」；纳入则改 08 范围行，属排期项（连带待裁项④ 资源）。
@@ -132,23 +132,23 @@ Prompt v0.1 要求的返回契约（`seeds.py:281`）是五键：`{"missing", "d
 | 「平台适配候选」Gate 登记（展示口径角色） | docs/06:187（§7 人工 Gate 点位总览） |
 | 红旗 S2 原文 | docs/03:18 |
 | V1 不含 PLATFORM-ADAPTER AI Skill | docs/08:50、docs/08:51（V2 段7/8 完整） |
-| 「候选投递/HumanGate/平台审核员界面随 V2」 | docs/08:99（Q260）、docs/04:232（Q259 遗留片） |
+| 「候选投递/HumanGate/平台审核员界面随 V2」 | docs/08:116（Q260）、docs/04:232（Q259 遗留片） |
 | 「业务接线随 V2 后续片」自述 | `backend/app/core/model_registry/synthetic.py:307` |
-| **Q38 降级动作字典口径定稿 ✅（六动作）** | docs/02 C1.6 Q38（:141）、docs/10:369、docs/12:104 |
+| **Q38 降级动作字典口径定稿 ✅（六动作）** | docs/02 C1.6 Q38（:141）、docs/10:372-374、docs/12:104 |
 | **Q38 字典零代码落地**（反向枚举零命中） | `backend/` 全量 grep `REMOVE_BRAND`/`SOFT_CTA`/`action_dict` |
-| **docs 口径漂移**（四项动作名对不上） | docs/02:141 vs docs/10:369 |
+| **docs 口径漂移**（四项动作名对不上） | docs/02:141 vs docs/10:372-374 |
 | 段7 四态状态机两行迁移表 | docs/13:125-128（§1.8） |
 | docs/13:123 旧读数已被 Q246/Q259 超越（陈述精确化） | docs/13:123 vs 02 C1.203/C1.204 |
 | 场景注册与 Prompt v0.1、三个变量 | `backend/app/core/model_registry/seeds.py:264-288` |
 | synthetic 四态机械映射 | `backend/app/core/model_registry/synthetic.py:296-334` |
 | **五键 vs 两键形状缺口** | `seeds.py:281` vs `synthetic.py:311` |
 | 迁移 0046（纯种子、无 schema 变更） | `backend/alembic/versions/0046_platform_adapter_seed.py`、docs/17 §迁移头 |
-| `match_rules` 四层选择器 | `backend/app/platform/platform_adaptation/service.py`、`router.py:286` |
-| `active_events_for` 生效期过滤 | `backend/app/platform/platform_adaptation/service.py:652-667` |
-| match advisory 回带（Q259） | `backend/app/platform/platform_adaptation/router.py:297-300` |
+| `match_rules` 四层选择器 | `backend/app/platform/platform_adaptation/service.py`、`router.py:308` |
+| `active_events_for` 生效期过滤 | `backend/app/platform/platform_adaptation/service.py:725` |
+| match advisory 回带（Q259） | `backend/app/platform/platform_adaptation/router.py:319` |
 | 平台适配 8 张表 / **25** 端点全量枚举 | `backend/app/platform/platform_adaptation/models.py`、`router.py`（`@router.*` 逐行点清＝25，**初稿误写 24**） |
-| **5** 个 `llm-*` 端点（无 adapter） | `core/model_registry/router.py:297,339`、`product/fieldpool/router.py:157`、`product/atom/router.py:145`、`product/condition/router.py:148`（**初稿只列 4 个、漏 `llm-invoke`**） |
+| **5** 个 `llm-*` 端点（无 adapter） | `core/model_registry/router.py:297,339`、`product/fieldpool/router.py:157`、`product/atom/router.py:145`、`product/condition/router.py:152`（**初稿只列 4 个、漏 `llm-invoke`**） |
 | eval 9 案例无 PLATFORM-ADAPTER | `eval/datasets/skills/`、`eval/golden_cases/skills/`（目录全量枚举） |
 | Q242 写口收口纪律 | docs/23 §10.4、docs/02 C1.186 |
-| Q83 手工触发先例（不自动消费） | docs/02 C1.94 段、`product/condition/router.py:148-154` |
+| Q83 手工触发先例（不自动消费） | docs/02 C1.94 段、`product/condition/router.py:152-158` |
 | FCW 预检只读口先例（Q249 裁决 b） | docs/02 C1.193、3.1 乙 |

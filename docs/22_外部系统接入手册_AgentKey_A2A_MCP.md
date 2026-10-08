@@ -15,7 +15,7 @@
 |---|---|---|---|---|---|
 | A2A（Q150） | `POST /api/a2a/tasks` | Q88 Agent Key `loom_…` Bearer | **无门控，一直在线** | 否（plan only） | `app/core/a2a/router.py:71` |
 | A2A 发现 | `GET /api/a2a/agent-card`、`GET /.well-known/agent-card.json`、`GET /.well-known/agent.json` | 公开无凭证 | 无 | — | `app/core/a2a/router.py:56,61,66` |
-| MCP（Q232） | `POST /mcp` | 同上（同一套 Q88 Key） | `LOOM_MCP_ENABLED` **默认关** | 否（plan only） | `app/core/mcp/router.py:35`、`app/core/config.py:126` |
+| MCP（Q232） | `POST /mcp` | 同上（同一套 Q88 Key） | `LOOM_MCP_ENABLED` **默认关** | 否（plan only） | `app/core/mcp/router.py:35`、`app/core/config.py:135`（Q310 复扫订正：旧作 `:126`，该行下方被 PCP 周扫描新设置顶掉） |
 | 效果回流（Q126） | `POST /api/effect-callback` | 同上 | 无 | 是（写 `effect_records`） | `app/core/effects/router.py:68`；契约见 docs/11 §2.1 |
 
 **这些面从哪儿可达（Q279 甲案，2026-10-04）**：仓内网关 = Caddy overlay（`infra/docker-compose.gateway.yml` ＋ `infra/caddy/Caddyfile`，运行手册与实测记录见 [docs/17 §1.1](17_部署与运维.md)）。部署后**公网入口只有 `https://loom.bayjf.com`（80/443）**，网关把 `/api/*`、顶层 `POST /mcp`、`/.well-known/*` 转后端，其余转前端；`frontend` 的 `3000` 与 `backend` 的 `8000` 都不再对宿主发布，所以**接入方拿到的地址必须带 scheme＋域名**，`LOOM_PUBLIC_BASE_URL` 要设成同一个值（A2A 卡片 `url` 由它拼出，`app/core/a2a/card.py:50,57`）。**别指望公网能取到 `/openapi.json`·`/docs`·`/redoc`**（网关 404，schema 请走仓内文档），`/healthz`·`/metrics` 同样不外露（Prometheus 在网格内直抓 `backend:8000`）。这张放行表由 `backend/tests/unit/test_gateway_surface_contract.py` 与代码逐条对齐——本文件新增一个对外面而未写网关策略，那条门会判红。
@@ -118,7 +118,7 @@
 
 ### 3.2 方法与必带字段
 
-单一入口 `POST /mcp`，JSON-RPC 2.0。对端规范版本＝ **`2026-07-28`**（`app/core/mcp/server.py:23`），该修订的事实按官方页逐条取（本仓实现依赖这几条，均已在 §3.6 标注符合度）：
+单一入口 `POST /mcp`，JSON-RPC 2.0。对端规范版本＝ **`2026-07-28`**（`app/core/mcp/server.py:24`），该修订的事实按官方页逐条取（本仓实现依赖这几条，均已在 §3.6 标注符合度）：
 
 - **移除协议级 sessions 与 `Mcp-Session-Id` 头** ⇒ 本面无状态，不需要 sticky routing；
 - **移除 `initialize`／`notifications/initialized` 握手**，服务端 **MUST** 实现 `server/discover` ⇒ 调 `initialize` 得 `-32601` 并在 message 里指明改用 `server/discover`；
@@ -131,7 +131,7 @@
 
 ### 3.3 三个工具 ↔ skill 映射
 
-`server.py:34-80`。工具名是 skill id 的下划线化，内部 `skill` 键不外泄（`server.py:82`）。
+`server.py:35-82`。工具名是 skill id 的下划线化，内部 `skill` 键不外泄（`server.py:84`）。
 
 | MCP 工具 | A2A skill | 必填 arguments |
 |---|---|---|

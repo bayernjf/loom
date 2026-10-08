@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import gateway, pwc_build
-from app.core.rbac import DICTIONARY_ADMIN, PermissionDenied, require_any_role
+from app.core.rbac import DICTIONARY_ADMIN, PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.product.condition import service
 from app.product.condition.models import (
     ConditionPackage,
@@ -31,9 +31,13 @@ def require_content_goals_view(
 ) -> Actor:
     # Q118：contentGoals 字典读口与写口同组（docs/05 表行标 dictionary_admin），
     # 补 Q109 审计遗漏的 query actor 闸：缺 actor_id 422、越权 403。
+    # Q307 读闸放行 platform_admin：D3.5 组装工作台首屏要读这张字典，而管理端唯一
+    # 保证存在的身份是 compose 里 `LOOM_ADMIN_ROLES` 的默认值 platform_admin
+    # （`frontend/lib/api.ts` 只用这一组角色自报）。只放宽"读"——写口 upsert/archive
+    # 仍只认 dictionary_admin。
     actor = Actor(id=actor_id, roles=roles)
     try:
-        require_any_role(actor, DICTIONARY_ADMIN)
+        require_any_role(actor, DICTIONARY_ADMIN, PLATFORM_ADMIN)
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return actor

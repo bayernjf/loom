@@ -13,6 +13,7 @@ from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
 from app.core.dashboards.router import router as dashboards_router
 from app.core.db import SessionLocal, settings
+from app.core.downgrade_actions.router import router as downgrade_actions_router
 from app.core.effects.router import router as effects_router
 from app.core.exports.router import router as exports_router
 from app.core.exports.worker import ExportWorker, build_export_workers
@@ -22,6 +23,7 @@ from app.core.mcp.router import router as mcp_router
 from app.core.metrics import MetricsMiddleware
 from app.core.metrics.router import router as metrics_router
 from app.core.model_registry.router import router as model_registry_router
+from app.core.pool_options.router import router as pool_options_router
 from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
@@ -170,6 +172,8 @@ app.include_router(intake_router)
 app.include_router(modeling_router)
 app.include_router(fieldpool_router)
 app.include_router(wordlist_router)
+app.include_router(downgrade_actions_router)
+app.include_router(pool_options_router)
 app.include_router(config_router)
 app.include_router(a2a_router)
 app.include_router(mcp_router)

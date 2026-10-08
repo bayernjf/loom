@@ -24,11 +24,11 @@
 - **事件的唯一真实消费＝match advisory，不改判定**：`active_events_for()`（`service.py:652-667`）在平台规则 match 时**回带**当前生效事件；docstring 自述「advisory 消费方……**不改变规则判定**」。即事件目前不会自动改任何权重。
 - **重算候选 + 人工 Gate 三件套已全**：`pcp_recalc_candidates`（`models.py:210`，partial unique `uq_pcp_recalc_pending`＝同 PCP 同刻仅一条 pending）；端点 `GET/POST /api/admin/pcp-recalc/candidates`、`.../{id}/approve|reject`（`router.py:369-437`）。
   - `create_candidate`（`service.py:686`）强制：Σ≤1.0（Q40）、单项变化 ≤ `platform.recalc_step`（Q42，默认 ±0.05，超限须走人工直编 `PUT /api/pcp/{id}`）、同 PCP 仅一条 pending。
-  - `approve_candidate`（`service.py:760+`）才写回 `pcp.weights`、清 `template_code`、before/after 审计。
-  - **`source=ai|manual`，V1 仅接受 manual**（`models.py:215-216`、`schemas.py:105` 明写「PCP-SCORE AI 生成器随 V2」）。
+  - `approve_candidate`（`service.py:1057`）才写回 `pcp.weights`、清 `template_code`、before/after 审计。〔Q309 复扫订正：旧作 `service.py:760+`——Q300 在该文件上方新增候选 service 后整体下移〕
+  - **`source=ai|manual`，V1 仅接受 manual**（`models.py:216-217`、`schemas.py:120` 明写「PCP-SCORE AI 生成器随 V2」）。
 - **调度底座可复用**：`SweepScheduler`（`core/sla/scheduler.py`，300s 一轮，含 Q89 多副本 leader 锁、Q139 协作中止、Q151 PG fence）＋统一 `run_jobs`（`core/sla/runner.py`，每作业独立会话/异常隔离）＋ `JOBS` 注册表（`core/sla/jobs.py`，现 5 作业，登记顺序即执行顺序）＋手工触发 `POST /api/admin/sla/run`（platform_admin，`sla/router.py:50`）。
 - **运营待办底座**：`OpsTodo`（`product/modeling/models.py:90`，todo_type/entity/status/assignee_role/due_at，到期 sweep 置 escalated）；PWS 就绪已有「写 OpsTodo 提醒」先例（`whitelist_center/service.py:171`）。
-- **fit_score 派生不落库**（Q34，`service.py:203`）；**fit_score 自学习**仍随 V2（`models.py:12`），不在本文范围。
+- **fit_score 派生不落库**（Q34，`service.py:244-276`；Q309 复扫订正：旧作 `:203`）；**fit_score 自学习**仍随 V2（`models.py:12`），不在本文范围。
 
 ### 2.2 未落（本文要解决的就两处）
 
