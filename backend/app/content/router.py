@@ -94,6 +94,12 @@ async def generate_content(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except generation.ArticleGenOutputInvalid as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except generation.VideoGenFcwNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except generation.VideoGenState as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except generation.VideoGenOutputInvalid as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -181,6 +187,12 @@ async def regenerate_content(
     except service.ContentReviseCap as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except generation.ArticleGenOutputInvalid as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except generation.VideoGenFcwNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except generation.VideoGenState as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except generation.VideoGenOutputInvalid as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await session.commit()
     return service.content_view(content)

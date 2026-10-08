@@ -1,7 +1,7 @@
-"""P4 切片 2：段12 文章生成（ARTICLE-GEN）的进程内 LLM 调用编排。
+"""P4 切片 2：段12 内容生成（ARTICLE-GEN / VIDEO-GEN）的进程内 LLM 调用编排。
 
 形态（Q116 定稿）：operations 在业务端点显式触发 → 只读组装 FCW 6 层原料 →
-进程内同步调模型网关 → 严格校验为 {"body": str} → 直接写 content_products.body。
+进程内同步调模型网关 → 严格校验输出契约 → 直接写 content_products.body。
 段12 的 Gate 是客户审阅（Q59），非运营审核，故不走 skill7 候选通道（Q66 的人工
 Gate 在段12 即客户）；成本经 SkillRun 记录（Q67），writeAudit 留痕。
 """
@@ -14,7 +14,7 @@ from app.content.models import CONTENT_GENERATING, ContentProduct
 from app.core.actor import Actor
 from app.core.audit import append_audit
 from app.core.model_registry import gateway
-from app.core.model_registry.seeds import SCENE_ARTICLE_GEN
+from app.core.model_registry.seeds import SCENE_ARTICLE_GEN, SCENE_VIDEO_GEN
 from app.core.rbac import OPERATIONS, require_any_role
 from app.core.skill7.models import SkillRun
 from app.decision.compliance_center.models import CcrReport
@@ -37,6 +37,18 @@ class ArticleGenState(Exception):
 
 
 class ArticleGenOutputInvalid(Exception):
+    pass
+
+
+class VideoGenFcwNotFound(Exception):
+    pass
+
+
+class VideoGenState(Exception):
+    pass
+
+
+class VideoGenOutputInvalid(Exception):
     pass
 
 
@@ -163,5 +175,84 @@ async def invoke_article_gen(
         entity_type="content_product",
         entity_id=content.content_id,
         detail={"final_id": content.final_id, "model_id": invocation.model_id},
+    )
+    return content
+
+
+async def invoke_video_gen(
+    session: AsyncSession,
+    content: ContentProduct,
+    trigger_actor: Actor,
+) -> ContentProduct:
+    """draft→generating 后调用：组装原料 → 调 VIDEO-GEN → 写 video_ref → 记 SkillRun。
+
+    VIDEO-GEN 契约（seeds.py v0.1）＝只输出 {"video_ref": str}，video_ref 为生成
+    视频的存储引用字符串，无可用原料时为空串；真视频存储与 agnes 视频 mode 取值
+    未给（docs/24 §5.1，Q254 实测五模式全 400 invalid mode），本切片只落引用
+    字符串载体，不触达真实视频管线。段12 视频复检规格未给【待补】：V1 不跑
+    文本复检/ARTICLE-QC，客户审阅 Gate（Q59）对所有 kind 生效。
+    """
+    require_any_role(trigger_actor, OPERATIONS)
+    if content.status != CONTENT_GENERATING:
+        raise VideoGenState(
+            f"VIDEO-GEN only allowed in {CONTENT_GENERATING}, current {content.status}"
+        )
+
+    fcw = await session.get(FinalContentWhitelist, content.final_id)
+    if fcw is None:
+        raise VideoGenFcwNotFound(f"FCW {content.final_id} not found")
+
+    # Q251 裁决 b（断消费，Q32 哲学）：快照 revoked 立即 409（与 ARTICLE-GEN 双保险）。
+    await ensure_fcw_consumable(session, content.final_id)
+
+    materials = await _assemble_materials(session, fcw)
+    variables = {
+        "materials": _materials_text(materials),
+        "language": content.language,
+        "_final_id": content.final_id,
+    }
+    invocation = await gateway.invoke(session, SCENE_VIDEO_GEN, variables)
+
+    try:
+        parsed = json.loads(invocation.text)
+        video_ref = parsed["video_ref"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise VideoGenOutputInvalid(
+            f"model output is not a valid VIDEO-GEN JSON: {exc}"
+        ) from exc
+    if not isinstance(video_ref, str):
+        raise VideoGenOutputInvalid("model output video_ref must be a string")
+
+    content.body = video_ref
+
+    # 成本记录（Q67）：与 ARTICLE-GEN 同族，SkillRun 手动落（source=llm_auto）。
+    session.add(
+        SkillRun(
+            skill_id=SCENE_VIDEO_GEN,
+            wf_id=WF_10,
+            tenant_id=content.tenant_id,
+            product_space_id=content.product_space_id,
+            status="succeeded",
+            source="llm_auto",
+            input_payload={"final_id": content.final_id, "kind": content.kind, "language": content.language},
+            output_payload={"video_ref": video_ref},
+            input_tokens=invocation.input_tokens,
+            output_tokens=invocation.output_tokens,
+            model_id=invocation.model_id,
+            input_cost=invocation.input_cost,
+            output_cost=invocation.output_cost,
+            currency_code=invocation.currency_code,
+            created_by=SYSTEM_ACTOR.id,
+        )
+    )
+    await append_audit(
+        session,
+        tenant_id=content.tenant_id,
+        actor_id=SYSTEM_ACTOR.id,
+        actor_roles=[],
+        action="content.generated",
+        entity_type="content_product",
+        entity_id=content.content_id,
+        detail={"final_id": content.final_id, "kind": content.kind, "model_id": invocation.model_id},
     )
     return content
