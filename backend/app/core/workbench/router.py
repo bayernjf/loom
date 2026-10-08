@@ -36,12 +36,15 @@ def require_workbench_view(
     actor_id: str = Query(...),
     roles: list[str] = Query(default_factory=list),
 ) -> Actor:
-    # 接缝③（Q232，负责人 2026-10-01 追认，02 C1.176）：platform_admin **不是**队列角色，
-    # 读队列也不放行——"能看队列"在这里等于进入裁决漏斗的前一步。本批试过放宽，
-    # 被 `test_queue_requires_actor_and_any_wf_gate_role` 当场判红，故原样保留；
-    # 管理端这一屏怎么通，登记 docs/19 清单二第 8 项待裁（甲＝读/裁分权，需重新追认接缝③）。
+    # 接缝③（Q232，负责人 2026-10-01 追认，02 C1.176）经 **Q314（负责人 2026-10-08
+    # 「按推荐来」）重新追认为「读/裁分权」**：读队列放行 platform_admin（管理端默认身份
+    # 能打开统一审核台这一屏），**下裁决仍按各 WF 的 queue_roles() 判**（batch-approve
+    # 逐候选过 registry.review_role(cand.wf_id)，service.py:214）。读面与裁决面分权
+    # 是 docs/19 清单二第 8 项甲案，已销账（02 C1.257）。
     actor = Actor(id=actor_id, roles=roles)
     try:
+        if "platform_admin" in actor.roles:
+            return actor
         require_any_role(actor, *service.queue_roles())
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
