@@ -8,6 +8,7 @@ import {
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   getAdminFcwMaterial,
+  revokeAdminFcw,
 } from "@/lib/api";
 
 // client 岛禁引 @/lib/api（check-admin 守卫），原料包视图类型经本模块转出。
@@ -52,5 +53,36 @@ export async function getFcwMaterialAction(
       };
     }
     return { ok: false, status: "unknown" };
+  }
+}
+
+// Q321：冻结管理——作废当前快照（Q251 裁决 b）。写闸＝operations（与后端
+// require_internal_actor(OPERATIONS) 对齐）；reason 必填；成功后由岛内提示
+// 重冻新版走组装台「复用」预填（不自动跳转、不刷新列表，保持零副作用契约）。
+export type RevokeFcwResult =
+  | { ok: true; finalId: string }
+  | { ok: false; status: 403 | 404 | 409 | 422 | "unconfigured" | "missing_role" | "unknown"; detail: string | null };
+
+export async function revokeFcwAction(
+  finalId: string,
+  reason: string,
+): Promise<RevokeFcwResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
+  if (!ADMIN_ROLE_LIST.some((r) => r === "operations"))
+    return { ok: false, status: "missing_role", detail: null };
+  if (!reason.trim())
+    return { ok: false, status: 422, detail: "reason is required" };
+  try {
+    await revokeAdminFcw(finalId, reason.trim());
+    return { ok: true, finalId };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      return {
+        ok: false,
+        status: err.status as 403 | 404 | 409 | 422,
+        detail: errorDetail(err.message),
+      };
+    }
+    return { ok: false, status: "unknown", detail: null };
   }
 }

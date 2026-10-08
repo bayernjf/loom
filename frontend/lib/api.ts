@@ -1384,6 +1384,9 @@ export interface FcwListItem {
   issued_by: string;
   created_at: string;
   published_at: string | null;
+  snapshot_status: string | null;
+  snapshot_revoked_at: string | null;
+  revoke_reason: string | null;
 }
 
 export interface FcwAdminPage {
@@ -1431,6 +1434,34 @@ export async function getAdminFcwMaterial(
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   return request<FcwMaterialPack>(
     `/api/admin/fcw/${encodeURIComponent(finalId)}/material?${params}`,
+  );
+}
+
+// Q321：冻结管理——作废当前快照（Q251 裁决 b，reason 必填，operations 写闸）。
+export interface FcwRevokeView {
+  snapshot_id: string;
+  final_id: string;
+  version: string;
+  status: string;
+  is_active: boolean;
+  revoked_by: string | null;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+}
+
+export async function revokeAdminFcw(
+  finalId: string,
+  reason: string,
+): Promise<FcwRevokeView> {
+  return request<FcwRevokeView>(
+    `/api/admin/fcw/${encodeURIComponent(finalId)}/revoke`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reason,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
   );
 }
 
