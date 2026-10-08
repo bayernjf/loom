@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q317 文档对账批＋handoff 滚档（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.260）**——当场重扫后四件纯文档缺口一次收口：
+  - **① README 状态段补 Q310–Q316**（原停在 Q309/C1.252、落后 7 批）：结构档/全景补登、38 真实包清单＋8 空壳清理、docs/12 补齐 7 份 PT 协议、审核台读/裁分权、权威行漂移收口、docs/21 §0.2 审核队列段。
+  - **② docs/09 审核队列补登块追加 Q314 注记**：读队列 `GET /api/review-workbench/candidates` 放行 `platform_admin`、`POST /batch-approve` 裁决面仍逐候选按 `registry.review_role(wf_id)` 判、ADMIN 能看不能裁 403；Q93/Q103/Q104 历史补登原文不改、不动 D3.x 编号。
+  - **③ docs/21 §4 SLA sweep 条补「待办在哪看」**：`/admin/sla-todos` 纯只读看板指针（Q108：9 列、四筛选默认 open、due_at 升序、消费 `GET /api/admin/sla/todos`、英文码原样、sla_state 四色 chip、黄仅法审、`POST /sla/run` 不上页面）。
+  - **④ handoff 按「最近 5 条」滚档**：新建 `docs/handoff-archive-2026-10-08.md`，banner 链 Q312→Q145（含 State of Loom 2026-09-21 超长段）与「最近进度」区 Q298–Q244（Q244 父＋6 sub 整块）逐字搬入，Python 确定性切分＋17 项结构断言，handoff 457→233 行。
+  - **合龙**：docs/02 C1.260＋续编索引、本 CHANGELOG、docs/README 地图行前移 Q317/C1.260、docs/08 §2.2 权威行前移 Q317（Q314 行标历史快照、原文待办句保留）；AGENTS 权威行 Q316 刚更新且基线数字不变，保持不动。**复判不变**：① 达标／② 达标／③ 未达标。
 - **Q316 运营 SOP 补审核队列段（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.259）**——当场重扫（先核 docs/10 迁移登记到 0052 无缺口、全仓 `docs/02:NNN` 行号引用落点不受尾部插入影响），按 Q309 纪律逐档查活状态，扫出**唯一缺口：docs/21 全档 grep `审核台|review-workbench|读队列|batch-approve` 零命中**——统一审核台（Q70/Q93 落地、Q314 刚定读/裁分权）在运营手册无操作段。
   - **docs/21 新增 §0.2「审核队列（统一审核台 /admin/review-queue）」**，事实逐条回代码核验：聚合段1/3/4/5 五类 target_type 的 skill7 pending 候选（风险降序＋创建升序）；读面 Q314 起放行 platform_admin（默认身份能开屏）；裁决面只认 `queue_roles()` 并集＝WF-01 `operations`＋WF-02/03/04 `product_reviewer`，**platform_admin 能看不能裁（403）**；单条三态 confirmed（critical 二次确认）／modified／rejected（reason 必填）、批量逐候选过所属 WF Gate 角色与适配器全部规则（service.py:214），置信度低于 `review.batch_pass_confidence` 或风险不达标整批 422／非 pending 409／id 缺失 404；与各段 Gate 互不取代、与 Q249 白名单组装审核 `/admin/fcw/review` 不同对象不同权限面勿混。
   - **同步**：docs/02 续编 C1.259 Q316。**复判不变**：① 达标／② 达标／③ 未达标。

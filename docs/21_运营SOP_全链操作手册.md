@@ -145,7 +145,7 @@
 
 ## 4. 日常运维节奏
 
-- **SLA sweep**：调度器自动巡检（受单 leader 锁/PG 行级 fence 保护）；手工触发 `POST /api/admin/sla/run`；阈值 SLA 72h、黄 24h、红 48h（Q149）。
+- **SLA sweep**：调度器自动巡检（受单 leader 锁/PG 行级 fence 保护）；手工触发 `POST /api/admin/sla/run`；阈值 SLA 72h、黄 24h、红 48h（Q149）。**待办在哪看**：管理端 `/admin/sla-todos` 纯只读看板（Q108，9 列＝待办/租户/类型/负责角色/关联实体/状态/SLA 态/截止时间/升级时间；GET 表单四筛选 open/escalated/resolved/all、默认 open、非法参数归一 open、不分页按 due_at 升序），消费 `GET /api/admin/sla/todos`（platform_admin 闸、缺 actor 422、status 非法 422）；todo_type/status/assignee_role/entity_type/sla_state 英文码原样不译，sla_state 四色 chip（red 临界/yellow 中警/green 低险/resolved 归档灰）；黄色预警目前仅法审（到期前 24h＝knob `sla.yellow_hours`），其他类型黄口径【原文未给出，待补】；`POST /sla/run` 不上页面、看板无任何写控件，手工触发走 API。
 - **难产/孤儿/待发布三队列**：每日在 /admin/content 与 /admin/effects 过 needs-attention、orphans、ready-to-publish。
 - **审计**：每个写操作与每次 LLM 调用均落审计；异常排查先查审计与 `/admin/token-cost`。
 - **指标（Q181）**：`GET /metrics` 暴露 Prometheus 文本（Counter/Gauge/Histogram + 每请求计时，path 按路由模板低基数），不鉴权（同 /healthz），供抓取；可选 prometheus 容器在 compose `monitoring` profile 后、默认不启动（`docker compose --profile monitoring up`）。
