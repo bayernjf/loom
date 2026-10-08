@@ -325,3 +325,41 @@ async def test_revoked_fcw_blocks_content_generation(client, session_factory):
     )
     assert resp.status_code == 409, resp.text
     assert "not consumable" in resp.text
+
+
+# ---------- Q321 管理端列表带冻结状态（fcw_view 加法扩展） ----------
+
+
+async def _admin_list_snapshot(client, final_id: str) -> dict:
+    params = [("actor_id", OPS["id"])] + [("roles", r) for r in OPS["roles"]]
+    resp = await client.get("/api/admin/fcw", params=params)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    item = next(
+        (row for row in body["items"] if row["final_id"] == final_id), None
+    )
+    assert item is not None, f"final_id {final_id} not in admin list"
+    return item
+
+
+async def test_admin_list_carries_frozen_snapshot_status(client, session_factory):
+    """发证即冻结：管理端列表项带 snapshot_status=frozen、无作废字段。"""
+    fcw = await _issue(client, session_factory)
+    item = await _admin_list_snapshot(client, fcw["final_id"])
+    assert item["snapshot_status"] == FCW_SNAP_FROZEN
+    assert item["snapshot_revoked_at"] is None
+    assert item["revoke_reason"] is None
+
+
+async def test_admin_list_reflects_revoked_status(client, session_factory):
+    """revoke 后列表项 snapshot_status=revoked，revoked_at/reason 回带。"""
+    fcw = await _issue(client, session_factory)
+    revoke = await client.post(
+        REVOKE_PATH.format(final_id=fcw["final_id"]),
+        json={"reason": "违规定位需作废", "actor": OPS},
+    )
+    assert revoke.status_code == 200, revoke.text
+    item = await _admin_list_snapshot(client, fcw["final_id"])
+    assert item["snapshot_status"] == FCW_SNAP_REVOKED
+    assert item["snapshot_revoked_at"] is not None
+    assert item["revoke_reason"] == "违规定位需作废"
