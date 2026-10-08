@@ -281,13 +281,18 @@ async def admin_list_fcw(
     rows, total = await service.list_fcw_admin(
         session, tenant_id=tenant_id, limit=limit, offset=offset
     )
+    snapshots = await service.latest_snapshots_for(
+        session, [r.final_id for r in rows]
+    )
     return {
         "count": len(rows),
         "total": total,
         "limit": limit,
         "offset": offset,
         "has_more": offset + len(rows) < total,
-        "items": [service.fcw_view(r) for r in rows],
+        "items": [
+            service.fcw_view(r, snapshots.get(r.final_id)) for r in rows
+        ],
     }
 
 

@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import type { FcwListItem } from "@/lib/api";
 import styles from "../admin.module.css";
+import { FreezeIsland } from "./freeze-island";
 import { MaterialIsland } from "./material-island";
 
 function shortId(value: string): string {
@@ -121,6 +122,7 @@ export function FcwTable({ items }: { items: FcwListItem[] }) {
               <th>{t("colGoal")}</th>
               <th>{t("colScore")}</th>
               <th>{t("colStatus")}</th>
+              <th>{t("colFreeze")}</th>
               <th>{t("colCreated")}</th>
               <th>{t("colAction")}</th>
             </tr>
@@ -160,6 +162,14 @@ export function FcwTable({ items }: { items: FcwListItem[] }) {
                   >
                     {fcw.publish_status}
                   </span>
+                </td>
+                <td>
+                  <FreezeIsland
+                    finalId={fcw.final_id}
+                    snapshotStatus={fcw.snapshot_status}
+                    snapshotRevokedAt={fcw.snapshot_revoked_at}
+                    revokeReason={fcw.revoke_reason}
+                  />
                 </td>
                 <td>{fmt(fcw.created_at)}</td>
                 <td>

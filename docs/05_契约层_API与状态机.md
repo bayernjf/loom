@@ -203,6 +203,7 @@
 > |---|---|---|
 > | POST `/api/admin/fcw/{final_id}/revoke` | **revoke 写口（D3.5 第 6 项）**：body `{reason: str 1..2000 必填, actor}`；`require_internal_actor(OPERATIONS)`（Q242 族，已验真 staff 令牌覆盖自报 actor）；把该 final_id 的 **active frozen 快照**（fcw_snapshots）翻转 revoked＋is_active=false＋revoked_by/at/reason，写 `fcw_freeze_logs` revoke 事件＋审计 `fcw.revoke`；**原成品行（final_content_whitelists）永不 mutate**（exit_guard 不可变）；响应＝`fcw_snapshot_view`（快照翻转后形态）；语义：final_id 无任何快照 → 404（`FcwNotFound`）、有快照但非 active frozen（重复 revoke 等）→ 409（`FcwWrongState`）、角色不足 → 403、reason 空 → 422；**段12 断消费**：`content/generate_content` 与 `content/generation` 生成入口在材料获取后 `ensure_fcw_consumable(session, final_id)`——**无快照行（V1 前发证/夹具）放行**、快照 revoked 立即 409（content router 映射 `FcwRevoked→409`） | Q250/D3.5⑥/Q242/Q203 |
 > - 配套状态机语义（裁决 a/b/d/e/f）：冻结粒度＝final_id 级（每成品一快照、version 恒 v1、`uq_fcw_final_version(final_id,version)`）；回滚＝A 案（作废当前＋重冻新版走 E1.1 再发证，PWS Q32 同族）；不可变由 exit_guard `before_update`/`before_delete` 强制（`FcwImmutable`）；冻结管理专用 UI 随 V2。
+> - **Q319 补登（2026-10-08，冻结管理 UI 片，02 C1.262）**：管理端列表 `GET /api/admin/fcw` 的 `fcw_view` 加法扩展三字段——`snapshot_status`（frozen/revoked/null）、`snapshot_revoked_at`、`revoke_reason`（取自该 final_id 最新快照 `latest_snapshots_for`，版本恒 v1 故每 final_id 至多一条；revoked 快照 is_active=false 仍展示）；既有消费方（中台/客户/详情）不传快照时三字段为 None、零影响。管理端 `/admin/fcw` 行内新增冻结管理岛：frozen 时「作废」（reason 必填 1..2000，调 revoke 写口，operations 闸），作废成功留痕并提示重冻走组装台「复用」预填（不跳转、不刷新列表、零其它写操作）；revoked 时展示作废时间与原因。
 
 **M10 切片 a · 配置中心**（2026-09-14，迁移 0010，路由前缀 `/api/admin/config`）
 

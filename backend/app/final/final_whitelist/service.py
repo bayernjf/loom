@@ -803,6 +803,33 @@ async def list_fcw_admin(
     return rows, total
 
 
+async def latest_snapshots_for(
+    session, final_ids: list[str]
+) -> dict[str, FcwSnapshot]:
+    """Q321 批量取每个 final_id 的最新快照，供管理端列表带冻结状态。
+
+    版本恒 v1（uq_fcw_final_version），一个 final_id 至多一条快照；revoked
+    快照 is_active=false 但仍是最新（作废语义，需展示给运营判读）。order_by
+    取最新一条兜底，避免理论上的多行场景。分页行级一次 IN 查询，避免 N+1；
+    无快照的 final_id 不落键（None 语义由调用方处理）。"""
+    if not final_ids:
+        return {}
+    rows = (
+        await session.scalars(
+            select(FcwSnapshot)
+            .where(FcwSnapshot.final_id.in_(final_ids))
+            .order_by(
+                FcwSnapshot.created_at.desc(),
+                FcwSnapshot.snapshot_id.desc(),
+            )
+        )
+    ).all()
+    out: dict[str, FcwSnapshot] = {}
+    for row in rows:
+        out.setdefault(row.final_id, row)
+    return out
+
+
 async def get_task(session, task_id: str) -> FcwAssemblyTask | None:
     return await session.get(FcwAssemblyTask, task_id)
 
@@ -906,8 +933,16 @@ def fcw_snapshot_view(snapshot: FcwSnapshot) -> dict:
     }
 
 
-def fcw_view(fcw: FinalContentWhitelist) -> dict:
-    return {
+def fcw_view(
+    fcw: FinalContentWhitelist, snapshot: FcwSnapshot | None = None
+) -> dict:
+    """Q177 管理端/中台/客户 FCW 元信息视图。
+
+    Q321 加法扩展：可选携带当前快照的冻结状态（snapshot_status／
+    snapshot_revoked_at／revoke_reason），供管理端冻结管理 UI 判读；不传
+    snapshot 时三字段为 None，既有消费方（中台/客户/详情）零影响。
+    """
+    view = {
         "final_id": fcw.final_id,
         "task_id": fcw.task_id,
         "tenant_id": fcw.tenant_id,
@@ -933,6 +968,14 @@ def fcw_view(fcw: FinalContentWhitelist) -> dict:
         "created_at": fcw.created_at,
         "published_at": fcw.published_at,
     }
+    view["snapshot_status"] = snapshot.status if snapshot else None
+    view["snapshot_revoked_at"] = (
+        snapshot.revoked_at.isoformat()
+        if snapshot and snapshot.revoked_at
+        else None
+    )
+    view["revoke_reason"] = snapshot.revoke_reason if snapshot else None
+    return view
 
 
 def task_view(task: FcwAssemblyTask) -> dict:
