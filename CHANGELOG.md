@@ -3,6 +3,10 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q311 结构档甲案＋8 空壳包清理＋文档对账（2026-10-08；**代码（仅删 8 个 0 字节 `__init__.py`）＋文档**；零迁移零新表零新 env，测试数不变＝基线 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.254**）——负责人「好的，开搞」，把 Q310 批登记的「结构档两案待点工＋8 空壳包删不删」一口气三件全落。
+  - **① docs/15 甲案落地**：新增 §3.1「包→职责→入口清单」（按代码反向生成、机械可复跑；真实包＝目录内 .py 总字节 > 0，职责取模块 docstring、表取 `__tablename__`、入口取 router 路由）；实测 **38 个真实包**＝横切 26（app 根＋core 根＋25 包，含 audit／rbac 两单文件包）＋业务域 12（product 6／platform 1／decision 2／final 2／content 1）。目录树 core 注释同步改：27 包枚举 → **25 真实包＋2 单文件包**＋空壳已删标注。
+  - **② 8 个空壳包 git rm**：`core/dict_management`／`core/gates`／`core/candidate_channel`／`platform/platform_dynamic`／`product/dimension`／`content/content_manage`／`feedback`／`feedback/feedback_loop` 的 8 个 0 字节 `__init__.py`（脚手架 commit `5d5f726` 遗留）；删除前 grep 全仓**零 import 引用**（唯一"命中"是无害字符串），目录连 `__pycache__` 一并清除。
+  - **③ 文档对账**：docs/08 §2.2 权威行前移（Q309→Q311，Q310 批当时未同步、本批补齐）；docs/02 续编行补 `/ C1.254 Q311`；本条目补登 CHANGELOG。**复判不变**：① 达标／② 达标／③ 未达标（现网＋真 ACME＋待裁③）。
 - **Q310 结构档与全景补登＋Q309 候选尾巴读完（2026-10-08；**纯文档零代码零迁移零测试变化**；基线不变 **1205 passed＋10 skipped／收集 1215**、头 `0052_pool_options`；02 C1.253**）——负责人第二次「更新项目文档」。结构档不是台账，是下一个人找代码的地图。
   - **候选读完、订正 4 处**：`docs/22` 的 `config.py:126`→**`:135`**（`mcp_enabled` 真位）；`docs/23 §3` 裸 except 证据 `main.py:68,119`→**`:67-71,118-121`**（按 `try:` 起算，否则读者找不到 `except`）；`docs/23 §10` Q241 复核表 `layer_strategy/router.py:49,71,87`→**`:75,107,133`**、`service.py:49-51`→`_require_ops` 在 `:81,100,153,191`（**结论不变，指针要换**）；`附录C` 种缺陷配方 `router.py:320`→**`:330`**（照抄旧行号种不出缺陷）。dated 记录一律加日期注不回改。
   - **docs/09 全景从来没有「字典管理」屏**：D3.1~D3.13 搜不到它，而它是今天侧栏第 15 项 `/admin/dictionaries`。补登四族字典两表两屏、读放行 `platform_admin`／写只认 `dictionary_admin`、**只给可选集不给拦截**；**不动 D3.x 编号**（菜单口径合并属裁决）。
