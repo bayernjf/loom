@@ -5,6 +5,15 @@
   加第 18 个池要先改 PCP 口径，不是在这张表里塞一行就算数 ⇒ 未知池 422。
 - **选项内容由运营给**：docs 只定"池→选项列表"，没给任何一池的候选值，
   所以种子留空列表、由管理面回填；这里只校验形状（非空字符串、池内不重复），不校验语义。
+
+运行期消费方（Q323 核实）：
+- 「选料只能从字典选项中选」的现行强校验在 **goal 维度**——E1.1 组装
+  （`final_whitelist.service._validate_goal` → GoalInvalid）与 PWC 构建
+  （`model_registry.pwc_build` unknown_goals）都只接受 Q25 目的字典（ContentGoal
+  活跃表）内的 goal，即 17 池中 goal 池的选料已闭环。
+- 其余 16 池（action/struct/intensity/…/ending）是 PCP 权重维度，组装输入无
+  自由池值字段（assemble 只收 goal/platform/slot/country），无运行期自由输入点，
+  强校验无从附加；options 由运营回填后供后续分析面（PCP 重算 AI 候选对照等）消费。
 """
 
 from collections.abc import Sequence

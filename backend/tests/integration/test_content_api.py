@@ -173,14 +173,6 @@ async def test_generate_rbac_and_notfound(client):
     assert r.status_code == 404
 
 
-async def test_generate_video_kind_not_implemented(client):
-    r = await client.post(
-        "/api/content/generate",
-        json={"final_id": "fcw-1", "kind": "video", "actor": OPS},
-    )
-    assert r.status_code == 422
-
-
 async def test_generate_malformed_output_is_502(client, monkeypatch):
     async def _broken(self, **kwargs):
         return GenerationResult(text="not json", input_tokens=3, output_tokens=4)

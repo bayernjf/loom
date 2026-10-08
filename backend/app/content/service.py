@@ -198,11 +198,17 @@ async def run_content_review(session: AsyncSession, content: ContentProduct) -> 
 async def _run_generation(
     session: AsyncSession, content: ContentProduct, actor
 ) -> ContentProduct:
-    """generating 态：调 ARTICLE-GEN 写 body → 复检 → review。"""
-    await generation.invoke_article_gen(session, content, actor)
-    content.review_hits = await run_content_review(session, content)
-    # Q120/Q57：AI 质量分（ARTICLE-QC）辅助参考，advisory 不阻断发证/驳回。
-    await qc.invoke_article_qc(session, content)
+    """generating 态：调 GEN 写 body →（article）复检/质量分 → review。"""
+    if content.kind == KIND_VIDEO:
+        # Q323 段12 视频载体切片：只落 video_ref 引用字符串；文本复检/ARTICLE-QC
+        # 不适用（段12 视频复检规格未给【待补】），review_hits 留空，客户审阅 Q59 不变。
+        await generation.invoke_video_gen(session, content, actor)
+        content.review_hits = {}
+    else:
+        await generation.invoke_article_gen(session, content, actor)
+        content.review_hits = await run_content_review(session, content)
+        # Q120/Q57：AI 质量分（ARTICLE-QC）辅助参考，advisory 不阻断发证/驳回。
+        await qc.invoke_article_qc(session, content)
     content.status = sm.target_status(content.status, sm.EVENT_COMPLETE)
     content.updated_at = _now()
     return content
@@ -213,9 +219,7 @@ async def generate_content(
 ) -> ContentProduct:
     """operations 触发生成：建成品（draft）→ 生成（generating）→ 待客户审阅（review）。"""
     require_any_role(body.actor, OPERATIONS)
-    if body.kind == KIND_VIDEO:
-        raise ContentKindNotImplemented("video generation deferred to a later P4 slice")
-    if body.kind != KIND_ARTICLE:
+    if body.kind not in (KIND_ARTICLE, KIND_VIDEO):
         raise ContentKindNotImplemented(f"unknown kind {body.kind!r}")
 
     fcw = await session.get(FinalContentWhitelist, body.final_id)
