@@ -7,10 +7,12 @@ import styles from "./empty-state.module.css";
 export function EmptyState({
   title,
   hint,
+  action,
   className,
 }: {
   title: string;
   hint?: string;
+  action?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -54,6 +56,7 @@ export function EmptyState({
       </svg>
       <p className={styles.title}>{title}</p>
       {hint ? <p className={styles.hint}>{hint}</p> : null}
+      {action ? <div className={styles.action}>{action}</div> : null}
     </div>
   );
 }
