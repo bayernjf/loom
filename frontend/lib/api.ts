@@ -1449,6 +1449,31 @@ export async function getAdminFcwMaterial(
   );
 }
 
+// Q328（D2 甲）：video-studio 内容清洗区——FCW 表达层脚本文本只读 CCR 复检。
+// 跨租户运营只读口，不改文本不落报告；text_present=false＋detail 表示
+// 未发证成品/无表达层文本（复检对象不存在），非 404。
+export interface ScriptRecheckView {
+  content_id: string;
+  final_id: string | null;
+  text_present: boolean;
+  detail?: string;
+  text_length: number;
+  status: string | null;
+  block_required: boolean;
+  bans: Array<Record<string, unknown>>;
+  downgrades: Array<Record<string, unknown>>;
+}
+
+export async function getAdminScriptRecheck(
+  contentId: string,
+): Promise<ScriptRecheckView> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<ScriptRecheckView>(
+    `/api/admin/content/${encodeURIComponent(contentId)}/script-recheck?${params}`,
+  );
+}
+
 // Q321：冻结管理——作废当前快照（Q251 裁决 b，reason 必填，operations 写闸）。
 export interface FcwRevokeView {
   snapshot_id: string;
@@ -1523,6 +1548,55 @@ export async function previewAssemble(body: AssembleManualBody): Promise<Assembl
 /** Q55 手动单条发证（既有口）：材料齐+七 Guard 全绿才 mint final_id。 */
 export async function assembleManual(body: AssembleManualBody): Promise<FcwCardView> {
   return request<FcwCardView>("/api/fcw/assemble", {
+    method: "POST",
+    body: JSON.stringify({
+      ...body,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+// Q328（WF-07 操作面 D3 甲）：组装工作台「AI 选包建议」触发。
+// 服务端按 PS×platform×slot 组装有界变量 → 模型网关 synthetic 路由 →
+// skill_candidates（pending_review）＋SLA 待办；AI 只产候选，operations 在
+// 统一审核工作台裁决（review-queue）。四场景字面量（docs/12 §3.2 #21–#24）。
+export type Wf07Scene =
+  | "PT-CONTENT-GOAL-PLAN"
+  | "PT-STRUCT-MATCH"
+  | "PT-TONE-STYLE"
+  | "PT-CONTENT-GOAL-TAG";
+
+export interface AiSelectSuggestBody {
+  scene: Wf07Scene;
+  product_space_id: string;
+  slot_id?: string;
+  goal?: string;
+  body?: string;
+}
+
+export interface AiSelectSuggestView {
+  run: {
+    run_id: string;
+    skill_id: string;
+    wf_id: string;
+    product_space_id: string;
+    status: string;
+    source: string;
+  };
+  candidate_ids: string[];
+  candidates: Array<{
+    candidate_id: string;
+    state: string;
+    target_type: string;
+    wf_id: string;
+    payload: Record<string, unknown>;
+  }>;
+}
+
+export async function suggestAiSelect(
+  body: AiSelectSuggestBody,
+): Promise<AiSelectSuggestView> {
+  return request<AiSelectSuggestView>("/api/ai-select/suggest", {
     method: "POST",
     body: JSON.stringify({
       ...body,
