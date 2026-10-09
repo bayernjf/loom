@@ -5,7 +5,11 @@ import {
   adminDiscardContent,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
+  getAdminFcwMaterial,
+  getContent,
   setPublishInfo,
+  type ContentProductView,
+  type FcwMaterialPack,
 } from "@/lib/api";
 
 const KNOWN_STATUSES = new Set([403, 404, 409, 422]);
@@ -75,5 +79,48 @@ export async function discardContentAction(
     return { ok: true };
   } catch (err) {
     return failure(err);
+  }
+}
+
+// Q324：video-studio 生成结果区——成品详情（含 body=video_ref），只读、无写闸。
+export type ContentDetailResult =
+  | { ok: true; content: ContentProductView }
+  | { ok: false; status: 403 | 404 | "unknown" };
+
+export async function getContentDetailAction(
+  contentId: string,
+): Promise<ContentDetailResult> {
+  const id = contentId.trim();
+  if (!id) return { ok: false, status: "unknown" };
+  try {
+    const content = await getContent(id);
+    return { ok: true, content };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+// Q324：video-studio 白名单信息区——六层原料包（Q177 管理端只读口，读闸放行）。
+export type WhitelistMaterialResult =
+  | { ok: true; pack: FcwMaterialPack }
+  | { ok: false; status: 403 | 404 | "unknown" };
+
+export async function getVideoWhitelistMaterialAction(
+  finalId: string,
+): Promise<WhitelistMaterialResult> {
+  const id = finalId.trim();
+  if (!id) return { ok: false, status: "unknown" };
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unknown" };
+  try {
+    const pack = await getAdminFcwMaterial(id);
+    return { ok: true, pack };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 };
+    }
+    return { ok: false, status: "unknown" };
   }
 }
