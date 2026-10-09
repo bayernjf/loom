@@ -2,9 +2,11 @@
 
 状态机（05 §2.3）：投递即 pending_review（ai_suggested 为生产者侧态，
 不持久化【实现补，Q76】）→ confirmed/modified/rejected → applied/archived。
+Q328 追加：WF-07 AI 选包触发（suggest_ai_select）走同一条投递通道。
 """
 
 from datetime import UTC, datetime, timedelta
+from json import JSONDecodeError, loads
 
 from pydantic import ValidationError
 from sqlalchemy import desc, select
@@ -15,7 +17,12 @@ from app.core.rbac import OPERATIONS, require_any_role
 from app.core.skill7 import registry, review_sla
 from app.core.skill7.adapters import ADAPTERS
 from app.core.skill7.models import SkillCandidate, SkillRun
-from app.core.skill7.schemas import CandidateDecisionRequest, DeliverRunRequest
+from app.core.skill7.schemas import (
+    AiSelectSuggestRequest,
+    CandidateDecisionRequest,
+    CandidateInput,
+    DeliverRunRequest,
+)
 
 PWC_BUILDER = "PWC-BUILDER"
 WF04 = "WF-04"
@@ -110,6 +117,20 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
         return
+    if target_type == "package_draft":
+        # Q328（WF-07）：payload 是四 Skill 之一的模型网关候选输出（合成路由
+        # 确定性字典值）。投递侧只做「非空且带已知目标键」的结构预校验——
+        # 字典值命中（ContentGoal/17 池）由适配器 apply_package_draft 强校验。
+        known_keys = ("goals", "structures", "tone", "style", "goal")
+        if not isinstance(payload, dict) or not payload:
+            raise InvalidCandidatePayload(
+                "package_draft payload must be a non-empty dict"
+            )
+        if not any(key in payload for key in known_keys):
+            raise InvalidCandidatePayload(
+                "package_draft payload must carry goals/structures/tone/style/goal"
+            )
+        return
     raise InvalidCandidatePayload(f"unsupported target_type: {target_type}")
 
 
@@ -144,6 +165,106 @@ async def deliver_run(
     # Q76-5：投递归 operations；机器对机器 API Key 通道契约【待补】。
     require_any_role(body.actor, OPERATIONS)
     return await _persist_delivery(session, body, source="delivery")
+
+
+class SlotNotFound(Exception):
+    """suggest 触发引用的发布位不存在。"""
+
+
+async def suggest_ai_select(
+    session: AsyncSession, body: AiSelectSuggestRequest
+) -> tuple[SkillRun, list[SkillCandidate]]:
+    """Q328（WF-07 操作面 D3 甲）：组装工作台「AI 选包建议」触发。
+
+    按当前 PS×platform×slot 组装有界变量 → 模型网关 synthetic 路由（Q326 场景
+    注册）→ 候选落 skill_candidates（pending_review）走既有 skill7 投递通道
+    （SLA 待办/审计/字典强校验全复用）；AI 只产候选，人工 Gate 裁决后才生效。
+    """
+    from app.core.model_registry import gateway as gw
+    from app.core.pool_options.models import ACTIVE, PoolOption
+    from app.platform.platform_adaptation.models import PublishSlot
+    from app.product.condition.models import ContentGoal
+    from app.product.product_intake.models import ProductSpace
+
+    ps = await session.get(ProductSpace, body.product_space_id)
+    if ps is None:
+        raise ProductSpaceMissing(body.product_space_id)
+
+    goal_codes = {
+        code
+        for (code,) in (
+            await session.execute(
+                select(ContentGoal.code).where(ContentGoal.status == "active")
+            )
+        ).all()
+    }
+    pool_options: dict[str, list[str]] = {}
+    for pool_name in ("struct", "tone", "style"):
+        row = await session.get(PoolOption, pool_name)
+        if row is not None and row.status == ACTIVE and isinstance(row.options, list):
+            pool_options[pool_name] = [str(v) for v in row.options]
+        else:
+            pool_options[pool_name] = []
+
+    variables: dict = {
+        "profile_snapshot": ps.profile_snapshot,
+        "platform": "",
+        "industry_tag": ps.industry_tag or "",
+        "sensitive": ps.sensitive_industry,
+        "available_goals": sorted(goal_codes),
+        "available_struct": pool_options["struct"],
+        "available_tone": pool_options["tone"],
+        "available_style": pool_options["style"],
+    }
+    slot_vars: dict = {}
+    if body.slot_id:
+        slot_row = await session.get(PublishSlot, body.slot_id)
+        if slot_row is None:
+            raise SlotNotFound(body.slot_id)
+        slot_vars = {
+            "slot_id": slot_row.slot_id,
+            "platform": slot_row.platform,
+            "code": slot_row.code,
+            "chars_max": slot_row.chars_max,
+            "dur_min": slot_row.dur_min,
+            "dur_max": slot_row.dur_max,
+            "traffic": slot_row.traffic,
+            "safe": slot_row.safe,
+            "conv": slot_row.conv,
+            "load": slot_row.load,
+        }
+        variables["slot"] = slot_vars
+        variables["platform"] = slot_row.platform
+    else:
+        variables["slot"] = {}
+    if body.goal:
+        variables["goal"] = body.goal
+    if body.body:
+        variables["body"] = body.body
+
+    invocation = await gw.invoke(session, body.scene, variables)
+    try:
+        output = loads(invocation.text)
+    except JSONDecodeError as exc:
+        raise InvalidCandidatePayload(
+            f"ai-select scene {body.scene} returned non-JSON output"
+        ) from exc
+    if isinstance(output, dict) and output.get("error"):
+        # docs/12 §3.2 强校验：error 形态由端点按 422 处理（缺 goal/body、池字典缺失）。
+        raise InvalidCandidatePayload(
+            f"ai-select scene {body.scene} rejected: {output['error']}"
+        )
+
+    delivery = DeliverRunRequest(
+        skill_id=body.scene,
+        wf_id="WF-07",
+        product_space_id=body.product_space_id,
+        input=variables,
+        output=output,
+        candidates=[CandidateInput(target_type="package_draft", payload=output)],
+        actor=body.actor,
+    )
+    return await deliver_run(session, delivery)
 
 
 async def deliver_generated_run(

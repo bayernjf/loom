@@ -7,7 +7,11 @@ from app.core.db import get_session
 from app.core.rbac import PermissionDenied
 from app.core.skill7 import registry, service
 from app.core.skill7.models import SkillCandidate, SkillRun
-from app.core.skill7.schemas import CandidateDecisionRequest, DeliverRunRequest
+from app.core.skill7.schemas import (
+    AiSelectSuggestRequest,
+    CandidateDecisionRequest,
+    DeliverRunRequest,
+)
 from app.product.product_intake.service import IntakeNotFound
 
 router = APIRouter(prefix="/api", tags=["skill7"])
@@ -201,3 +205,53 @@ async def decide_candidate(
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _candidate_view(cand)
+
+
+@router.post("/ai-select/suggest", status_code=201)
+async def suggest_ai_select(
+    body: AiSelectSuggestRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Q328（WF-07 操作面 D3 甲）：组装工作台「AI 选包建议」触发。
+
+    经模型网关 synthetic 路由产候选 → skill7 投递通道落 skill_candidates
+    （pending_review）＋SLA 待办＋审计；人工 Gate（operations）在统一审核
+    工作台裁决。AI 只产候选，不自动生效。
+    """
+    from app.core.model_registry import gateway as gw
+
+    try:
+        run, candidates = await service.suggest_ai_select(session, body)
+        await session.commit()
+    except PermissionDenied as exc:
+        await session.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except service.ProductSpaceMissing as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="product space not found") from exc
+    except service.SlotNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="publish slot not found") from exc
+    except registry.RegistryError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=f"unregistered skill/workflow: {exc}") from exc
+    except service.InvalidCandidatePayload as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except gw.ModelNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail=f"model {exc} not found") from exc
+    except gw.ModelUnavailable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gw.ModelConfigError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except gw.GenerationUpstreamError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "run": _run_view(run),
+        "candidate_ids": [c.candidate_id for c in candidates],
+        "candidates": [_candidate_view(c) for c in candidates],
+    }

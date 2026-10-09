@@ -7,9 +7,11 @@ import {
   CURRENT_ADMIN_ACTOR_ID,
   getAdminContentDetail,
   getAdminFcwMaterial,
+  getAdminScriptRecheck,
   setPublishInfo,
   type ContentProductView,
   type FcwMaterialPack,
+  type ScriptRecheckView,
 } from "@/lib/api";
 
 const KNOWN_STATUSES = new Set([403, 404, 409, 422]);
@@ -120,6 +122,29 @@ export async function getVideoWhitelistMaterialAction(
   try {
     const pack = await getAdminFcwMaterial(id);
     return { ok: true, pack };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+// Q328（D2 甲）：video-studio 内容清洗区——FCW 表达层脚本文本只读 CCR 复检。
+// 只读无写闸；text_present=false＋detail（未发证/无文本）为正常业务结果。
+export type ScriptRecheckResult =
+  | { ok: true; check: ScriptRecheckView }
+  | { ok: false; status: 403 | 404 | "unknown" };
+
+export async function getScriptRecheckAction(
+  contentId: string,
+): Promise<ScriptRecheckResult> {
+  const id = contentId.trim();
+  if (!id) return { ok: false, status: "unknown" };
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unknown" };
+  try {
+    const check = await getAdminScriptRecheck(id);
+    return { ok: true, check };
   } catch (err) {
     if (err instanceof ApiError && [403, 404].includes(err.status)) {
       return { ok: false, status: err.status as 403 | 404 };

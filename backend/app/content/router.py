@@ -281,6 +281,23 @@ async def admin_get_content(
     return service.content_view(content)
 
 
+@router.get("/api/admin/content/{content_id}/script-recheck")
+async def admin_script_recheck(
+    content_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_admin_view),
+) -> dict:
+    """Q328（D2 甲）：video-studio 内容清洗区——FCW 表达层脚本文本只读 CCR 复检。
+
+    跨租户只读（同 Q326 管理端成品详情口），不写报告不改文本；未发证成品/
+    无表达层文本返回 text_present=false＋detail，不 404（复检对象不存在≠资源不存在）。
+    """
+    try:
+        return await service.script_recheck(session, content_id)
+    except service.ContentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.put(
     "/api/admin/content/{content_id}/publish-info",
     response_model=ContentProductView,

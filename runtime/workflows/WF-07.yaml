@@ -1,0 +1,39 @@
+# WF-07 · 段9 AI 选包（docs/12 §3.2 #21–#24）
+# Q328（D3/D4 甲，D5＝写回目标 Package 草稿、裁决角色 operations）：
+# 四 Skill 经模型网关 synthetic 路由产出字典值候选，走 skill7 候选通道落
+# skill_candidates（pending_review）→ 统一审核工作台人工 Gate → confirmed/
+# modified 后由 package_draft 适配器做字典强校验并标记 applied；采用后的
+# 预填（goal/struct/tone/style → 包创建/更新表单）在前端完成，走既有包
+# create/update 审批（layer_strategy），不直接改 active 包、不绕过包 Gate。
+wf_id: WF-07
+stage: 9
+name: AI 选包（四 Skill）
+skills:
+  - skill_id: PT-CONTENT-GOAL-PLAN
+    produces_candidates: true
+    candidate_target: package_draft
+  - skill_id: PT-STRUCT-MATCH
+    produces_candidates: true
+    candidate_target: package_draft
+  - skill_id: PT-TONE-STYLE
+    produces_candidates: true
+    candidate_target: package_draft
+  - skill_id: PT-CONTENT-GOAL-TAG
+    produces_candidates: true
+    candidate_target: package_draft
+gates:
+  - after: PT-CONTENT-GOAL-PLAN
+    channel: skill7
+    role: operations
+    note: AI 选包候选必经人工 Gate（Q85 字段池方案同构）；裁决角色 D5＝operations
+  - after: PT-STRUCT-MATCH
+    channel: skill7
+    role: operations
+  - after: PT-TONE-STYLE
+    channel: skill7
+    role: operations
+  - after: PT-CONTENT-GOAL-TAG
+    channel: skill7
+    role: operations
+failure_policy:
+  dictionary_mismatch: 422   # 适配器字典强校验不命中即 422，禁止越字典值落库

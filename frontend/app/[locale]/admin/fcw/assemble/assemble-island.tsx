@@ -12,13 +12,22 @@ import {
   getAssembleFormDataAction,
   getFcwReuseAction,
   previewAssembleAction,
+  suggestAiSelectAction,
   type AdminContentGoal,
   type AdminPublishSlot,
+  type AiSelectResult,
   type AssembleManualBody,
   type ConflictCheckRow,
+  type Wf07Scene,
 } from "./actions";
 
 const KNOWN_STATUSES = new Set([401, 403, 404, 409, 422]);
+
+const AI_SCENES: Array<{ scene: Wf07Scene; labelKey: string }> = [
+  { scene: "PT-CONTENT-GOAL-PLAN", labelKey: "aiSceneGoal" },
+  { scene: "PT-STRUCT-MATCH", labelKey: "aiSceneStruct" },
+  { scene: "PT-TONE-STYLE", labelKey: "aiSceneTone" },
+];
 
 export function AssembleIsland() {
   const t = useTranslations("admin.fcwAssemble");
@@ -48,6 +57,11 @@ export function AssembleIsland() {
   >(null);
   const [issued, setIssued] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+
+  // Q328（WF-07 操作面 D3 甲）：AI 选包建议——只产候选，人工 Gate 裁决。
+  const [aiScene, setAiScene] = useState<Wf07Scene | null>(null);
+  const [aiRunning, setAiRunning] = useState(false);
+  const [aiResult, setAiResult] = useState<AiSelectResult | null>(null);
 
   const loadForm = useCallback(() => {
     startTransition(async () => {
@@ -137,6 +151,24 @@ export function AssembleIsland() {
         setReuseError(failureText(r.status, r.detail));
       }
       setReuseLoading(false);
+    });
+  }
+
+  // Q328：AI 选包建议触发（前置：PS 已填；platform/slot/goal 尽力带上）。
+  function runAiSuggest(scene: Wf07Scene) {
+    if (!psId.trim()) return;
+    setAiScene(scene);
+    setAiRunning(true);
+    setAiResult(null);
+    startTransition(async () => {
+      const r = await suggestAiSelectAction({
+        scene,
+        product_space_id: psId.trim(),
+        slot_id: slotId || undefined,
+        goal: goal || undefined,
+      });
+      setAiResult(r);
+      setAiRunning(false);
     });
   }
 
@@ -363,6 +395,67 @@ export function AssembleIsland() {
             </tbody>
           </table>
         </>
+      )}
+
+      <h2 className={styles.sectionTitle}>{t("aiSelectTitle")}</h2>
+      <p className={styles.windowLine}>{t("aiSelectIntro")}</p>
+      <div className={styles.actionsRow}>
+        {AI_SCENES.map(({ scene, labelKey }) => (
+          <button
+            key={scene}
+            type="button"
+            className={styles.secondaryButton}
+            disabled={aiRunning || !psId.trim()}
+            onClick={() => runAiSuggest(scene)}
+          >
+            {aiRunning && aiScene === scene
+              ? t("aiSelectRunning")
+              : t(labelKey)}
+          </button>
+        ))}
+      </div>
+      {!psId.trim() && <p className={styles.notice}>{t("aiSelectNeedPs")}</p>}
+      {aiResult && !aiResult.ok && (
+        <p className={styles.notice}>
+          {aiResult.status === "unconfigured"
+            ? t("actorUnconfigured")
+            : aiResult.status === "missing_role"
+              ? t("actorMissingRole")
+              : aiResult.status === "unknown"
+                ? tError("unknown")
+                : (aiResult.detail ?? tError(String(aiResult.status)))}
+        </p>
+      )}
+      {aiResult?.ok && (
+        <div className={styles.provisionForm}>
+          <p className={styles.successLine}>{t("aiSelectPendingNote")}</p>
+          <ul className={styles.detailList}>
+            {aiResult.suggest.candidates.map((cand) => (
+              <li key={cand.candidate_id}>
+                <span className={styles.metaLine}>
+                  {t("aiSelectCandidateId")}: {cand.candidate_id} · {t("aiSelectCandidateState")}:{" "}
+                  {cand.state}
+                </span>
+                <span className={styles.metaLine}>
+                  {t("aiSelectCandidatePayload")}:{" "}
+                  <span className={styles.mono}>
+                    {JSON.stringify(cand.payload)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className={styles.notice}>
+            {t("aiSelectReviewLinkText")}
+            {": "}
+            <a
+              className={styles.planChip}
+              href="/zh-CN/admin/review-queue"
+            >
+              {t("aiSelectReviewLink")}
+            </a>
+          </p>
+        </div>
       )}
     </section>
   );

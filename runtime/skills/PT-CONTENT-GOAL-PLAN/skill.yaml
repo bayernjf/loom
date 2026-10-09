@@ -1,0 +1,19 @@
+# PT-CONTENT-GOAL-PLAN · 段9 WF-07 AI 选包（docs/12 §3.2 #21）
+# Q328：经模型网关 synthetic 路由产出 goal 候选（≤3，命中 ContentGoal 字典），
+# 候选落 skill_candidates（package_draft）走 skill7 人工 Gate（operations）。
+skill_id: PT-CONTENT-GOAL-PLAN
+layer: package
+version: 1.0.0
+input_output_schema:
+  input: "profile_snapshot（Q74 产品资料副本）＋available_goals（ContentGoal active 字典）"
+  output: "goal 候选：[{goal, confidence}]，≤3 条，命中 ContentGoal 字典；无资料/字典空 → goals 空数组"
+knowledge_deps:
+  - ContentGoal 目的字典（Q25）
+  - ProductSpace.profile_snapshot（Q74）
+model_tier: ""
+thresholds:
+  goal_candidates_max: 3
+  goal_confidence: 0.92/0.85/0.78
+failure_policy: produce_candidates_only   # 仅产候选，不直接写正式对象
+review_rule: skill7 candidate gate → operations
+cost_limit: null

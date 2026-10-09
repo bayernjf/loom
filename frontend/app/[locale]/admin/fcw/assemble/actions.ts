@@ -12,11 +12,15 @@ import {
   getAdminFcwMaterial,
   getAdminPublishSlots,
   previewAssemble,
+  suggestAiSelect,
   type AdminContentGoal,
   type AdminPublishSlot,
+  type AiSelectSuggestBody,
+  type AiSelectSuggestView,
   type AssembleManualBody,
   type AssemblePreview,
   type FcwCardView,
+  type Wf07Scene,
 } from "@/lib/api";
 import { mapConflictChecks, type ConflictCheckRow } from "@/lib/fcw-conflict-map";
 
@@ -27,6 +31,7 @@ export type {
   AssemblePreview,
   FcwCardView,
   ConflictCheckRow,
+  Wf07Scene,
 };
 
 const KNOWN_STATUSES = new Set([401, 403, 404, 409, 422]);
@@ -171,6 +176,38 @@ export async function getFcwReuseAction(
       goal: issued.goal,
       country: issued.country ?? null,
     };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      return {
+        ok: false,
+        status: err.status as 401 | 403 | 404 | 409 | 422,
+        detail: errorDetail(err.message),
+      };
+    }
+    return { ok: false, status: "unknown", detail: null };
+  }
+}
+
+// Q328（WF-07 操作面 D3 甲）：组装工作台「AI 选包建议」触发。
+// AI 只产候选（pending_review＋SLA 待办），operations 在统一审核工作台裁决；
+// 采用后的预填在包管理页走既有包 create/update 审批（D5 甲，本 V1 不预填包表单）。
+export type AiSelectResult =
+  | { ok: true; suggest: AiSelectSuggestView }
+  | {
+      ok: false;
+      status: 401 | 403 | 404 | 409 | 422 | "unconfigured" | "missing_role" | "unknown";
+      detail: string | null;
+    };
+
+export async function suggestAiSelectAction(
+  body: AiSelectSuggestBody,
+): Promise<AiSelectResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
+  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
+    return { ok: false, status: "missing_role", detail: null };
+  try {
+    const suggest = await suggestAiSelect(body);
+    return { ok: true, suggest };
   } catch (err) {
     if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
       return {

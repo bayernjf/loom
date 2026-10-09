@@ -89,6 +89,7 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("review.sla_hours.c1_recognition", "review", "float", 72, "Q70②/Q114", {"min": 1}),
     ("review.sla_hours.atom_batch", "review", "float", 72, "Q70②/Q114", {"min": 1}),
     ("review.sla_hours.c7_layer4", "review", "float", 72, "Q70②/Q114", {"min": 1}),
+    ("review.sla_hours.package_draft", "review", "float", 72, "Q328 WF-07 AI 选包", {"min": 1}),
     # ---- 段7/8 动态信号与 PCP 重算（Q42 单项单次幅度上限，Q259 起消费）----
     ("platform.recalc_step", "platform", "float", 0.05, "Q42", {"min": 0.001}),
     # Q294：PCP 每周重算**提醒**的周节奏（段8 PT-PCP-V1.5「动态信号每周更新触发重算」的

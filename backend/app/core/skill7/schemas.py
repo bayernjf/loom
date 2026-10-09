@@ -10,13 +10,39 @@ CandidateState = Literal[
     "pending_review", "confirmed", "modified", "rejected", "applied", "archived"
 ]
 
+# WF-07 AI 选包四场景（docs/12 §3.2 #21–#24，Q328 操作面）。
+Wf07Scene = Literal[
+    "PT-CONTENT-GOAL-PLAN",
+    "PT-STRUCT-MATCH",
+    "PT-TONE-STYLE",
+    "PT-CONTENT-GOAL-TAG",
+]
+
+
+class AiSelectSuggestRequest(BaseModel):
+    """Q328：组装工作台「AI 选包建议」触发体。
+
+    按当前 PS×platform×slot 组装有界变量后经模型网关 synthetic 路由产出候选；
+    端点层前置闸：PS 存在（404）、TONE/TAG 场景缺 goal、TAG 场景缺 body 由
+    合成路由 error 形态按 422 强校验（与 docs/12 §3.2 强校验一致）。
+    """
+
+    scene: Wf07Scene
+    product_space_id: str = Field(min_length=1)
+    slot_id: str | None = Field(default=None, min_length=1)
+    goal: str | None = Field(default=None, min_length=1)
+    body: str | None = Field(default=None, min_length=1)
+    actor: Actor
+
 
 class CandidateInput(BaseModel):
     # target_type 与 WF 步骤声明的 candidate_target 对齐（按 WF 泛化）：
     # pwc_combo（WF-04）/ field_plan（WF-02，Q78）/ c1_recognition（WF-01，Q79）
-    # / atom_batch（WF-03，Q80）/ c7_layer4（WF-01 TYPE-MATCH，Q81）。
+    # / atom_batch（WF-03，Q80）/ c7_layer4（WF-01 TYPE-MATCH，Q81）
+    # / package_draft（WF-07 AI 选包，Q328）。
     target_type: Literal[
-        "pwc_combo", "field_plan", "c1_recognition", "atom_batch", "c7_layer4"
+        "pwc_combo", "field_plan", "c1_recognition", "atom_batch", "c7_layer4",
+        "package_draft",
     ]
     payload: dict
 

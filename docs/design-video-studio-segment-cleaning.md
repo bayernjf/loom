@@ -1,6 +1,6 @@
-# design：video-studio 分段编辑器/内容清洗区 ＋ WF-07 AI 选包操作面（待裁决）
+# design：video-studio 分段编辑器/内容清洗区 ＋ WF-07 AI 选包操作面（已裁决甲案）
 
-- 状态：**候选档，待负责人 Gate 裁决**（AI 只产候选，不代裁）
+- 状态：**已裁决甲案并全部落地（Q328，2026-10-10）**；本文保留候选档原文与裁决记录，落地细节见 02 C1.271
 - 立项：Q326（2026-10-09）
 - 范围：两块"规格缺口导致不能直接落生产代码"的管理端形态——
   1. video-studio 四模块中尚未落地的**分段编辑器、内容清洗区**（白名单信息区/生成结果区已随 Q324 落地为两屏只读）；
@@ -62,7 +62,7 @@
   - **甲（推荐）**：候选落既有 `skill_candidates`（state=pending_review），复用 Q93 统一审核工作台与 skill7 decide 流程，人工 decision 后才生效——与 Q85 字段池方案、Q93 审核台完全同构，**不新建表、留痕、AI 不自动生效**。
   - 乙：候选仅在会话/前端展示不落库，运营手工抄录。无留痕、无 Gate，**违反候选必经人工裁决的惯例，不建议**。
 - **采用写回**：goal/struct/tone/style 被采用后，**预填到三包/包配置的草稿**，再走既有包 create/update 审批（`layer_strategy`），不直接改 active 包、不绕过包 Gate。
-  - **接缝（待负责人定）**：写回的确切目标（Package 草稿 vs PCP 17 池权重行）与裁决角色（operations / product_reviewer）原文未定，列为审核表 D5。
+  - **接缝（已裁决 Q328）**：写回的确切目标＝**包配置草稿（预填）走既有包 create/update 审批**、裁决角色＝**operations**（原列为审核表 D5，2026-10-10 负责人批「按推荐甲」闭合）。
 - **丙**：操作面整体 V2，V1 维持现状（仅场景注册，无 UI）。
 
 **推荐甲（含 D5 先定写回目标与角色）**；若暂不具备接线条件，可取丙维持现状。
@@ -73,17 +73,19 @@
 
 | # | 决策点 | 甲（推荐） | 乙 | 丙 | 裁决 |
 |---|---|---|---|---|---|
-| D1 | 分段编辑器 V1 形态 | 只读分段视图（消费 FCW 文本，不建实体） | 建最小分段实体（臆造风险） | 整体灰置后置 | ☐ |
-| D2 | 内容清洗区 V1 形态 | 脚本文本只读 CCR 视图 | 等转写后做成片清洗 | 整体灰置后置 | ☐ |
-| D3 | WF-07 候选持久化 | skill_candidates＋审核台 Gate | 会话内不落库（不建议） | 操作面 V2 | ☐ |
-| D4 | WF-07 采用写回 | 预填包配置草稿走既有包审批 | 随 D3 | 后置 | ☐ |
-| D5 | D4 写回目标表与裁决角色 | **需负责人指定**（Package 草稿/PCP 池行；operations/product_reviewer） | — | — | ☐ |
+| D1 | 分段编辑器 V1 形态 | 只读分段视图（消费 FCW 文本，不建实体） | 建最小分段实体（臆造风险） | 整体灰置后置 | ✅ 甲（Q328） |
+| D2 | 内容清洗区 V1 形态 | 脚本文本只读 CCR 视图 | 等转写后做成片清洗 | 整体灰置后置 | ✅ 甲（Q328） |
+| D3 | WF-07 候选持久化 | skill_candidates＋审核台 Gate | 会话内不落库（不建议） | 操作面 V2 | ✅ 甲（Q328） |
+| D4 | WF-07 采用写回 | 预填包配置草稿走既有包审批 | 随 D3 | 后置 | ✅ 甲（Q328） |
+| D5 | D4 写回目标表与裁决角色 | **需负责人指定**（Package 草稿/PCP 池行；operations/product_reviewer） | — | — | ✅ 甲（Q328）：写回目标＝**包配置草稿（预填）走既有包 create/update 审批**；裁决角色＝**operations**（投递/裁决均 `OPERATIONS`，与 skill7 投递惯例一致） |
+
+**裁决记录（Q328，2026-10-10）**：负责人对 §6 审核表 D1–D5 全部批「按推荐甲」。落地＝S1/S2/S3 三切片（§8）一次性点工，具体见 02 C1.271：script-recheck 只读口（`GET /api/admin/content/{content_id}/script-recheck`）＋WF-07 注册表/`package_draft` 通道（迁移种子 `review.sla_hours.package_draft`＝72h）＋`POST /api/ai-select/suggest` 触发端点＋组装工作台「AI 选包建议」区＋video-studio 屏3 分段视图/屏4 内容清洗区。
 
 ## 7. 外部依赖（工程侧不能自推，禁臆造）
 
-- agnes-video `mode` 合法取值（供应商）。
-- 段12 视频分段/转写/对象存储/成片复检业务规格（业务方＋供应商）。
-- D5：WF-07 候选采用的写回目标表与 Gate 角色（负责人）。
+- agnes-video `mode` 合法取值（供应商）——仍【待供应商文档】挂账。
+- 段12 视频分段/转写/对象存储/成片复检业务规格（业务方＋供应商）——分段编目（时长/镜头/转场）与可编辑能力、成片语音/字幕复检随此规格到位后点工。
+- ~~D5：WF-07 候选采用的写回目标表与 Gate 角色~~ ✅ Q328 已裁决（Package 草稿＋operations）。
 
 ## 8. 甲案全选的工作量与切片建议（裁决后）
 
@@ -94,3 +96,5 @@
 | S3（D3/D4 甲，待 D5） | WF-07 四触发端点＋skill_candidates 落库＋审核台复用＋采用预填包草稿 | 4 端点＋候选适配 | 建议卡片＋采用动作 | 无新表（复用 skill_candidates） |
 
 S1、S2 互不依赖、无外部规格阻塞，裁决甲案后即可一次性落地；S3 需先定 D5。全部为只读/候选/草稿路径，不改变 `final_id` 唯一出口与既有 Gate。
+
+**Q328 落地状态（2026-10-10，详见 02 C1.271）**：S1 ✅（video-studio 屏3 分段视图，只读切分不建实体）；S2 ✅（屏4 内容清洗区＋`GET /api/admin/content/{content_id}/script-recheck` 只读复检口，复用 `ccr_rules.evaluate`，缺内容 404/无文本 `text_present=false`）；S3 ✅（WF-07.yaml 注册表＋四 Skill.yaml＋`package_draft` 通道＋字典强校验＋`POST /api/ai-select/suggest`（PS 缺失 404/非 operations 403/模板缺变量 422/模型 error 422/PS 停用 409/网关故障 502）＋组装工作台「AI 选包建议」区（AI 只产候选、人工 Gate 裁决、采用走既有包审批）。测试 ＋15（`test_admin_script_recheck_api.py` 7 例＋`test_wf07_suggest_api.py` 8 例）。

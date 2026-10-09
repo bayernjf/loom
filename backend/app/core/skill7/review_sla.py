@@ -21,6 +21,7 @@ REVIEW_TARGET_TYPES = (
     "c1_recognition",
     "atom_batch",
     "c7_layer4",
+    "package_draft",  # WF-07 AI 选包（Q328）
 )
 
 SLA_KEY = {tt: f"review.sla_hours.{tt}" for tt in REVIEW_TARGET_TYPES}

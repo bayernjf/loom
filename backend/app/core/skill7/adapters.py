@@ -2,11 +2,13 @@
 
 key = candidate.target_type；适配器只调用既有业务服务，不绕过任何
 预筛/合规/评分/限量/Gate。已接入：pwc_combo（WF-04）、field_plan（WF-02，Q78）、
-c1_recognition（WF-01，Q79）、atom_batch（WF-03，Q80）、c7_layer4（WF-01，Q81）。
+c1_recognition（WF-01，Q79）、atom_batch（WF-03，Q80）、c7_layer4（WF-01，Q81）、
+package_draft（WF-07 AI 选包，Q328）。
 """
 
 from collections.abc import Awaitable, Callable
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.actor import Actor
@@ -108,10 +110,95 @@ async def apply_c7_layer4(
     return [run.run_id]
 
 
+async def apply_package_draft(
+    session: AsyncSession, candidate: SkillCandidate, actor: Actor
+) -> list[str]:
+    """Q328（WF-07，D3/D4 甲，D5＝Package 草稿）：AI 选包候选 confirmed/modified 后落库前校验。
+
+    - 字典强校验：候选值逐一命中既有权威字典（ContentGoal active codes、
+      Q43 17 池 struct/tone/style active options），不命中即 422（越字典值禁落）。
+    - **不写包表、不绕过包 Gate**：采用后的预填（goal/struct/tone/style →
+      包创建/更新表单）在前端完成，走既有 layer_strategy 包 create/update 审批；
+      本适配器只做终态校验并留痕（applied_refs＝命中的候选值引用）。
+    """
+    from app.core.pool_options.models import ACTIVE, PoolOption
+
+    # 延迟导入防环：service 顶层已 import 本模块的 ADAPTERS。
+    from app.core.skill7.service import InvalidCandidatePayload
+    from app.product.condition.models import ContentGoal
+
+    payload = candidate.payload
+    if not isinstance(payload, dict) or not payload:
+        raise InvalidCandidatePayload("package_draft payload must be a non-empty dict")
+
+    goal_codes = {
+        code
+        for (code,) in (
+            await session.execute(
+                select(ContentGoal.code).where(ContentGoal.status == "active")
+            )
+        ).all()
+    }
+    option_pools: dict[str, set[str]] = {}
+    for pool_name in ("struct", "tone", "style"):
+        row = await session.get(PoolOption, pool_name)
+        if row is not None and row.status == ACTIVE and isinstance(row.options, list):
+            option_pools[pool_name] = {str(v) for v in row.options}
+        else:
+            option_pools[pool_name] = set()
+
+    refs: list[str] = []
+    goals = payload.get("goals") or []
+    if isinstance(goals, list):
+        for item in goals:
+            goal = item.get("goal") if isinstance(item, dict) else None
+            if goal is None:
+                continue
+            if goal not in goal_codes:
+                raise InvalidCandidatePayload(
+                    f"goal {goal!r} not in ContentGoal active dictionary"
+                )
+            refs.append(f"goal:{goal}")
+    structures = payload.get("structures") or []
+    if isinstance(structures, list):
+        for item in structures:
+            structure = item.get("structure") if isinstance(item, dict) else None
+            if structure is None:
+                continue
+            if structure not in option_pools.get("struct", set()):
+                raise InvalidCandidatePayload(
+                    f"structure {structure!r} not in struct pool options"
+                )
+            refs.append(f"structure:{structure}")
+    tone = payload.get("tone")
+    if tone is not None:
+        if tone not in option_pools.get("tone", set()):
+            raise InvalidCandidatePayload(f"tone {tone!r} not in tone pool options")
+        refs.append(f"tone:{tone}")
+    style = payload.get("style")
+    if style is not None:
+        if style not in option_pools.get("style", set()):
+            raise InvalidCandidatePayload(f"style {style!r} not in style pool options")
+        refs.append(f"style:{style}")
+    goal = payload.get("goal")
+    if goal is not None:
+        if goal not in goal_codes:
+            raise InvalidCandidatePayload(
+                f"goal {goal!r} not in ContentGoal active dictionary"
+            )
+        refs.append(f"goal:{goal}")
+    if not refs:
+        raise InvalidCandidatePayload(
+            "package_draft payload carries no in-dictionary goal/struct/tone/style value"
+        )
+    return refs
+
+
 ADAPTERS: dict[str, CandidateAdapter] = {
     "pwc_combo": apply_pwc_combo,
     "field_plan": apply_field_plan,
     "c1_recognition": apply_c1_recognition,
     "atom_batch": apply_atom_batch,
     "c7_layer4": apply_c7_layer4,
+    "package_draft": apply_package_draft,
 }
