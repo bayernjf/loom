@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 
 import "../tokens.css";
+import "../global-ui.css";
 
 export const metadata: Metadata = {
   title: "Loom",

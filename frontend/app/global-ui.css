@@ -1,0 +1,24 @@
+/*
+ * Loom 全局交互增强（Q331 门面收口）：只做加法，不覆盖任何 module 的布局与配色。
+ * 全部使用 :where() 零特异性选择器，module 规则始终优先；reduced-motion 由 tokens.css 兜底。
+ */
+/* 焦点可见性：键盘导航可见品牌色焦点环（AA 对比） */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-1);
+}
+
+/* 交互过渡：统一 hover/active 动效时长与缓动 */
+:where(button, a, input, textarea, select) {
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+/* 表格行 hover：统一浅底反馈（静止态不变） */
+:where(table) tbody tr:hover {
+  background: var(--color-bg-hover);
+}

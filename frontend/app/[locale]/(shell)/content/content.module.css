@@ -88,8 +88,8 @@
 }
 
 .toneRevising {
-  color: #b26a00;
-  border-color: #b26a00;
+  color: var(--color-warning-strong);
+  border-color: var(--color-warning-strong);
 }
 
 .toneGenerating {
@@ -126,8 +126,8 @@
   display: inline-block;
   padding: 1px var(--space-2);
   font-size: var(--font-size-xs);
-  color: #b26a00;
-  border: 1px solid #b26a00;
+  color: var(--color-warning-strong);
+  border: 1px solid var(--color-warning-strong);
   border-radius: var(--radius-1);
 }
 
@@ -144,7 +144,7 @@
 .qualityAdvisory {
   display: block;
   margin-top: 2px;
-  color: #b26a00;
+  color: var(--color-warning-strong);
   font-size: var(--font-size-xs);
 }
 
