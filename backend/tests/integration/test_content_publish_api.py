@@ -351,3 +351,41 @@ async def test_ready_queue_readable_by_platform_admin_but_write_denied(client):
         },
     )
     assert r.status_code == 403, r.text
+
+
+# ---- Q326：管理端跨租户成品详情（video-studio 生成结果区）----
+
+
+async def test_admin_content_detail_cross_tenant_returns_body(client):
+    # 内容运营台是跨租户管理页：运营口读 t2 成品必须 200 且带回 body（=video_ref
+    # 场景同理；客户口 /api/content/{id} 强制 tenant 归属，不可在此复用）。
+    cid = await _ready(client, "fcw-2", "zh-CN")  # fcw-2 属 t2
+    r = await client.get(f"/api/admin/content/{cid}", params=OPS_Q)
+    assert r.status_code == 200, r.text
+    view = r.json()
+    assert view["content_id"] == cid
+    assert view["tenant_id"] == "t2"
+    assert view["status"] == CONTENT_READY
+    assert view["body"]  # 详情口含 body（列表口不含）
+
+
+async def test_admin_content_detail_readable_by_platform_admin(client):
+    cid = await _ready(client, "fcw-2", "zh-CN")
+    r = await client.get(f"/api/admin/content/{cid}", params=ADMIN_Q)
+    assert r.status_code == 200, r.text
+    assert r.json()["tenant_id"] == "t2"
+
+
+async def test_admin_content_detail_role_gate(client):
+    cid = await _ready(client)
+    # 缺 actor → 422。
+    r = await client.get(f"/api/admin/content/{cid}")
+    assert r.status_code == 422, r.text
+    # 客户身份 → 403。
+    r = await client.get(f"/api/admin/content/{cid}", params=CUSTOMER_Q)
+    assert r.status_code == 403, r.text
+
+
+async def test_admin_content_detail_unknown_404(client):
+    r = await client.get("/api/admin/content/ghost-id", params=OPS_Q)
+    assert r.status_code == 404, r.text

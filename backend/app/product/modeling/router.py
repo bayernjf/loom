@@ -10,6 +10,7 @@ from app.core.rbac import (
     PermissionDenied,
     require_any_role,
 )
+from app.core.staff_auth.deps import require_internal_actor
 from app.product.modeling import c7, service
 from app.product.modeling.c1 import WeightSumError
 from app.product.modeling.schemas import (
@@ -58,6 +59,11 @@ def require_dictionary_view(
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return actor
+
+
+# Q325（02 C1.268）拍板：ops-decision 写口补角色闸，只认已验真 staff 令牌的 operations。
+# Q277 时点该口在 UNGATED（契约未定调用角色、代码无闸），Q325 裁决后移进 GATED。
+_ops_gate = require_internal_actor(OPERATIONS)
 
 
 # ---- Q2 信号权重 ----
@@ -193,10 +199,11 @@ async def post_recognition(
 async def post_ops_decision(
     intake_id: str,
     body: OpsDecisionRequest,
+    actor: Actor = Depends(_ops_gate),
     session: AsyncSession = Depends(get_session),
 ) -> TodoView:
     try:
-        todo = await service.ops_decide(session, intake_id, body)
+        todo = await service.ops_decide(session, intake_id, body, actor)
     except IntakeNotFound as exc:
         raise HTTPException(status_code=404, detail="intake not found") from exc
     except service.TodoNotFound as exc:

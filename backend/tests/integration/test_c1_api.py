@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.actor import Actor
 from app.core.db import Base, get_session
+from app.core.staff_auth.deps import get_auth_session
 from app.core.tenants.models import Tenant
 from app.main import app
 from app.product.modeling import service as modeling_service
@@ -16,6 +17,7 @@ from app.product.modeling.models import (
 )
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import G2Field
+from tests.integration.staff_tokens import acting_as
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 DICT_ADMIN = {"id": "dict-1", "roles": ["dictionary_admin"]}
@@ -35,6 +37,9 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # Q325：ops-decision 已加闸（require_internal_actor 走 get_auth_session 缝），
+    # 不一起覆盖会去连应用真实的 SessionLocal（与测试内存库不是同一个库）。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -139,15 +144,17 @@ async def test_mid_confidence_creates_ops_todo_and_sweep_escalates(client, sessi
         )
 
     # 候选外类目 422；选候选内类目 → 已提交，待办 resolved。
-    r = await client.post(
-        f"/api/intakes/{intake_id}/ops-decision",
-        json={"decision": "select", "category_id": "nope", "actor": OPS},
-    )
+    async with acting_as(client, ["operations"], staff_id="s-ops"):
+        r = await client.post(
+            f"/api/intakes/{intake_id}/ops-decision",
+            json={"decision": "select", "category_id": "nope", "actor": OPS},
+        )
     assert r.status_code == 422
-    r = await client.post(
-        f"/api/intakes/{intake_id}/ops-decision",
-        json={"decision": "select", "category_id": "c1", "actor": OPS},
-    )
+    async with acting_as(client, ["operations"], staff_id="s-ops"):
+        r = await client.post(
+            f"/api/intakes/{intake_id}/ops-decision",
+            json={"decision": "select", "category_id": "c1", "actor": OPS},
+        )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "resolved"
     r = await client.get(f"/api/intakes/{intake_id}")
@@ -161,15 +168,17 @@ async def test_reject_all_routes_to_cold_start(client):
         signals={"name": 0.65, "brief": 0.65, "sellpoint": 0.65},
     )
     # 全否必须带 B2 候选单。
-    r = await client.post(
-        f"/api/intakes/{intake_id}/ops-decision",
-        json={"decision": "reject_all", "actor": OPS},
-    )
+    async with acting_as(client, ["operations"], staff_id="s-ops"):
+        r = await client.post(
+            f"/api/intakes/{intake_id}/ops-decision",
+            json={"decision": "reject_all", "actor": OPS},
+        )
     assert r.status_code == 422
-    r = await client.post(
-        f"/api/intakes/{intake_id}/ops-decision",
-        json={"decision": "reject_all", "category_pending_id": "b2-9", "actor": OPS},
-    )
+    async with acting_as(client, ["operations"], staff_id="s-ops"):
+        r = await client.post(
+            f"/api/intakes/{intake_id}/ops-decision",
+            json={"decision": "reject_all", "category_pending_id": "b2-9", "actor": OPS},
+        )
     assert r.status_code == 200, r.text
     r = await client.get(f"/api/intakes/{intake_id}")
     assert r.json()["status"] == sm.CATEGORY_CREATING

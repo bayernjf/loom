@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import append_audit
 from app.core.rbac import PLATFORM_ADMIN, require_any_role
 from app.core.tenants.models import (
+    MONTHLY_TOKEN_QUOTA_BY_PLAN,
     PLANS,
-    TRIAL_MONTHLY_TOKEN_QUOTA,
     Tenant,
 )
 from app.product.product_intake.models import (
@@ -63,7 +63,7 @@ async def provision_tenant(
 
     # 开通即试用 → status=trial；选付费档开通 → active（Q95 接缝②）。
     status = "trial" if plan == "trial" else "active"
-    quota = TRIAL_MONTHLY_TOKEN_QUOTA if plan == "trial" else None
+    quota = MONTHLY_TOKEN_QUOTA_BY_PLAN[plan]
     tenant = Tenant(
         tenant_id=tenant_id,
         name=name,
@@ -135,10 +135,8 @@ async def change_plan(
     tenant = await get_tenant(session, tenant_id)
     old_plan = tenant.plan
     tenant.plan = plan
-    # 只有试用档额度有原文数值；切到付费档置空（各档额度【原文未给出，待补】）。
-    tenant.monthly_token_quota = (
-        TRIAL_MONTHLY_TOKEN_QUOTA if plan == "trial" else None
-    )
+    # Q325 拍板：各档额度按 MONTHLY_TOKEN_QUOTA_BY_PLAN 映射（trial 原文、其余工程建议值）。
+    tenant.monthly_token_quota = MONTHLY_TOKEN_QUOTA_BY_PLAN[plan]
     tenant.plan_changed_by = actor.id
     tenant.plan_changed_at = _now()
     await append_audit(

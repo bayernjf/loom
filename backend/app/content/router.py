@@ -257,6 +257,30 @@ async def list_needs_attention(
     return [service.content_list_item(row) for row in rows]
 
 
+@router.get(
+    "/api/admin/content/{content_id}",
+    response_model=ContentProductView,
+)
+async def admin_get_content(
+    content_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_admin_view),
+) -> ContentProductView:
+    """Q326：运营跨租户成品详情（只读）。
+
+    内容运营台是跨租户管理页（video-studio 生成结果区在岛内展开）；客户口
+    ``GET /api/content/{id}`` 强制 tenant_id 归属校验，管理端不得复用，否则非
+    当前占位租户的成品详情一律 404。本口走运营读闸、不做租户过滤
+    （``service.get_content`` 不传 tenant_id 即跨租户口径）。注册在
+    ready-to-publish / needs-attention 两个静态 GET 之后，避免参数路径吞静态段。
+    """
+    try:
+        content = await service.get_content(session, content_id)
+    except service.ContentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return service.content_view(content)
+
+
 @router.put(
     "/api/admin/content/{content_id}/publish-info",
     response_model=ContentProductView,

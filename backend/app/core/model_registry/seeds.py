@@ -288,6 +288,103 @@ $dynamic_events
 PLATFORM_ADAPTER_PROMPT_VARIABLES = ["pws", "platform_rules", "dynamic_events"]
 
 
+# ===========================================================================
+# WF-07 AI 选包四 Skill（段9；规格定稿 docs/12 §3.2，Q326 模型网关场景注册）
+# 四 Skill 只产字典值候选＋置信度，AI 不自动裁决；输出全部从已落字典取值，
+# 字典缺失不产出（禁臆造）。本批只注册场景（synthetic 路由），触发/候选/采用
+# 操作面随 design 候选档裁决后另点工。
+# ===========================================================================
+
+SCENE_PT_CONTENT_GOAL_PLAN = "PT-CONTENT-GOAL-PLAN"
+PT_CONTENT_GOAL_PLAN_VERSION = "v0.1"
+PT_CONTENT_GOAL_PLAN_PROMPT_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:PT-CONTENT-GOAL-PLAN:v0.1")
+)
+PT_CONTENT_GOAL_PLAN_TEMPLATE = """你是 Loom 私域内容生产平台段9 WF-07 的 PT-CONTENT-GOAL-PLAN Skill：根据产品资料与目标平台/发布位，规划内容目的候选。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【产品资料】
+$profile_snapshot
+
+目标平台：$platform
+发布位：$slot
+行业标签：$industry_tag
+敏感行业标记：$sensitive
+
+硬性规则（PT-CONTENT-GOAL-PLAN-v0.1）：
+1. 只输出 {"goals": [{"goal": "<目的码>", "confidence": <0..1>}]}；最多 3 个候选，按置信度降序。
+2. goal 必须取自 ContentGoal 活跃字典；不得编造字典外目的码。
+3. 无活跃目的字典时输出 {"goals": []}，不造假。
+4. confidence 为 0..1 的数值，须给出真实判断。
+5. 候选仅供人工裁决，不自动决定内容目的。
+"""
+PT_CONTENT_GOAL_PLAN_VARIABLES = [
+    "profile_snapshot", "platform", "slot", "industry_tag", "sensitive",
+]
+
+SCENE_PT_STRUCT_MATCH = "PT-STRUCT-MATCH"
+PT_STRUCT_MATCH_VERSION = "v0.1"
+PT_STRUCT_MATCH_PROMPT_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:PT-STRUCT-MATCH:v0.1")
+)
+PT_STRUCT_MATCH_TEMPLATE = """你是 Loom 私域内容生产平台段9 WF-07 的 PT-STRUCT-MATCH Skill：根据产品资料与发布位约束，匹配内容结构候选。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【产品资料】
+$profile_snapshot
+
+【发布位约束（字数上限/时长区间）】
+$slot
+
+硬性规则（PT-STRUCT-MATCH-v0.1）：
+1. 只输出 {"structures": [{"structure": "<结构值>", "confidence": <0..1>, "partial": <bool>}]}；最多 2 个候选。
+2. structure 必须取自 17 池 struct 池活跃字典；不得编造字典外取值。
+3. 发布位约束不满足时该候选 "partial": true（不直接剔除，交下游判断）；满足为 false。
+4. 无活跃 struct 池字典时输出 {"structures": []}。
+5. 候选仅供人工裁决，不自动决定内容结构。
+"""
+PT_STRUCT_MATCH_VARIABLES = ["profile_snapshot", "slot"]
+
+SCENE_PT_TONE_STYLE = "PT-TONE-STYLE"
+PT_TONE_STYLE_VERSION = "v0.1"
+PT_TONE_STYLE_PROMPT_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:PT-TONE-STYLE:v0.1")
+)
+PT_TONE_STYLE_TEMPLATE = """你是 Loom 私域内容生产平台段9 WF-07 的 PT-TONE-STYLE Skill：根据内容目的、目标平台与行业标签，确定语气与风格。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+内容目的：$goal
+目标平台：$platform
+行业标签：$industry_tag
+
+硬性规则（PT-TONE-STYLE-v0.1）：
+1. 只输出 {"tone": "<语气值>", "style": "<风格值>"}；两个维度各 1 个取值。
+2. tone 必须取自 17 池 tone 池活跃字典，style 必须取自 style 池活跃字典；不得编造字典外取值。
+3. 缺内容目的时不得自行默认填充，返回错误。
+4. 组合合法性由 WF-07 确定性三元组调度侧兜底。
+5. 结果仅供人工裁决，不自动生效。
+"""
+PT_TONE_STYLE_VARIABLES = ["goal", "platform", "industry_tag"]
+
+SCENE_PT_CONTENT_GOAL_TAG = "PT-CONTENT-GOAL-TAG"
+PT_CONTENT_GOAL_TAG_VERSION = "v0.1"
+PT_CONTENT_GOAL_TAG_PROMPT_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:PT-CONTENT-GOAL-TAG:v0.1")
+)
+PT_CONTENT_GOAL_TAG_TEMPLATE = """你是 Loom 私域内容生产平台段9 WF-07 的 PT-CONTENT-GOAL-TAG Skill：对已生成内容确认其内容目的标签。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【已生成内容（正文文本/视频描述）】
+$body
+
+声明目的：$goal
+
+硬性规则（PT-CONTENT-GOAL-TAG-v0.1）：
+1. 只输出 {"goal": "<目的码>", "confirmed": <bool>, "confidence": <0..1>}。
+2. 仅对已生成内容操作；内容缺失时返回错误，不臆造标签。
+3. goal 必须取自 ContentGoal 活跃字典；不得编造字典外目的码。
+4. confidence 不足阈值时仍可给出 goal，但须如实反映置信度。
+5. 结果仅供人工裁决，不自动改写目的。
+"""
+PT_CONTENT_GOAL_TAG_VARIABLES = ["body", "goal"]
+
+
 def all_scene_codes() -> tuple[str, ...]:
     """本模块声明的全部 SCENE_* 场景码（Q193：供指标预置零序列用）。
 

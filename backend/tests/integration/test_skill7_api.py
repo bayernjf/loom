@@ -22,7 +22,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
-from tests.integration.staff_tokens import bearer, issue_write_token
+from tests.integration.staff_tokens import acting_as, bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
@@ -346,3 +346,26 @@ async def test_consume_below_critical_requests_restock_with_debounce(
         f"/api/skill-runs?product_space_id={ps_id}&status=requested"
     )
     assert len(runs.json()["runs"]) == 1
+
+
+# ---------- Q325 ops-decision 写口凭证闸（02 C1.268：一律 operations） ----------
+
+_OPS_DECISION_BODY = {"decision": "select", "category_id": "c1", "actor": OPS}
+
+
+async def test_ops_decision_requires_staff_token(client):
+    # Q325 拍板：ops-decision 只认已验真 staff 令牌（门控关着也自行验真）。
+    saved = client.headers.pop("Authorization", None)
+    try:
+        resp = await client.post("/api/intakes/int-x/ops-decision", json=_OPS_DECISION_BODY)
+        assert resp.status_code == 401, resp.text
+    finally:
+        if saved is not None:
+            client.headers.update({"Authorization": saved})
+
+
+async def test_ops_decision_requires_operations_role(client):
+    # 越权口径＝换一枚真缺 operations 的令牌（Q242）。
+    async with acting_as(client, ["product_reviewer"], staff_id="s-reviewer"):
+        resp = await client.post("/api/intakes/int-x/ops-decision", json=_OPS_DECISION_BODY)
+        assert resp.status_code == 403, resp.text

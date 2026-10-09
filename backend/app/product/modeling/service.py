@@ -290,7 +290,7 @@ async def submit_recognition(session, intake_id, body) -> tuple[C1Record, OpsTod
     return record, todo
 
 
-async def ops_decide(session, intake_id, body) -> OpsTodo:
+async def ops_decide(session, intake_id, body, actor) -> OpsTodo:
     intake = await session.get(ProductIntakeApplication, intake_id)
     if intake is None:
         raise IntakeNotFound(intake_id)
@@ -321,7 +321,7 @@ async def ops_decide(session, intake_id, body) -> OpsTodo:
         valid = {c["category_id"] for c in (record.top_candidates if record else [])}
         if body.category_id not in valid:
             raise InvalidDecision("category_id must be one of the AI top candidates")
-        intake.status = sm.transition(intake.status, "ops_confirm", body.actor.roles)
+        intake.status = sm.transition(intake.status, "ops_confirm", actor.roles)
         if record:
             record.selected_category_id = body.category_id
         todo.status = "resolved"
@@ -331,7 +331,7 @@ async def ops_decide(session, intake_id, body) -> OpsTodo:
         if not body.category_pending_id:
             raise InvalidDecision("reject_all requires a B2 category_pending_id")
         intake.category_pending_id = body.category_pending_id
-        intake.status = sm.transition(intake.status, "to_cold_start", body.actor.roles)
+        intake.status = sm.transition(intake.status, "to_cold_start", actor.roles)
         todo.status = "cancelled"
         todo.resolution = "reject_all_to_cold_start"
         todo.resolved_at = datetime.now(UTC)
@@ -341,8 +341,8 @@ async def ops_decide(session, intake_id, body) -> OpsTodo:
     await append_audit(
         session,
         tenant_id=intake.tenant_id,
-        actor_id=body.actor.id,
-        actor_roles=body.actor.roles,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
         action=f"c1.ops_{body.decision}",
         entity_type="product_intake_application",
         entity_id=intake_id,

@@ -102,7 +102,7 @@
 | account | string | ✅ | 发布账号 |
 | slot | string | ✅ | 发布位 |
 | goals | string[] | ⬜ | 目的码交集过滤（不传不过滤） |
-| actor | object | ✅ | 操作人（id/roles） |
+| actor | object | ✅ | 操作人（id/roles）【Q325 起字段保留仅契约兼容，不再作为授权/审计依据——写闸＝已验真 staff 令牌的 `operations`（`require_internal_actor`），审计记令牌主体】 |
 
 响应 200：`pwc`（组合完整视图，含 score/gate_status/status/combo_atom_ids 等）、`usage_record_id`（取用即写流水）、`platform_state`（platform/state/cooldown_until，per-platform 冷却态）、`pool_ready_count`、`pool_health`（target100/low70/critical50）、`restock_hint`、`restock_run_id`。
 
