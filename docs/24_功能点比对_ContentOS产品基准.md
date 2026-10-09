@@ -11,7 +11,7 @@
 
 1. **核心主链完成度高**：13 段链中 **9 段闭环**（段1/2/4/5/6/8/10/11/13）、**4 段部分**（段3/7/9/12）；V1 主链段1→6→10→11 与段12/13 主体已落地，docs/20 三层判定 ① 功能覆盖达标／② 核心完全可用达标不变。
 2. **「全部搞完」≠ 是**：按产品文档全景口径，剩余未做项全部属 **V2 厚度／V3 辅助系统／周边** 与 **3 个已定位的待规格或未点工项**，不阻塞已判定的核心可用。
-3. **未做/部分项可归三类**：① 外部规格依赖（DIM-SOURCE 来源规格、PLATFORM-ADAPTER 真模型、fit_score 自学习数据源、agnes 视频 `mode`）；② 未点工大项（video-studio 业务链路面（载体已落 Q323）、WF-07 AI 选包 4 Skill；段9/12 字典强校验已 Q323 核实收口，不再属未点工项）；③ V2/V3 规划（KUP 分析面、知识库/Memory/客户门户等 P5 厚度、辅助系统 10 个、周边商业/账号/BI/Webhook/SDK/移动端/国际化/白牌）。
+3. **未做/部分项可归三类**：① 外部规格依赖（DIM-SOURCE 来源规格、PLATFORM-ADAPTER 真模型、fit_score 自学习数据源、agnes 视频 `mode`）；② 未点工大项（video-studio 业务链路面（载体已落 Q323、管理端两屏 UI 已落 Q324，分段编辑器/内容清洗区待点工）、WF-07 AI 选包 4 Skill；段9/12 字典强校验已 Q323 核实收口，不再属未点工项）；③ V2/V3 规划（KUP 分析面、知识库/Memory/客户门户等 P5 厚度、辅助系统 10 个、周边商业/账号/BI/Webhook/SDK/移动端/国际化/白牌）。
 
 ## 1. 比对方法
 
@@ -72,7 +72,7 @@
 
 | 项 | 现状 | 出处 |
 |---|---|---|
-| video-studio 段12 视频支线（白名单信息区/分段编辑器/内容清洗区/生成结果区） | VIDEO-GEN 引擎预备切片已落（Q252）＋后端载体切片已落（Q323 `invoke_video_gen`＋kind 分流＋7 测试），业务链路面待点工 | docs/23 §8.5、Q252、Q323 |
+| video-studio 段12 视频支线（白名单信息区/分段编辑器/内容清洗区/生成结果区） | VIDEO-GEN 引擎预备切片已落（Q252）＋后端载体切片已落（Q323 `invoke_video_gen`＋kind 分流＋7 测试）＋管理端两屏 UI 已落（Q324：白名单信息区/生成结果区只读），分段编辑器/内容清洗区待点工 | docs/23 §8.5、Q252、Q323 |
 | WF-07 AI 选包四 Skill（docs/12 #21–24） | 全 ⬜ 占位未定稿 | docs/23 §8.3 P2、docs/12 |
 | 段9/12「选料只能从字典里选」运行期强校验 | Q323 核实收口：goal 维度强校验已闭环（E1.1 `_validate_goal` 404＋PWC `unknown_goals` 判红，只认 Q25 目的字典）；其余 16 池为 PCP 权重维度无自由池值输入点；Q38 六码随段7 点工挂账 | docs/02 C1.266、Q323 |
 
@@ -94,5 +94,5 @@
 - **可一口气推进（纯工程/纯文档，无外部规格依赖）**：
   - A. docs/24 本报告落地＋文档合龙（Q322 已落地）
   - B. 段9/12 运行期字典强校验核实收口（**Q323 已落地**：goal 维度强校验已闭环（E1.1 `_validate_goal` 404＋PWC `unknown_goals` 判红，只认 Q25 目的字典）；其余 16 池为 PCP 权重维度、组装请求仅 goal/platform/slot/country 无自由池值输入点 ⇒ 无运行期自由输入；Q38 六码运行期强校验随段7 真模型接入点工挂账；落点＝`pool_options/service.py` docstring 消费方声明）
-  - C. video-studio 载体后端切片（**Q323 已落地**：`invoke_video_gen`＋`_run_generation` kind 分流＋`generate_content` video 放行＋router VideoGen 三异常（404/409/502）＋`test_content_video_api.py` 7 例；业务链路面（白名单信息区/分段编辑器/内容清洗区/生成结果区）仍待点工）
+  - C. video-studio 载体后端切片（**Q323 已落地**：`invoke_video_gen`＋`_run_generation` kind 分流＋`generate_content` video 放行＋router VideoGen 三异常（404/409/502）＋`test_content_video_api.py` 7 例；管理端两屏 UI（白名单信息区/生成结果区）已随 Q324 落地，分段编辑器/内容清洗区仍待点工）
 - **需拍板/等外部输入**：DIM-SOURCE 规格、8 种检测名单＋评分公式、agnes 视频 `mode`、PLATFORM-ADAPTER 真模型供应商、fit_score 自学习数据源、付费档额度、KUP 分析面是否提前点工。
