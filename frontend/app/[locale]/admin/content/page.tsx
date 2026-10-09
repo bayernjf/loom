@@ -11,10 +11,12 @@ import {
 } from "@/lib/api";
 import { DiscardIsland } from "./discard-island";
 import { PublishInfoIsland } from "./publish-info-island";
+import { VideoStudioIsland } from "./video-studio-island";
 import styles from "../admin.module.css";
 
 // Q124/Q125：管理端内容运营台——待发布队列回填平台链接/ID（Q60c），
 // 待处置队列（review/revising/rejected）作废骨架回池（Q56-b）。
+// Q324：video 成品行内嵌 video-studio 两屏（白名单信息区 + 生成结果区，只读）。
 // 读口 operations | platform_admin，写口 operations 硬闸（岛内置缺失角色提示）。
 export const dynamic = "force-dynamic";
 
@@ -128,6 +130,7 @@ function PublishQueueSection({
               <th>{t("colQuality")}</th>
               <th>{t("colReview")}</th>
               <th>{t("colCreated")}</th>
+              <th>{t("colVideo")}</th>
               <th>{t("colPublish")}</th>
             </tr>
           </thead>
@@ -141,6 +144,16 @@ function PublishQueueSection({
                   showStatus={false}
                 />
                 <td>
+                  {item.kind === "video" ? (
+                    <VideoStudioIsland
+                      contentId={item.content_id}
+                      finalId={item.final_id}
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td>
                   <PublishInfoIsland contentId={item.content_id} />
                 </td>
               </tr>
@@ -153,6 +166,16 @@ function PublishQueueSection({
                   tStatus={tStatus}
                   showStatus={false}
                 />
+                <td>
+                  {item.kind === "video" ? (
+                    <VideoStudioIsland
+                      contentId={item.content_id}
+                      finalId={item.final_id}
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>
                   <a href={item.published_url ?? "#"} target="_blank" rel="noreferrer">
                     {item.published_url}
@@ -216,6 +239,7 @@ function NeedsAttentionSection({
                 <th>{t("colQuality")}</th>
                 <th>{t("colReview")}</th>
                 <th>{t("colCreated")}</th>
+                <th>{t("colVideo")}</th>
                 <th>{t("colDiscard")}</th>
               </tr>
             </thead>
@@ -228,6 +252,16 @@ function NeedsAttentionSection({
                     tStatus={tStatus}
                     showStatus
                   />
+                  <td>
+                    {item.kind === "video" ? (
+                      <VideoStudioIsland
+                        contentId={item.content_id}
+                        finalId={item.final_id}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td>
                     <DiscardIsland contentId={item.content_id} />
                   </td>

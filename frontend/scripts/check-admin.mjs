@@ -246,6 +246,18 @@ const requiredKeys = [
     "discardSuccess",
     "actorUnconfigured",
     "actorMissingRole",
+    "colVideo",
+    "videoStudioToggle",
+    "whitelistTitle",
+    "resultTitle",
+    "videoRefLabel",
+    "videoNoTextReview",
+    "layerName.product",
+    "layerName.platform",
+    "layerName.strategy",
+    "layerName.structure",
+    "layerName.expression",
+    "layerName.compliance",
   ].map((k) => `admin.contentOps.${k}`),
   ...[
     "title",
@@ -496,6 +508,7 @@ const requiredFiles = [
   join("content", "actions.ts"),
   join("content", "publish-info-island.tsx"),
   join("content", "discard-island.tsx"),
+  join("content", "video-studio-island.tsx"),
   join("effects", "page.tsx"),
   join("effects", "actions.ts"),
   join("effects", "orphan-table-island.tsx"),
@@ -1134,6 +1147,7 @@ const contentOpsPage = readAdmin(join("content", "page.tsx"));
 const contentOpsActions = readAdmin(join("content", "actions.ts"));
 const publishIsland = readAdmin(join("content", "publish-info-island.tsx"));
 const discardIsland = readAdmin(join("content", "discard-island.tsx"));
+const videoStudioIsland = readAdmin(join("content", "video-studio-island.tsx"));
 
 if (!/export const dynamic = "force-dynamic"/.test(contentOpsPage))
   problems.push("admin/content/page.tsx must be force-dynamic (server-only env)");
@@ -1143,7 +1157,7 @@ for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
   if (contentOpsPage.includes(forbidden))
     problems.push(`admin/content/page.tsx is read-only; must not contain ${forbidden}`);
 }
-for (const token of ["getReadyToPublishQueue", "getNeedsAttentionQueue", "PublishInfoIsland", "DiscardIsland"]) {
+for (const token of ["getReadyToPublishQueue", "getNeedsAttentionQueue", "PublishInfoIsland", "DiscardIsland", "VideoStudioIsland"]) {
   if (!contentOpsPage.includes(token))
     problems.push(`admin/content/page.tsx must use ${token}`);
 }
@@ -1158,6 +1172,9 @@ for (const token of [
   "ADMIN_ROLE_LIST",
   "setPublishInfo",
   "adminDiscardContent",
+  "getContentDetailAction",
+  "getVideoWhitelistMaterialAction",
+  "getAdminFcwMaterial",
 ]) {
   if (!contentOpsActions.includes(token))
     problems.push(`admin/content/actions.ts must contain ${token}`);
