@@ -188,7 +188,7 @@ async def test_evaluate_creates_todo_once_and_freeze_resolves(client, session_fa
     assert r2.json()["todo_id"] == todo_id  # 幂等
 
     freeze = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     assert freeze.status_code == 200, freeze.text
     pws = freeze.json()["pws"]
@@ -221,18 +221,23 @@ async def test_ready_todo_escalates_after_7_days(client, session_factory):
     async with session_factory() as session:
         todo = await session.get(OpsTodo, todo_id)
         assert todo.status == "escalated"
-        assert todo.assignee_role == "whitelist_owner"
+        assert todo.assignee_role == "operations"  # Q329：PWS 待办指派改判 operations
 
 
 async def test_freeze_blocked_when_not_green_and_role(client, session_factory):
     ps_id = await _make_ps(session_factory)
+    # Q329（Q242 乙案）后角色闸 = operations：客户角色 whitelist_owner 与空角色均 403（红线角色闸优先）。
     denied = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
     )
-    assert denied.status_code == 403  # 红线角色闸优先
+    assert denied.status_code == 403
+    denied2 = await client.post(
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": NOBODY}
+    )
+    assert denied2.status_code == 403
 
     red = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     assert red.status_code == 409  # 就绪门不全绿
     assert red.json()["detail"]["approved_field_pool"] is False
@@ -268,30 +273,30 @@ async def test_blocked_conflict_gate(client, session_factory):
 async def test_refreeze_tiers_and_versioning(client, session_factory):
     ps_id = await _green_ps(client, session_factory)
     v1 = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     v1_id = v1.json()["pws"]["pws_id"]
 
     no_reason = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     assert no_reason.status_code == 422
 
     none_tier = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "unrelated_change"},
+        json={"actor": OPS, "reason_code": "unrelated_change"},
     )
     assert none_tier.status_code == 409
 
     bad_reason = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "nope"},
+        json={"actor": OPS, "reason_code": "nope"},
     )
     assert bad_reason.status_code == 422
 
     v2 = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "asset_increment"},
+        json={"actor": OPS, "reason_code": "asset_increment"},
     )
     assert v2.status_code == 200, v2.text
     p2 = v2.json()["pws"]
@@ -316,11 +321,11 @@ async def test_refreeze_tiers_and_versioning(client, session_factory):
 async def test_forced_refreeze_flags_recheck(client, session_factory):
     ps_id = await _green_ps(client, session_factory)
     await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     v2 = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "wordlist_hit"},
+        json={"actor": OPS, "reason_code": "wordlist_hit"},
     )
     assert v2.json()["pws"]["refreeze_tier"] == "forced"
     assert v2.json()["dispositions"]["unpublished_pending_recheck"] is True
@@ -332,23 +337,23 @@ async def test_revoke_cuts_consumption_and_refreeze(client, session_factory):
     ps_id = await _green_ps(client, session_factory)
     v1 = (
         await client.post(
-            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
         )
     ).json()["pws"]
 
     denied = await client.post(
         f"/api/pws/{v1['pws_id']}/revoke",
-        json={"reason": "外部新规追溯命中", "actor": OPS},
+        json={"reason": "外部新规追溯命中", "actor": NOBODY},
     )
-    assert denied.status_code == 403
+    assert denied.status_code == 403  # Q329：非 operations 角色 403（service 兜底）
     missing = await client.post(
-        "/api/pws/nope/revoke", json={"reason": "x", "actor": OWNER}
+        "/api/pws/nope/revoke", json={"reason": "x", "actor": OPS}
     )
     assert missing.status_code == 404
 
     revoked = await client.post(
         f"/api/pws/{v1['pws_id']}/revoke",
-        json={"reason": "外部新规追溯命中", "actor": OWNER},
+        json={"reason": "外部新规追溯命中", "actor": OPS},
     )
     assert revoked.status_code == 200
     assert revoked.json()["status"] == "revoked"
@@ -356,13 +361,13 @@ async def test_revoke_cuts_consumption_and_refreeze(client, session_factory):
 
     again = await client.post(
         f"/api/pws/{v1['pws_id']}/revoke",
-        json={"reason": "再次急停", "actor": OWNER},
+        json={"reason": "再次急停", "actor": OPS},
     )
     assert again.status_code == 409
 
     # 作废后重冻新版（Q32）
     v2 = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     assert v2.status_code == 200
     assert v2.json()["pws"]["version"] == "v2.0"
@@ -372,7 +377,7 @@ async def test_revoke_cuts_consumption_and_refreeze(client, session_factory):
 async def test_snapshot_immutable_after_source_change(client, session_factory):
     ps_id = await _green_ps(client, session_factory)
     freeze = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     frozen_atoms = freeze.json()["pws"]["snapshot"]["atoms"]
     assert len(frozen_atoms) == 3

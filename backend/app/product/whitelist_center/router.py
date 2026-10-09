@@ -2,12 +2,19 @@
 
 错误口径：不存在 404 / 角色不符 403 / 状态或就绪门不允许 409 /
 重冻原因校验失败 422；所有写操作 writeAudit。
+
+角色口径（Q329，Q242 乙案）：freeze/revoke 两写口改判 operations——
+require_internal_actor(OPERATIONS) 为 HTTP 闸（门控关 no-op、门控开要求 staff 令牌），
+service._require_ops 保留作 worker 内部兜底；body.actor 形状保留（值被令牌覆盖）。
 """
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.db import get_session
+from app.core.rbac import OPERATIONS
+from app.core.staff_auth.deps import require_internal_actor
 from app.product.whitelist_center import service
 from app.product.whitelist_center.models import PwsSnapshot
 from app.product.whitelist_center.schemas import (
@@ -80,6 +87,7 @@ async def freeze(
     product_space_id: str,
     body: FreezeRequest,
     session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(require_internal_actor(OPERATIONS)),
 ):
     try:
         result = await service.freeze(session, product_space_id, body, body.actor)
@@ -107,7 +115,12 @@ async def freeze(
 
 
 @router.post("/pws/{pws_id}/revoke")
-async def revoke(pws_id: str, body: RevokeRequest, session: AsyncSession = Depends(get_session)):
+async def revoke(
+    pws_id: str,
+    body: RevokeRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(require_internal_actor(OPERATIONS)),
+):
     try:
         snapshot = await service.revoke(session, pws_id, body.reason, body.actor)
     except service.PwsNotFound as exc:

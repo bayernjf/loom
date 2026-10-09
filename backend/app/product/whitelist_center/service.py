@@ -1,6 +1,9 @@
 """段6 PWS 冻结服务：就绪门（line 2634）、Q28 待办、Q29/Q30/Q31/Q32 版本动作、Q33 同租户查重提示。
 
-AI 不参与冻结：系统只做机械核验与待办提请，盖章必须 BO-07（whitelist_owner，红线 line 7674）。
+AI 不参与冻结：系统只做机械核验与待办提请，盖章动作的角色已按 Q329（Q242 乙案）由
+BO-07（whitelist_owner，红线 line 7674）改判为 operations——whitelist_owner 不可签发
+staff 令牌（Q178 限五内部角色），V1 代运营期冻结/吊销由运营执行，与 FCW final_id revoke
+（Q250，OPERATIONS）同口径；whitelist_owner 保留为 Q28 原文角色，随 V2 客户侧认证回评。
 """
 
 from datetime import UTC, datetime, timedelta
@@ -8,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 
 from app.core.audit import append_audit
+from app.core.rbac import OPERATIONS
 from app.product.atom.atom_rules import ATOM_APPROVED
 from app.product.atom.models import AtomCandidate, AtomConflict, ProductAtomInstance
 from app.product.condition import pwc_rules
@@ -65,9 +69,11 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _require_owner(actor) -> None:
-    if pws_rules.ROLE_PWS_OWNER not in actor.roles:
-        raise RoleNotAllowed("PWS freeze requires BO-07 whitelist_owner role")
+def _require_ops(actor) -> None:
+    # Q329（Q242 乙案）：BO-07 whitelist_owner 不可签发 staff 令牌，改判 operations。
+    # service 层自判保留作非 HTTP 调用方（worker）兜底；HTTP 闸在 router（require_internal_actor）。
+    if OPERATIONS not in actor.roles:
+        raise RoleNotAllowed("PWS freeze/revoke requires operations role (Q329: BO-07 reassigned from whitelist_owner)")
 
 
 # ---------- Q28 pwsReadiness 5 项 ----------
@@ -173,7 +179,7 @@ async def evaluate(session, product_space_id: str, actor) -> dict:
                 todo_type=TODO_TYPE_PWS_READY,
                 entity_type=ENTITY_PS,
                 entity_id=product_space_id,
-                assignee_role=pws_rules.ROLE_PWS_OWNER,
+                assignee_role=OPERATIONS,
                 detail={"summary": readiness["counts"], "proposed_by": actor.id},
                 due_at=_now() + timedelta(days=pws_rules.ready_todo_due_days()),
             )
@@ -244,7 +250,7 @@ async def _snapshot_assets(session, product_space_id: str) -> dict:
 
 
 async def freeze(session, product_space_id: str, body, actor) -> dict:
-    _require_owner(actor)
+    _require_ops(actor)
     ps = await session.get(ProductSpace, product_space_id)
     if ps is None:
         raise ProductSpaceNotFound(product_space_id)
@@ -473,7 +479,7 @@ async def freeze(session, product_space_id: str, body, actor) -> dict:
 # ---------- Q32 急停 ----------
 
 async def revoke(session, pws_id: str, reason: str, actor) -> PwsSnapshot:
-    _require_owner(actor)
+    _require_ops(actor)
     snapshot = await session.get(PwsSnapshot, pws_id)
     if snapshot is None:
         raise PwsNotFound(pws_id)

@@ -28,7 +28,6 @@ from tests.integration.test_fcw_api import (
     COMPLIANCE,
     GOAL,
     OPS,
-    OWNER,
     REVIEWER,
     _assemble_body,
     _dim,
@@ -142,7 +141,7 @@ async def _prepare(client, session_factory, *, industry="general"):
             f"/api/pwcs/{pwc_id}/gate", json={"decision": "approve", "actor": REVIEWER}
         )
         freeze = await client.post(
-            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
         )
         pws = freeze.json()["pws"]
     else:

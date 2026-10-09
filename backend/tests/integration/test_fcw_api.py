@@ -172,7 +172,7 @@ async def _freeze(client, ps_id, contents=("温和洁面", "水润肤感", "清�
     pwc_id = funnel.json()[0]["pwc_id"]
     await client.post(f"/api/pwcs/{pwc_id}/gate", json={"decision": "approve", "actor": REVIEWER})
     freeze = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     assert freeze.status_code == 200, freeze.text
     return freeze.json()["pws"]
@@ -342,7 +342,7 @@ async def test_duplicate_and_superseded_pws_guards(client, session_factory):
     # Q29 重冻：旧版 superseded/is_active=false → 指定旧 pws_id 过 Guard①⑦ 失败
     v2 = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "asset_increment"},
+        json={"actor": OPS, "reason_code": "asset_increment"},
     )
     assert v2.status_code == 200
     old = await client.post(
@@ -480,7 +480,7 @@ async def test_law_review_blocks_g6_until_approved(client, session_factory):
     pwc_id = funnel.json()[0]["pwc_id"]
     await client.post(f"/api/pwcs/{pwc_id}/gate", json={"decision": "approve", "actor": REVIEWER})
     freeze = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     pws = freeze.json()["pws"]
     slot_id = await _seed_static_inputs(client, ps_id)
