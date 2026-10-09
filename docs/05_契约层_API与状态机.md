@@ -360,6 +360,7 @@
 | PUT `/api/admin/content/{content_id}/publish-info` | **operations 写口**（Q125，越权 403）：body=`{url(必填非空白,≤1000),platform_post_id?(≤128),actor}`；仅 ready_for_publish（否则 409）、未知 404、空白 url 422；首次落 `published_at`，可重复回填修正 url（不重置时间），post_id 缺省不动、空串清空；审计 `content.publish_info_set` | Q125/Q60c |
 | GET `/api/admin/content/ready-to-publish` | **operations \| platform_admin 读口**（Q125，query actor 闸，缺 422/越权 403）：跨租户全部 ready_for_publish 成品，created_at 升序先到先发，行不含 body；published_at 空=待回填、非空=已回填（显链接可修正） | Q125/Q60c |
 | GET `/api/admin/content/needs-attention` | **operations \| platform_admin 读口**（Q124，query actor 闸）：跨租户 review/revising/rejected 成品（可作废候选），created_at 升序，行不含 body；**两个静态 GET 必须注册在参数路由 PUT/POST 之前** | Q124/Q56-b |
+| GET `/api/admin/content/{content_id}` | **operations \| platform_admin 读口**（Q326，`require_ops_admin_view`，query actor 闸：缺 actor_id 422、客户角色 403）：**跨租户只读成品详情**，返回 ContentProductView 含 `body` 与完整 review_hits/质量字段（service.get_content 不传 tenant_id 即运营跨租户口径，与客户口 GET `/api/content/{id}` 的强制租户反查区分）；供内容运营台 video-studio 屏2 生成结果区（Q324 起该屏误用客户租户隔离口 `?tenant_id=<前端固定占位 t1>`，非 t1 租户成品详情必 404，Q326 浏览器测试发现并修复，两屏口径对齐屏1 的管理端 material 口）；未知/ghost id 404；**必须注册在 ready-to-publish/needs-attention 两个静态 GET 之后**，否则被参数路径吞静态段 | Q326 |
 
 > 复检口径（Q59 四项）：①**词库扫描**（复用 Q48 词库 + ccr_rules 三层裁决，ban 命中 `block_required=true` 硬阻断，落 `review_hits.bans/downgrades`）；②**语义级检测**（Q121 已落，模型网关第 9 场景 ARTICLE-SEMANTIC-CHECK，落 `review_hits.semantic`，**纯 advisory** 不阻断）；③施工指令核对、④国家规则核对仍【原文未给出，待补】。状态机见 §2.12，表见 04 §3 / 10 §2.9。
 >
