@@ -1,6 +1,12 @@
 # Handoff — Loom
 
-> **最新（2026-10-09）：Q324 候选稿统一审阅档＋agnes 视频 mode 查证＋video-studio 管理端两屏 UI（**前端代码＋文档**，零后端零迁移零测试变化；基线不变 **1213 passed＋10 skipped／收集 1223**、头 `0052_pool_options`／71 表·766 列；02 C1.267）**——负责人对「等外部输入」与「待点工大项」两段批注「你自己不能搞吗，给我选项」「咋搞，帮我决策」，把外部输入类收拢成候选审阅档、可直做类本批点工：
+> **最新（2026-10-09）：Q325 八件候选按推荐全部落地（**后端代码＋迁移＋文档**；基线待全量 pytest 定数、头 `0053_q325_candidate_backfill`／71 表·766 列；02 C1.268）**——负责人对 design-q324 §10 审核表批「按推荐」，八件（#1–#8）全部落地、agnes 视频 mode（#9）维持【待供应商文档】挂账：
+> - **种子回填四件**：Q38 六码 name/why（seeds `DOWNGRADE_ACTION_META`＋迁移 0053 UPDATE 六行）／Q43 17 池候选值（seeds `POOL_OPTION_CANDIDATES` 每池 3–6 值＋迁移 0053 UPDATE 17 行，goal 池闭环不入表）／DIM-SOURCE 第 7 路 `case_evidence`（迁移 0053 INSERT，field_plan 动态白名单自动生效）／付费档第 5 档 `agency`（PLANS＋`MONTHLY_TOKEN_QUOTA_BY_PLAN` 五档额度，service 两处改用字典，零迁移）。
+> - **代码能力三件**：三条写口加闸（ops-decision/funnel/consume 一律 `operations`＋`require_internal_actor`，GATED 移入写期望角色＋补 401/403 用例 4 例；body.actor 保留兼容不再作授权/审计依据）／8 检测名单＋评分公式**规格定稿**（design-d3.5 §3.3 挂账②闭合，复用段5 同源不新造引擎）／fit_score 自学习映射（`fit_learning.py` 纯函数：traffic=plays/conv=inquiries+conversions/load=read_rate→0-100 advisory，safe 维持人工、数据不足不触发、门控默认关；单测 5 例）。
+> - **WF-07 四 Skill 规格定稿**：docs/12 #21–24 ⬜→✅（§3.2 四份，与 Q25/Q43 字典强校验闭环对齐）。
+> 合龙：02 C1.268＋续编索引、CHANGELOG 补 Q325、handoff 本 banner（Q324 转「其前」）、AGENTS 权威行前移 Q325、docs/08 权威行前移 Q325、docs/16 补 Q325 基线刷新行、docs/05 三口角色列回填＋Q325 追认、docs/11 consume actor 行订正、design-q324 翻 ✅＋§10 批注、design-d3.5 §2 第 3 行翻 ✅＋挂账②闭合、docs/README docs/02 行前移 Q325/C1.268。【复判不变】① 达标／② 达标／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agnes 视频 `mode`（清单二 #6，待供应商文档）＋Q242 `whitelist_owner` 可签发性＋现网部署（服务器/域名）。
+>
+> **其前（2026-10-09）：Q324 候选稿统一审阅档＋agnes 视频 mode 查证＋video-studio 管理端两屏 UI（**前端代码＋文档**，零后端零迁移零测试变化；基线不变 **1213 passed＋10 skipped／收集 1223**、头 `0052_pool_options`／71 表·766 列；02 C1.267）**——负责人对「等外部输入」与「待点工大项」两段批注「你自己不能搞吗，给我选项」「咋搞，帮我决策」，把外部输入类收拢成候选审阅档、可直做类本批点工：
 > - **A 组＝docs/design-q324-candidate-review.md 候选审阅档（八件全部草案·待负责人确认，零落生产）**：Q38 六码 name/why 文案候选／Q43 17 池候选值（每池 3–6 个取值起点，`stage` 与 `action` 语义区分已注）／DIM-SOURCE 第 7 路候选（甲 `case_evidence`〔推荐〕/乙 维持 6 路/丙 `user_generated`）／8 种检测名单＋评分公式候选（复用段5 同源能力，权重 0.30/0.25/0.15/0.10/0.10/0.05/0.05/0.00＋blocked 一票否决＋阈值 0.85）／三条写口角色候选（一律 operations，加闸须裁决后回填）／付费档第 5 档候选（甲 `agency`〔推荐〕/乙 笔误/丙 enterprise-plus）／fit_score 自学习映射候选（traffic=plays、conv=inquiries+conversions、load=read_rate，safe 维持人工）／WF-07 四 Skill 规格草案；§10 汇总审核表供逐行批注。
 > - **B 组①＝agnes 视频 mode 查证**：公开检索无官方契约证据（仅第三方使用经验 Video2.5Flash/3–18s/720P，不可作合法取值证据）⇒ **维持【待供应商接口文档】挂账**（design-q324 §9）。
 > - **B 组②＝video-studio 管理端两屏 UI（纯前端只读，不依赖 mode）**：`/admin/content` 新增「视频工作台」列（kind=video 挂载 `VideoStudioIsland`）——屏1 白名单信息区（Q177 管理端 material 口六层键数摘要）＋屏2 生成结果区（详情 body=video_ref＋状态＋「视频不跑文本复检（规格【待补】Q323）」）；i18n＋check-admin 守卫；前端 typecheck＋check-admin＋check-content 全绿。
