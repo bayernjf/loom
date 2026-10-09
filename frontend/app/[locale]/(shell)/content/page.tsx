@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
+import { EmptyState } from "@/components/empty-state";
 import {
   ApiError,
   CURRENT_TENANT_ID,
@@ -75,7 +76,7 @@ export default async function ContentPage() {
       const items = await listContent(CURRENT_TENANT_ID);
       body =
         items.length === 0 ? (
-          <p className={styles.notice}>{t("empty")}</p>
+          <EmptyState title={t("empty")} />
         ) : (
           <table className={styles.table}>
             <thead>

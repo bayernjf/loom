@@ -1,4 +1,5 @@
 import { formatDateTimeLocal } from "@/lib/time";
+import { EmptyState } from "@/components/empty-state";
 import { getTranslations } from "next-intl/server";
 
 import { ApiError, listExportJobs } from "@/lib/api";
@@ -81,7 +82,7 @@ export default async function ExportsPage({
           <section className={styles.section}>
             <h2 className={styles.sectionTitle}>{t("listTitle")}</h2>
             {jobs.length === 0 ? (
-              <p className={styles.notice}>{t("empty")}</p>
+              <EmptyState title={t("empty")} />
             ) : (
               <div className={styles.tableWrap}>
                 <table className={styles.table}>

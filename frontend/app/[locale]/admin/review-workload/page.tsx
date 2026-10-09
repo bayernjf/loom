@@ -1,4 +1,5 @@
 import { formatDateTimeLocal } from "@/lib/time";
+import { EmptyState } from "@/components/empty-state";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import {
@@ -50,7 +51,7 @@ function CandidateTable({
   rows: CandidateBacklogRow[];
   t: (key: string) => string;
 }) {
-  if (rows.length === 0) return <p className={styles.notice}>{t("empty")}</p>;
+  if (rows.length === 0) return <EmptyState title={t("empty")} />;
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
@@ -86,7 +87,7 @@ function TodoTable({
   rows: TodoBacklogRow[];
   t: (key: string) => string;
 }) {
-  if (rows.length === 0) return <p className={styles.notice}>{t("empty")}</p>;
+  if (rows.length === 0) return <EmptyState title={t("empty")} />;
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
@@ -120,7 +121,7 @@ function DecidedTable({
   rows: DecidedCountRow[];
   t: (key: string) => string;
 }) {
-  if (rows.length === 0) return <p className={styles.notice}>{t("empty")}</p>;
+  if (rows.length === 0) return <EmptyState title={t("empty")} />;
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
@@ -150,7 +151,7 @@ function ResolvedTable({
   rows: ResolvedCountRow[];
   t: (key: string) => string;
 }) {
-  if (rows.length === 0) return <p className={styles.notice}>{t("empty")}</p>;
+  if (rows.length === 0) return <EmptyState title={t("empty")} />;
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
