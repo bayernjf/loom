@@ -11,7 +11,9 @@ from collections import Counter
 from collections.abc import Callable
 from itertools import pairwise
 
+from app.core.pool_options.seeds import POOL_OPTION_CANDIDATES
 from app.product.atom.models import EMBEDDING_DIM
+from app.product.condition.pwc_rules import CONTENT_GOALS
 
 
 def _signal_score(text: str) -> float:
@@ -332,6 +334,102 @@ def build_platform_adapter(variables: dict) -> dict:
 
 
 BUILDERS["PLATFORM-ADAPTER"] = build_platform_adapter
+
+
+# ===========================================================================
+# WF-07 AI 选包四 Skill 构造器（段9；规格 docs/12 §3.2，Q326 场景注册）
+# 只产字典值候选＋置信度；可用字典由调用方经 available_* 变量传入（含空列表
+# ＝字典被清空→空候选/错误），未传入时回落到工程种子。AI 不自动裁决。
+# ===========================================================================
+
+def _available(variables: dict, key: str, fallback: list[str]) -> list[str]:
+    values = variables.get(key)
+    return list(values) if values is not None else list(fallback)
+
+
+def build_pt_content_goal_plan(variables: dict) -> dict:
+    """PT-CONTENT-GOAL-PLAN：产 goal 候选（≤3，命中 ContentGoal 字典）。
+
+    无产品资料（规划无依据）或可用 goal 字典为空 → goals 空数组，不造假。
+    """
+    profile = variables.get("profile_snapshot")
+    if not profile:
+        return {"goals": []}
+    goals = _available(variables, "available_goals", list(CONTENT_GOALS))
+    confidences = (0.92, 0.85, 0.78)
+    return {
+        "goals": [
+            {"goal": goal, "confidence": confidences[index]}
+            for index, goal in enumerate(goals[:3])
+        ]
+    }
+
+
+BUILDERS["PT-CONTENT-GOAL-PLAN"] = build_pt_content_goal_plan
+
+
+def build_pt_struct_match(variables: dict) -> dict:
+    """PT-STRUCT-MATCH：产结构候选（≤2，命中 struct 池字典）。
+
+    发布位约束缺失按「不满足」记 partial=true（docs/12 §3.2 #22 异常降级）；
+    可用 struct 池为空 → structures 空数组。
+    """
+    structs = _available(variables, "available_struct", POOL_OPTION_CANDIDATES["struct"])
+    slot = variables.get("slot")
+    if not isinstance(slot, dict) or slot.get("chars_max") is None:
+        partial = True
+    else:
+        partial = False
+    confidences = (0.90, 0.82)
+    return {
+        "structures": [
+            {
+                "structure": struct,
+                "confidence": confidences[index],
+                "partial": partial,
+            }
+            for index, struct in enumerate(structs[:2])
+        ]
+    }
+
+
+BUILDERS["PT-STRUCT-MATCH"] = build_pt_struct_match
+
+
+def build_pt_tone_style(variables: dict) -> dict:
+    """PT-TONE-STYLE：产 tone/style 各 1 值（命中对应池字典）。
+
+    缺 goal → error=goal_required；对应池字典为空 → error=pool_dictionary_missing。
+    错误形态由调用方/网关按 422 强校验处理（docs/12 §3.2 #23）。
+    """
+    if not variables.get("goal"):
+        return {"error": "goal_required"}
+    tones = _available(variables, "available_tone", POOL_OPTION_CANDIDATES["tone"])
+    styles = _available(variables, "available_style", POOL_OPTION_CANDIDATES["style"])
+    if not tones or not styles:
+        return {"error": "pool_dictionary_missing"}
+    return {"tone": tones[0], "style": styles[0]}
+
+
+BUILDERS["PT-TONE-STYLE"] = build_pt_tone_style
+
+
+def build_pt_content_goal_tag(variables: dict) -> dict:
+    """PT-CONTENT-GOAL-TAG：对已生成内容确认 goal 标签。
+
+    内容缺失 → error=content_required；goal 未给或不在可用字典 →
+    error=goal_not_in_dictionary（不臆造标签）。
+    """
+    if not variables.get("body"):
+        return {"error": "content_required"}
+    goal = variables.get("goal")
+    goals = _available(variables, "available_goals", list(CONTENT_GOALS))
+    if not goal or goal not in goals:
+        return {"error": "goal_not_in_dictionary"}
+    return {"goal": goal, "confirmed": True, "confidence": 0.88}
+
+
+BUILDERS["PT-CONTENT-GOAL-TAG"] = build_pt_content_goal_tag
 
 
 def _embed_one(text: str) -> list[float]:
