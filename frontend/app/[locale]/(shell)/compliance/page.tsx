@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import {
   ApiError,
   CURRENT_TENANT_ID,
@@ -337,11 +338,18 @@ export default async function CompliancePage() {
           </ul>
         );
     } catch (err) {
-      const key =
+      const code =
         err instanceof ApiError && KNOWN_ERROR_STATUSES.has(err.status)
           ? String(err.status)
-          : "unknown";
-      body = <p className={styles.notice}>{tError(key)}</p>;
+          : undefined;
+      body = (
+        <ErrorState
+          title={tError(code ?? "unknown")}
+          code={code}
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
+      );
     }
   }
 
