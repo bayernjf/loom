@@ -4,6 +4,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ## [Unreleased]
 
+## [Unreleased]
+
+- **Q330 文档漂移清扫批（2026-10-10；**纯文档零代码零迁移零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.273）**——Q328/Q329 落地后活文档漂移一次性收口（历史台账不回改）：**docs/24 八处**＝未点工大项改「待规格大项」（video-studio 分段视图/内容清洗区、WF-07 操作面均随 Q328 落地，剩段12 四块规格【待补】）＋段9 三包行/段12 行/6 种 AI Skill/§5.2 两行/§6 C 行/D1–D5 待裁句全部按 Q328 订正；**docs/23 四处**＝§4.2 第 4 族 PWS 行加 Q329〔Q242 乙案〕追认注记（两口改判 operations 受闸落地）＋§8.3 P2 段9「未落＝WF-07 操作面」改「无（Q328 已落地）」＋§11.18/§11.19「全仓受闸 46」加 Q329 注记（受闸 46→48）＋Q326 刷新句订正。合龙＝02 C1.273＋续编索引、handoff 顶部 Q330 banner（Q329 转「其前」＋滚档 Q325 入 archive 新「六、」节）、AGENTS 权威行前移 Q330、docs/08 权威行前移 Q330、docs/README docs/02 行前移 Q330/C1.273、README 状态段尾追加 Q330 段、docs/24 头部注记基线订正（C1.272→C1.273）。【复判不变】① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agnes 视频 `mode`（待供应商文档）＋段12 四块规格（输入清单已出待回填）＋现网部署（服务器/域名/真 ACME）。
+
 - **Q329 Q242 乙案落地：PWS 冻结/吊销两写口改判 operations（2026-10-10；**后端代码＋测试＋文档**；测试基线不变 **1261 passed＋10 skipped／收集 1271**、全量 212.27s、ruff 净、eval 101/101、e2e golden path 2 passed＋1 skipped；零迁移零新表，头仍 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.272）**——负责人对 design-q242-whitelist-owner-signability 三案候选批「按你推荐的搞」（乙案）：
   - **乙案落地**：`product/whitelist_center/service.py` 自判守卫 `_require_owner`（BO-07 whitelist_owner）改 `_require_ops`（OPERATIONS，保留作 worker 内部兜底）；router 两写口 `POST /product-spaces/{product_space_id}/pws/freeze` 与 `POST /pws/{pws_id}/revoke` 挂 `require_internal_actor(OPERATIONS)`（门控关 no-op、门控开要求 staff 令牌，与 Q250 FCW `final_id` revoke 同口径；body.actor 形状保留、值被令牌覆盖）；Q28 pws_ready 待办 assignee_role 同步改判 operations（否则待办无令牌可认领悬空）；`pws_rules.py` ROLE_PWS_OWNER 常量保留为 Q28 原文角色并加 Q329 改判注记（随 V2 客户侧认证回评）；守卫测试 `test_write_gate_wiring.py` 两口整条由 UNGATED 移入 GATED（期望角色 operations）。
   - **测试更新**：`test_pws_api.py` freeze/revoke 成功与业务路径 actor OWNER→OPS、角色反例改 OWNER（客户角色被 service 兜底 403）＋NOBODY 403、就绪门 409 用例改 OPS、revoke 404 用例改 OPS、待办 escalate 断言 assignee_role 改 `"operations"`；`test_fcw_material_api.py`/`test_ccr_api.py`/`test_fcw_api.py`/`test_fullchain_golden_path.py` 造数 freeze 同步 OWNER→OPS；移除 fcw_material 未使用 OWNER import。
