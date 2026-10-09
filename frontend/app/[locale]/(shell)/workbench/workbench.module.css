@@ -181,6 +181,12 @@
   font-size: var(--font-size-xs);
 }
 
+.metricHint {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
 /* Q163 客户首启 Onboarding 引导岛（工作台空态内嵌，客户 nav 不增项）。 */
 .onboardingCard {
   padding: var(--space-4);
