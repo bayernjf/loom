@@ -78,6 +78,20 @@
   text-decoration: underline;
 }
 
+/* Q332（UX 收口）：导航按业务域分组 */
+.navGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.navGroupLabel {
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.04em;
+}
+
 .main {
   display: flex;
   flex: 1;
