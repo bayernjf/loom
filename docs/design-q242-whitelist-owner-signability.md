@@ -1,6 +1,6 @@
 # design：Q242 `whitelist_owner` 可签发性裁决材料
 
-- 状态：**⬜ 待负责人拍板**（三案候选）；本材料只给现状、候选与推荐，不代裁
+- 状态：**✅ 已裁决乙案并全部落地（Q329，2026-10-10，02 C1.272）**——负责人批「按你推荐的搞」；裁决与落地记录见文末「## 5. 裁决与落地记录（Q329）」；本文第 1–4 节为裁决前材料（现状/候选/推荐，原文保留）
 - 背景：Q242（02 C1.168 排除项①）把 PWS 冻结/吊销一族（`product/whitelist_center` 两个写口）并入待裁项③（客户侧真实认证，V2 第一项）；Q321（02 C1.264）已裁「客户侧认证后置 V2、beta 维持代运营＋无客户登录」。本材料回答 Q242 遗留的前置问题——**`whitelist_owner` 是否可签发为 staff 令牌、V1 期该族写口由谁操作**（02 C1.168「是前置问题，不是加不加闸的问题」；02 C1.139 追认「唯一仍敞开」）。
 - 相关先例：Q297 汇总档 [design-v2-internal-roles-rbac.md](./design-v2-internal-roles-rbac.md) 已登记「`whitelist_owner` 推荐甲＝维持客户角色随③」与「PWS 冻结两口身份模型悬空」——本材料聚焦该两口的 **V1 处置**，供与③一并拍板。
 
@@ -45,3 +45,15 @@
 1. 案型：甲／乙／丙；
 2. 若乙：角色取 `operations` 还是 `product_reviewer`（推荐 operations，与 Q250 一致）；
 3. 是否同步把该族两口从守卫 `UNGATED` 移入 `GATED`（乙案必须，甲/丙案随案型定）。
+
+## 5. 裁决与落地记录（Q329）
+
+- **裁决（2026-10-10）**：负责人对三案批「按你推荐的搞」＝**乙案**，且第 2 点取 `operations`、第 3 点乙案必做（移入 GATED）。
+- **落地（02 C1.272，后端代码＋测试＋文档，零迁移零新表）**：
+  - `product/whitelist_center/service.py`：`_require_owner`（检查 `ROLE_PWS_OWNER not in actor.roles`）改名 `_require_ops`（检查 OPERATIONS、报错消息含 Q329 改判说明、保留作 worker 内部兜底）；freeze/revoke 两调用点改 `_require_ops`；Q28 pws_ready 待办 `assignee_role=ROLE_PWS_OWNER` 改 `OPERATIONS`（否则待办无令牌可认领悬空）。
+  - `pws_rules.py:30`：`ROLE_PWS_OWNER` 常量保留为 Q28 原文角色＋Q329 改判注记（随 V2 客户侧认证回评）。
+  - `router.py`：两写口 `POST /product-spaces/{product_space_id}/pws/freeze` 与 `POST /pws/{pws_id}/revoke` 挂 `require_internal_actor(OPERATIONS)`（门控关 no-op、门控开要求 staff 令牌；body.actor 形状保留、值被令牌覆盖），与 Q250 FCW `final_id` revoke 同口径。
+  - 守卫：`test_write_gate_wiring.py` 两口整条由 `UNGATED` 移入 `GATED`（期望角色 operations），Q297 注释明示的「裁决后须整条移进 GATED」动作完成。
+  - 测试：`test_pws_api.py` freeze/revoke 成功与业务路径 actor OWNER→OPS、角色反例改 OWNER（客户角色被 service 兜底 403）＋NOBODY 403、就绪门 409 用例改 OPS、revoke 404 用例改 OPS、待办 escalate 断言 `assignee_role == "operations"`；`test_fcw_material_api.py`（1 处）`test_ccr_api.py`（4 处）`test_fcw_api.py`（3 处）`test_fullchain_golden_path.py`（1 处）造数 freeze 同步 OWNER→OPS；移除 fcw_material 未使用 OWNER import（ruff F401）。
+  - 验证：相关 5 文件 pytest 34 passed；全量 **1261 passed＋10 skipped**（212.27s）；e2e golden path 2 passed＋1 skipped；ruff 净；eval 101/101。
+- **语义**：`whitelist_owner` 保留为客户侧角色（Q178 仍不可签发 staff 令牌），V1 代运营期该族由运营执行；V2 客户侧真实认证（待裁项③）落地后如需客户自助冻结再改回。
