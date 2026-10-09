@@ -1427,6 +1427,18 @@ export async function listAdminFcw(opts: {
   return request<FcwAdminPage>(`/api/admin/fcw?${params}`);
 }
 
+// Q326：管理端跨租户成品详情（内容运营台 video-studio 生成结果区，只读）。
+// 客户口 getContent 强制 tenant 归属，跨租户管理页必须走本口（运营读闸）。
+export async function getAdminContentDetail(
+  contentId: string,
+): Promise<ContentProductView> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<ContentProductView>(
+    `/api/admin/content/${encodeURIComponent(contentId)}?${params}`,
+  );
+}
+
 export async function getAdminFcwMaterial(
   finalId: string,
 ): Promise<FcwMaterialPack> {

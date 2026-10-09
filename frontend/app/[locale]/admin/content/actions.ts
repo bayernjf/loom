@@ -5,8 +5,8 @@ import {
   adminDiscardContent,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
+  getAdminContentDetail,
   getAdminFcwMaterial,
-  getContent,
   setPublishInfo,
   type ContentProductView,
   type FcwMaterialPack,
@@ -83,6 +83,8 @@ export async function discardContentAction(
 }
 
 // Q324：video-studio 生成结果区——成品详情（含 body=video_ref），只读、无写闸。
+// Q326：内容运营台是跨租户管理页，详情改走管理端只读口 getAdminContentDetail；
+// 原先复用客户租户隔离口 getContent（tenant 固定为占位租户）会让非该租户成品 404。
 export type ContentDetailResult =
   | { ok: true; content: ContentProductView }
   | { ok: false; status: 403 | 404 | "unknown" };
@@ -92,8 +94,9 @@ export async function getContentDetailAction(
 ): Promise<ContentDetailResult> {
   const id = contentId.trim();
   if (!id) return { ok: false, status: "unknown" };
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unknown" };
   try {
-    const content = await getContent(id);
+    const content = await getAdminContentDetail(id);
     return { ok: true, content };
   } catch (err) {
     if (err instanceof ApiError && [403, 404].includes(err.status)) {
