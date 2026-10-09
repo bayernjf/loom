@@ -1,0 +1,18 @@
+# PT-CONTENT-GOAL-TAG · 段9 WF-07 AI 选包（docs/12 §3.2 #24）
+# Q328：经模型网关 synthetic 路由对已生成内容确认 goal 标签（命中 ContentGoal
+# 字典，不臆造）；缺 body → error=content_required、goal 不在字典 →
+# error=goal_not_in_dictionary（422）；候选落 skill_candidates 走 skill7 Gate。
+skill_id: PT-CONTENT-GOAL-TAG
+layer: package
+version: 1.0.0
+input_output_schema:
+  input: "body（已生成内容）＋goal（待确认）＋available_goals（ContentGoal active 字典）"
+  output: "{goal, confirmed: true, confidence}；缺 body/goal 不在字典 → error 形态"
+knowledge_deps:
+  - ContentGoal 目的字典（Q25）
+model_tier: ""
+thresholds:
+  goal_tag_exact: 1
+failure_policy: produce_candidates_only
+review_rule: skill7 candidate gate → operations
+cost_limit: null

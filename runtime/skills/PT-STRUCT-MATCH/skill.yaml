@@ -1,0 +1,19 @@
+# PT-STRUCT-MATCH · 段9 WF-07 AI 选包（docs/12 §3.2 #22）
+# Q328：经模型网关 synthetic 路由产出结构候选（≤2，命中 struct 池字典），
+# 发布位约束缺失按 partial=true 降级；候选落 skill_candidates 走 skill7 Gate。
+skill_id: PT-STRUCT-MATCH
+layer: package
+version: 1.0.0
+input_output_schema:
+  input: "available_struct（Q43 17 池 struct 字典）＋slot（chars_max 等发布位约束）"
+  output: "结构候选：[{structure, confidence, partial}]，≤2 条；池空 → structures 空数组"
+knowledge_deps:
+  - Q43 17 池选项字典（struct）
+  - PublishSlot 发布位约束
+model_tier: ""
+thresholds:
+  struct_candidates_max: 2
+  struct_confidence: 0.90/0.82
+failure_policy: produce_candidates_only
+review_rule: skill7 candidate gate → operations
+cost_limit: null

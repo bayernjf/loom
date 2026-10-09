@@ -1,0 +1,19 @@
+# PT-TONE-STYLE · 段9 WF-07 AI 选包（docs/12 §3.2 #23）
+# Q328：经模型网关 synthetic 路由产出 tone/style 各 1 值（命中对应池字典），
+# 缺 goal → error=goal_required、池空 → error=pool_dictionary_missing（422 强校验）；
+# 候选落 skill_candidates 走 skill7 Gate。
+skill_id: PT-TONE-STYLE
+layer: package
+version: 1.0.0
+input_output_schema:
+  input: "goal（必填）＋available_tone/available_style（Q43 17 池字典）"
+  output: "{tone, style}；缺 goal/池空 → error 形态（调用方按 422 处理）"
+knowledge_deps:
+  - Q43 17 池选项字典（tone/style）
+  - ContentGoal 目的字典（goal 前置）
+model_tier: ""
+thresholds:
+  tone_style_exact: 1
+failure_policy: produce_candidates_only
+review_rule: skill7 candidate gate → operations
+cost_limit: null
