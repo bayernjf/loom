@@ -76,6 +76,11 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     # 段11 组装预检与冻结管理（Q249/Q250）：预检只读但走同一受闸口，吊销是写口。
     ("/api/fcw/assemble/preview", "POST"): OPS,
     ("/api/admin/fcw/{final_id}/revoke", "POST"): OPS,
+    # Q325（02 C1.268）拍板：Q277 三条登记写口补角色闸，只认已验真 staff 令牌的 operations
+    # （Q277 时点在 UNGATED 的理由"契约未规定调用角色、代码亦无闸"已随裁决失效）。
+    ("/api/intakes/{intake_id}/ops-decision", "POST"): OPS,
+    ("/api/product-spaces/{product_space_id}/pwc/funnel", "POST"): OPS,
+    ("/api/product-spaces/{product_space_id}/pwc/consume", "POST"): OPS,
 }
 
 # 必须一个标记都没有：只读口，以及有意不加闸的写口。
@@ -89,11 +94,8 @@ UNGATED: tuple[tuple[str, str], ...] = (
     # 段4 的这两口 docs/05 未给角色，Q242 刻意不动。
     ("/api/product-spaces/{product_space_id}/atom-batches", "POST"),
     ("/api/atom-candidates/{candidate_id}/evidence", "POST"),
-    # Q277 登记在 docs/05 的三口：契约未规定调用角色、代码亦无角色闸。
+    # Q277 登记在 docs/05 的三口已由 Q325 裁决补角色（operations），整条移进 GATED。
     # 钉在 UNGATED＝"当前刻意不加闸"是判据；负责人裁决补角色后，须整条移进 GATED 并写期望角色。
-    ("/api/intakes/{intake_id}/ops-decision", "POST"),
-    ("/api/product-spaces/{product_space_id}/pwc/funnel", "POST"),
-    ("/api/product-spaces/{product_space_id}/pwc/consume", "POST"),
     # Q262 读口：query actor 闸（require_layer_spaces_view），非凭证依赖。
     ("/api/admin/layer-spaces", "GET"),
     ("/api/admin/layer-spaces/items/{item_id}/impact", "GET"),

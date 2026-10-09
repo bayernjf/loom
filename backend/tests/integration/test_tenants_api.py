@@ -112,7 +112,7 @@ async def test_provision_defaults_to_trial_with_quota(client, session_factory):
         assert len(audit) == 1 and audit[0].entity_id == "t-trial"
 
 
-async def test_provision_paid_plan_starts_active_without_quota(client):
+async def test_provision_paid_plan_starts_active_with_quota(client):
     r = await client.post(
         "/api/admin/tenants",
         json={"tenant_id": "t-pro", "name": "企业客户", "plan": "pro", "actor": ADMIN},
@@ -121,8 +121,8 @@ async def test_provision_paid_plan_starts_active_without_quota(client):
     body = r.json()
     assert body["plan"] == "pro"
     assert body["status"] == "active"
-    # 付费档额度原文未给【待补】：不落任何猜测值。
-    assert body["monthly_token_quota"] is None
+    # Q325：付费档五档额度映射落地（design-q324 §6 按推荐），pro＝500 万。
+    assert body["monthly_token_quota"] == 5_000_000
 
 
 async def test_provision_rejects_duplicate_and_unknown_plan(client):
@@ -212,7 +212,7 @@ async def test_change_plan_keeps_status_and_manages_quota(client):
     body = r.json()
     assert body["plan"] == "enterprise"
     assert body["status"] == "trial"  # 续费/改套餐不改状态（Q95 接缝②）
-    assert body["monthly_token_quota"] is None  # 付费档额度【待补】
+    assert body["monthly_token_quota"] == 20_000_000  # Q325：enterprise＝2000 万（五档额度映射）
 
     # 非管理员拒绝。
     r = await client.post(

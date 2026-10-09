@@ -4,7 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import gateway, pwc_build
-from app.core.rbac import DICTIONARY_ADMIN, PLATFORM_ADMIN, PermissionDenied, require_any_role
+from app.core.rbac import (
+    DICTIONARY_ADMIN,
+    OPERATIONS,
+    PLATFORM_ADMIN,
+    PermissionDenied,
+    require_any_role,
+)
+from app.core.staff_auth.deps import require_internal_actor
 from app.product.condition import service
 from app.product.condition.models import (
     ConditionPackage,
@@ -41,6 +48,11 @@ def require_content_goals_view(
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return actor
+
+
+# Q325（02 C1.268）拍板：PWC funnel/consume 两条写口补角色闸，只认已验真 staff 令牌的
+# operations。Q277 时点两口在 UNGATED（契约未定调用角色、代码无闸），Q325 裁决后移进 GATED。
+_pwc_ops_gate = require_internal_actor(OPERATIONS)
 
 
 def _goal_view(g: ContentGoal) -> dict:
@@ -202,10 +214,11 @@ async def llm_build(
 async def run_funnel(
     product_space_id: str,
     body: FunnelRequest,
+    actor: Actor = Depends(_pwc_ops_gate),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     try:
-        created = await service.run_funnel(session, product_space_id, body, body.actor)
+        created = await service.run_funnel(session, product_space_id, body, actor)
         await session.commit()
     except service.ProductSpaceNotFound as exc:
         await session.rollback()
@@ -297,10 +310,11 @@ async def archive_pwc(
 async def consume(
     product_space_id: str,
     body: ConsumeRequest,
+    actor: Actor = Depends(_pwc_ops_gate),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     try:
-        result = await service.consume(session, product_space_id, body, body.actor)
+        result = await service.consume(session, product_space_id, body, actor)
         await session.commit()
     except service.ProductSpaceNotFound as exc:
         await session.rollback()

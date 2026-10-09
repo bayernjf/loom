@@ -24,7 +24,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
-from tests.integration.staff_tokens import bearer, issue_write_token
+from tests.integration.staff_tokens import acting_as, bearer, issue_write_token
 
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
 OPS = {"id": "ops-1", "roles": ["operations"]}
@@ -567,3 +567,34 @@ async def test_content_goals_dictionary(client, session_factory):
     ps_id, atoms = await _seeded_ps(client, session_factory)
     blocked = await _funnel(client, ps_id, [_combo(atoms, goals=["TRUST"])])
     assert blocked.status_code == 422
+
+
+# ---------- Q325 三口写口凭证闸（02 C1.268：一律 operations，require_internal_actor） ----------
+
+_PWC_WRITE_BODIES = [
+    ("/api/product-spaces/ps-x/pwc/funnel", {"combos": [], "actor": OPS}),
+    (
+        "/api/product-spaces/ps-x/pwc/consume",
+        {"platform": "dy", "account": "a1", "slot": "s1", "actor": OPS},
+    ),
+]
+
+
+async def test_pwc_write_endpoints_require_staff_token(client):
+    # Q325 拍板：PWC funnel/consume 只认已验真 staff 令牌（门控关着也自行验真）。
+    for path, body in _PWC_WRITE_BODIES:
+        saved = client.headers.pop("Authorization", None)
+        try:
+            resp = await client.post(path, json=body)
+            assert resp.status_code == 401, (path, resp.text)
+        finally:
+            if saved is not None:
+                client.headers.update({"Authorization": saved})
+
+
+async def test_pwc_write_endpoints_require_operations_role(client):
+    # 越权口径＝换一枚真缺 operations 的令牌（Q242），而非正文自报。
+    for path, body in _PWC_WRITE_BODIES:
+        async with acting_as(client, ["product_reviewer"], staff_id="s-reviewer"):
+            resp = await client.post(path, json=body)
+            assert resp.status_code == 403, (path, resp.text)
