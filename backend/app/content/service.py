@@ -32,6 +32,7 @@ from app.core.compliance_wordlist import service as wl_service
 from app.core.config_center.knobs import knob
 from app.core.rbac import OPERATIONS, PLATFORM_ADMIN, require_any_role
 from app.decision.compliance_center import ccr_rules
+from app.decision.layer_strategy.models import Package
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.final.final_whitelist.service import ensure_fcw_consumable
 from app.product.product_intake.models import ProductSpace
@@ -193,6 +194,83 @@ async def run_content_review(session: AsyncSession, content: ContentProduct) -> 
     }
     review_hits["semantic"] = await sem.run_semantic_check(session, content)
     return review_hits
+
+
+def _extract_script_text(value, out: list[str]) -> None:
+    """递归提取 JSON 值中的叶子字符串作为脚本文本（D2 甲：不臆造 payload 键名）。
+
+    表达层 payload 的文本形态（tone/style/段落等）随段12 规格【待补】，
+    按叶子字符串收集即可覆盖任意键名形态。
+    """
+    if isinstance(value, str):
+        if value.strip():
+            out.append(value)
+    elif isinstance(value, dict):
+        for child in value.values():
+            _extract_script_text(child, out)
+    elif isinstance(value, list):
+        for child in value:
+            _extract_script_text(child, out)
+
+
+async def script_recheck(session: AsyncSession, content_id: str) -> dict:
+    """D2 甲（Q328）：video-studio 内容清洗区——FCW 表达层脚本文本只读 CCR 复检。
+
+    只读复用 ccr_rules.evaluate（与 run_content_review 同口径），不改文本、
+    不落报告、不越 final_id；处置仍走既有 CCR 人工 approval。复检对象为
+    脚本文本（表达层包 payload 的叶子字符串）；成片语音/字幕复检随段12
+    转写能力【待补】，不在本口。
+    """
+    content = await session.get(ContentProduct, content_id)
+    if content is None:
+        raise ContentNotFound(content_id)
+    if not content.final_id:
+        return _script_empty(content_id, "not_issued")
+    fcw = await session.get(FinalContentWhitelist, content.final_id)
+    if fcw is None:
+        return _script_empty(content_id, "fcw_missing", content.final_id)
+    pkg = await session.get(Package, fcw.cep_package_id)
+    if pkg is None or not isinstance(pkg.payload, (dict, list)):
+        return _script_empty(content_id, "no_script_payload", content.final_id)
+    strings: list[str] = []
+    _extract_script_text(pkg.payload, strings)
+    text_blob = "\n".join(strings)
+    if not text_blob.strip():
+        return _script_empty(content_id, "no_script_text", content.final_id)
+    ps = await session.get(ProductSpace, content.product_space_id)
+    industry = ps.industry_tag if ps is not None else None
+    entries = [
+        e
+        for e in await wl_service.active_entries(session, industry=industry, now=_now())
+        if ccr_rules.applicable_to_market(e, content.country)
+    ]
+    result = ccr_rules.evaluate(entries, text_blob)
+    return {
+        "content_id": content_id,
+        "final_id": content.final_id,
+        "text_present": True,
+        "text_length": len(text_blob),
+        "status": result["status"],
+        "block_required": result["block_required"],
+        "bans": result["bans"],
+        "downgrades": result["downgrades"],
+    }
+
+
+def _script_empty(
+    content_id: str, detail: str, final_id: str | None = None
+) -> dict:
+    return {
+        "content_id": content_id,
+        "final_id": final_id,
+        "text_present": False,
+        "detail": detail,
+        "text_length": 0,
+        "status": None,
+        "block_required": False,
+        "bans": [],
+        "downgrades": [],
+    }
 
 
 async def _run_generation(
