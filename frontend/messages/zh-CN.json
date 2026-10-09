@@ -17,7 +17,8 @@
     "primaryNav": "主导航",
     "v2Badge": "V2",
     "placeholderV1": "该模块将随 M12 后续切片落地。",
-    "placeholderV2": "V2 规划中，V1 暂不提供。"
+    "placeholderV2": "V2 规划中，V1 暂不提供。",
+    "placeholderV2Note": "该能力为 V2 规划项，需对应数据链路与规格落地后开放；期间可在产品中心、内容生产与发布等已开放模块推进。"
   },
   "products": {
     "myProducts": "我的产品",
@@ -109,7 +110,12 @@
       "published": "发布",
       "interactions": "互动",
       "trends": "趋势",
-      "health": "健康度"
+      "health": "健康度",
+      "generatedHint": "成品生成量随内容生产链路（段12）上线后开放",
+      "publishedHint": "发布回填量随段12 发布位上线后开放",
+      "interactionsHint": "随反馈回流（段13）聚合口径上线后开放",
+      "trendsHint": "随反馈回流（段13）聚合口径上线后开放",
+      "healthHint": "随反馈回流（段13）聚合口径上线后开放"
     },
     "onboarding": {
       "title": "开通引导",
@@ -129,7 +135,10 @@
     "404": "资源不存在",
     "409": "操作冲突，请刷新后重试",
     "422": "提交内容有误，请检查后重试",
-    "unknown": "操作失败，请稍后重试"
+    "unknown": "操作失败，请稍后重试",
+    "retry": "重试",
+    "retryHint": "请稍后重试；若持续失败，请联系平台运营协助。",
+    "codePrefix": "错误码"
   },
   "content": {
     "cards": {
@@ -1002,6 +1011,9 @@
       "emptyToken": "请先粘贴运营令牌。",
       "disabledHint": "后端尚未开启运营令牌门控（LOOM_STAFF_AUTH_ENABLED），当前沿用 V1 自报身份，无需登录。",
       "invalidHint": "令牌无效或已被吊销，请核对后重试。"
-    }
+    },
+    "navGroupOps": "运营",
+    "navGroupGovernance": "治理",
+    "navGroupData": "数据与成本"
   }
 }
