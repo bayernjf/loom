@@ -4,7 +4,7 @@
 > **基准来源（外部，未改动仅读取）**：
 > - `/Users/jiangfeng/Downloads/项目2-loom-重要/ContentOS_核心业务主链梳理_v1.md`（13 段主链 + §10 规则定稿 Q1–Q72 + §10.9 配置化清单；文件名 v1 系历史命名，实为 2026-07-22 版）
 > - `/Users/jiangfeng/Downloads/项目2-loom-重要/ContentOS_SaaS后台完整体系全景图_V1.0_项目北极星.html`（33 项功能点清单，含远期规划项）
-> **实现现状侧基线**：docs/23 §8 功能点全景 + docs/09 全景体系各菜单实现注记 + docs/02（最高 C1.264＝Q321）+ handoff（Q321 后基线 1207 passed＋10 skipped／收集 1217、头 `0052_pool_options`、71 表·766 列）。
+> **实现现状侧基线**：docs/23 §8 功能点全景 + docs/09 全景体系各菜单实现注记 + docs/02（最高 C1.266＝Q323）+ handoff（Q323 后基线 1213 passed＋10 skipped／收集 1223、头 `0052_pool_options`、71 表·766 列）。
 > **登记**：本报告随 Q322 批落地（2026-10-09，docs/02 C1.265，纯文档零代码零迁移零测试变化）。
 
 ## 0. 结论摘要
