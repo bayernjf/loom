@@ -22,6 +22,7 @@ Create Date: 2026-10-09
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 from app.core.downgrade_actions.seeds import DOWNGRADE_ACTION_META
@@ -54,7 +55,7 @@ def upgrade() -> None:
                 "UPDATE pool_options SET options = :options "
                 "WHERE pool = :pool"
             ).bindparams(
-                sa.bindparam("options", options),
+                sa.bindparam("options", options, type_=postgresql.JSONB),
                 sa.bindparam("pool", pool),
             )
         )
@@ -87,7 +88,7 @@ def downgrade() -> None:
         sa.text(
             "UPDATE pool_options SET options = :empty WHERE pool IN :pools"
         ).bindparams(
-            sa.bindparam("empty", []),
+            sa.bindparam("empty", [], type_=postgresql.JSONB),
             sa.bindparam("pools", list(POOL_OPTION_CANDIDATES), expanding=True),
         )
     )
