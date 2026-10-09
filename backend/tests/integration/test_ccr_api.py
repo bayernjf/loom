@@ -150,7 +150,7 @@ async def _freeze(
     pwc_id = funnel.json()[0]["pwc_id"]
     await client.post(f"/api/pwcs/{pwc_id}/gate", json={"decision": "approve", "actor": REVIEWER})
     freeze = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     assert freeze.status_code == 200, freeze.text
     return freeze.json()["pws"]
@@ -238,7 +238,7 @@ async def test_superseded_snapshot_not_cleanable(client, session_factory):
     pws = await _freeze(client, ps_id)
     await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "asset_increment"},
+        json={"actor": OPS, "reason_code": "asset_increment"},
     )
     resp = await client.post(f"/api/pws/{pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
     assert resp.status_code == 409
@@ -388,7 +388,7 @@ async def test_law_review_trigger_decision_and_sla(client, session_factory):
     # 通过路径：新版本重冻后再走法审
     v2 = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "asset_increment"},
+        json={"actor": OPS, "reason_code": "asset_increment"},
     )
     new_pws = v2.json()["pws"]
     run3 = await client.post(f"/api/pws/{new_pws['pws_id']}/ccr/run", json={"actor": COMPLIANCE})
@@ -448,6 +448,6 @@ async def test_q51_rescan_todo_idempotent(client, session_factory):
     # owner 按 Q29 强制档执行重冻（wordlist_hit），新版本可再清洗
     refreeze = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze",
-        json={"actor": OWNER, "reason_code": "wordlist_hit"},
+        json={"actor": OPS, "reason_code": "wordlist_hit"},
     )
     assert refreeze.json()["pws"]["refreeze_tier"] == "forced"

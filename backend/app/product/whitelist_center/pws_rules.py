@@ -27,6 +27,8 @@ VERSION_PREFIX = "v"
 VERSION_MAJOR_STEP = 1.0
 
 # BO-07 角色 id 原文未给英文码【实现补】，沿用既有 snake_case 命名。
+# Q329（Q242 乙案）：V1 冻结/吊销动作已改判 operations（whitelist_owner 不可签发 staff
+# 令牌，Q178 限五内部角色）；本常量保留 Q28 原文角色，随 V2 客户侧认证回评。
 ROLE_PWS_OWNER = "whitelist_owner"
 
 # Q29 重冻三档。

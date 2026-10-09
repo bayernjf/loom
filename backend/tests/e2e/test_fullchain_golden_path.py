@@ -341,7 +341,7 @@ async def _drive(client: AsyncClient) -> dict:
 
     # ---- 段 6：PWS 冻结 ----
     freeze = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
     )
     assert freeze.status_code == 200, freeze.text
     pws_id = freeze.json()["pws"]["pws_id"]

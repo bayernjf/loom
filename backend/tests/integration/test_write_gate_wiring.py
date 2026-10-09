@@ -76,6 +76,11 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     # 段11 组装预检与冻结管理（Q249/Q250）：预检只读但走同一受闸口，吊销是写口。
     ("/api/fcw/assemble/preview", "POST"): OPS,
     ("/api/admin/fcw/{final_id}/revoke", "POST"): OPS,
+    # 段6 PWS 冻结/吊销（Q329，Q242 乙案）：BO-07 whitelist_owner 不可签发 staff 令牌
+    # （Q178 限五内部角色），两口改判 operations（require_internal_actor），与
+    # FCW final_id revoke（Q250）同口径；whitelist_owner 保留为 Q28 原文角色随 V2 回评。
+    ("/api/product-spaces/{product_space_id}/pws/freeze", "POST"): OPS,
+    ("/api/pws/{pws_id}/revoke", "POST"): OPS,
     # Q325（02 C1.268）拍板：Q277 三条登记写口补角色闸，只认已验真 staff 令牌的 operations
     # （Q277 时点在 UNGATED 的理由"契约未规定调用角色、代码亦无闸"已随裁决失效）。
     ("/api/intakes/{intake_id}/ops-decision", "POST"): OPS,
@@ -99,11 +104,6 @@ UNGATED: tuple[tuple[str, str], ...] = (
     # Q262 读口：query actor 闸（require_layer_spaces_view），非凭证依赖。
     ("/api/admin/layer-spaces", "GET"),
     ("/api/admin/layer-spaces/items/{item_id}/impact", "GET"),
-    # Q297：PWS 冻结/吊销要求客户角色 whitelist_owner（BO-07 红线），该角色刻意
-    # 不可签发 staff 令牌（Q178），故两口当前无内部凭证闸；身份模型悬空归待裁项③
-    # （客户侧真实认证）承接，裁决后须整条移进 GATED 并写期望角色。
-    ("/api/product-spaces/{product_space_id}/pws/freeze", "POST"),
-    ("/api/pws/{pws_id}/revoke", "POST"),
 )
 
 
