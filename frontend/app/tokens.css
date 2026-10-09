@@ -1,7 +1,8 @@
 /*
  * Loom 设计 Token 唯一事实源（Q96，docs/18 §3）。
  * 三层模型：Primitive（本段，只定义）→ Semantic（下段，组件唯一允许引用）。
- * 色值初版借 Ant Design 5 默认调色板（只借值，未引 antd 依赖）；设计产出后只改本段。
+ * 色值初版借 Ant Design 5 默认调色板（只借值，未引 antd 依赖）；品牌色阶已定稿
+ * （靛蓝系，Q331 品牌化）——后续只改本段，Semantic 段组件唯一允许引用。
  * TS 侧（图表/Canvas）镜像见 tokens.ts，由 scripts/check-tokens.mjs 强制同值。
  */
 
@@ -22,11 +23,11 @@
   --color-border-subtle: #f0f0f0;
   --color-border-strong: #d9d9d9;
 
-  /* ============ Primitive：品牌（AntD blue 阶，#1677ff = blue-6） ============ */
-  --color-brand-1: #e6f4ff; /* 选中浅底 */
-  --color-brand-5: #4096ff; /* hover */
-  --color-brand-6: #1677ff; /* 默认主色 */
-  --color-brand-7: #0958d9; /* active/文字态（AA） */
+  /* ============ Primitive：品牌（Loom 靛蓝阶，Q331 品牌化定稿） ============ */
+  --color-brand-1: #edf0fa; /* 选中浅底 */
+  --color-brand-5: #5368d1; /* hover（白字 4.86:1 AA） */
+  --color-brand-6: #3d4fb8; /* 默认主色（白字 6.96:1 AA） */
+  --color-brand-7: #2c3a8f; /* active/文字态（AA 9.94:1） */
 
   /* ============ Primitive：状态四态（base=图标边框 / strong=文字 AA / bg=浅底） ============ */
   --color-success: #52c41a;
@@ -38,9 +39,9 @@
   --color-danger: #ff4d4f;
   --color-danger-strong: #cf1322;
   --color-danger-bg: #fff2f0;
-  --color-info: #1677ff;
-  --color-info-strong: #0958d9;
-  --color-info-bg: #e6f4ff;
+  --color-info: #3d4fb8;
+  --color-info-strong: #2c3a8f;
+  --color-info-bg: #edf0fa;
 
   /* ============ 字体（docs/18 §3.3） ============ */
   --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI",

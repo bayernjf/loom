@@ -3,6 +3,7 @@
 import { Link, usePathname } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 
+import { LoomBrand } from "@/components/loom-brand";
 import styles from "./admin.module.css";
 
 const ADMIN_NAV_ITEMS = [
@@ -29,6 +30,11 @@ export function AdminSidebar() {
 
   return (
     <nav className={styles.sidebar} aria-label={t("admin.navLabel")}>
+      <LoomBrand
+        name={t("admin.appName")}
+        tagline={t("common.appTagline")}
+        className={styles.brand}
+      />
       {ADMIN_NAV_ITEMS.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (

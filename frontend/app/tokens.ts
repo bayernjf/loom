@@ -20,10 +20,10 @@ export const tokenValues: readonly TokenEntry[] = [
   ["--color-border-subtle", "#f0f0f0"],
   ["--color-border-strong", "#d9d9d9"],
   // Primitive：品牌
-  ["--color-brand-1", "#e6f4ff"],
-  ["--color-brand-5", "#4096ff"],
-  ["--color-brand-6", "#1677ff"],
-  ["--color-brand-7", "#0958d9"],
+  ["--color-brand-1", "#edf0fa"],
+  ["--color-brand-5", "#5368d1"],
+  ["--color-brand-6", "#3d4fb8"],
+  ["--color-brand-7", "#2c3a8f"],
   // Primitive：状态四态
   ["--color-success", "#52c41a"],
   ["--color-success-strong", "#389e0d"],
@@ -34,9 +34,9 @@ export const tokenValues: readonly TokenEntry[] = [
   ["--color-danger", "#ff4d4f"],
   ["--color-danger-strong", "#cf1322"],
   ["--color-danger-bg", "#fff2f0"],
-  ["--color-info", "#1677ff"],
-  ["--color-info-strong", "#0958d9"],
-  ["--color-info-bg", "#e6f4ff"],
+  ["--color-info", "#3d4fb8"],
+  ["--color-info-strong", "#2c3a8f"],
+  ["--color-info-bg", "#edf0fa"],
   // 字体
   [
     "--font-family-sans",
