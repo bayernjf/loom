@@ -1,6 +1,11 @@
 # Handoff — Loom
 
-> **最新（2026-10-10）：Q341 活文档行号锚点漂移修复批＋docs/21 SOP 补 Q334/Q335 操作段（**纯文档零代码零迁移零测试变化**；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列；02 C1.284）**——负责人「把你能搞的按推荐的搞掉」点工自推项＝锚点修复＋SOP 缺口两件一次收口。
+> **最新（2026-10-10）：Q342 文档对账批：docs/17 迁移头链补登 0055/0056＋handoff 设计档清单订正（**纯文档零代码零迁移零测试变化**；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列；02 C1.285）**——负责人「后面还有要推的吗，按你推进的搞」后当场重扫活文档，扫出两处漂移一次收口。
+> - **① docs/17 迁移头链停在 0054（Q326）**：Q335（0055_billing_price_seed，纯数据展示价三键 999/2999/9999、agency 待业务方不播种、71 表·55 迁移文件）与 Q336（0056_video_segments_objects，新建 video_segments 12 列＋video_objects 9 列两表、71→**73** 表·766→**787** 列、56 迁移文件）未登记——已按 docs/10 §2 权威描述补登两档、0054/0053 转「前一档」。
+> - **② handoff 文档清单 design 档「12 份／行 39–50」过期**：实测盘上 **18 份**、docs/README 地图已登记至**行 39–56**（含 Q329 后新增六份：segment12-video-spec-input／external-inputs-action-card／q242-whitelist-owner-signability／v2-billing-subscription／v3-rollback-center／segment12-video-candidates）——已订正份数与行号引用（地图为准，本表仍不重复维护）。
+> - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+>
+> **其前（2026-10-10）：Q341 活文档行号锚点漂移修复批＋docs/21 SOP 补 Q334/Q335 操作段（**纯文档零代码零迁移零测试变化**；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列；02 C1.284）**——负责人「把你能搞的按推荐的搞掉」点工自推项＝锚点修复＋SOP 缺口两件一次收口。
 > - **① 行号锚点漂移修复（15 处，6 个活文档）**：`main.py` FastAPI 实例化 `:145/:147`→**`:149`**（docs/17、design-deployment-gateway-tls 两处、handoff 待裁项①）；`config.py` public_base_url `:134`→**`:143`**；`final_whitelist/router.py` assemble `:60`→**`:103`**、assembly-tasks `:102`→**`:145`**、`staff_auth/deps.py` require_internal_actor `:96`→**`:104`**、`main.py` 全局兜底 `:161/:166`→**`:165/:169`**（docs/11 三处）；`docs/08` Q260 落地行 `:116`→**`:142`**（fit-score 档三处＋platform-adapter 档两处）；`docs/10` 降级动作字典 `:372-374`→**`:375`**、`docs/12` 六动作 `:104`→**`:148`**（platform-adapter 档）；platform-adapter 档「口径漂移待确认」前提已被 Q295 销账加注。修复后重扫**文档引用越界 0、代码引用越界 0、缺失 0**。
 > - **② docs/21 SOP 补两节**：§4 新增「变更-回滚清单（Q334，只读聚合面）」与「租户 Token 用量看板（Q335，计费 V2 甲案第一块）」操作段（端点/权限/五机制 11 action/四级可回滚性/no_surface 挂账；自然月 UTC 派生、agency 待业务方、超额软提醒不拦截），事实回 Q334/Q335 提交核验。
 > - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
