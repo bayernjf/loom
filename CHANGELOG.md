@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q334 回滚中心甲案落地：变更-回滚清单只读聚合面（2026-10-10；**代码＋测试＋文档**，零迁移零新表；测试 1261→**1265 passed＋10 skipped**〔＋4＝`test_change_ledger_api.py`〕、ruff 净；02 C1.277）** —— Q333「按推荐全部」裁决之第一件。
+  - 新 `app/core/change_ledger/`：`GET /api/admin/change-ledger`（operations/platform_admin 只读）从 `audit_logs` 派生聚合五机制（config_center/pws/fcw/wordlist/skill_prompt 共 11 个 audit action）变更事件，回带 `rollbackability` 四级＋`ops_surface` 直达既有操作面；不落新表、不发明第六套回滚语义。乙案 Prompt 版本回滚标 `no_surface` 挂账。
 - **Q333 三件候选设计档一次交付：计费订阅（V2）＋回滚中心（V3）＋段12 视频四块（2026-10-10；**纯文档零代码零迁移零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`；02 C1.276）** —— 负责人「那你都搞吧」点工三件候选（Q274/Q292/Q293 同型：只产材料不裁决不落码）。
   - [docs/design-v2-billing-subscription.md](docs/design-v2-billing-subscription.md)：现状＝五档额度已落（Q325）但 `monthly_token_quota` 零消费方、无租户账本/账单/支付；候选＝甲 按租户 Token 账本＋额度看板不接支付（推荐）／乙 ＋硬拦截／丙 完整计费，账期甲-1 自然月、价格入配置中心仅展示；5 待裁点。
   - [docs/design-v3-rollback-center.md](docs/design-v3-rollback-center.md)：现状＝五套各自为政的版本/撤销机制（配置版本化已能回滚／PWS 作废+重冻／FCW revoke／词库无版本／SkillRunLog 不可 mutate）；候选＝甲 只读变更-回滚聚合面（推荐，不发明第六套语义）／乙 ＋Prompt 版本回滚／丙 通用快照-恢复（与 Q30/PT 口径冲突）；5 待裁点。
