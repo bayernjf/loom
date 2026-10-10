@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.content.router import router as content_router
+from app.content.video_studio.router import router as video_studio_router
 from app.core.a2a.router import router as a2a_router
 from app.core.api_keys.router import router as agent_keys_router
 from app.core.change_ledger.router import router as change_ledger_router
@@ -197,6 +198,7 @@ app.include_router(platform_router)
 app.include_router(package_router)
 app.include_router(fcw_router)
 app.include_router(content_router)
+app.include_router(video_studio_router)
 app.include_router(effects_router)
 app.include_router(exports_router)
 app.include_router(imports_router)

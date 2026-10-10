@@ -15,6 +15,7 @@ from alembic import context
 # is that this repo's migration convention forbids autogenerate (Q198 logged that).
 # Registration is checked on every push by backend/scripts/dba_schema_check.py (Q207).
 from app.content import models as _content_models  # noqa: F401  (段12 content_products)
+from app.content.video_studio import models as _video_studio_models  # noqa: F401  (Q336 分段/原片)
 from app.core import models as _core_models  # noqa: F401  (register audit_logs)
 from app.core.api_keys import models as _api_key_models  # noqa: F401  (Q88 agent_api_keys)
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401

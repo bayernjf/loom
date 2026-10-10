@@ -1,6 +1,6 @@
 # 段12 视频四块规格（分段编目/转写/对象存储/成片复检）实现候选设计
 
-> **状态：⬜ 草案·待负责人 Gate 裁决**；本档只产候选材料，**不写码、不裁决、不建迁移**。业务方/供应商事实缺口一律标【待补】，禁臆造。
+> **状态：✅ ①分段编目甲＋③对象存储甲已落地（Q336，2026-10-10，02 C1.279）**——负责人「按推荐全部」裁决：`video_segments` 实体＋CRUD 三口（写口 operations 凭证闸，编辑只改元数据不动 body、改文本标 needs_regen＋回带屏4 CCR 复检）＋`video_objects` 登记＋MinIO 上传/后端代理只读流（迁移 0056）。**②转写／④复检维持挂账**＝agnes 转写契约【待供应商】、视频专用检测名单【待业务方】（§5 待裁 2/4/5 未闭）。
 > 起草：2026-10-10（Q333 批，负责人「那你都搞吧」点工三件候选之三）。承接：[design-segment12-video-spec-input.md](design-segment12-video-spec-input.md)（输入清单，仍待回填）与 [design-video-studio-segment-cleaning.md](design-video-studio-segment-cleaning.md)（D1–D5 已裁甲，S1/S2/S3 已随 Q328 落地）。
 
 ## 1. 与输入清单的关系
