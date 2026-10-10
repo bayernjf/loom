@@ -1,6 +1,8 @@
 import { getTranslations } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
+import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import {
   ApiError,
   CURRENT_TENANT_ID,
@@ -75,7 +77,7 @@ export default async function ContentPage() {
       const items = await listContent(CURRENT_TENANT_ID);
       body =
         items.length === 0 ? (
-          <p className={styles.notice}>{t("empty")}</p>
+          <EmptyState title={t("empty")} />
         ) : (
           <table className={styles.table}>
             <thead>
@@ -137,12 +139,14 @@ export default async function ContentPage() {
         );
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0;
+      const code = [403, 404, 409, 422].includes(status) ? String(status) : undefined;
       body = (
-        <p className={styles.notice}>
-          {te(status === 403 || status === 404 || status === 409 || status === 422
-            ? String(status)
-            : "unknown")}
-        </p>
+        <ErrorState
+          title={te(code ?? "unknown")}
+          code={code}
+          hint={te("retryHint")}
+          retryLabel={te("retry")}
+        />
       );
     }
   }

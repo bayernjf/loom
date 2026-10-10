@@ -3,6 +3,7 @@
 import { Link, usePathname } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 
+import { LoomBrand } from "@/components/loom-brand";
 import { NAV_ITEMS } from "../nav";
 import styles from "./shell.module.css";
 
@@ -12,6 +13,11 @@ export function Sidebar() {
 
   return (
     <nav className={styles.sidebar} aria-label={t("shell.primaryNav")}>
+      <LoomBrand
+        name={t("common.appName")}
+        tagline={t("common.appTagline")}
+        className={styles.brand}
+      />
       {NAV_ITEMS.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (

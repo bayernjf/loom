@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
+import { EmptyState } from "@/components/empty-state";
 import { CURRENT_TENANT_ID, listMyFcw } from "@/lib/api";
 
 import { CardMaterialIsland } from "./card-material-island";
@@ -23,7 +24,7 @@ export default async function FcwCardsPage() {
     const items = await listMyFcw(CURRENT_TENANT_ID);
     body =
       items.length === 0 ? (
-        <p className={contentStyles.notice}>{t("empty")}</p>
+        <EmptyState title={t("empty")} />
       ) : (
         <div className={styles.cardList}>
           {items.map((item) => (

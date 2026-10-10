@@ -1,5 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
+import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import {
   ApiError,
   CURRENT_TENANT_ID,
@@ -321,7 +323,7 @@ export default async function CompliancePage() {
       const overview = await getComplianceOverview(CURRENT_TENANT_ID);
       body =
         overview.items.length === 0 ? (
-          <p className={styles.notice}>{t("empty")}</p>
+          <EmptyState title={t("empty")} />
         ) : (
           <ul className={styles.itemList}>
             {overview.items.map((item) => (
@@ -336,11 +338,18 @@ export default async function CompliancePage() {
           </ul>
         );
     } catch (err) {
-      const key =
+      const code =
         err instanceof ApiError && KNOWN_ERROR_STATUSES.has(err.status)
           ? String(err.status)
-          : "unknown";
-      body = <p className={styles.notice}>{tError(key)}</p>;
+          : undefined;
+      body = (
+        <ErrorState
+          title={tError(code ?? "unknown")}
+          code={code}
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
+      );
     }
   }
 
@@ -360,7 +369,7 @@ export default async function CompliancePage() {
               <h2 className={styles.subTitle}>{tHistory("title")}</h2>
               <p className={styles.subNote}>{tHistory("note")}</p>
             </header>
-            <p className={styles.notice}>{tHistory("empty")}</p>
+            <EmptyState title={tHistory("empty")} />
           </section>
         );
       } else {
@@ -411,7 +420,7 @@ export default async function CompliancePage() {
             <p className={styles.subNote}>{tLawSla("note")}</p>
           </header>
           {laws.length === 0 ? (
-            <p className={styles.notice}>{tLawSla("empty")}</p>
+            <EmptyState title={tLawSla("empty")} />
           ) : (
             <ul className={styles.lawCards}>
               {laws.map((row) => (

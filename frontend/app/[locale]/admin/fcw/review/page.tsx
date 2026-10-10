@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { EmptyState } from "@/components/empty-state";
 import { getTranslations } from "next-intl/server";
 
 import { ApiError, CURRENT_ADMIN_ACTOR_ID, getReviewQueue } from "@/lib/api";
@@ -81,7 +82,7 @@ export default async function FcwReviewPage({
             {t("total", { from: String(from), to: String(to), total: String(total) })}
           </p>
           {candidates.length === 0 ? (
-            <p className={styles.notice}>{t("empty")}</p>
+            <EmptyState title={t("empty")} />
           ) : (
             <table className={styles.table}>
               <thead>

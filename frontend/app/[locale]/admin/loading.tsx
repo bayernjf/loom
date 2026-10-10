@@ -1,0 +1,21 @@
+// Loom 路由导航骨架（UX 收口 Q332）：管理端导航期间显示；纯静态占位。
+import styles from "@/components/loading-skeleton.module.css";
+
+export default function Loading() {
+  return (
+    <div className={styles.page} aria-busy="true" data-testid="page-loading">
+      <div className={styles.titleBar}>
+        <span className={styles.skeletonTitle} />
+      </div>
+      <div className={styles.card}>
+        <span className={styles.skeletonLine} style={{ width: "48%" }} />
+        <span className={styles.skeletonLine} style={{ width: "80%" }} />
+      </div>
+      <div className={styles.card}>
+        <span className={styles.skeletonLine} style={{ width: "92%" }} />
+        <span className={styles.skeletonLine} style={{ width: "58%" }} />
+        <span className={styles.skeletonLine} style={{ width: "70%" }} />
+      </div>
+    </div>
+  );
+}

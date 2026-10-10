@@ -1,0 +1,58 @@
+/* Loom 路由导航骨架（UX 收口 Q332）：RSC 导航期间显示的纯静态占位；颜色走 Token，尊重 reduced-motion。 */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+
+.titleBar {
+  height: var(--space-6);
+}
+
+.skeletonTitle {
+  display: block;
+  width: 14%;
+  height: var(--space-6);
+  background: var(--color-bg-hover);
+  border-radius: var(--radius-1);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.skeletonLine {
+  display: block;
+  height: var(--space-4);
+  background: var(--color-bg-hover);
+  border-radius: var(--radius-1);
+}
+
+.skeletonTitle,
+.skeletonLine {
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonTitle,
+  .skeletonLine {
+    animation: none;
+  }
+}

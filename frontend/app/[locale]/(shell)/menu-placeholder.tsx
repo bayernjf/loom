@@ -23,6 +23,9 @@ export async function MenuPlaceholder({
       <p className={styles.note}>
         {phase === "v2" ? t("shell.placeholderV2") : t("shell.placeholderV1")}
       </p>
+      {phase === "v2" && (
+        <p className={styles.noteSub}>{t("shell.placeholderV2Note")}</p>
+      )}
     </div>
   );
 }

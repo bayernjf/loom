@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { EmptyState } from "@/components/empty-state";
 
 import {
   ApiError,
@@ -113,7 +114,7 @@ export default async function AnalyticsPage({
       {failed && <p className={styles.error}>{t("loadFailed")}</p>}
 
       {data && data.records_total === 0 && (
-        <p className={styles.notice}>{t("empty")}</p>
+        <EmptyState title={t("empty")} />
       )}
 
       {data && data.records_total > 0 && (

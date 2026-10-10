@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { EmptyState } from "@/components/empty-state";
 import { Link } from "@/i18n/navigation";
 
 import {
@@ -69,7 +70,7 @@ export default async function DictionariesPage({
 
         {actions.failed && <p className={styles.msgErr}>{t("loadFailed")}</p>}
         {!actions.failed && actions.rows.length === 0 && (
-          <p className={styles.notice}>{t("empty")}</p>
+          <EmptyState title={t("empty")} />
         )}
 
         {!actions.failed && actions.rows.length > 0 && (

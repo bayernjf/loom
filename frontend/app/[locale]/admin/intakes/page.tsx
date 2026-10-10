@@ -1,4 +1,5 @@
 import { formatDateTimeLocal } from "@/lib/time";
+import { EmptyState } from "@/components/empty-state";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -78,7 +79,7 @@ function IntakeTable({
   tStatus: Translator;
 }) {
   if (queue.items.length === 0) {
-    return <p className={styles.notice}>{t("empty")}</p>;
+    return <EmptyState title={t("empty")} />;
   }
   return (
     <div className={styles.tableWrap}>

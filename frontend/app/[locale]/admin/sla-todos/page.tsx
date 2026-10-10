@@ -1,4 +1,5 @@
 import { formatDateTimeLocal } from "@/lib/time";
+import { EmptyState } from "@/components/empty-state";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -61,7 +62,7 @@ function StatusFilters({ status, t }: { status: string; t: Translator }) {
 
 function TodoTable({ todos, t }: { todos: SlaTodoView[]; t: Translator }) {
   if (todos.length === 0) {
-    return <p className={styles.notice}>{t("empty")}</p>;
+    return <EmptyState title={t("empty")} />;
   }
   return (
     <div className={styles.tableWrap}>

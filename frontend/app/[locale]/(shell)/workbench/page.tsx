@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
+import { ErrorState } from "@/components/error-state";
 import {
   ApiError,
   CURRENT_TENANT_ID,
@@ -186,10 +187,17 @@ export default async function WorkbenchPage() {
         </>
       );
     } catch (err) {
-      const key = err instanceof ApiError && KNOWN_ERROR_STATUSES.has(err.status)
+      const code = err instanceof ApiError && KNOWN_ERROR_STATUSES.has(err.status)
         ? String(err.status)
-        : "unknown";
-      body = <p className={styles.notice}>{tError(key)}</p>;
+        : undefined;
+      body = (
+        <ErrorState
+          title={tError(code ?? "unknown")}
+          code={code}
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
+      );
     }
   }
 
@@ -210,6 +218,7 @@ export default async function WorkbenchPage() {
               <span className={styles.v2Badge}>V2</span>
             </div>
             <p className={styles.metricNote}>{t("metricsNote")}</p>
+            <p className={styles.metricHint}>{t(`metrics.${metric}Hint`)}</p>
           </li>
         ))}
       </ul>

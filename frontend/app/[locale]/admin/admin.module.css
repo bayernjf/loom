@@ -8,6 +8,34 @@
   line-height: var(--line-height-cjk);
 }
 
+/* 品牌标识（Q331） */
+.brand {
+  padding: var(--space-1) var(--space-2) var(--space-4);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* 登录页品牌化（Q331） */
+.loginPage {
+  align-items: center;
+  padding-top: var(--space-7);
+}
+
+.brandHero {
+  margin-bottom: var(--space-4);
+}
+
+.loginHeader {
+  margin-bottom: var(--space-4);
+  text-align: center;
+}
+
+.loginPage > header,
+.loginPage > section {
+  width: 100%;
+  max-width: 480px;
+}
+
 .sidebar {
   display: flex;
   flex: 0 0 var(--sidebar-width);
@@ -50,6 +78,20 @@
   text-decoration: underline;
 }
 
+/* Q332（UX 收口）：导航按业务域分组 */
+.navGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.navGroupLabel {
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.04em;
+}
+
 .main {
   display: flex;
   flex: 1;
@@ -63,7 +105,7 @@
   height: var(--space-8);
   padding: 0 var(--space-6);
   background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-brand-bg);
   font-weight: var(--font-weight-semibold);
 }
 

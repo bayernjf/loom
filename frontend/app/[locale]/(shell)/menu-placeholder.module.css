@@ -28,3 +28,9 @@
   margin: 0;
   color: var(--color-text-secondary);
 }
+
+.noteSub {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
