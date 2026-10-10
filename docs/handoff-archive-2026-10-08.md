@@ -351,11 +351,20 @@
 ## 十四、Q333 banner（2026-10-10 滚入）
 
 ~~**其前（2026-10-10）：Q333 三件候选设计档一次交付：计费订阅（V2）＋回滚中心（V3）＋段12 视频四块（**纯文档零代码零迁移零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.276）**——负责人「那你都搞吧」点工三件候选（Q274/Q292/Q293 同型：只产材料、不裁决、不落码）。~~
+- **① 计费订阅（V2）**＝[docs/design-v2-billing-subscription.md](design-v2-billing-subscription.md)：现状盘实＝五档额度常量已落（Q325）但 `monthly_token_quota` 零消费方、无租户账本/账单/支付，真问题＝「额度五档与价格三档从未合流」；候选＝甲 只建按租户 Token 账本＋额度看板不接支付（推荐，不触发 Q66 资金 HumanGate）／乙 ＋硬拦截／丙 完整计费；账期甲-1 自然月；价格入配置中心仅展示；5 待裁点。
+- **② 回滚中心（V3）**＝[docs/design-v3-rollback-center.md](design-v3-rollback-center.md)：现状盘实＝五套各自为政版本/撤销机制（配置版本化已能回滚／PWS 作废+重冻／FCW revoke+再发证／词库无版本／SkillRunLog·audit append-only），无统一登记处；候选＝甲 只读「变更-回滚清单」聚合面（推荐：标可回滚性＋一跳直达既有操作面，不发明第六套语义）／乙 ＋Prompt 版本回滚写口／丙 通用快照-恢复（与 Q30/PT 口径冲突）；甲-1 派生读不落表；5 待裁点。
+- **③ 段12 视频四块**＝[docs/design-segment12-video-candidates.md](design-segment12-video-candidates.md)：在既有输入清单（仍待回填）上预置可裁决候选＝分段编目甲 建 `video_segments` 实体句子粒度（推荐）／转写甲 agnes 异步 `SCENE_VIDEO_TRANSCRIBE` 场景（**硬阻塞＝agnes 转写契约【待供应商】**，与 mode 挂账一并索取）／存储甲 仓内 MinIO 只存原片＋后端代理流（推荐，URL 签名 15 分钟入配置中心）／复检甲 对象=转写文本＋段5 已定稿 8 检测＋advisory 不阻断（推荐）；依赖链＝③独立可先行、①→②→④ 依次依赖；5 待裁点。
+- **纪律**：三档事实缺口全标【待补】禁臆造；落码须负责人拍板后在 02 追加 Q 另行点工；docs/README 地图补三档登记。【复判不变】① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agnes 视频 `mode`＋转写契约（待供应商）＋四块业务回填＋现网部署（服务器/域名/真 ACME）。
+〔**Q343 滚档修复注记**：本节此前只收了 Q333 条目头，上面四条正文遗留在 handoff 里（指针行却写「已滚档」）。本批逐字搬入并自 handoff 切下；两处机械变换＝行首 `> ` 引用标记脱掉以合本档节内样式、链接目标由 `docs/design-*.md` 改为 `design-*.md`（本档在 `docs/` 内，原写法解析不到文件），正文文字一字未改。〕
 
 
 ## 十五、Q334 banner（2026-10-10 滚入）
 
 ~~**其前（2026-10-10）：Q334 回滚中心甲案落地：变更-回滚清单只读聚合面（**代码＋测试＋文档**，零迁移零新表；测试 1261→**1265 passed＋10 skipped**〔＋4＝`test_change_ledger_api.py`〕、ruff 净、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.277）**——负责人对 Q333 三件候选批「按推荐全部」，本批落第一件＝design-v3-rollback-center §3.1 甲＋§3.2 甲-1。~~
+- **交付**：新 `app/core/change_ledger/`（service＋router）＋`GET /api/admin/change-ledger?mechanism=&limit=&offset=`（operations/platform_admin 只读，query actor 同 Q92 口径）——从 `audit_logs` 派生聚合五机制 11 个 audit action（config.update/rollback、pws.freeze/refreeze/revoke、fcw.issued/revoke、wl.create/update/archive、skill_prompt.publish），非五机制写动作（如 tenant.plan_changed）不入聚合；每笔回带 `rollbackability` 四级（rollbackable／revoke_reissue／reedit_only／no_surface）＋`ops_surface` 一跳直达既有操作面；**不落新表、不回写、历史 append-only 不动**。
+- **挂账**：§3.1 乙 Prompt 版本回滚写口（`no_surface` 标注，待裁）／§3.1 丙通用快照-恢复（与 Q30/PT 口径冲突不推荐）。第二三件（计费甲＋段12 ③①甲）随后批落。
+- **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+〔**Q343 滚档修复注记**：本节此前只收了 Q334 条目头，上面三条正文遗留在 handoff 里（指针行却写「已滚档」）。本批把三条正文逐字搬入并自 handoff 切下；搬运只脱掉行首 `> ` 引用标记以合本档节内样式，正文一字未改。〕
 
 
 ## 十六、Q335 banner（2026-10-10 滚入）
@@ -364,3 +373,27 @@
 - **交付**：`monthly_token_usage`（tenants/service.py：自然月 UTC、派生自 `skill_runs`〔succeeded 且 tenant_id 命中〕，**不落账本表不改调用路径**）＋`GET /api/admin/tenants/{tenant_id}/token-usage`（platform_admin query actor；缺 actor 422／角色 403／未知租户 404）＋超额**软提醒不拦截**（`over_quota`/`usage_ratio`）＋迁移 0055 播种 `billing.price_monthly_usd.{basic,pro,enterprise}`＝999/2999/9999（仅展示不扣费、改价走 config.update 审计；agency【待业务方回填】刻意不播种＝「待补」展示口径）＋前端租户详情页「本月 Token 用量（派生账本）」区（i18n 八键）。
 - **挂账**：乙案额度硬拦截（须先跑一账期实测误伤率）／丙案账单＋支付（触发 Q66 资金 HumanGate，§1 缺口 1/3/4 待业务方）。第三件（段12 ③①甲）随后批落。
 - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agency 档价格＋支付通道/发票口径（待业务方）＋agnes 视频 `mode`＋转写契约（待供应商）＋现网部署（服务器/域名/真 ACME）。
+
+## 十七、Q338 banner（2026-10-10 滚入，Q343 批按「最近 5 条」上限滚出）
+
+**其前（2026-10-10 15:52）：Q338 video-studio 前端接 Q336 操作面＋docs/23 规模重扫（**前端代码＋纯文档**，零后端零迁移；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列、前端 tsc＋check-admin 全绿；02 C1.281）**——负责人对自推项批「都搞」。
+- **① 前端接线**：video-studio 岛新增「分段编目」区（列表/行内文本编辑〔needs_regen 回显〕/新增六 type）与「原片留档」区（列表/上传/503 未配置明示）；`lib/api.ts`＋actions 各六函数，写口缺 operations 前端先拒发；屏3 只读派生视图保留双轨；i18n ＋17 键。
+- **② docs/23 重扫**：TL;DR 规模行 73 表/787 列/56 迁移/1273 passed/147 测试文件、技术债 104→110（backend/app 84＋tests 26）、受闸注记 46→49→51→53。
+- **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+
+## 十八、Q337 banner（2026-10-10 滚入，Q343 批按「最近 5 条」上限滚出）
+
+**其前（2026-10-10 15:43）：Q337 文档债收口批：受闸计数链订正＋SOP 补 Q336 操作段（**纯文档零代码零迁移零测试变化**；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列；02 C1.280）**——「继续找可自推的文档/测试债」触发当场重扫，两处实锤漂移一次收口。
+- **① docs/23 §4.2 受闸计数链订正**：Q329 注记「46→48」漏记 Q325 三口加闸，订正链条＝Q309＝46 → Q325＝49 → Q329＝51 → Q336＝**53**（实测 `GATED` 长度）；§4.2 与 §11.18/§11.19 两处注记同步（历史原文不回改）。
+- **② docs/21 SOP 补段**：段12 新增「video-studio 分段编目与原片留档」（三口＋凭证闸＋编辑只改元数据/needs_regen/回带 CCR 复检＋原片上传/代理流/503 口径＋转写/复检挂账），事实逐条回代码与 docs/05 核验。
+- **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+
+## 十九、Q336 banner（2026-10-10 滚入，Q343 批按「最近 5 条」上限滚出）
+
+**其前（2026-10-10 15:19）：Q336 段12 视频两甲落地：分段编目实体＋对象存储原片留档（**代码＋迁移＋测试＋文档**；测试 1267→**1273 passed＋10 skipped**〔＋6＝`test_video_studio_api.py`〕〔沙箱误红 2 例同 Q335 先例〕、收集 1279→**1285**、ruff 净；头 `0056_video_segments_objects`（新建两表）／73 表·787 列；02 C1.279）**——负责人「按推荐全部」裁 Q333 三件之第三件＝design-segment12-video-candidates §3-①甲＋③甲。
+- **①分段编目（甲）**：新 `app/content/video_studio/`——`video_segments` 实体（seq/start_ms/end_ms 可空/type 六值/source_leaf/text）＋`GET/POST /api/admin/content/{id}/video-segments`＋`PUT /api/admin/video-segments/{id}`（读口 operations/platform_admin query actor，写口 `require_internal_actor(OPERATIONS)` 进 GATED）；编辑只改元数据不动 body、改文本标 `needs_regen`＋回带屏4 CCR 复检（advisory）；审计人员来自已验真凭证。
+- **③对象存储（甲）**：沿用仓内 MinIO——`video_objects` 登记表＋原始字节流上传（`LOOM_S3_ENDPOINT_URL` 空 503）＋后端代理只读流（不暴露 MinIO 直连）；初版只存原片；审计 `video_object.register`。
+- **挂账**：②转写（agnes 转写契约【待供应商】）／④成片复检对象切换（依赖②，名单【待业务方】）／URL 签名策略（随现网部署定）。
+- **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+
+〔**滚档注记（Q343）**：本批加 Q343 banner 时，handoff 顶部条数已是 **8 条**（Q343＋Q342＋Q341＋Q340＋Q339＋Q338＋Q337＋Q336）——上限 5 条自 Q337 批起就没守住，历批只加不滚。本批一次滚出最旧三条（Q338／Q337／Q336，正文 15 行逐字搬入上面三节、只脱行首 `> ` 引用标记），滚后顶部为 Q343→Q339 五条。三条正文里的「1273 passed」当时点读数按「逐片记录不回改」原样保留，现行读数见 docs/16 §4 与 docs/23 §0.1（Q343 复测＝1275 passed＋10 skipped／收集 1285）。〕
