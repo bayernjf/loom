@@ -11,7 +11,7 @@
 
 1. **核心主链完成度高**：13 段链中 **9 段闭环**（段1/2/4/5/6/8/10/11/13）、**4 段部分**（段3/7/9/12）；V1 主链段1→6→10→11 与段12/13 主体已落地，docs/20 三层判定 ① 功能覆盖达标／② 核心完全可用达标不变。
 2. **「全部搞完」≠ 是**：按产品文档全景口径，剩余未做项全部属 **V2 厚度／V3 辅助系统／周边** 与 **3 个已定位的待规格或未点工项**，不阻塞已判定的核心可用。
-3. **未做/部分项可归三类**：① 外部规格依赖（DIM-SOURCE 来源规格（第 7 路 `case_evidence` 已随 **Q325** 落地，七路种子齐全）、PLATFORM-ADAPTER 真模型、fit_score 自学习数据源（映射逻辑已落 **Q325** `fit_learning.py`，真指标数据源仍待）、agnes 视频 `mode`）；② 待规格大项（video-studio 段12 业务链路面：载体已落 Q323、管理端两屏 UI 已落 Q324、分段视图/内容清洗区操作面已随 **Q328** 落地〔S1 只读分段视图＋S2 脚本复检＋script-recheck 口〕，剩分段编目/转写/对象存储/成片复检规格【待补】〔输入清单已出 design-segment12-video-spec-input.md〕；WF-07 四 Skill 规格已定稿（**Q325**，docs/12 §3.2）且四场景已注册模型网关 synthetic（**Q326**，纯数据迁移 0054＋20 例），**操作面已随 Q328 落地**〔`POST /api/ai-select/suggest` 只产候选、采用走统一审核台〕；段9/12 字典强校验已 Q323 核实收口）；③ V2/V3 规划（KUP 分析面、知识库/Memory/客户门户等 P5 厚度、辅助系统 10 个、周边商业/账号/BI/Webhook/SDK/移动端/国际化/白牌）。
+3. **未做/部分项可归三类**：① 外部规格依赖（DIM-SOURCE 来源规格（第 7 路 `case_evidence` 已随 **Q325** 落地，七路种子齐全）、PLATFORM-ADAPTER 真模型、fit_score 自学习数据源（映射逻辑已落 **Q325** `fit_learning.py`，真指标数据源仍待）、agnes 视频 `mode`）；② 待规格大项（video-studio 段12 业务链路面：载体已落 Q323、管理端两屏 UI 已落 Q324、分段视图/内容清洗区操作面已随 **Q328** 落地〔S1 只读分段视图＋S2 脚本复检＋script-recheck 口〕，分段编目＋对象存储已随 **Q336** 落地〔`video_segments` 实体＋`video_objects` 登记＋MinIO 代理流，迁移 0056〕，剩转写/成片复检【待供应商/待业务方】；WF-07 四 Skill 规格已定稿（**Q325**，docs/12 §3.2）且四场景已注册模型网关 synthetic（**Q326**，纯数据迁移 0054＋20 例），**操作面已随 Q328 落地**〔`POST /api/ai-select/suggest` 只产候选、采用走统一审核台〕；段9/12 字典强校验已 Q323 核实收口）；③ V2/V3 规划（KUP 分析面、知识库/Memory/客户门户等 P5 厚度、辅助系统 10 个、周边商业/账号/BI/Webhook/SDK/移动端/国际化/白牌）。
 
 ## 1. 比对方法
 
@@ -35,7 +35,7 @@
 | 段9 三包 | CSP/CSTP/CEP（三元组复用）、layerSpaces 通用底座、contentGoals 配比软提示 | 三包建模/查重（Q288 部分唯一索引）/发证解析/复用阈值（Q263）/重配（Q264）、layerSpaces（Q262） | 🟡 部分（WF-07 四 Skill 规格已定稿（**Q325**，docs/12 §3.2）＋操作面已落地（**Q328**：`POST /api/ai-select/suggest`＋组装台「AI 选包建议」区＋apply_package_draft 字典强校验）；配比软提示仪表盘未见独立落地） |
 | 段10 合规 | 合规词库合并（Q48）、law_review（Q49）、国家规则优先（Q50）、生效即扫（Q51） | CCR 词库三层裁决、复检、snapshot；law_review Guard⑥ | ✅ 闭环 |
 | 段11 FCW | 7 项 Guard（Q53）、单一出口、score＝0.4/0.3/0.3 仅排序（Q54）、全自动发证（Q55） | 组装 7 Guard、单出口闸、发证落快照、冻结管理（作废/留痕/重冻） | ✅ 闭环 |
-| 段12 内容生成 | ARTICLE-GEN/VIDEO-SCRIPT/MULTILANG-GEN/CONTENT-COMPLIANCE、客户审阅三动作、重生成上限 3 次 | ARTICLE-GEN、多语言（Q119/Q123）、词库复检＋语义级检测（Q121）、AI 质量分（Q120）、客户审阅（Q122）、discarded 态（Q124）、发布回填（Q125）、video 载体后端切片（Q323） | 🟡 部分（video-studio 业务链路面：载体 Q323＋两屏 UI Q324＋分段/清洗操作面 Q328；剩分段编目/转写/对象存储/成片复检规格【待补】） |
+| 段12 内容生成 | ARTICLE-GEN/VIDEO-SCRIPT/MULTILANG-GEN/CONTENT-COMPLIANCE、客户审阅三动作、重生成上限 3 次 | ARTICLE-GEN、多语言（Q119/Q123）、词库复检＋语义级检测（Q121）、AI 质量分（Q120）、客户审阅（Q122）、discarded 态（Q124）、发布回填（Q125）、video 载体后端切片（Q323） | 🟡 部分（video-studio 业务链路面：载体 Q323＋两屏 UI Q324＋分段/清洗操作面 Q328＋分段编目实体＋原片留档 Q336；剩转写/成片复检【待供应商/待业务方】） |
 | 段13 反馈回流 | effect-callback 推送制（Q60）、孤儿认领（Q60a）、爆款自动判定（Q61）、KUP 证据三关（Q63）、两级审批（Q64）、校准报表（Q65） | effect-callback 入站（Q126）、孤儿认领（Q127/Q129）、customer-backfill（Q128/Q131/Q136）、运营台（Q130）、批量 CSV 回填（Q156） | ✅ 主体（KUP 提案/爆款自动判定/校准报表属 V2 分析面未做） |
 
 ## 3. 横切治理覆盖
@@ -72,7 +72,7 @@
 
 | 项 | 现状 | 出处 |
 |---|---|---|
-| video-studio 段12 视频支线（白名单信息区/分段编辑器/内容清洗区/生成结果区） | VIDEO-GEN 引擎预备切片已落（Q252）＋后端载体切片已落（Q323 `invoke_video_gen`＋kind 分流＋7 测试）＋管理端两屏 UI 已落（Q324：白名单信息区/生成结果区只读）；**Q326** 内置浏览器两屏验收通过并修复屏2 跨租户详情 404（新增管理端 `GET /api/admin/content/{id}` 跨租户只读口＋前端改调）；分段视图/内容清洗区操作面已随 **Q328** 全部按推荐甲落地（design-video-studio-segment-cleaning.md 已翻 ✅：S1 只读分段视图〔屏3〕＋S2 脚本复检〔屏4〕＋`GET /api/admin/content/{id}/script-recheck`）；剩段12 分段编目/转写/对象存储/成片复检规格【待补】＝docs/design-segment12-video-spec-input.md 输入清单已出待回填） | docs/23 §8.5、Q252、Q323、Q324、Q326 |
+| video-studio 段12 视频支线（白名单信息区/分段编辑器/内容清洗区/生成结果区） | VIDEO-GEN 引擎预备切片已落（Q252）＋后端载体切片已落（Q323 `invoke_video_gen`＋kind 分流＋7 测试）＋管理端两屏 UI 已落（Q324：白名单信息区/生成结果区只读）；**Q326** 内置浏览器两屏验收通过并修复屏2 跨租户详情 404（新增管理端 `GET /api/admin/content/{id}` 跨租户只读口＋前端改调）；分段视图/内容清洗区操作面已随 **Q328** 全部按推荐甲落地（design-video-studio-segment-cleaning.md 已翻 ✅：S1 只读分段视图〔屏3〕＋S2 脚本复检〔屏4〕＋`GET /api/admin/content/{id}/script-recheck`）；分段编目＋对象存储已随 **Q336** 落地（①③甲），剩转写（agnes 契约【待供应商】）/成片复检（名单【待业务方】）） | docs/23 §8.5、Q252、Q323、Q324、Q326 |
 | WF-07 AI 选包四 Skill（docs/12 #21–24） | ✅ 规格已定稿（**Q325**，docs/12 §3.2 四份 v0.1）＋操作面已随 **Q328** 落地（`runtime/workflows/WF-07.yaml`＋`POST /api/ai-select/suggest`＋组装台「AI 选包建议」区；AI 只产候选、采用走统一审核台） | docs/23 §8.3 P2、docs/12 §3.2、Q325 |
 | 段9/12「选料只能从字典里选」运行期强校验 | Q323 核实收口：goal 维度强校验已闭环（E1.1 `_validate_goal` 404＋PWC `unknown_goals` 判红，只认 Q25 目的字典）；其余 16 池为 PCP 权重维度无自由池值输入点；Q38 六码随段7 点工挂账 | docs/02 C1.266、Q323 |
 
@@ -94,5 +94,5 @@
 - **可一口气推进（纯工程/纯文档，无外部规格依赖）**：
   - A. docs/24 本报告落地＋文档合龙（Q322 已落地）
   - B. 段9/12 运行期字典强校验核实收口（**Q323 已落地**：goal 维度强校验已闭环（E1.1 `_validate_goal` 404＋PWC `unknown_goals` 判红，只认 Q25 目的字典）；其余 16 池为 PCP 权重维度、组装请求仅 goal/platform/slot/country 无自由池值输入点 ⇒ 无运行期自由输入；Q38 六码运行期强校验随段7 真模型接入点工挂账；落点＝`pool_options/service.py` docstring 消费方声明）
-  - C. video-studio 载体后端切片（**Q323 已落地**：`invoke_video_gen`＋`_run_generation` kind 分流＋`generate_content` video 放行＋router VideoGen 三异常（404/409/502）＋`test_content_video_api.py` 7 例；管理端两屏 UI（白名单信息区/生成结果区）已随 Q324 落地，分段视图/内容清洗区操作面已随 **Q328** 落地，剩段12 分段编目/转写/对象存储/成片复检规格【待补】＝输入清单已出 design-segment12-video-spec-input.md 待回填）
+  - C. video-studio 载体后端切片（**Q323 已落地**：`invoke_video_gen`＋`_run_generation` kind 分流＋`generate_content` video 放行＋router VideoGen 三异常（404/409/502）＋`test_content_video_api.py` 7 例；管理端两屏 UI（白名单信息区/生成结果区）已随 Q324 落地，分段视图/内容清洗区操作面已随 **Q328** 落地，分段编目＋对象存储已随 **Q336** 落地（①③甲），剩转写/成片复检【待供应商/待业务方】）
 - **需拍板/等外部输入（Q325 后）**：agnes 视频 `mode`、PLATFORM-ADAPTER 真模型供应商、fit_score 自学习真指标数据源、KUP 分析面是否提前点工。（**Q325 已按推荐落地**：DIM-SOURCE 第 7 路 `case_evidence`、8 检测名单＋评分公式定稿、付费档第 5 档 `agency`＋五档额度、三口角色加闸、fit_score 映射模块、WF-07 四 Skill 定稿。）（**Q326**：WF-07 四场景已注册 synthetic、video-studio 两屏浏览器验收并修复跨租户详情口；新增待裁＝video-studio 分段/清洗＋WF-07 操作面 **D1–D5**〔见 design-video-studio-segment-cleaning.md〕，**Q328 已全部按推荐甲裁决并落地（档已翻 ✅）**。）
