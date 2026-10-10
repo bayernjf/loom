@@ -1,6 +1,11 @@
 # Handoff — Loom
 
-> **最新（2026-10-10 15:19）：Q336 段12 视频两甲落地：分段编目实体＋对象存储原片留档（**代码＋迁移＋测试＋文档**；测试 1267→**1273 passed＋10 skipped**〔＋6＝`test_video_studio_api.py`〕〔沙箱误红 2 例同 Q335 先例〕、收集 1279→**1285**、ruff 净；头 `0056_video_segments_objects`（新建两表）／73 表·787 列；02 C1.279）**——负责人「按推荐全部」裁 Q333 三件之第三件＝design-segment12-video-candidates §3-①甲＋③甲。
+> **最新（2026-10-10 15:43）：Q337 文档债收口批：受闸计数链订正＋SOP 补 Q336 操作段（**纯文档零代码零迁移零测试变化**；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列；02 C1.280）**——「继续找可自推的文档/测试债」触发当场重扫，两处实锤漂移一次收口。
+> - **① docs/23 §4.2 受闸计数链订正**：Q329 注记「46→48」漏记 Q325 三口加闸，订正链条＝Q309＝46 → Q325＝49 → Q329＝51 → Q336＝**53**（实测 `GATED` 长度）；§4.2 与 §11.18/§11.19 两处注记同步（历史原文不回改）。
+> - **② docs/21 SOP 补段**：段12 新增「video-studio 分段编目与原片留档」（三口＋凭证闸＋编辑只改元数据/needs_regen/回带 CCR 复检＋原片上传/代理流/503 口径＋转写/复检挂账），事实逐条回代码与 docs/05 核验。
+> - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+>
+> **其前（2026-10-10 15:19）：Q336 段12 视频两甲落地：分段编目实体＋对象存储原片留档（**代码＋迁移＋测试＋文档**；测试 1267→**1273 passed＋10 skipped**〔＋6＝`test_video_studio_api.py`〕〔沙箱误红 2 例同 Q335 先例〕、收集 1279→**1285**、ruff 净；头 `0056_video_segments_objects`（新建两表）／73 表·787 列；02 C1.279）**——负责人「按推荐全部」裁 Q333 三件之第三件＝design-segment12-video-candidates §3-①甲＋③甲。
 > - **①分段编目（甲）**：新 `app/content/video_studio/`——`video_segments` 实体（seq/start_ms/end_ms 可空/type 六值/source_leaf/text）＋`GET/POST /api/admin/content/{id}/video-segments`＋`PUT /api/admin/video-segments/{id}`（读口 operations/platform_admin query actor，写口 `require_internal_actor(OPERATIONS)` 进 GATED）；编辑只改元数据不动 body、改文本标 `needs_regen`＋回带屏4 CCR 复检（advisory）；审计人员来自已验真凭证。
 > - **③对象存储（甲）**：沿用仓内 MinIO——`video_objects` 登记表＋原始字节流上传（`LOOM_S3_ENDPOINT_URL` 空 503）＋后端代理只读流（不暴露 MinIO 直连）；初版只存原片；审计 `video_object.register`。
 > - **挂账**：②转写（agnes 转写契约【待供应商】）／④成片复检对象切换（依赖②，名单【待业务方】）／URL 签名策略（随现网部署定）。
@@ -22,7 +27,7 @@
 > - **③ 段12 视频四块**＝[docs/design-segment12-video-candidates.md](docs/design-segment12-video-candidates.md)：在既有输入清单（仍待回填）上预置可裁决候选＝分段编目甲 建 `video_segments` 实体句子粒度（推荐）／转写甲 agnes 异步 `SCENE_VIDEO_TRANSCRIBE` 场景（**硬阻塞＝agnes 转写契约【待供应商】**，与 mode 挂账一并索取）／存储甲 仓内 MinIO 只存原片＋后端代理流（推荐，URL 签名 15 分钟入配置中心）／复检甲 对象=转写文本＋段5 已定稿 8 检测＋advisory 不阻断（推荐）；依赖链＝③独立可先行、①→②→④ 依次依赖；5 待裁点。
 > - **纪律**：三档事实缺口全标【待补】禁臆造；落码须负责人拍板后在 02 追加 Q 另行点工；docs/README 地图补三档登记。【复判不变】① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agnes 视频 `mode`＋转写契约（待供应商）＋四块业务回填＋现网部署（服务器/域名/真 ACME）。
 >
-> **其前（2026-10-10）：**Q332 UX 收口五项（**纯前端零后端零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.275）——负责人对「UX 方面要优化吗」回复「五个点劝告」＝五项全收一次落地：**①错误态可恢复**＝新建共享 ErrorState 组件（role=alert＋错误码＋兜底指引＋重试=整页刷新，纯 Token）替换 workbench/products/content/compliance 四页主错误分支纯文案 notice；**②空态 CTA**＝EmptyState 加可选 action 插槽，products 空态挂「新建产品」主按钮直达 /products/new（content/compliance 无客户可执行动作、保持无 CTA 属正确产品行为）；**③V2 占位密度**＝workbench 五张 V2 指标卡各加开放路径 hint（generated/published 随段12、interactions/trends/health 随段13 回流，与 docs/09 D5 口径一致不臆造），V2 占位页（模板管理/社媒账号）加前置条件说明行；**④路由导航骨架屏**＝新建共享 loading-skeleton（Token 化＋prefers-reduced-motion 尊重）＋客户侧 (shell)/loading.tsx 与 admin/loading.tsx（相关页 force-dynamic SSR 无客户端数据加载时刻，骨架屏服务于 RSC 路由导航的真实加载间隙）；**⑤管理端导航分组**＝ADMIN_NAV_GROUPS 三组（运营 8 项／治理 4 项／数据与成本 3 项，组标签＋组内顺序与高亮不变）。验证＝tsc＋六检查器（nav/products/workbench/compliance/admin/settings）全绿＋内置浏览器实测（admin 三组导航＋Token 成本高亮、社媒账号 V2 占位说明行、模板管理 V1 占位、导航期间骨架屏出现）＋curl SSR 断言（workbench metricHint 全量输出、无 error-state；async SSR 正文在 bu 流式环境不 flush、非代码缺陷）。合龙＝CHANGELOG 补 Q332、handoff 本 banner（Q331 转「其前」）、AGENTS 权威行前移 Q332、docs/08 §2.2 权威行前移 Q332、docs/02 补 C1.275＋续编索引、docs/README docs/02 行前移 Q332/C1.275、README 状态段尾追加 Q332 段、docs/24 头部注记基线订正（C1.274→C1.275）。【复判不变】① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agnes 视频 `mode`（待供应商文档）＋段12 四块规格（输入清单已出待回填）＋现网部署（服务器/域名/真 ACME）。
+> （Q332 已滚档至 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)「十三、」节，2026-10-10 Q337 批按「最近 5 条」上限滚出。）
 >
 > （Q331/Q330 两条已滚档至 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)「十一、」「十二、」节，2026-10-10 Q336 后按「最近 5 条」上限滚出。）
 >
