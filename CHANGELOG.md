@@ -3,6 +3,7 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q340 管理端整页错误态与 analytics 客户页统一 ErrorState（2026-10-10；**纯前端零后端零迁移零测试变化**；基线不变 1273 passed＋10 skipped／收集 1285、前端 tsc＋check-tokens 86＋六检查器全绿；02 C1.283）** —— Q332 ErrorState 从客户侧 4 页扩到管理端 12 页整页错误态（body 模式 5／catch early-return 2／failed 布尔 5，fcw missingRole 显 403）＋analytics 客户页主数据 failed 分支，共 13 页；错误码仅 [403,404,409,422] 展示、unknown 不传，零新 i18n 键；settings/effects/content/dictionaries/compliance 区块级降级与详情页 notFound 边界按 Q332 决策刻意不改，analytics invalidRange 表单校验提示保持内联；验证＝tsc＋六检查器全绿＋curl SSR 12 路由正常态零误现＋不存在租户 404 实测错误态完整渲染（错误码/重试/指引齐全、旧裸文案零残留）。
 - **Q339 推送与 PR #171 落档（2026-10-10；**纯文档零代码**；基线不变 1273 passed＋10 skipped／收集 1285；02 C1.282）** —— Q333–Q338 七 commit 已 push origin/dev；PR #171（dev→main）标题/描述已更新；CI 两轮 run 六门全绿（含真 PG16 Migration gate 0055/0056 往返）。
 - **Q338 video-studio 前端接 Q336 操作面＋docs/23 规模重扫（2026-10-10；**前端代码＋纯文档**；基线不变 1273 passed＋10 skipped／收集 1285、前端 tsc＋check-admin 全绿；02 C1.281）** —— 岛组件新增分段编目区（列表/行内编辑 needs_regen 回显/新增）与原片留档区（列表/上传/503 明示）；docs/23 TL;DR 规模行刷至 73 表·787 列·1273 passed·147 测试文件、技术债 104→110、受闸注记 53。
 - **Q337 文档债收口批：受闸计数链订正＋SOP 补 Q336 操作段（2026-10-10；**纯文档零代码零迁移零测试变化**；基线不变 1273 passed＋10 skipped／收集 1285；02 C1.280）** —— 重扫实锤两处：docs/23 受闸计数链订正（46→49→51→53，Q329 注记漏记 Q325 三口）＋docs/21 段12 补「video-studio 分段编目与原片留档」SOP 节。
