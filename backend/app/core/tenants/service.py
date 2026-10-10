@@ -202,3 +202,59 @@ async def assert_intake_admitted(session: AsyncSession, tenant_id: str) -> Tenan
     if tenant.status == "paused":
         raise TenantPaused(tenant_id)
     return tenant
+
+
+# ---------- Q335：按租户 Token 月账本（计费 V2 甲案，design-v2-billing-subscription §3.1 甲） ----------
+#
+# 口径：自然月（UTC）；只读派生自 skill_runs（status=succeeded 且 tenant_id 命中），
+# 不落账本表、不改模型调用路径；超额仅软提醒（返回 over_quota 标志，不拦截）。
+# tenant_id 为空的运行（跨租户/系统任务）不计入任何租户。
+
+
+def _month_bounds(now: datetime | None = None) -> tuple[datetime, datetime]:
+    now = now or _now()
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+    return start, end
+
+
+async def monthly_token_usage(
+    session: AsyncSession, tenant_id: str, *, now: datetime | None = None
+) -> dict:
+    tenant = await get_tenant(session, tenant_id)
+    start, end = _month_bounds(now)
+    from app.core.skill7.models import SkillRun
+
+    row = (
+        await session.execute(
+            select(
+                func.count().label("runs"),
+                func.coalesce(func.sum(SkillRun.input_tokens), 0).label("input_tokens"),
+                func.coalesce(func.sum(SkillRun.output_tokens), 0).label("output_tokens"),
+            )
+            .where(
+                SkillRun.tenant_id == tenant_id,
+                SkillRun.status == "succeeded",
+                SkillRun.created_at >= start,
+                SkillRun.created_at < end,
+            )
+        )
+    ).one()
+    used = int(row.input_tokens) + int(row.output_tokens)
+    quota = tenant.monthly_token_quota
+    return {
+        "tenant_id": tenant_id,
+        "period_start": start.date().isoformat(),
+        "period_end_excl": end.date().isoformat(),
+        "runs": int(row.runs),
+        "input_tokens": int(row.input_tokens),
+        "output_tokens": int(row.output_tokens),
+        "used_tokens": used,
+        "monthly_token_quota": quota,
+        # 软提醒：超额只标红不拦截（乙案硬拦须先跑一个账期实测误伤率，design §4-3 维持推荐甲）。
+        "over_quota": bool(quota is not None and used > quota),
+        "usage_ratio": (used / quota) if quota else None,
+    }

@@ -763,6 +763,20 @@ export interface TenantDetailView extends TenantView {
   onboarding: TenantOnboarding;
 }
 
+// Q335：按租户本月 Token 用量账本（计费 V2 甲案；超额仅软提醒不拦截）。
+export interface TenantTokenUsage {
+  tenant_id: string;
+  period_start: string;
+  period_end_excl: string;
+  runs: number;
+  input_tokens: number;
+  output_tokens: number;
+  used_tokens: number;
+  monthly_token_quota: number | null;
+  over_quota: boolean;
+  usage_ratio: number | null;
+}
+
 export async function listTenants(): Promise<TenantView[]> {
   return request<TenantView[]>(adminPath("/api/admin/tenants"));
 }
@@ -770,6 +784,16 @@ export async function listTenants(): Promise<TenantView[]> {
 export async function getTenant(tenantId: string): Promise<TenantDetailView> {
   return request<TenantDetailView>(
     adminPath(`/api/admin/tenants/${encodeURIComponent(tenantId)}`),
+  );
+}
+
+export async function getTenantTokenUsage(
+  tenantId: string,
+): Promise<TenantTokenUsage> {
+  return request<TenantTokenUsage>(
+    adminPath(
+      `/api/admin/tenants/${encodeURIComponent(tenantId)}/token-usage`,
+    ),
   );
 }
 

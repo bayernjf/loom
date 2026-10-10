@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q335 计费甲案落地：按租户 Token 月账本＋额度看板＋价格入配置中心（2026-10-10；**代码＋迁移＋测试＋前端＋文档**；测试 1265→**1267 passed＋10 skipped**〔＋4〕、收集 1271→**1279**、ruff 净、前端 tsc＋check-admin 全绿；头 `0055_billing_price_seed`（纯数据）；02 C1.278）** —— Q333「按推荐全部」裁决之第二件。
+  - `monthly_token_usage`（自然月 UTC，派生自 `skill_runs`，不落账本表）＋`GET /api/admin/tenants/{tenant_id}/token-usage`（platform_admin）；超额仅软提醒不拦截（乙案硬拦挂账）；迁移 0055 播种 `billing.price_monthly_usd.{basic,pro,enterprise}`＝999/2999/9999（仅展示不扣费，agency【待业务方回填】不播种）；前端租户详情页新增「本月 Token 用量」区。
 - **Q334 回滚中心甲案落地：变更-回滚清单只读聚合面（2026-10-10；**代码＋测试＋文档**，零迁移零新表；测试 1261→**1265 passed＋10 skipped**〔＋4＝`test_change_ledger_api.py`〕、ruff 净；02 C1.277）** —— Q333「按推荐全部」裁决之第一件。
   - 新 `app/core/change_ledger/`：`GET /api/admin/change-ledger`（operations/platform_admin 只读）从 `audit_logs` 派生聚合五机制（config_center/pws/fcw/wordlist/skill_prompt 共 11 个 audit action）变更事件，回带 `rollbackability` 四级＋`ops_surface` 直达既有操作面；不落新表、不发明第六套回滚语义。乙案 Prompt 版本回滚标 `no_surface` 挂账。
 - **Q333 三件候选设计档一次交付：计费订阅（V2）＋回滚中心（V3）＋段12 视频四块（2026-10-10；**纯文档零代码零迁移零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`；02 C1.276）** —— 负责人「那你都搞吧」点工三件候选（Q274/Q292/Q293 同型：只产材料不裁决不落码）。

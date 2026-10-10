@@ -589,6 +589,14 @@
       "firstModelingStarted": "已开始首次建模",
       "yes": "是",
       "no": "否"
+      ,"usageTitle": "本月 Token 用量（派生账本）",
+      "usageNote": "口径：自然月（UTC）；派生自 skill_runs 成功运行，不落账本表；超额仅软提醒标红，不拦截（计费 V2 第一切片 Q335）。",
+      "usagePeriod": "账期（起 ~ 止，止不含）",
+      "usageRuns": "本月运行数",
+      "usageUsed": "本月用量 / 额度",
+      "usageStatus": "额度状态",
+      "usageOverQuota": "已超额度（软提醒，不拦截）",
+      "usageWithinQuota": "额度内"
     },
     "slaTodosNav": "待办 SLA 看板",
     "contentOpsNav": "内容运营台",
