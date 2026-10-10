@@ -173,3 +173,16 @@ async def resume_tenant(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.commit()
     return _view(row)
+
+
+@router.get("/{tenant_id}/token-usage")
+async def tenant_token_usage(
+    tenant_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_admin_view),
+) -> dict:
+    """Q335：按租户本月 Token 用量/额度只读账本（计费 V2 甲案；超额仅软提醒不拦截）。"""
+    try:
+        return await service.monthly_token_usage(session, tenant_id)
+    except service.TenantNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"tenant not found: {exc}") from exc

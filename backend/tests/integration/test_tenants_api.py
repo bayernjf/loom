@@ -380,3 +380,91 @@ async def test_backfilled_tenant_row_is_admitted(client, session_factory):
         await client.get("/api/admin/tenants/legacy", params=_admin_params())
     ).json()
     assert body["detail"]["backfilled"] is True
+
+
+# ---------- Q335：按租户 Token 月账本（计费 V2 甲案） ----------
+
+
+async def test_token_usage_empty_month(client):
+    await client.post(
+        "/api/admin/tenants", json={"tenant_id": "t-usage", "plan": "pro", "actor": ADMIN}
+    )
+    r = await client.get("/api/admin/tenants/t-usage/token-usage", params=_admin_params())
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["tenant_id"] == "t-usage"
+    assert body["runs"] == 0 and body["used_tokens"] == 0
+    assert body["monthly_token_quota"] == 5_000_000
+    assert body["over_quota"] is False
+    assert body["usage_ratio"] == 0
+
+
+async def test_token_usage_aggregates_current_month(client, session_factory):
+    from datetime import UTC, datetime
+
+    from app.core.skill7.models import SkillRun
+
+    await client.post(
+        "/api/admin/tenants", json={"tenant_id": "t-use2", "plan": "trial", "actor": ADMIN}
+    )
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        session.add_all([
+            SkillRun(
+                skill_id="PT-X", status="succeeded", source="ops",
+                tenant_id="t-use2", input_tokens=400_000, output_tokens=200_000,
+                created_at=now,
+            ),
+            # 非 succeeded 不计费
+            SkillRun(
+                skill_id="PT-X", status="failed", source="ops",
+                tenant_id="t-use2", input_tokens=999_999, output_tokens=0,
+                created_at=now,
+            ),
+            # 其他租户不计入
+            SkillRun(
+                skill_id="PT-X", status="succeeded", source="ops",
+                tenant_id="t-other", input_tokens=999_999, output_tokens=0,
+                created_at=now,
+            ),
+            # 上月（或上年初）不计入本月
+            SkillRun(
+                skill_id="PT-X", status="succeeded", source="ops",
+                tenant_id="t-use2", input_tokens=999_999, output_tokens=0,
+                created_at=datetime(2000, 1, 15, tzinfo=UTC),
+            ),
+        ])
+        await session.commit()
+    r = await client.get("/api/admin/tenants/t-use2/token-usage", params=_admin_params())
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["runs"] == 1
+    assert body["used_tokens"] == 600_000
+    # trial 额度 50 万 → 软提醒标红，不拦截
+    assert body["over_quota"] is True
+    assert body["usage_ratio"] > 1
+
+
+async def test_token_usage_rbac_and_404(client):
+    await client.post(
+        "/api/admin/tenants", json={"tenant_id": "t-use3", "actor": ADMIN}
+    )
+    r = await client.get("/api/admin/tenants/t-use3/token-usage")
+    assert r.status_code == 422  # 缺 actor_id
+    r = await client.get(
+        "/api/admin/tenants/t-use3/token-usage",
+        params=[("actor_id", "c-1"), ("roles", "customer_admin")],
+    )
+    assert r.status_code == 403
+    r = await client.get("/api/admin/tenants/no-such/token-usage", params=_admin_params())
+    assert r.status_code == 404
+
+
+async def test_billing_price_seeds_registered():
+    from app.core.config_center.seeds import SEED_BY_KEY
+
+    assert SEED_BY_KEY["billing.price_monthly_usd.basic"][3] == 999
+    assert SEED_BY_KEY["billing.price_monthly_usd.pro"][3] == 2999
+    assert SEED_BY_KEY["billing.price_monthly_usd.enterprise"][3] == 9999
+    # agency 价格【待业务方回填】：SEED 缺位即「待补」展示口径
+    assert "billing.price_monthly_usd.agency" not in SEED_BY_KEY

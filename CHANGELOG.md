@@ -3,6 +3,18 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q338 video-studio 前端接 Q336 操作面＋docs/23 规模重扫（2026-10-10；**前端代码＋纯文档**；基线不变 1273 passed＋10 skipped／收集 1285、前端 tsc＋check-admin 全绿；02 C1.281）** —— 岛组件新增分段编目区（列表/行内编辑 needs_regen 回显/新增）与原片留档区（列表/上传/503 明示）；docs/23 TL;DR 规模行刷至 73 表·787 列·1273 passed·147 测试文件、技术债 104→110、受闸注记 53。
+- **Q337 文档债收口批：受闸计数链订正＋SOP 补 Q336 操作段（2026-10-10；**纯文档零代码零迁移零测试变化**；基线不变 1273 passed＋10 skipped／收集 1285；02 C1.280）** —— 重扫实锤两处：docs/23 受闸计数链订正（46→49→51→53，Q329 注记漏记 Q325 三口）＋docs/21 段12 补「video-studio 分段编目与原片留档」SOP 节。
+- **Q336 段12 视频两甲落地：分段编目实体＋对象存储原片留档（2026-10-10；**代码＋迁移＋测试＋文档**；测试 1267→**1273 passed＋10 skipped**〔＋6〕、收集 **1285**、ruff 净；头 `0056_video_segments_objects`／73 表·787 列；02 C1.279）** —— Q333「按推荐全部」裁决之第三件（①③甲；②④维持待供应商/待回填）。
+  - 新 `app/content/video_studio/`：`video_segments` 实体＋`GET/POST .../video-segments`＋`PUT /api/admin/video-segments/{id}`（写口 operations 凭证闸进 GATED；编辑只改元数据不动 body，改文本标 needs_regen＋回带屏4 CCR 复检）；`video_objects` 登记＋上传（原始字节流，S3 未配置 503）＋后端代理只读流（不暴露 MinIO 直连）；全审计。
+- **Q335 计费甲案落地：按租户 Token 月账本＋额度看板＋价格入配置中心（2026-10-10；**代码＋迁移＋测试＋前端＋文档**；测试 1265→**1267 passed＋10 skipped**〔＋4〕、收集 1271→**1279**、ruff 净、前端 tsc＋check-admin 全绿；头 `0055_billing_price_seed`（纯数据）；02 C1.278）** —— Q333「按推荐全部」裁决之第二件。
+  - `monthly_token_usage`（自然月 UTC，派生自 `skill_runs`，不落账本表）＋`GET /api/admin/tenants/{tenant_id}/token-usage`（platform_admin）；超额仅软提醒不拦截（乙案硬拦挂账）；迁移 0055 播种 `billing.price_monthly_usd.{basic,pro,enterprise}`＝999/2999/9999（仅展示不扣费，agency【待业务方回填】不播种）；前端租户详情页新增「本月 Token 用量」区。
+- **Q334 回滚中心甲案落地：变更-回滚清单只读聚合面（2026-10-10；**代码＋测试＋文档**，零迁移零新表；测试 1261→**1265 passed＋10 skipped**〔＋4＝`test_change_ledger_api.py`〕、ruff 净；02 C1.277）** —— Q333「按推荐全部」裁决之第一件。
+  - 新 `app/core/change_ledger/`：`GET /api/admin/change-ledger`（operations/platform_admin 只读）从 `audit_logs` 派生聚合五机制（config_center/pws/fcw/wordlist/skill_prompt 共 11 个 audit action）变更事件，回带 `rollbackability` 四级＋`ops_surface` 直达既有操作面；不落新表、不发明第六套回滚语义。乙案 Prompt 版本回滚标 `no_surface` 挂账。
+- **Q333 三件候选设计档一次交付：计费订阅（V2）＋回滚中心（V3）＋段12 视频四块（2026-10-10；**纯文档零代码零迁移零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`；02 C1.276）** —— 负责人「那你都搞吧」点工三件候选（Q274/Q292/Q293 同型：只产材料不裁决不落码）。
+  - [docs/design-v2-billing-subscription.md](docs/design-v2-billing-subscription.md)：现状＝五档额度已落（Q325）但 `monthly_token_quota` 零消费方、无租户账本/账单/支付；候选＝甲 按租户 Token 账本＋额度看板不接支付（推荐）／乙 ＋硬拦截／丙 完整计费，账期甲-1 自然月、价格入配置中心仅展示；5 待裁点。
+  - [docs/design-v3-rollback-center.md](docs/design-v3-rollback-center.md)：现状＝五套各自为政的版本/撤销机制（配置版本化已能回滚／PWS 作废+重冻／FCW revoke／词库无版本／SkillRunLog 不可 mutate）；候选＝甲 只读变更-回滚聚合面（推荐，不发明第六套语义）／乙 ＋Prompt 版本回滚／丙 通用快照-恢复（与 Q30/PT 口径冲突）；5 待裁点。
+  - [docs/design-segment12-video-candidates.md](docs/design-segment12-video-candidates.md)：在既有输入清单上预置可裁决候选＝分段编目甲 建实体句子粒度（推荐）／转写甲 agnes 异步场景（硬阻塞＝供应商契约【待补】）／存储甲 MinIO 只存原片（推荐）／复检甲 转写文本＋8 检测 advisory（推荐）；依赖链③→①→②→④；5 待裁点。
 
 ## [Unreleased]
 

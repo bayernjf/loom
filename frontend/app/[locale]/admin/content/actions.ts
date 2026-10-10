@@ -152,3 +152,122 @@ export async function getScriptRecheckAction(
     return { ok: false, status: "unknown" };
   }
 }
+
+// Q336：video-studio 分段编目（①甲）＋原片留档（③甲）操作面。
+// 写口 operations 凭证闸；人员以已验真令牌为准（body.actor 仅为占位）。
+export type VideoSegmentsResult =
+  | { ok: true; segments: import("@/lib/api").VideoSegmentView[] }
+  | { ok: false; status: 403 | 404 | "unknown" };
+
+export async function listVideoSegmentsAction(
+  contentId: string,
+): Promise<VideoSegmentsResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unknown" };
+  try {
+    const { listVideoSegments } = await import("@/lib/api");
+    return { ok: true, segments: await listVideoSegments(contentId) };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+export type VideoSegmentSaveResult =
+  | { ok: true; needsRegen: boolean }
+  | { ok: false; status: 403 | 404 | 422 | "missing_role" | "unconfigured" | "unknown" };
+
+export async function createVideoSegmentAction(
+  contentId: string,
+  type: string,
+  text: string,
+): Promise<VideoSegmentSaveResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
+  if (!ADMIN_ROLE_LIST.includes("operations")) {
+    return { ok: false, status: "missing_role" };
+  }
+  if (!text.trim()) return { ok: false, status: 422 };
+  try {
+    const { createVideoSegment } = await import("@/lib/api");
+    await createVideoSegment(contentId, { type, text: text.trim() });
+    return { ok: true, needsRegen: false };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404, 422].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 | 422 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+export async function updateVideoSegmentTextAction(
+  segmentId: string,
+  text: string,
+): Promise<VideoSegmentSaveResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
+  if (!ADMIN_ROLE_LIST.includes("operations")) {
+    return { ok: false, status: "missing_role" };
+  }
+  if (!text.trim()) return { ok: false, status: 422 };
+  try {
+    const { updateVideoSegment } = await import("@/lib/api");
+    const result = await updateVideoSegment(segmentId, { text: text.trim() });
+    return { ok: true, needsRegen: result.needs_regen };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404, 422].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 | 422 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+export type VideoObjectsResult =
+  | { ok: true; objects: import("@/lib/api").VideoObjectView[] }
+  | { ok: false; status: 403 | 404 | "unknown" };
+
+export async function listVideoObjectsAction(
+  contentId: string,
+): Promise<VideoObjectsResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unknown" };
+  try {
+    const { listVideoObjects } = await import("@/lib/api");
+    return { ok: true, objects: await listVideoObjects(contentId) };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+export type VideoObjectUploadResult =
+  | { ok: true }
+  | { ok: false; status: 403 | 404 | 422 | 502 | 503 | "missing_role" | "unconfigured" | "unknown" };
+
+export async function uploadVideoObjectAction(
+  contentId: string,
+  filename: string,
+  base64: string,
+  contentType: string,
+): Promise<VideoObjectUploadResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
+  if (!ADMIN_ROLE_LIST.includes("operations")) {
+    return { ok: false, status: "missing_role" };
+  }
+  if (!filename.trim() || !base64) return { ok: false, status: 422 };
+  try {
+    const { uploadVideoObject } = await import("@/lib/api");
+    const bytes = Buffer.from(base64, "base64");
+    await uploadVideoObject(
+      contentId,
+      filename.trim(),
+      new Blob([bytes], { type: contentType || "application/octet-stream" }),
+    );
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404, 422, 502, 503].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 | 422 | 502 | 503 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}

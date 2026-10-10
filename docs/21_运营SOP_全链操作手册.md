@@ -118,6 +118,17 @@
 4. **operations** 托管发布后回填：`PUT /api/admin/content/{id}/publish-info`（url 必填）；不新增 published 态，三列非空即已发布。队列：`GET /api/admin/content/ready-to-publish`。
 5. 难产骨架：**operations** `POST /api/content/{id}/discard`（reason 必填，终态，释放唯一占位回池）；队列在 needs-attention。
 
+### 段 12 — video-studio 分段编目与原片留档（Q336，视频成品按需）
+
+1. **分段编目**（`video_segments` 实体，句子粒度；管理端 API，跨租户口径）：
+   - 列表：`GET /api/admin/content/{content_id}/video-segments?actor_id=&roles=operations`（operations/platform_admin 可读）。
+   - 新建：`POST /api/admin/content/{content_id}/video-segments`（**operations 凭证闸**，body 带 actor 占位即可、人员以令牌为准）；type 六值 `hook/intro/body/climax/ending/cta`，`seq` 缺省自动接尾，`start_ms/end_ms` 无供应商时间戳时可留空。
+   - 编辑：`PUT /api/admin/video-segments/{segment_id}`（同闸）。**只改分段元数据，不动成品 body**；改 `text` 会落新文本并标 `needs_regen=true`——重生成走既有 generate/regenerate 链路，本口不代触发；每次编辑响应回带 `script_recheck`（屏4 CCR 复检，advisory 不阻断）。
+2. **原片留档**（`video_objects` 登记＋仓内 MinIO，只存原片）：
+   - 上传：`POST /api/admin/content/{content_id}/video-objects?filename=clip.mp4&actor_id=&roles=operations`，body＝文件原始字节、Content-Type 头即对象类型；S3 未配置（`LOOM_S3_ENDPOINT_URL` 空）回 503 且不产生登记行。
+   - 列表：`GET /api/admin/content/{content_id}/video-objects`；播放/下载走后端代理只读流 `GET /api/admin/video-objects/{object_id}/stream`——**不暴露 MinIO 直连地址**。
+3. 转写与成片复检未接线：agnes 转写契约【待供应商】、视频专用检测名单【待业务方】，屏4 复检对象暂为脚本文本（Q328 口径）。
+
 ### 段 13 — 效果回流
 
 1. **platform_admin** 在 /admin/agent-keys 签发 Agent Key（secret 仅显示一次）。

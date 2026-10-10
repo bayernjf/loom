@@ -1,7 +1,7 @@
 import { formatDateTimeLocal } from "@/lib/time";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
-import { ApiError, CURRENT_ADMIN_ACTOR_ID, getTenant } from "@/lib/api";
+import { ApiError, CURRENT_ADMIN_ACTOR_ID, getTenant, getTenantTokenUsage } from "@/lib/api";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,9 @@ export default async function TenantDetailPage({
 
   try {
     const tenant = await getTenant(tenantId);
+    const usage = await getTenantTokenUsage(tenantId);
+    const usagePct =
+      usage.usage_ratio === null ? null : Math.round(usage.usage_ratio * 100);
     return (
       <main>
         <Link href="/admin/tenants" className={styles.secondaryButton}>
@@ -63,6 +66,30 @@ export default async function TenantDetailPage({
           <dd>{tenant.monthly_token_quota ?? "—"}</dd>
           <dt>{t("colCreated")}</dt>
           <dd>{timeText(tenant.created_at)}</dd>
+        </dl>
+
+        <h2 className={styles.sectionTitle}>{t("usageTitle")}</h2>
+        <p className={styles.onboardingNote}>{t("usageNote")}</p>
+        <dl className={styles.detailList}>
+          <dt>{t("usagePeriod")}</dt>
+          <dd>
+            {usage.period_start} ~ {usage.period_end_excl}
+          </dd>
+          <dt>{t("usageRuns")}</dt>
+          <dd>{usage.runs}</dd>
+          <dt>{t("usageUsed")}</dt>
+          <dd>
+            {usage.used_tokens} / {usage.monthly_token_quota ?? "—"}
+            {usagePct !== null ? ` (${usagePct}%)` : ""}
+          </dd>
+          <dt>{t("usageStatus")}</dt>
+          <dd>
+            {usage.over_quota ? (
+              <span className={styles.msgErr}>{t("usageOverQuota")}</span>
+            ) : (
+              t("usageWithinQuota")
+            )}
+          </dd>
         </dl>
 
         <h2 className={styles.sectionTitle}>{t("onboardingTitle")}</h2>

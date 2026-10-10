@@ -103,6 +103,11 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     # 提醒待办的截止时长（天）：与 PWS 就绪提醒同型（pws.ready_todo_due_days=7），到期经
     # sweep 置 escalated（审计动作沿用默认 sla.todo_escalated，docs/10 §4）。
     ("platform.recalc_todo_due_days", "platform", "int", 7, "Q294 甲案（原文未给出）", {"min": 1}),
+    # ---- 计费与订阅（D3.11-6 展示价，Q335；仅展示不扣费，改价走 config.update 审计）----
+    # agency 档价格原文未给【待业务方回填】，不播种子（SEED 缺位即「待补」展示口径）。
+    ("billing.price_monthly_usd.basic", "billing", "int", 999, "docs/09 D3.11-6", {"min": 0}),
+    ("billing.price_monthly_usd.pro", "billing", "int", 2999, "docs/09 D3.11-6", {"min": 0}),
+    ("billing.price_monthly_usd.enterprise", "billing", "int", 9999, "docs/09 D3.11-6", {"min": 0}),
 ]
 
 SEED_BY_KEY = {row[0]: row for row in CONFIG_SEEDS}
