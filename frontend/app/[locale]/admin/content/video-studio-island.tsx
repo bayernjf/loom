@@ -7,6 +7,11 @@ import {
   getContentDetailAction,
   getScriptRecheckAction,
   getVideoWhitelistMaterialAction,
+  createVideoSegmentAction,
+  listVideoObjectsAction,
+  listVideoSegmentsAction,
+  updateVideoSegmentTextAction,
+  uploadVideoObjectAction,
   type WhitelistMaterialResult,
 } from "./actions";
 import styles from "../admin.module.css";
@@ -86,6 +91,18 @@ export function VideoStudioIsland({
   const [scriptCheck, setScriptCheck] = useState<
     Awaited<ReturnType<typeof getScriptRecheckAction>> | null
   >(null);
+  // Q336：分段编目实体（①甲，可编辑）与原片留档（③甲）。
+  const [catalog, setCatalog] = useState<
+    Awaited<ReturnType<typeof listVideoSegmentsAction>> | null
+  >(null);
+  const [objects, setObjects] = useState<
+    Awaited<ReturnType<typeof listVideoObjectsAction>> | null
+  >(null);
+  const [newType, setNewType] = useState("body");
+  const [newText, setNewText] = useState("");
+  const [editText, setEditText] = useState<Record<string, string>>({});
+  const [catalogMsg, setCatalogMsg] = useState<string | null>(null);
+  const [objectMsg, setObjectMsg] = useState<string | null>(null);
 
   function toggle() {
     const next = !open;
@@ -101,6 +118,97 @@ export function VideoStudioIsland({
         setDetail(await getContentDetailAction(contentId));
       });
     }
+    if (!catalog) {
+      startTransition(async () => {
+        setCatalog(await listVideoSegmentsAction(contentId));
+      });
+    }
+    if (!objects) {
+      startTransition(async () => {
+        setObjects(await listVideoObjectsAction(contentId));
+      });
+    }
+  }
+
+  function reloadCatalog() {
+    startTransition(async () => {
+      setCatalog(await listVideoSegmentsAction(contentId));
+    });
+  }
+
+  function reloadObjects() {
+    startTransition(async () => {
+      setObjects(await listVideoObjectsAction(contentId));
+    });
+  }
+
+  function submitNewSegment() {
+    setCatalogMsg(null);
+    startTransition(async () => {
+      const result = await createVideoSegmentAction(contentId, newType, newText);
+      if (result.ok) {
+        setNewText("");
+        setCatalogMsg(t("catalogSaved"));
+        reloadCatalog();
+      } else {
+        setCatalogMsg(
+          result.status === "missing_role"
+            ? t("actorMissingRole")
+            : `${t("catalogSaveFailed")} (${String(result.status)})`,
+        );
+      }
+    });
+  }
+
+  function submitSegmentText(segmentId: string) {
+    setCatalogMsg(null);
+    startTransition(async () => {
+      const result = await updateVideoSegmentTextAction(
+        segmentId,
+        editText[segmentId] ?? "",
+      );
+      if (result.ok) {
+        setCatalogMsg(
+          result.needsRegen ? t("catalogSavedRegen") : t("catalogSaved"),
+        );
+        reloadCatalog();
+      } else {
+        setCatalogMsg(
+          result.status === "missing_role"
+            ? t("actorMissingRole")
+            : `${t("catalogSaveFailed")} (${String(result.status)})`,
+        );
+      }
+    });
+  }
+
+  function submitObjectUpload(file: File | null) {
+    setObjectMsg(null);
+    if (!file) return;
+    startTransition(async () => {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      const result = await uploadVideoObjectAction(
+        contentId,
+        file.name,
+        btoa(binary),
+        file.type,
+      );
+      if (result.ok) {
+        setObjectMsg(t("objectUploaded"));
+        reloadObjects();
+      } else if (result.status === 503) {
+        setObjectMsg(t("objectStorageDown"));
+      } else {
+        setObjectMsg(
+          result.status === "missing_role"
+            ? t("actorMissingRole")
+            : `${t("objectUploadFailed")} (${String(result.status)})`,
+        );
+      }
+    });
   }
 
   function runScriptCheck() {
@@ -195,6 +303,130 @@ export function VideoStudioIsland({
                 ))}
               </ol>
             )}
+          </section>
+          <section>
+            <h3 className={styles.sectionTitle}>{t("catalogTitle")}</h3>
+            <p className={styles.notice}>{t("catalogIntro")}</p>
+            {catalog === null ? (
+              <p className={styles.notice}>
+                {pending ? t("loading") : t("loadPending")}
+              </p>
+            ) : catalog.ok ? (
+              <>
+                {catalog.segments.length === 0 ? (
+                  <p className={styles.notice}>{t("catalogEmpty")}</p>
+                ) : (
+                  <ol className={styles.detailList}>
+                    {catalog.segments.map((segment) => (
+                      <li key={segment.segment_id}>
+                        <span className={styles.metaLine}>
+                          {segment.seq}. [{segment.type}] {segment.text}
+                          {segment.start_ms !== null
+                            ? ` (${segment.start_ms}-${segment.end_ms ?? "?"}ms)`
+                            : ""}
+                        </span>
+                        <span className={styles.metaLine}>
+                          <input
+                            defaultValue={segment.text}
+                            onChange={(event) =>
+                              setEditText((prev) => ({
+                                ...prev,
+                                [segment.segment_id]: event.target.value,
+                              }))
+                            }
+                          />
+                          <button
+                            type="button"
+                            className={styles.planChip}
+                            disabled={pending}
+                            onClick={() => submitSegmentText(segment.segment_id)}
+                          >
+                            {t("catalogSaveText")}
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <p className={styles.metaLine}>
+                  <select
+                    value={newType}
+                    onChange={(event) => setNewType(event.target.value)}
+                  >
+                    {["hook", "intro", "body", "climax", "ending", "cta"].map(
+                      (type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  <input
+                    value={newText}
+                    placeholder={t("catalogNewPlaceholder")}
+                    onChange={(event) => setNewText(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className={styles.planChip}
+                    disabled={pending || !newText.trim()}
+                    onClick={submitNewSegment}
+                  >
+                    {t("catalogAdd")}
+                  </button>
+                </p>
+              </>
+            ) : (
+              <p className={styles.riskMedium}>
+                {catalog.status === 403
+                  ? t("actorMissingRole")
+                  : t("catalogLoadFailed")}
+              </p>
+            )}
+            {catalogMsg ? <p className={styles.notice}>{catalogMsg}</p> : null}
+          </section>
+          <section>
+            <h3 className={styles.sectionTitle}>{t("objectTitle")}</h3>
+            <p className={styles.notice}>{t("objectIntro")}</p>
+            {objects === null ? (
+              <p className={styles.notice}>
+                {pending ? t("loading") : t("loadPending")}
+              </p>
+            ) : objects.ok ? (
+              <>
+                {objects.objects.length === 0 ? (
+                  <p className={styles.notice}>{t("objectEmpty")}</p>
+                ) : (
+                  <ul className={styles.detailList}>
+                    {objects.objects.map((obj) => (
+                      <li key={obj.object_id}>
+                        <span className={styles.metaLine}>
+                          {obj.object_key} [{obj.source}]
+                          {obj.size_bytes !== null ? ` ${obj.size_bytes}B` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className={styles.metaLine}>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    disabled={pending}
+                    onChange={(event) =>
+                      submitObjectUpload(event.target.files?.[0] ?? null)
+                    }
+                  />
+                </p>
+              </>
+            ) : (
+              <p className={styles.riskMedium}>
+                {objects.status === 403
+                  ? t("actorMissingRole")
+                  : t("objectLoadFailed")}
+              </p>
+            )}
+            {objectMsg ? <p className={styles.notice}>{objectMsg}</p> : null}
           </section>
           <section>
             <h3 className={styles.sectionTitle}>{t("scriptCheckTitle")}</h3>

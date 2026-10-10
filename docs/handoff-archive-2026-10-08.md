@@ -346,3 +346,8 @@
 ## 十三、Q332 banner（2026-10-10 滚入）
 
 ~~**其前（2026-10-10）：**Q332 UX 收口五项（**纯前端零后端零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.275）——负责人对「UX 方面要优化吗」回复「五个点劝告」＝五项全收一次落地：**①错误态可恢复**＝新建共享 ErrorState 组件（role=alert＋错误码＋兜底指引＋重试=整页刷新，纯 Token）替换 workbench/products/content/compliance 四页主错误分支纯文案 notice；**②空态 CTA**＝EmptyState 加可选 action 插槽，products 空态挂「新建产品」主按钮直达 /products/new（content/compliance 无客户可执行动作、保持无 CTA 属正确产品行为）；**③V2 占位密度**＝workbench 五张 V2 指标卡各加开放路径 hint（generated/published 随段12、interactions/trends/health 随段13 回流，与 docs/09 D5 口径一致不臆造），V2 占位页（模板管理/社媒账号）加前置条件说明行；**④路由导航骨架屏**＝新建共享 loading-skeleton（Token 化＋prefers-reduced-motion 尊重）＋客户侧 (shell)/loading.tsx 与 admin/loading.tsx（相关页 force-dynamic SSR 无客户端数据加载时刻，骨架屏服务于 RSC 路由导航的真实加载间隙）；**⑤管理端导航分组**＝ADMIN_NAV_GROUPS 三组（运营 8 项／治理 4 项／数据与成本 3 项，组标签＋组内顺序与高亮不变）。验证＝tsc＋六检查器（nav/products/workbench/compliance/admin/settings）全绿＋内置浏览器实测（admin 三组导航＋Token 成本高亮、社媒账号 V2 占位说明行、模板管理 V1 占位、导航期间骨架屏出现）＋curl SSR 断言（workbench metricHint 全量输出、无 error-state；async SSR 正文在 bu 流式环境不 flush、非代码缺陷）。合龙＝CHANGELOG 补 Q332、handoff 本 banner（Q331 转「其前」）、AGENTS 权威行前移 Q332、docs/08 §2.2 权威行前移 Q332、docs/02 补 C1.275＋续编索引、docs/README docs/02 行前移 Q332/C1.275、README 状态段尾追加 Q332 段、docs/24 头部注记基线订正（C1.274→C1.275）。【复判不变】① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agnes 视频 `mode`（待供应商文档）＋段12 四块规格（输入清单已出待回填）＋现网部署（服务器/域名/真 ACME）。~~
+
+
+## 十四、Q333 banner（2026-10-10 滚入）
+
+~~**其前（2026-10-10）：Q333 三件候选设计档一次交付：计费订阅（V2）＋回滚中心（V3）＋段12 视频四块（**纯文档零代码零迁移零测试变化**；基线不变 **1261 passed＋10 skipped／收集 1271**、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.276）**——负责人「那你都搞吧」点工三件候选（Q274/Q292/Q293 同型：只产材料、不裁决、不落码）。~~

@@ -3,6 +3,7 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q338 video-studio 前端接 Q336 操作面＋docs/23 规模重扫（2026-10-10；**前端代码＋纯文档**；基线不变 1273 passed＋10 skipped／收集 1285、前端 tsc＋check-admin 全绿；02 C1.281）** —— 岛组件新增分段编目区（列表/行内编辑 needs_regen 回显/新增）与原片留档区（列表/上传/503 明示）；docs/23 TL;DR 规模行刷至 73 表·787 列·1273 passed·147 测试文件、技术债 104→110、受闸注记 53。
 - **Q337 文档债收口批：受闸计数链订正＋SOP 补 Q336 操作段（2026-10-10；**纯文档零代码零迁移零测试变化**；基线不变 1273 passed＋10 skipped／收集 1285；02 C1.280）** —— 重扫实锤两处：docs/23 受闸计数链订正（46→49→51→53，Q329 注记漏记 Q325 三口）＋docs/21 段12 补「video-studio 分段编目与原片留档」SOP 节。
 - **Q336 段12 视频两甲落地：分段编目实体＋对象存储原片留档（2026-10-10；**代码＋迁移＋测试＋文档**；测试 1267→**1273 passed＋10 skipped**〔＋6〕、收集 **1285**、ruff 净；头 `0056_video_segments_objects`／73 表·787 列；02 C1.279）** —— Q333「按推荐全部」裁决之第三件（①③甲；②④维持待供应商/待回填）。
   - 新 `app/content/video_studio/`：`video_segments` 实体＋`GET/POST .../video-segments`＋`PUT /api/admin/video-segments/{id}`（写口 operations 凭证闸进 GATED；编辑只改元数据不动 body，改文本标 needs_regen＋回带屏4 CCR 复检）；`video_objects` 登记＋上传（原始字节流，S3 未配置 503）＋后端代理只读流（不暴露 MinIO 直连）；全审计。

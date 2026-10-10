@@ -1807,3 +1807,119 @@ export async function revokeStaffKey(keyId: string): Promise<StaffKeyView> {
     },
   );
 }
+
+// Q336：video-studio 分段编目实体（①甲）＋原片留档（③甲）。
+// 读口 operations | platform_admin（adminPath）；写口 operations 凭证闸
+// （body.actor 占位即可，人员以已验真令牌为准）；上传为原始字节流。
+export interface VideoSegmentView {
+  segment_id: string;
+  content_id: string;
+  seq: number;
+  start_ms: number | null;
+  end_ms: number | null;
+  type: string;
+  source_leaf: string | null;
+  text: string;
+  created_by: string | null;
+  created_at: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+export interface VideoSegmentUpdateResult extends VideoSegmentView {
+  needs_regen: boolean;
+  script_recheck: ScriptRecheckView;
+}
+
+export interface VideoObjectView {
+  object_id: string;
+  content_id: string;
+  bucket: string;
+  object_key: string;
+  size_bytes: number | null;
+  content_type: string | null;
+  source: string;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export async function listVideoSegments(
+  contentId: string,
+): Promise<VideoSegmentView[]> {
+  return request<VideoSegmentView[]>(
+    adminPath(`/api/admin/content/${encodeURIComponent(contentId)}/video-segments`),
+  );
+}
+
+export async function createVideoSegment(
+  contentId: string,
+  body: { type: string; text: string; startMs?: number; endMs?: number },
+): Promise<VideoSegmentView> {
+  return request<VideoSegmentView>(
+    `/api/admin/content/${encodeURIComponent(contentId)}/video-segments`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        type: body.type,
+        text: body.text,
+        start_ms: body.startMs ?? null,
+        end_ms: body.endMs ?? null,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
+export async function updateVideoSegment(
+  segmentId: string,
+  body: {
+    seq?: number;
+    startMs?: number;
+    endMs?: number;
+    type?: string;
+    text?: string;
+  },
+): Promise<VideoSegmentUpdateResult> {
+  return request<VideoSegmentUpdateResult>(
+    `/api/admin/video-segments/${encodeURIComponent(segmentId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        seq: body.seq ?? null,
+        start_ms: body.startMs ?? null,
+        end_ms: body.endMs ?? null,
+        type: body.type ?? null,
+        text: body.text ?? null,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
+export async function listVideoObjects(
+  contentId: string,
+): Promise<VideoObjectView[]> {
+  return request<VideoObjectView[]>(
+    adminPath(`/api/admin/content/${encodeURIComponent(contentId)}/video-objects`),
+  );
+}
+
+export async function uploadVideoObject(
+  contentId: string,
+  filename: string,
+  data: Blob,
+): Promise<VideoObjectView> {
+  const params = new URLSearchParams({
+    filename,
+    actor_id: CURRENT_ADMIN_ACTOR_ID,
+  });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<VideoObjectView>(
+    `/api/admin/content/${encodeURIComponent(contentId)}/video-objects?${params}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": data.type || "application/octet-stream" },
+      body: data,
+    },
+  );
+}
