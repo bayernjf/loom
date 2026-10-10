@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { ErrorState } from "@/components/error-state";
 import type { ReactNode } from "react";
 import {
   ApiError,
@@ -219,7 +220,14 @@ export default async function TokenCostPage({
         err instanceof ApiError && KNOWN_ERROR_STATUSES.has(err.status)
           ? String(err.status)
           : "unknown";
-      body = <p className={styles.notice}>{tError(key)}</p>;
+      body = (
+        <ErrorState
+          title={tError(key)}
+          code={key === "unknown" ? undefined : key}
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
+      );
     }
   }
 

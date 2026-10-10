@@ -1,5 +1,6 @@
 import { formatDateTimeLocal } from "@/lib/time";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 
@@ -24,16 +25,19 @@ export default async function AgentKeysPage({
   searchParams: Promise<SearchParams>;
 }) {
   const t = await getTranslations("admin.agentKeys");
+  const tError = await getTranslations("error");
   const sp = await searchParams;
   const includeRevoked = sp.include_revoked === "true" || sp.include_revoked === "1";
 
   let keys: Awaited<ReturnType<typeof listAgentKeys>> = [];
   let failed = false;
+  let failedStatus = 0;
   try {
     keys = await listAgentKeys({ includeRevoked });
   } catch (err) {
     if (err instanceof ApiError && [403, 404, 409, 422].includes(err.status)) {
       failed = true;
+      failedStatus = err.status;
     } else {
       throw err;
     }
@@ -65,7 +69,14 @@ export default async function AgentKeysPage({
           )}
         </div>
 
-        {failed && <p className={styles.msgErr}>{t("loadFailed")}</p>}
+        {failed && (
+          <ErrorState
+            title={t("loadFailed")}
+            code={[403, 404, 409, 422].includes(failedStatus) ? String(failedStatus) : undefined}
+            hint={tError("retryHint")}
+            retryLabel={tError("retry")}
+          />
+        )}
         {!failed && keys.length === 0 && (
           <EmptyState title={t("empty")} />
         )}

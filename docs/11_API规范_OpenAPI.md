@@ -192,11 +192,11 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 
 ### 2.8 `final_id` 发证两口（E1.1 publishFCW · Q52/Q55 契约 ＋ Q203 凭证契约，已落地）
 
-**用途**：全系统 `final_id` 的唯一出口。手动单条 `POST /api/fcw/assemble`（`app/final/final_whitelist/router.py:60`）；任务驱动批量 `POST /api/fcw/assembly-tasks`（`router.py:102`；Q165 门控开时建 queued 并入流、关时请求内同步到终态）。
+**用途**：全系统 `final_id` 的唯一出口。手动单条 `POST /api/fcw/assemble`（`app/final/final_whitelist/router.py:103`）；任务驱动批量 `POST /api/fcw/assembly-tasks`（`router.py:145`；Q165 门控开时建 queued 并入流、关时请求内同步到终态）。
 
 **鉴权（Q203 收紧，`02 C1.147`）——本口与其余内部口的区别要读清**：
 
-- 必须有**已验真的内部令牌** `Authorization: Bearer loom_staff_…`（Q178 PAT）。依赖为 `app/core/staff_auth/deps.py:96` 的 `require_internal_actor(OPERATIONS)`，**与 `LOOM_STAFF_AUTH_ENABLED` 无关**：门控关闭时它自行验真，因此「正文自报 `operations`」在默认部署形态下也不足以发证。
+- 必须有**已验真的内部令牌** `Authorization: Bearer loom_staff_…`（Q178 PAT）。依赖为 `app/core/staff_auth/deps.py:104` 的 `require_internal_actor(OPERATIONS)`，**与 `LOOM_STAFF_AUTH_ENABLED` 无关**：门控关闭时它自行验真，因此「正文自报 `operations`」在默认部署形态下也不足以发证。
 - 缺失／格式不符／已吊销 → **401**；令牌角色不含 `operations` → **403**。
 - 进服务层的 actor 是**令牌持有人**；body 的 `actor` 字段仍接受但被覆盖（Q196 口径：被推翻的自报值在审计里降级存证）。
 - 对照其余各面：**Q242 起**，段4 原子（13 个写端点）、段9/10 策略包（3 个）、段7/8 平台适配（9 个）三族写口也统一到 `require_internal_actor`，与本节两口同口径（门控关着也自行验真；全仓受凭证保护的写口共 **27** 个）；其余内部口仍按 Q178（门控开才强制）；客户口按 `tenant_id` 归属校验（Q200，跨租户与不存在同回 404）；机器口按 Q88 Agent Key。**未**统一的两族：`product/whitelist_center` 冻结/吊销（该族要求 `whitelist_owner`，而该角色不可签发为 staff 令牌，Q242 改判归 V2 第一项）与段4 的 `submit_batch`／`supplement_evidence`／`revive_candidate`（docs/05 未给角色／Q75 有意不加闸）——两者均**刻意保持原样**，由 `tests/integration/test_write_gate_wiring.py` 的反向对照钉住。
@@ -204,7 +204,7 @@ DB 只存 SHA-256 hex 哈希 + 展示前缀（单向，库泄露不暴露可用 
 
 **唯一出口是运行期事实，不是注释（Q203）**：`final_content_whitelists` 的 mapper `before_insert` 要求当前处于 `service.assemble_one` 打开的签发作用域（`exit_guard.py:33` 作用域、`:42` 装载实现、装载调用 `models.py:80`），作用域外 INSERT 抛 `OutsidePublishFCW`。边界：只覆盖 ORM flush，Core `insert()`／裸 SQL 不经 mapper 事件——由 `test_core_insert_bypasses_the_mapper_guard` 钉成实测事实；全仓今日对该表无 Core 写入。
 
-**错误码**（两口一致；`router.py` 局部映射 ＋ `app/main.py:161/:166` 全局兜底）：401 无有效凭证、403 角色不足、404 PWS／slot／goal 未知、409 Guard 败（回带逐项明细，失败尝试仍写 `fcw.assembly_blocked` 审计并提交）、409 同键重复发证、409 材料缺失、422 入参非法；异步门控开时入流失败 fail-closed → **503** 且不留半完成任务。
+**错误码**（两口一致；`router.py` 局部映射 ＋ `app/main.py:165/:169` 全局兜底）：401 无有效凭证、403 角色不足、404 PWS／slot／goal 未知、409 Guard 败（回带逐项明细，失败尝试仍写 `fcw.assembly_blocked` 审计并提交）、409 同键重复发证、409 材料缺失、422 入参非法；异步门控开时入流失败 fail-closed → **503** 且不留半完成任务。
 
 **审计**：成功 `fcw.issued`（六路材料＋Guard 结果＋`E1_owner=publishFCW`），失败 `fcw.assembly_blocked`。零迁移、无新增表。
 

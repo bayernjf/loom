@@ -356,3 +356,11 @@
 ## 十五、Q334 banner（2026-10-10 滚入）
 
 ~~**其前（2026-10-10）：Q334 回滚中心甲案落地：变更-回滚清单只读聚合面（**代码＋测试＋文档**，零迁移零新表；测试 1261→**1265 passed＋10 skipped**〔＋4＝`test_change_ledger_api.py`〕、ruff 净、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.277）**——负责人对 Q333 三件候选批「按推荐全部」，本批落第一件＝design-v3-rollback-center §3.1 甲＋§3.2 甲-1。~~
+
+
+## 十六、Q335 banner（2026-10-10 滚入）
+
+~~**其前（2026-10-10）：Q335 计费甲案落地：按租户 Token 月账本＋额度看板＋价格入配置中心（**代码＋迁移＋测试＋前端＋文档**；测试 1265→**1267 passed＋10 skipped**〔＋4＝`test_tenants_api.py`〕〔沙箱误红 2 例＝`test_backup_monitoring_contract.py` socket.bind EPERM，Q291/Q298 先例〕、收集 1271→**1279**、ruff 净、前端 tsc＋check-admin 全绿；头 `0055_billing_price_seed`（纯数据无 schema 变更）／71 表·766 列；02 C1.278）**——负责人「按推荐全部」裁 Q333 三件，本批落第二件＝design-v2-billing-subscription §3.1 甲＋§3.2 甲-1＋§3.3。~~
+- **交付**：`monthly_token_usage`（tenants/service.py：自然月 UTC、派生自 `skill_runs`〔succeeded 且 tenant_id 命中〕，**不落账本表不改调用路径**）＋`GET /api/admin/tenants/{tenant_id}/token-usage`（platform_admin query actor；缺 actor 422／角色 403／未知租户 404）＋超额**软提醒不拦截**（`over_quota`/`usage_ratio`）＋迁移 0055 播种 `billing.price_monthly_usd.{basic,pro,enterprise}`＝999/2999/9999（仅展示不扣费、改价走 config.update 审计；agency【待业务方回填】刻意不播种＝「待补」展示口径）＋前端租户详情页「本月 Token 用量（派生账本）」区（i18n 八键）。
+- **挂账**：乙案额度硬拦截（须先跑一账期实测误伤率）／丙案账单＋支付（触发 Q66 资金 HumanGate，§1 缺口 1/3/4 待业务方）。第三件（段12 ③①甲）随后批落。
+- **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agency 档价格＋支付通道/发票口径（待业务方）＋agnes 视频 `mode`＋转写契约（待供应商）＋现网部署（服务器/域名/真 ACME）。

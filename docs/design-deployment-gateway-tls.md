@@ -20,9 +20,9 @@
   | `/.well-known/agent-card.json`、`/.well-known/agent.json` | A2A 公开只读发现端点 | docs/22 §2 |
   | `/healthz`、`/metrics` | 探活与指标暴露（均默认不鉴权） | docs/17 Q181 |
   | `/`、`/_next/*` 等前端静态面 | frontend SSR 全部路径 | Q145 |
-  | `/docs`、`/redoc`、`/openapi.json` | FastAPI 自带交互式文档/OpenAPI 模式，**应用默认开启**（`backend/app/main.py:147` 实例化未传 `docs_url/redoc_url/openapi_url`，2026-10-04 复核实证）；生产建议网关**默认拦截**或应用侧 env 门控关闭，**不在放行之列** | main.py:147（实证；Q309 复扫订正，旧作 `:145`） |
+  | `/docs`、`/redoc`、`/openapi.json` | FastAPI 自带交互式文档/OpenAPI 模式，**应用默认开启**（`backend/app/main.py:149` 实例化未传 `docs_url/redoc_url/openapi_url`，2026-10-04 复核实证）；生产建议网关**默认拦截**或应用侧 env 门控关闭，**不在放行之列** | main.py:149（实证；Q309 复扫订正为 `:147`，旧作 `:145`） |
 - **两个待清理的非业务暴露面（2026-10-04 复核新发现，三案共同前置，工程侧不代裁）**：
-  1. **FastAPI 交互式文档面**：`backend/app/main.py:147` 的 `FastAPI(...)` 未禁用文档，故 `/docs`（Swagger UI）、`/redoc`、`/openapi.json` 在任何部署形态下默认开放且无鉴权——网关上线时若不显式拦截，等于把完整 API 目录公开到公网。 **✅ 随 Q279 甲案落地收口**：`infra/caddy/Caddyfile` 对六条面（`/docs`·`/docs/*`·`/redoc`·`/openapi.json`·`/healthz`·`/metrics`）返回 404，应用侧不改；形状由 `tests/unit/test_gateway_surface_contract.py` 逐路径钉住（判 body 不判状态码）。
+  1. **FastAPI 交互式文档面**：`backend/app/main.py:149` 的 `FastAPI(...)` 未禁用文档，故 `/docs`（Swagger UI）、`/redoc`、`/openapi.json` 在任何部署形态下默认开放且无鉴权——网关上线时若不显式拦截，等于把完整 API 目录公开到公网。 **✅ 随 Q279 甲案落地收口**：`infra/caddy/Caddyfile` 对六条面（`/docs`·`/docs/*`·`/redoc`·`/openapi.json`·`/healthz`·`/metrics`）返回 404，应用侧不改；形状由 `tests/unit/test_gateway_surface_contract.py` 逐路径钉住（判 body 不判状态码）。
   2. **monitoring overlay 的 prometheus 宿主口**：`infra/docker-compose.monitoring.yml:23` 为 `ports: ["9090:9090"]`（发布到所有网卡）；同 overlay 的 Grafana 已按 **Q192 负责人决策**绑 `127.0.0.1:3001` 且有契约测试 `test_grafana_is_loopback_only` 硬守，而 prometheus（无认证、含 `/api/v1/query` 查询面）**无回环绑定、无契约**；alerting 演练探针一律 `docker exec` 走容器网格内（docs/17 §7.6），宿主 9090 无已知消费者。监控 profile 默认不启，不阻塞 beta，但与 Q192 同纪律的处置（绑回环）建议一并裁决。 **✅ Q289 已裁决并落地（2026-10-05「按你建议来」）**：现同一位置在 `:25`＝`ports: ["127.0.0.1:9090:9090"]`（本批新增两行注释使锚点下移），网格内消费不受影响，hardening 门断言 prometheus＋grafana 两口绑回环。
 - **Q238 已就位机制**：`LOOM_PUBLIC_BASE_URL` 是 `Settings` 真字段（默认空⇒A2A 卡片 `url` 为相对路径）；**设对外公网域名即输出绝对地址——取值正取决于本裁决**（docs/22 §2.1）。
 - **判定影响**：docs/20 §7.4/#1：③ 可上线（受控 private beta）未达标的主因之一＝「后端在网关后」仓内无产物。本裁决落地后该主因即消（剩余 ② 主数据回填与跑链人手仍为外部卡点）。

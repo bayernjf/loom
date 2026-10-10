@@ -10,7 +10,7 @@
 - docs/08:50 V1 范围（Q73 合并后权威）：段 7/8「仅做 FCW 6 路输入所必需的静态底表基础版（发布位/平台规则/17 权重池录入与静态值，**无动态信号、无 fit_score 学习、无 PLATFORM-ADAPTER AI Skill**）」。
 - docs/04:230：「Q41/Q42 每周动态信号重算 + AI 对照单 + 单项 ±0.05、**fit_score 学习闭环**、PLATFORM-ADAPTER AI Skill 均 V2」。
 - docs/04:232（Q259 遗留片登记）：「weekly 调度节奏（Q41 实现形态现场定）、PLATFORM-ADAPTER AI Skill、**fit_score 学习闭环**、PCP-SCORE AI 生成器（V1 候选仅 manual）」。
-- docs/08:116（Q260 落地行）：「**fit_score 学习需回流数据**」。
+- docs/08:142（Q260 落地行）：「**fit_score 学习需回流数据**」。
 - 治理红线（docs/02 Q66 等）：**AI 只产候选、人工 Gate 裁决**；拟合分影响段11 FCW 评分（Q54），属高影响面，不得自动写回。
 
 **红旗 B1.1 的精确状态（Q293 核对）**：原文挂的问题是「**四维如何聚合为单一 fit_score**」，这一半已由 **Q34** 裁决并落地（`fit_score = Σ(四维分 × 目的权重)`，目的权重矩阵 Σ=1 强校验，`pa_rules.py:89-96`/`71-86`）。**未答的另一半是「四维分本身从哪来、会不会随时间变」**——这才是本文要处理的「学习」。
@@ -36,7 +36,7 @@
 
 ### 2.3 硬阻塞：唯一候选学习数据源与四维对不上（本批 grounding 最硬的发现）
 
-docs/08:116 明写「fit_score 学习**需回流数据**」。全仓唯一的回流数据载体是段13 `effect_records`：
+docs/08:142 明写「fit_score 学习**需回流数据**」。全仓唯一的回流数据载体是段13 `effect_records`：
 
 - 表：`core/effects/models.py:50`，迁移 0034 建表（Q126），`status` 只有 `matched|orphan` 两态（Q127 人工认领不新增第三状态）。
 - 指标形态：`metrics` 为 **JSONB 七键稀疏子集**（`models.py:83-84`），**缺席键不落、绝不写 0、不许估算**（数据纪律硬性）。
@@ -112,7 +112,7 @@ docs/08:116 明写「fit_score 学习**需回流数据**」。全仓唯一的回
 | 四维静态分 0-100 + 红旗 B1.1 原文 | docs/01:106（`line 1098-1221` 痕迹，基准 HTML 已丢失） |
 | V1 无 fit_score 学习的范围口径 | docs/08:50（Q73 合并后权威）、docs/08:51（V2 段7/8 完整） |
 | fit_score 学习闭环属 V2 / Q259 遗留片 | docs/04:230、docs/04:232 |
-| 「fit_score 学习需回流数据」 | docs/08:116（Q260 落地行） |
+| 「fit_score 学习需回流数据」 | docs/08:142（Q260 落地行） |
 | Q34 公式与 Σ=1 强校验 | `backend/app/platform/platform_adaptation/pa_rules.py:31,71-96` |
 | Q34 权重样例（四维中文名：流量/安全/转化/承载） | docs/02 C1.6 Q34（:133）、docs/02:1369（配置化清单行） |
 | fit_score 派生 service（不凑分） | `backend/app/platform/platform_adaptation/service.py:244-276` |

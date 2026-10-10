@@ -1,6 +1,7 @@
 import { formatDateTimeLocal } from "@/lib/time";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
+import { ErrorState } from "@/components/error-state";
 import { ApiError, CURRENT_ADMIN_ACTOR_ID, getTenant, getTenantTokenUsage } from "@/lib/api";
 import styles from "../../admin.module.css";
 
@@ -115,7 +116,12 @@ export default async function TenantDetailPage({
           {t("backToList")}
         </Link>
         <h1>{t("detailTitle")}</h1>
-        <p className={styles.msgErr}>{tError(key)}</p>
+        <ErrorState
+          title={tError(key)}
+          code={key === "unknown" ? undefined : key}
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
       </main>
     );
   }

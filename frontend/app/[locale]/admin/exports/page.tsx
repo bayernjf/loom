@@ -1,5 +1,6 @@
 import { formatDateTimeLocal } from "@/lib/time";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { getTranslations } from "next-intl/server";
 
 import { ApiError, listExportJobs } from "@/lib/api";
@@ -32,11 +33,13 @@ export default async function ExportsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const t = await getTranslations("admin.exports");
+  const tError = await getTranslations("error");
   const sp = await searchParams;
   const tenantId = oneParam(sp.tenant_id);
 
   let jobs: ExportJobView[] = [];
   let failed = false;
+  let failedStatus = 0;
   if (tenantId) {
     try {
       const page = await listExportJobs(tenantId, 100);
@@ -44,6 +47,7 @@ export default async function ExportsPage({
     } catch (err) {
       if (err instanceof ApiError && [403, 404, 409, 422].includes(err.status)) {
         failed = true;
+        failedStatus = err.status;
       } else {
         throw err;
       }
@@ -73,7 +77,14 @@ export default async function ExportsPage({
       </form>
 
       {!tenantId && <p className={styles.notice}>{t("needTenant")}</p>}
-      {tenantId && failed && <p className={styles.msgErr}>{t("loadFailed")}</p>}
+      {tenantId && failed && (
+        <ErrorState
+          title={t("loadFailed")}
+          code={[403, 404, 409, 422].includes(failedStatus) ? String(failedStatus) : undefined}
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
+      )}
 
       {tenantId && !failed && (
         <>
