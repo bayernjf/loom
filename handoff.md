@@ -1,6 +1,10 @@
 # Handoff — Loom
 
-> **最新（2026-10-10 15:52）：Q338 video-studio 前端接 Q336 操作面＋docs/23 规模重扫（**前端代码＋纯文档**，零后端零迁移；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列、前端 tsc＋check-admin 全绿；02 C1.281）**——负责人对自推项批「都搞」。
+> **最新（2026-10-10 16:03）：Q339 推送与 PR #171 落档（**纯文档零代码零迁移零测试变化**；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列；02 C1.282）**——「都搞」第三件执行完毕：Q333–Q338 七 commit 已 push origin/dev（`0ffe5f3..3a75cbf`）；PR [#171](https://github.com/bayernjf/loom/pull/171)（dev→main）标题/描述已更新并关联任务；CI 两轮 run 六门全绿（Backend 3m56s／Frontend／Migration 真 PG16 0055+0056 往返 NO DRIFT／Real infra／Fullchain e2e／Infra static）。
+> - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+> - **待负责人**：合并 PR #171。仍等外部输入＝agnes 视频 `mode`＋转写契约（待供应商）＋复检名单（待业务方）＋agency 价格＋支付通道（待业务方）＋现网部署（服务器/域名/真 ACME）。
+>
+> **其前（2026-10-10 15:52）：Q338 video-studio 前端接 Q336 操作面＋docs/23 规模重扫（**前端代码＋纯文档**，零后端零迁移；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列、前端 tsc＋check-admin 全绿；02 C1.281）**——负责人对自推项批「都搞」。
 > - **① 前端接线**：video-studio 岛新增「分段编目」区（列表/行内文本编辑〔needs_regen 回显〕/新增六 type）与「原片留档」区（列表/上传/503 未配置明示）；`lib/api.ts`＋actions 各六函数，写口缺 operations 前端先拒发；屏3 只读派生视图保留双轨；i18n ＋17 键。
 > - **② docs/23 重扫**：TL;DR 规模行 73 表/787 列/56 迁移/1273 passed/147 测试文件、技术债 104→110（backend/app 84＋tests 26）、受闸注记 46→49→51→53。
 > - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
@@ -21,7 +25,7 @@
 > - **挂账**：乙案额度硬拦截（须先跑一账期实测误伤率）／丙案账单＋支付（触发 Q66 资金 HumanGate，§1 缺口 1/3/4 待业务方）。第三件（段12 ③①甲）随后批落。
 > - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。仍等外部输入＝agency 档价格＋支付通道/发票口径（待业务方）＋agnes 视频 `mode`＋转写契约（待供应商）＋现网部署（服务器/域名/真 ACME）。
 >
-> **其前（2026-10-10）：Q334 回滚中心甲案落地：变更-回滚清单只读聚合面（**代码＋测试＋文档**，零迁移零新表；测试 1261→**1265 passed＋10 skipped**〔＋4＝`test_change_ledger_api.py`〕、ruff 净、头 `0054_wf07_skill_scene_seed`／71 表·766 列；02 C1.277）**——负责人对 Q333 三件候选批「按推荐全部」，本批落第一件＝design-v3-rollback-center §3.1 甲＋§3.2 甲-1。
+> （Q334 已滚档至 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)「十五、」节，2026-10-10 Q339 批按「最近 5 条」上限滚出。）
 > - **交付**：新 `app/core/change_ledger/`（service＋router）＋`GET /api/admin/change-ledger?mechanism=&limit=&offset=`（operations/platform_admin 只读，query actor 同 Q92 口径）——从 `audit_logs` 派生聚合五机制 11 个 audit action（config.update/rollback、pws.freeze/refreeze/revoke、fcw.issued/revoke、wl.create/update/archive、skill_prompt.publish），非五机制写动作（如 tenant.plan_changed）不入聚合；每笔回带 `rollbackability` 四级（rollbackable／revoke_reissue／reedit_only／no_surface）＋`ops_surface` 一跳直达既有操作面；**不落新表、不回写、历史 append-only 不动**。
 > - **挂账**：§3.1 乙 Prompt 版本回滚写口（`no_surface` 标注，待裁）／§3.1 丙通用快照-恢复（与 Q30/PT 口径冲突不推荐）。第二三件（计费甲＋段12 ③①甲）随后批落。
 > - **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
