@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { getTranslations } from "next-intl/server";
 
 import { ApiError, CURRENT_ADMIN_ACTOR_ID, getReviewQueue } from "@/lib/api";
@@ -31,12 +32,14 @@ export default async function FcwReviewPage({
   searchParams: Promise<SearchParams>;
 }) {
   const t = await getTranslations("admin.fcwReview");
+  const tError = await getTranslations("error");
   const sp = await searchParams;
   const offset = parseOffset(oneParam(sp.offset));
 
   let queue: Awaited<ReturnType<typeof getReviewQueue>> | null = null;
   let failed = false;
   let missingRole = false;
+  let failedStatus = 0;
   if (CURRENT_ADMIN_ACTOR_ID) {
     try {
       queue = await getReviewQueue({
@@ -48,6 +51,7 @@ export default async function FcwReviewPage({
     } catch (err) {
       if (err instanceof ApiError && [403, 404, 409, 422].includes(err.status)) {
         failed = true;
+        failedStatus = err.status;
         missingRole = err.status === 403;
       } else {
         throw err;
@@ -73,9 +77,18 @@ export default async function FcwReviewPage({
       {!CURRENT_ADMIN_ACTOR_ID ? (
         <p className={styles.notice}>{t("actorUnconfigured")}</p>
       ) : failed ? (
-        <p className={styles.notice}>
-          {missingRole ? t("actorMissingRole") : t("loadFailed")}
-        </p>
+        <ErrorState
+          title={missingRole ? t("actorMissingRole") : t("loadFailed")}
+          code={
+            missingRole
+              ? "403"
+              : [404, 409, 422].includes(failedStatus)
+                ? String(failedStatus)
+                : undefined
+          }
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
       ) : (
         <>
           <p className={styles.windowLine}>

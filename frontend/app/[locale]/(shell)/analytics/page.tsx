@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 
 import {
   ApiError,
@@ -50,6 +51,7 @@ export default async function AnalyticsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const t = await getTranslations("analytics");
+  const tError = await getTranslations("error");
   const raw = await searchParams;
   const rawFrom = oneParam(raw.date_from);
   const rawTo = oneParam(raw.date_to);
@@ -71,6 +73,7 @@ export default async function AnalyticsPage({
 
   let data: EffectAnalytics | null = null;
   let failed = false;
+  let failedStatus = 0;
   if (!invalidRange) {
     try {
       data = await getEffectAnalytics(CURRENT_TENANT_ID, {
@@ -80,6 +83,7 @@ export default async function AnalyticsPage({
     } catch (err) {
       if (err instanceof ApiError && [403, 404, 409, 422].includes(err.status)) {
         failed = true;
+        failedStatus = err.status;
       } else {
         throw err;
       }
@@ -111,7 +115,14 @@ export default async function AnalyticsPage({
       </form>
 
       {invalidRange && <p className={styles.error}>{t("invalidRange")}</p>}
-      {failed && <p className={styles.error}>{t("loadFailed")}</p>}
+      {failed && (
+        <ErrorState
+          title={t("loadFailed")}
+          code={[403, 404, 409, 422].includes(failedStatus) ? String(failedStatus) : undefined}
+          hint={tError("retryHint")}
+          retryLabel={tError("retry")}
+        />
+      )}
 
       {data && data.records_total === 0 && (
         <EmptyState title={t("empty")} />
