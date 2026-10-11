@@ -1668,20 +1668,37 @@ export async function suggestAiSelect(
   });
 }
 
+// Q345：字段与后端 `_slot_view`（platform_adaptation/router.py）逐键对齐，段7/8 适配台要读
+// 四维分与限制列；组装工作台等既有消费方只取自己用的那几个键，加法扩展不影响。
 export interface AdminPublishSlot {
   slot_id: string;
   platform: string;
   code: string;
   name: string;
   slot_type: string;
+  chars_max: number | null;
+  dur_min: number | null;
+  dur_max: number | null;
+  traffic: number;
+  safe: number;
+  conv: number;
+  load: number;
+  score_source: string;
+  risk: string | null;
   gate: string;
+  source_url: string | null;
   status: string;
 }
 
-export async function getAdminPublishSlots(platform?: string): Promise<AdminPublishSlot[]> {
+export async function getAdminPublishSlots(
+  platform?: string,
+  opts: { includeArchived?: boolean } = {},
+): Promise<AdminPublishSlot[]> {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   if (platform) params.set("platform", platform);
+  // 后端 status 默认 "active"；传空串＝不加过滤＝连归档行一起回（service.list_rules 同口径）。
+  if (opts.includeArchived) params.set("status", "");
   return request<AdminPublishSlot[]>(`/api/admin/publish-slots?${params}`);
 }
 
@@ -1697,6 +1714,109 @@ export async function getAdminContentGoals(): Promise<AdminContentGoal[]> {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   return request<AdminContentGoal[]>(`/api/admin/content-goals?${params}`);
+}
+
+// ---- Q345 段7/8 平台适配台（/admin/platform-adaptation）消费的四张只读口 ----
+// 口径：只接「默认管理身份（compose 的 platform_admin）实测读得动」的口。fit-weights／
+// slot-type-defaults／动态信号／PCP 重算候选／adapter 候选五口只认 operations，
+// 接进来会撞 Q307 的管理端可读性契约门——那是裁决不是工程默认，登记在 docs/19 清单二。
+
+export interface FitScoreRow {
+  dim: string;
+  score: number;
+  weight: number | null;
+  contribution: number | null;
+}
+
+export interface AdminFitScore {
+  slot_id: string;
+  goal: string;
+  fit_score: number | null;
+  /** 目的未配权重矩阵＝不凑分（Q34），分项仍可见、weight/contribution 为 null（Q296 甲）。 */
+  incomplete: boolean;
+  breakdown: FitScoreRow[];
+}
+
+export async function getAdminFitScore(
+  slotId: string,
+  goal: string,
+): Promise<AdminFitScore> {
+  const params = new URLSearchParams({
+    actor_id: CURRENT_ADMIN_ACTOR_ID,
+    goal,
+  });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminFitScore>(
+    `/api/admin/publish-slots/${encodeURIComponent(slotId)}/fit-score?${params}`,
+  );
+}
+
+export interface AdminPlatformRule {
+  rule_id: string;
+  selector_level: string;
+  platform: string | null;
+  slot_type: string | null;
+  slot_id: string | null;
+  country: string | null;
+  effect: string;
+  note: string | null;
+  status: string;
+}
+
+export async function listAdminPlatformRules(
+  opts: { platform?: string; includeArchived?: boolean } = {},
+): Promise<AdminPlatformRule[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.platform) params.set("platform", opts.platform);
+  if (opts.includeArchived) params.set("status", "");
+  return request<AdminPlatformRule[]>(`/api/admin/platform-rules?${params}`);
+}
+
+export interface AdminDynamicEvent {
+  event_id: string;
+  platform: string;
+  slot_id: string | null;
+  event_type: string;
+  severity: string;
+  effective_start: string;
+  effective_end: string | null;
+  note: string | null;
+  status: string;
+}
+
+export interface AdminRuleMatch {
+  effect: string | null;
+  matched_rule_ids: string[];
+  /** Q259 advisory：当前生效动态信号，只提示、不改变 effect 裁决。 */
+  events: AdminDynamicEvent[];
+}
+
+export async function matchAdminPlatformRules(input: {
+  platform: string;
+  slotType: string;
+  slotId?: string;
+}): Promise<AdminRuleMatch> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  params.set("platform", input.platform);
+  params.set("slot_type", input.slotType);
+  if (input.slotId) params.set("slot_id", input.slotId);
+  return request<AdminRuleMatch>(`/api/admin/platform-rules/match?${params}`);
+}
+
+export interface AdminPcpTemplate {
+  template_id: string;
+  code: string;
+  name: string;
+  /** Q39 四模板的 17 键权重（Σ=1.0），键序由后端字典给，前端不重排。 */
+  weights: Record<string, number>;
+}
+
+export async function listAdminPcpTemplates(): Promise<AdminPcpTemplate[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminPcpTemplate[]>(`/api/admin/pcp-templates?${params}`);
 }
 
 // Q306：Q38 降级动作字典（docs/02:141 的六码）。读口沿用管理端自报身份（Q118 同型 query 闸）；

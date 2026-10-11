@@ -80,8 +80,10 @@ export default async function ChangeLedgerAdminPage({
           offset,
         });
   } catch (err) {
+    // Q345 订正：error.* 只有 403/404/409/422 四个状态码键，原写法把 400 映射到不存在的
+    // 文案键＝next-intl 只在浏览器控制台报 MISSING_MESSAGE，tsc 与八门全看不见（Q344 同族）。
     const key =
-      err instanceof ApiError && [400, 403, 404, 422].includes(err.status)
+      err instanceof ApiError && ["403", "404", "409", "422"].includes(String(err.status))
         ? String(err.status)
         : "unknown";
     return (
