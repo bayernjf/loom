@@ -17,6 +17,8 @@ from tests.integration.staff_tokens import acting_as, bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 NOBODY = {"id": "nobody-1", "roles": []}
+# Q346：段7/8 读口统一到 query 读闸后，测试侧读这些口要带自报身份（与写口的 OPS 同一个人）。
+OPS_QS = "actor_id=ops-1&roles=operations"
 
 SLOT = {
     "platform": "x_platform",
@@ -127,7 +129,7 @@ async def test_slot_crud_role_code_and_fit_score(client):
 
     # Q34：ENGAGEMENT 种子权重 0.4/0.2/0.2/0.2 → 32+10+8+20=70
     fit = await client.get(
-        f"/api/admin/publish-slots/{slot['slot_id']}/fit-score?goal=ENGAGEMENT"
+        f"/api/admin/publish-slots/{slot['slot_id']}/fit-score?goal=ENGAGEMENT&{OPS_QS}"
     )
     assert fit.status_code == 200
     body = fit.json()
@@ -136,7 +138,7 @@ async def test_slot_crud_role_code_and_fit_score(client):
 
     # 原文未给权重的目的 → 不凑分
     missing = await client.get(
-        f"/api/admin/publish-slots/{slot['slot_id']}/fit-score?goal=TRUST"
+        f"/api/admin/publish-slots/{slot['slot_id']}/fit-score?goal=TRUST&{OPS_QS}"
     )
     assert missing.json()["incomplete"] is True
     assert missing.json()["fit_score"] is None
@@ -220,7 +222,7 @@ async def test_rule_conflict_overwrite_and_match(client):
         json={"item": {**item, "effect": "partial"}, "overwrite": True, "actor": OPS},
     )
     assert overwrite.status_code == 201
-    active = await client.get("/api/admin/platform-rules")
+    active = await client.get(f"/api/admin/platform-rules?{OPS_QS}")
     effects = [r["effect"] for r in active.json()]
     assert effects == ["partial"]
 
@@ -236,11 +238,13 @@ async def test_rule_conflict_overwrite_and_match(client):
     )
     assert r_slot.status_code == 201
     match = await client.get(
-        "/api/admin/platform-rules/match?platform=x_platform&slot_type=main&slot_id=slot-1"
+        "/api/admin/platform-rules/match"
+        f"?platform=x_platform&slot_type=main&slot_id=slot-1&{OPS_QS}"
     )
     assert match.json()["effect"] == "blocked"
     other = await client.get(
-        "/api/admin/platform-rules/match?platform=x_platform&slot_type=main&slot_id=other-slot"
+        "/api/admin/platform-rules/match"
+        f"?platform=x_platform&slot_type=main&slot_id=other-slot&{OPS_QS}"
     )
     assert other.json()["effect"] == "partial"
 
@@ -270,7 +274,7 @@ async def test_slot_type_defaults(client):
 async def test_pcp_templates_seed_and_ps_instances(session_factory, client):
     ps_id, _ = await _make_ps(session_factory)
 
-    templates = await client.get("/api/admin/pcp-templates")
+    templates = await client.get(f"/api/admin/pcp-templates?{OPS_QS}")
     assert templates.status_code == 200
     codes = {t["code"] for t in templates.json()}
     assert codes == {"short_video", "community", "photo_text", "ecommerce"}

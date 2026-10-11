@@ -633,7 +633,9 @@ async def list_events(
     )
     if platform is not None:
         stmt = stmt.where(PlatformDynamicEvent.platform == platform)
-    if status is not None:
+    # Q346：`status=""` ＝不过滤（连归档行一起回），与同族 list_slots／list_rules 同一条口径。
+    # 管理端「含归档行」开关对全族九张口必须是同一个语义，否则同一 chip 在不同节里行为相反。
+    if status:
         stmt = stmt.where(PlatformDynamicEvent.status == status)
     return list((await session.scalars(stmt)).all())
 

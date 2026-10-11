@@ -27,36 +27,26 @@ from app.platform.platform_adaptation.schemas import (
 
 router = APIRouter(tags=["platform-adaptation"])
 
-# Q242：段7/8 底表写口只认已验真 staff 令牌；读口仍走 query actor 的
-# require_operations_view（Q118 口径，门控关时不强求凭证）。
+# Q242：段7/8 底表写口只认已验真 staff 令牌。
+# Q346（负责人「按你推荐的搞」裁甲，02 C1.289）：**段7/8 全部管理端读口统一到
+# `require_ops_admin_view`（operations＋platform_admin）**——原来五张只认 operations
+# （Q109/Q118），另有四张 GET 连 query 读闸都没有（platform-rules／match／pcp-templates／
+# fit-score，Q345 真进程实测零身份即可读，登 docs/19 清单二第 10／11 项待裁后由本批一并收口）。
+# 收口后这一族只有一条读闸，且**写口一律不动**（仍 `require_internal_actor(OPERATIONS)`）。
 _ops_gate = require_internal_actor(OPERATIONS)
-
-
-def require_operations_view(
-    actor_id: str = Query(...),
-    roles: list[str] = Query(default_factory=list),
-) -> Actor:
-    # Q109/Q118：矩阵把段7/8 静态底表管理面读口（fit-weights/publish-slots/
-    # slot-type-defaults）与写口同组标 operations，读口同型补 query actor 闸。
-    actor = Actor(id=actor_id, roles=roles)
-    try:
-        require_any_role(actor, OPERATIONS)
-    except PermissionDenied as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    return actor
 
 
 def require_ops_admin_view(
     actor_id: str = Query(...),
     roles: list[str] = Query(default_factory=list),
 ) -> Actor:
-    # Q307：只给**发布位读口**放行 platform_admin——D3.5 组装工作台首屏要读发布位清单，
-    # 而管理端唯一保证存在的身份就是 compose 里 `LOOM_ADMIN_ROLES` 的默认值
-    # platform_admin（`frontend/lib/api.ts` 只用这一组身份自报）。
-    # 同组另外五个读口（fit-weights／slot-type-defaults／动态信号／PCP 重算候选／
-    # adapter 候选）前端零消费，**不跟着放宽**，仍按 Q109/Q118 表行只认 operations；
-    # 哪天管理端真要读它，`tests/unit/test_admin_surface_read_contract.py` 会先判红。
-    # 写口一律不动（仍 `require_internal_actor(OPERATIONS)`）。
+    # Q307 首用于**发布位读口**：D3.5 组装工作台首屏要读发布位清单，而管理端唯一保证
+    # 存在的身份就是 compose 里 `LOOM_ADMIN_ROLES` 的默认值 platform_admin
+    # （`frontend/lib/api.ts` 只用这一组身份自报）。当时同组另外五张只读口前端零消费，
+    # 刻意**不跟着放宽**（Q307 的口径就是"只放宽真有人读的口"）。
+    # Q346 负责人裁甲后，本族读口全部走这一条闸：那五张（管理端 `/admin/platform-adaptation`
+    # 已建屏要读）＋原本连 query 读闸都没有的四张（platform-rules／match／pcp-templates／
+    # fit-score）。放宽的依据始终是"有人读"，不是"顺手统一"。写口一律不动。
     actor = Actor(id=actor_id, roles=roles)
     try:
         require_any_role(actor, OPERATIONS, PLATFORM_ADMIN)
@@ -211,7 +201,10 @@ async def archive_slot(
 
 @router.get("/api/admin/publish-slots/{slot_id}/fit-score")
 async def fit_score(
-    slot_id: str, goal: str, session: AsyncSession = Depends(get_session)
+    slot_id: str,
+    goal: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> dict:
     try:
         return await service.fit_score(session, slot_id, goal)
@@ -224,7 +217,7 @@ async def fit_score(
 @router.get("/api/admin/fit-weights")
 async def list_fit_weights(
     session: AsyncSession = Depends(get_session),
-    _: Actor = Depends(require_operations_view),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
     return [
         {"goal": r.goal, "weights": r.weights, "updated_by": r.updated_by}
@@ -258,6 +251,7 @@ async def list_rules(
     slot_type: str | None = None,
     status: str | None = "active",
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
     return [
         _rule_view(r)
@@ -312,6 +306,7 @@ async def match_rules(
     slot_id: str | None = None,
     country: str | None = None,
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> dict:
     result = await service.match_rules(
         session, platform=platform, slot_type=slot_type, slot_id=slot_id, country=country
@@ -385,7 +380,7 @@ def _adapter_candidate_view(c) -> dict:
 async def list_adapter_candidates(
     status_filter: str | None = Query(default=None, alias="status"),
     session: AsyncSession = Depends(get_session),
-    _: Actor = Depends(require_operations_view),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
     rows = await service.list_adapter_candidates(session, status=status_filter)
     return [_adapter_candidate_view(c) for c in rows]
@@ -457,7 +452,7 @@ async def list_events(
     platform: str | None = None,
     status: str | None = "active",
     session: AsyncSession = Depends(get_session),
-    _: Actor = Depends(require_operations_view),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
     return [_event_view(e) for e in await service.list_events(session, platform=platform, status=status)]
 
@@ -519,7 +514,7 @@ async def archive_event(
 async def list_candidates(
     status: str | None = None,
     session: AsyncSession = Depends(get_session),
-    _: Actor = Depends(require_operations_view),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
     return [_candidate_view(c) for c in await service.list_candidates(session, status=status)]
 
@@ -587,7 +582,7 @@ async def reject_candidate(
 @router.get("/api/admin/slot-type-defaults")
 async def list_slot_type_defaults(
     session: AsyncSession = Depends(get_session),
-    _: Actor = Depends(require_operations_view),
+    _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
     return [
         {
@@ -624,7 +619,10 @@ async def put_slot_type_default(
 # ---------- 段8 PCP 权重 ----------
 
 @router.get("/api/admin/pcp-templates")
-async def list_templates(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def list_templates(
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_ops_admin_view),
+) -> list[dict]:
     return [
         {"template_id": t.template_id, "code": t.code, "name": t.name, "weights": t.weights}
         for t in await service.list_templates(session)
