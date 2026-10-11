@@ -405,3 +405,15 @@
 - **待负责人**：合并 PR #171。仍等外部输入＝agnes 视频 `mode`＋转写契约（待供应商）＋复检名单（待业务方）＋agency 价格＋支付通道（待业务方）＋现网部署（服务器/域名/真 ACME）。
 
 〔**滚档注记（Q344）**：本条按「最近 5 条」上限逐字搬入，正文三行只做了一处机械变换＝脱掉行首 `> ` 引用标记以合本档节内样式，文字一字未改。**其中"待负责人：合并 PR #171"已于滚档时实测失效**＝该 PR 状态 `MERGED`、mergedAt `2026-10-10T08:00:05Z`（`gh pr view 171` 实测），按「逐片记录不回改」原文照抄留档，仅作历史；此后 main 分支另经 PR #174 合入（`6aa9c29`）。〕
+
+## 二十一、Q340 banner（2026-10-11 滚入，Q345 批按「最近 5 条」上限滚出）
+
+**其前（2026-10-10 18:44）：Q340 管理端整页错误态与 analytics 客户页统一接入 ErrorState（**纯前端零后端零迁移零测试变化**；基线不变 **1273 passed＋10 skipped／收集 1285**、头 `0056_video_segments_objects`／73 表·787 列、前端 tsc＋check-tokens 86＋六检查器全绿；02 C1.283）**——Q332 建立的统一可恢复错误态组件从客户侧 4 页扩到管理端全部整页错误态与 analytics，共 13 页。
+- **① 管理端 12 页**：body 模式 5 页（token-cost／review-workload／sla-todos／intakes／review-queue）、catch 内 early-return 2 页（tenants 列表／租户详情，保留页头与返回按钮）、failed 布尔 5 页（staff-keys／agent-keys／exports／fcw／fcw/review，新增 failedStatus 保存状态码；fcw 两页 missingRole 显 403）。
+- **② analytics 客户页**：主数据 failed 分支接 ErrorState；invalidRange 表单校验提示保持内联（非错误态）。
+- **③ 接入口径**：title 取各页既有 loadFailed／error 状态码键；错误码仅 [403,404,409,422] 展示、unknown 不传 code；hint/retry 复用 Q332 已入 zh-CN.json 的 error.retryHint／error.retry，零新 i18n 键。
+- **④ 刻意不改（延续 Q332 区块级决策）**：settings 账户卡片、effects 孤儿区、admin/content 发布/待处置区、dictionaries 表格区块、compliance 二级分区（页面其余部分仍可用）；详情页 404→notFound() 的 Next 边界、login、video-studio 岛内联空态保持。
+- **验证**：tsc＋check-tokens（86 项一致）＋六检查器全绿；curl SSR 12 路由正常态全 200 且 error-state 零误现；不存在租户详情自然触发 404 实测 error-state=1、错误码 404＋重试＋指引齐全、旧 msgErr 裸文案零残留。
+- **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+
+〔**滚档注记（Q345）**：本条按「最近 5 条」上限逐字搬入，正文七行只做一处机械变换＝行首 `> ` 引用标记去掉（归档内以正文承载）。搬入后已用 `diff` 对照 handoff 删除前的原文，字节一致；标题里「2026-10-10 18:44」是 Q340 批当时的落档时间戳，不是滚档时间。〕
