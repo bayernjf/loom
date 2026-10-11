@@ -9,25 +9,34 @@ import {
   getAdminContentGoals,
   getAdminFitScore,
   getAdminPublishSlots,
-  listAdminPlatformRules,
+  listAdminAdapterCandidates,
+  listAdminDynamicEvents,
+  listAdminFitWeights,
   listAdminPcpTemplates,
+  listAdminPlatformRules,
+  listAdminRecalcCandidates,
+  listAdminSlotTypeDefaults,
   matchAdminPlatformRules,
+  type AdminAdapterCandidate,
+  type AdminDynamicEvent,
   type AdminFitScore,
+  type AdminFitWeight,
   type AdminPcpTemplate,
   type AdminPlatformRule,
   type AdminPublishSlot,
+  type AdminRecalcCandidate,
   type AdminRuleMatch,
+  type AdminSlotTypeDefault,
 } from "@/lib/api";
 import styles from "../admin.module.css";
 
 export const dynamic = "force-dynamic";
 
-// Q345：段7/8 平台适配台＝这九张只读口里「默认管理身份实测读得动」的六张的界面片
-// （发布位档案＋目的字典＋fit-score 展开／平台规则／规则命中预演／PCP 权重模板）。
-// 另五张（fit-weights／slot-type-defaults／动态信号／PCP 重算候选／adapter 候选）
-// 只认 operations，接进来会撞 Q307 管理端可读性契约门——放宽属裁决，已登记 docs/19 清单二，
-// 本屏刻意不绕。全部只读：写面走 Q203/Q242 staff 令牌，不在这一屏。
-// 枚举码（gate/effect/level/status/score_source）一律原样展示、不翻译（docs/18 口径）。
+// Q345 建屏＝段7/8 静态底表与 PCP 那族只读口的界面片；Q346 负责人「按你推荐的搞」裁甲
+// （docs/19 清单二第 10／11 项）把这族管理端读口统一到 `require_ops_admin_view`
+// （operations＋platform_admin）之后，九张读口全部接齐（＋目的字典＝本屏十个来源）。
+// 全部只读：写面走 Q203/Q242 已验真 staff 令牌，不在这一屏；Q346 也没动任何写口。
+// 枚举码（gate/effect/level/status/score_source/decision）一律原样展示、不翻译（docs/18 口径）。
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -48,6 +57,34 @@ function num(value: number | null | undefined): string {
 function cell(value: string | null | undefined): string {
   const v = (value ?? "").trim();
   return v === "" ? "—" : v;
+}
+
+/**
+ * 后端不约束键名的 JSON 明细（change_list／refs／defaults／missing）折起来原样给运营看。
+ * 不猜键名、不挑字段——docs/05 对这些列写明【待补】或自由 JSON，界面替它编列名就是臆造。
+ */
+function jsonFold(label: string, value: unknown) {
+  const count = Array.isArray(value) ? value.length : Object.keys(value ?? {}).length;
+  if (count === 0) return <span className={styles.notice}>—</span>;
+  return (
+    <details data-testid="platform-adaptation-json-fold">
+      <summary>{`${label} · ${count}`}</summary>
+      <pre className={styles.jsonArea}>{JSON.stringify(value, null, 2)}</pre>
+    </details>
+  );
+}
+
+/** 权重字典逐键列示（键序由后端给，界面不重排、不补 0）。 */
+function weightChips(weights: Record<string, number>) {
+  return (
+    <span className={styles.chipRow}>
+      {Object.entries(weights).map(([key, value]) => (
+        <code key={key}>
+          {key}={num(value)}
+        </code>
+      ))}
+    </span>
+  );
 }
 
 function adaptPath(input: {
@@ -93,16 +130,27 @@ export default async function PlatformAdaptationAdminPage({
   let goalCodes: string[];
   let rules: AdminPlatformRule[];
   let templates: AdminPcpTemplate[];
+  let fitWeights: AdminFitWeight[];
+  let typeDefaults: AdminSlotTypeDefault[];
+  let events: AdminDynamicEvent[];
+  let recalc: AdminRecalcCandidate[];
+  let adapter: AdminAdapterCandidate[];
   try {
-    // 四张主读口一屏取齐：任一口挂了就整屏进错误态（Q340 的 ErrorState 口径，不留半屏）。
-    [slots, goalCodes, rules, templates] = await Promise.all([
-      getAdminPublishSlots(platform || undefined, { includeArchived: archived }),
-      getAdminContentGoals().then((rows) =>
-        rows.filter((row) => row.status === "active").map((row) => row.code),
-      ),
-      listAdminPlatformRules({ platform: platform || undefined, includeArchived: archived }),
-      listAdminPcpTemplates(),
-    ]);
+    // 九张主读口一屏取齐：任一口挂了就整屏进错误态（Q340 的 ErrorState 口径，不留半屏）。
+    [slots, goalCodes, rules, templates, fitWeights, typeDefaults, events, recalc, adapter] =
+      await Promise.all([
+        getAdminPublishSlots(platform || undefined, { includeArchived: archived }),
+        getAdminContentGoals().then((rows) =>
+          rows.filter((row) => row.status === "active").map((row) => row.code),
+        ),
+        listAdminPlatformRules({ platform: platform || undefined, includeArchived: archived }),
+        listAdminPcpTemplates(),
+        listAdminFitWeights(),
+        listAdminSlotTypeDefaults(),
+        listAdminDynamicEvents({ platform: platform || undefined, includeArchived: archived }),
+        listAdminRecalcCandidates(),
+        listAdminAdapterCandidates(),
+      ]);
   } catch (err) {
     const key =
       err instanceof ApiError && ERROR_KEYS.includes(String(err.status))
@@ -388,6 +436,91 @@ export default async function PlatformAdaptationAdminPage({
       </section>
 
       <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t("weightsTitle")}</h2>
+        <p className={styles.metaLine}>{t("weightsMeta", { count: fitWeights.length })}</p>
+        {fitWeights.length === 0 ? (
+          <EmptyState title={t("weightsEmpty")} hint={t("weightsEmptyHint")} />
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>{t("colGoal")}</th>
+                  <th>{t("colMatrix")}</th>
+                  <th>{t("colSigma")}</th>
+                  <th>{t("colUpdatedBy")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fitWeights.map((row) => {
+                  const sigma = Object.values(row.weights).reduce((a, b) => a + b, 0);
+                  return (
+                    <tr key={row.goal} data-testid="platform-adaptation-weight-row">
+                      <td>
+                        <code>{row.goal}</code>
+                      </td>
+                      <td>{weightChips(row.weights)}</td>
+                      <td>{num(sigma)}</td>
+                      <td>{cell(row.updated_by)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {/* 目的字典里没配矩阵的目的＝上面这一族 fit-score 一律"不凑分"的直接原因，两表并读才闭环。 */}
+        {goalCodes
+          .filter((code) => !fitWeights.some((row) => row.goal === code))
+          .map((code) => (
+            <p
+              key={code}
+              className={styles.metaLine}
+              data-testid="platform-adaptation-weight-missing"
+            >
+              {t("weightMissing", { goal: code })}
+            </p>
+          ))}
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t("defaultsTitle")}</h2>
+        <p className={styles.metaLine}>
+          {t("defaultsMeta", { count: typeDefaults.length })}
+        </p>
+        {typeDefaults.length === 0 ? (
+          <EmptyState title={t("defaultsEmpty")} hint={t("defaultsEmptyHint")} />
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>{t("colSlotType")}</th>
+                  <th>{t("colDailyLimit")}</th>
+                  <th>{t("colDefaults")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {typeDefaults.map((row) => (
+                  <tr key={row.slot_type} data-testid="platform-adaptation-default-row">
+                    <td>
+                      <code>{row.slot_type}</code>
+                    </td>
+                    <td>
+                      {row.daily_limit_min === null && row.daily_limit_max === null
+                        ? "—"
+                        : `${num(row.daily_limit_min)}–${num(row.daily_limit_max)}`}
+                    </td>
+                    <td>{jsonFold(t("colDefaults"), row.defaults)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className={styles.section}>
         <h2 className={styles.sectionTitle}>{t("rulesTitle")}</h2>
         <p className={styles.metaLine}>{t("rulesMeta", { count: rules.length })}</p>
         {rules.length === 0 ? (
@@ -433,6 +566,53 @@ export default async function PlatformAdaptationAdminPage({
       </section>
 
       <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t("eventsTitle")}</h2>
+        <p className={styles.metaLine}>{t("eventsListMeta", { count: events.length })}</p>
+        {events.length === 0 ? (
+          <EmptyState title={t("eventsEmpty")} hint={t("eventsEmptyHint")} />
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>{t("colPlatform")}</th>
+                  <th>{t("colSlotId")}</th>
+                  <th>{t("colEventType")}</th>
+                  <th>{t("colSeverity")}</th>
+                  <th>{t("colWindow")}</th>
+                  <th>{t("colNote")}</th>
+                  <th>{t("colStatus")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((row) => (
+                  <tr key={row.event_id} data-testid="platform-adaptation-event-list-row">
+                    <td>{row.platform}</td>
+                    <td>{row.slot_id ? <code>{row.slot_id}</code> : "—"}</td>
+                    <td>
+                      <code>{row.event_type}</code>
+                    </td>
+                    <td>
+                      <code>{row.severity}</code>
+                    </td>
+                    <td>
+                      {row.effective_end
+                        ? `${row.effective_start} → ${row.effective_end}`
+                        : `${row.effective_start} → ${t("windowOpen")}`}
+                    </td>
+                    <td>{cell(row.note)}</td>
+                    <td>
+                      <code>{row.status}</code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className={styles.section}>
         <h2 className={styles.sectionTitle}>{t("templatesTitle")}</h2>
         <p className={styles.metaLine}>{t("templatesIntro")}</p>
         {templates.length === 0 ? (
@@ -458,18 +638,119 @@ export default async function PlatformAdaptationAdminPage({
                       </td>
                       <td>{row.name}</td>
                       <td>{num(sigma)}</td>
-                      <td>
-                        <span className={styles.chipRow}>
-                          {Object.entries(row.weights).map(([key, value]) => (
-                            <code key={key}>
-                              {key}={num(value)}
-                            </code>
-                          ))}
-                        </span>
-                      </td>
+                      <td>{weightChips(row.weights)}</td>
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t("recalcTitle")}</h2>
+        <p className={styles.metaLine}>{t("recalcMeta", { count: recalc.length })}</p>
+        {recalc.length === 0 ? (
+          <EmptyState title={t("recalcEmpty")} hint={t("recalcEmptyHint")} />
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>{t("colCandidate")}</th>
+                  <th>{t("colPcp")}</th>
+                  <th>{t("colPlatform")}</th>
+                  <th>{t("colSource")}</th>
+                  <th>{t("colStatus")}</th>
+                  <th>{t("colProposed")}</th>
+                  <th>{t("colChangeList")}</th>
+                  <th>{t("colDecidedBy")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recalc.map((row) => (
+                  <tr key={row.candidate_id} data-testid="platform-adaptation-recalc-row">
+                    <td>
+                      <code>{row.candidate_id}</code>
+                    </td>
+                    <td>
+                      <code>{row.pcp_id}</code>
+                    </td>
+                    <td>{row.platform}</td>
+                    <td>
+                      <code>{row.source}</code>
+                    </td>
+                    <td>
+                      <code>{row.status}</code>
+                    </td>
+                    <td>{weightChips(row.proposed_weights)}</td>
+                    <td>{jsonFold(t("colChangeList"), row.change_list)}</td>
+                    <td>
+                      {row.status === "rejected"
+                        ? cell(row.rejected_reason)
+                        : cell(row.approved_by ?? row.created_by)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t("adapterTitle")}</h2>
+        <p className={styles.metaLine}>{t("adapterMeta", { count: adapter.length })}</p>
+        {adapter.length === 0 ? (
+          <EmptyState title={t("adapterEmpty")} hint={t("adapterEmptyHint")} />
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>{t("colCandidate")}</th>
+                  <th>{t("colPlatform")}</th>
+                  <th>{t("colSlotType")}</th>
+                  <th>{t("colSlotId")}</th>
+                  <th>{t("colSource")}</th>
+                  <th>{t("colDecision")}</th>
+                  <th>{t("colStatus")}</th>
+                  <th>{t("colMissing")}</th>
+                  <th>{t("colRefs")}</th>
+                  <th>{t("colDecidedBy")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adapter.map((row) => (
+                  <tr key={row.candidate_id} data-testid="platform-adaptation-adapter-row">
+                    <td>
+                      <code>{row.candidate_id}</code>
+                    </td>
+                    <td>{row.platform}</td>
+                    <td>{row.slot_type ? <code>{row.slot_type}</code> : "—"}</td>
+                    <td>{row.slot_id ? <code>{row.slot_id}</code> : "—"}</td>
+                    <td>
+                      <code>{row.source}</code>
+                    </td>
+                    <td>
+                      <code>{cell(row.decision)}</code>
+                    </td>
+                    <td>
+                      <code>{row.status}</code>
+                    </td>
+                    <td>
+                      {/* 模型列就是 Boolean（PT 四态里的 missing＝无生效 PWS、不造假），原样显值。 */}
+                      <code>{String(row.missing)}</code>
+                    </td>
+                    <td>{jsonFold(t("colRefs"), row.refs)}</td>
+                    <td>
+                      {row.status === "rejected"
+                        ? cell(row.rejected_reason)
+                        : cell(row.approved_by ?? row.created_by)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

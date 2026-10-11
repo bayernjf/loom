@@ -825,43 +825,46 @@ for (const banned of ["/rollback", "revoke", "freeze", "upsert"]) {
     problems.push(`change-ledger page must stay read-only, found write call: ${banned}`);
 }
 
-// Q345 平台适配台（/admin/platform-adaptation）＝段7/8 只读面，四条红线：
-// ① 只读；② 只接「默认管理身份 platform_admin 实测读得动」的六张口——五张 operations-only
-//   读口（fit-weights／slot-type-defaults／动态信号／PCP 重算候选／adapter 候选）一张都不许进来，
-//   放宽它们是裁决不是工程默认，接进来等于用自报身份绕过 Q307 读闸；
-// ③ 新读口必须带管理身份（否则 Q307 契约门从 lib/api.ts 反解时看不见这些口）；
-// ④ 界面文案键与 error.* 状态码键必须真实存在——MISSING_MESSAGE 只在浏览器控制台现形，
-//   tsc 与八道门全看不见（Q344 实测吃过一次）。
+// Q345 建屏、Q346 裁甲后收齐的平台适配台（/admin/platform-adaptation）＝段7/8 只读面。
+// 三条红线：① 只读（写面一律不接，含那个 POST 的 adapter 预览口）；
+// ② 段7/8 族九张读口必须**全部带管理身份**——不带 `ADMIN_ROLE_LIST` 的口，Q307 契约门从
+//   `lib/api.ts` 反解时根本看不见，等于让"默认身份读不动"重新变成静默退化；
+// ③ 界面文案键与 error.* 状态码键必须真实存在（MISSING_MESSAGE 只在浏览器控制台现形，
+//   tsc 与八道门全看不见，Q344 实测吃过一次）。
+// Q346 的口径变化：这五张原本只认 operations，负责人「按你推荐的搞」裁甲＝与同组 publish-slots
+// 统一到 require_ops_admin_view（02 C1.289），所以下面从"禁止消费"翻成"必须消费齐全"。
 const adaptPage = readAdmin(join("platform-adaptation", "page.tsx"));
-for (const route of [
-  "/api/admin/fit-weights",
-  "/api/admin/slot-type-defaults",
-  "/api/admin/platform-dynamic-events",
-  "/api/admin/pcp-recalc/candidates",
-  "/api/admin/platform-adapter/candidates",
-  "/api/admin/platform-adapter/preview",
-]) {
-  if (adaptPage.includes(route) || apiText.includes(route))
-    problems.push(
-      `platform-adaptation must not consume operations-only read ${route} (widening it is a ruling)`,
-    );
-}
-for (const banned of ['method: "POST"', 'method: "PUT"', 'method: "DELETE"', "router.refresh"]) {
-  if (adaptPage.includes(banned))
-    problems.push(`platform-adaptation page must stay read-only, found: ${banned}`);
-}
-for (const fn of [
+const STAGE78_READ_FUNCS = [
   "getAdminFitScore",
   "listAdminPlatformRules",
   "matchAdminPlatformRules",
   "listAdminPcpTemplates",
-]) {
+  "listAdminFitWeights",
+  "listAdminSlotTypeDefaults",
+  "listAdminDynamicEvents",
+  "listAdminRecalcCandidates",
+  "listAdminAdapterCandidates",
+];
+for (const fn of STAGE78_READ_FUNCS) {
+  // 要"被调用"而不是"被提到"——只查函数名的话，一条 import 就能骗过这条门（种植实测过）。
+  if (!adaptPage.includes(`${fn}(`))
+    problems.push(`platform-adaptation page must call ${fn} (stage 7/8 read family is nine)`);
   const block = apiText.split("\nexport async function ").find((chunk) =>
     chunk.startsWith(`${fn}(`),
   );
   if (!block) problems.push(`lib/api.ts must define ${fn}`);
   else if (!block.includes("ADMIN_ROLE_LIST"))
     problems.push(`${fn} must append ADMIN_ROLE_LIST (else the Q307 read contract can't see it)`);
+}
+for (const banned of [
+  'method: "POST"',
+  'method: "PUT"',
+  'method: "DELETE"',
+  "router.refresh",
+  "/api/admin/platform-adapter/preview",
+]) {
+  if (adaptPage.includes(banned))
+    problems.push(`platform-adaptation page must stay read-only, found: ${banned}`);
 }
 {
   const adaptMessages = messages.admin?.platformAdaptation ?? {};

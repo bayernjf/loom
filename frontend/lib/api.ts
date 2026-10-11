@@ -1716,10 +1716,10 @@ export async function getAdminContentGoals(): Promise<AdminContentGoal[]> {
   return request<AdminContentGoal[]>(`/api/admin/content-goals?${params}`);
 }
 
-// ---- Q345 段7/8 平台适配台（/admin/platform-adaptation）消费的四张只读口 ----
-// 口径：只接「默认管理身份（compose 的 platform_admin）实测读得动」的口。fit-weights／
-// slot-type-defaults／动态信号／PCP 重算候选／adapter 候选五口只认 operations，
-// 接进来会撞 Q307 的管理端可读性契约门——那是裁决不是工程默认，登记在 docs/19 清单二。
+// ---- Q345 段7/8 平台适配台（/admin/platform-adaptation）消费的九张只读口 ----
+// Q346（负责人「按你推荐的搞」裁甲，02 C1.289）：段7/8 管理端读口统一到
+// `require_ops_admin_view`（operations＋platform_admin），原本只认 operations 的五张
+// 因此默认管理身份也读得动，本屏把九张全接上。写口一律未动，仍只认已验真 staff 令牌。
 
 export interface FitScoreRow {
   dim: string;
@@ -1817,6 +1817,106 @@ export async function listAdminPcpTemplates(): Promise<AdminPcpTemplate[]> {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   return request<AdminPcpTemplate[]>(`/api/admin/pcp-templates?${params}`);
+}
+
+// ---- Q346（裁甲落地）：本屏再接上原本只认 operations 的五张只读口 ----
+
+export interface AdminFitWeight {
+  goal: string;
+  /** 四维权重（traffic/safe/conv/load），Σ=1 由写口硬校验，界面只展示不归一。 */
+  weights: Record<string, number>;
+  updated_by: string | null;
+}
+
+export async function listAdminFitWeights(): Promise<AdminFitWeight[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminFitWeight[]>(`/api/admin/fit-weights?${params}`);
+}
+
+export interface AdminSlotTypeDefault {
+  slot_type: string;
+  daily_limit_min: number | null;
+  daily_limit_max: number | null;
+  /** 约 40 列走 defaults JSON（docs/05 表行注「明细【待补】」），界面按后端给的键原样列示。 */
+  defaults: Record<string, unknown>;
+}
+
+export async function listAdminSlotTypeDefaults(): Promise<AdminSlotTypeDefault[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminSlotTypeDefault[]>(`/api/admin/slot-type-defaults?${params}`);
+}
+
+export async function listAdminDynamicEvents(
+  opts: { platform?: string; includeArchived?: boolean } = {},
+): Promise<AdminDynamicEvent[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.platform) params.set("platform", opts.platform);
+  if (opts.includeArchived) params.set("status", "");
+  return request<AdminDynamicEvent[]>(`/api/admin/platform-dynamic-events?${params}`);
+}
+
+export interface AdminRecalcCandidate {
+  candidate_id: string;
+  pcp_id: string;
+  tenant_id: string;
+  product_space_id: string;
+  platform: string;
+  /** V1 候选仅 manual（AI 生成器随 V2 PCP-SCORE，docs/05 表行）。 */
+  source: string;
+  proposed_weights: Record<string, number>;
+  change_list: Record<string, unknown>[];
+  status: string;
+  rejected_reason: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+}
+
+export async function listAdminRecalcCandidates(
+  status?: string,
+): Promise<AdminRecalcCandidate[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (status) params.set("status", status);
+  return request<AdminRecalcCandidate[]>(`/api/admin/pcp-recalc/candidates?${params}`);
+}
+
+export interface AdminAdapterCandidate {
+  candidate_id: string;
+  pws_snapshot_id: string;
+  platform: string;
+  slot_type: string | null;
+  slot_id: string | null;
+  country: string | null;
+  source: string;
+  /** 裁决结果由网关四态机械生成（Q300），界面只读不判。 */
+  decision: string | null;
+  reason: string | null;
+  /** PT-PLATFORM-ADAPTER 四态里的 `refs`（JSON 数组，键名由网关输出给，界面不猜）。 */
+  refs: unknown[];
+  /** 模型列就是 Boolean（`missing: Mapped[bool]`）＝PT 四态里的 missing「无生效 PWS 不造假」。 */
+  missing: boolean;
+  status: string;
+  rejected_reason: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+}
+
+export async function listAdminAdapterCandidates(
+  status?: string,
+): Promise<AdminAdapterCandidate[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (status) params.set("status", status);
+  return request<AdminAdapterCandidate[]>(
+    `/api/admin/platform-adapter/candidates?${params}`,
+  );
 }
 
 // Q306：Q38 降级动作字典（docs/02:141 的六码）。读口沿用管理端自报身份（Q118 同型 query 闸）；
