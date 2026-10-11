@@ -179,6 +179,18 @@ async def test_event_crud_role_gate(client):
     )
     assert len(archived_list.json()) == 1
 
+    # Q346（02 C1.289）：`status=""` ＝不过滤，与同族 list_slots／list_rules 同一条口径。
+    # 管理端「含归档行」这个 chip 对段7/8 九张口必须是同一语义，否则同一个开关在不同节里行为相反。
+    both = await client.get(
+        "/api/admin/platform-dynamic-events?actor_id=ops-1&roles=operations&status="
+    )
+    assert len(both.json()) == 1, both.json()
+    assert [e["status"] for e in both.json()] == ["archived"]
+    admin_read = await client.get(
+        "/api/admin/platform-dynamic-events?actor_id=pa-1&roles=platform_admin&status="
+    )
+    assert admin_read.status_code == 200, admin_read.text
+
 
 # ---------- Q37 match advisory 回带 ----------
 
@@ -202,6 +214,7 @@ async def test_match_returns_active_events_advisory(session_factory, client):
     )
     hit = await client.get(
         "/api/admin/platform-rules/match?platform=x_platform&slot_type=main"
+        "&actor_id=ops-1&roles=operations"
     )
     assert hit.status_code == 200
     assert hit.json()["effect"] is None  # 无规则命中 → effect None（Q36 native 不存）
@@ -211,6 +224,7 @@ async def test_match_returns_active_events_advisory(session_factory, client):
 
     miss = await client.get(
         "/api/admin/platform-rules/match?platform=y_platform&slot_type=main"
+        "&actor_id=ops-1&roles=operations"
     )
     assert miss.json()["events"] == []
 

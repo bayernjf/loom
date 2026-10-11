@@ -38,6 +38,8 @@ const requiredKeys = [
   "admin.staffKeysNav",
   "admin.exportsNav",
   "admin.fcwNav",
+  "admin.changeLedgerNav",
+  "admin.platformAdaptationNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -554,6 +556,8 @@ const requiredFiles = [
   join("fcw", "assemble", "actions.ts"),
   join("fcw", "assemble", "assemble-island.tsx"),
   join("fcw", "review", "page.tsx"),
+  join("change-ledger", "page.tsx"),
+  join("platform-adaptation", "page.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -664,11 +668,15 @@ if (!sidebarText.includes("/admin/fcw/review"))
   problems.push("admin sidebar must link the whitelist review queue (Q249)");
 if (!sidebarText.includes("/admin/dictionaries"))
   problems.push("admin sidebar must link the dictionary surface (Q306/Q38)");
+if (!sidebarText.includes("/admin/change-ledger"))
+  problems.push("admin sidebar must link the rollback center (Q334 甲案界面片，Q344)");
+if (!sidebarText.includes("/admin/platform-adaptation"))
+  problems.push("admin sidebar must link the stage 7/8 platform adaptation console (Q345)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  // 15＝Q306 起加入字典管理入口（此前为 14）。改这个数字必须对应一次真实的入口增删。
-  if (navCount !== 15)
-    problems.push(`admin sidebar must keep exactly 15 admin entries, got ${navCount}`);
+  // 17＝Q345 加入平台适配台（此前 16＝Q344 加入回滚中心，15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
+  if (navCount !== 17)
+    problems.push(`admin sidebar must keep exactly 17 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -722,6 +730,16 @@ for (const token of [
   "listAdminFcw",
   "getAdminFcwMaterial",
   "/api/admin/fcw",
+  "listChangeLedger",
+  "/api/admin/change-ledger",
+  "getAdminFitScore",
+  "listAdminPlatformRules",
+  "matchAdminPlatformRules",
+  "listAdminPcpTemplates",
+  "/api/admin/publish-slots",
+  "/api/admin/platform-rules",
+  "/api/admin/platform-rules/match",
+  "/api/admin/pcp-templates",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -791,6 +809,78 @@ for (const code of [
 }
 if (!queuePage.includes("data-batch-candidate"))
   problems.push("review-queue rows must expose data-batch-candidate checkboxes");
+
+// Q344 回滚中心（/admin/change-ledger）：Q334 甲案是**只读聚合面**，界面三条红线。
+const ledgerPage = readAdmin(join("change-ledger", "page.tsx"));
+for (const code of ["config_center", "pws", "fcw", "wordlist", "skill_prompt"]) {
+  if (!ledgerPage.includes(code))
+    problems.push(`change-ledger page must list mechanism code raw: ${code}`);
+}
+// ops_surface 是带未替换占位符的提示串（真进程实测），做成链接会跳到不存在的地址。
+if (/href=\{[^}]*ops_surface/.test(ledgerPage))
+  problems.push("change-ledger must not turn ops_surface into a link (it carries unresolved placeholders)");
+// 甲案不新增任何写口：这一屏不得调用回滚/作废/再编辑类接口。
+for (const banned of ["/rollback", "revoke", "freeze", "upsert"]) {
+  if (ledgerPage.includes(banned))
+    problems.push(`change-ledger page must stay read-only, found write call: ${banned}`);
+}
+
+// Q345 建屏、Q346 裁甲后收齐的平台适配台（/admin/platform-adaptation）＝段7/8 只读面。
+// 三条红线：① 只读（写面一律不接，含那个 POST 的 adapter 预览口）；
+// ② 段7/8 族九张读口必须**全部带管理身份**——不带 `ADMIN_ROLE_LIST` 的口，Q307 契约门从
+//   `lib/api.ts` 反解时根本看不见，等于让"默认身份读不动"重新变成静默退化；
+// ③ 界面文案键与 error.* 状态码键必须真实存在（MISSING_MESSAGE 只在浏览器控制台现形，
+//   tsc 与八道门全看不见，Q344 实测吃过一次）。
+// Q346 的口径变化：这五张原本只认 operations，负责人「按你推荐的搞」裁甲＝与同组 publish-slots
+// 统一到 require_ops_admin_view（02 C1.289），所以下面从"禁止消费"翻成"必须消费齐全"。
+const adaptPage = readAdmin(join("platform-adaptation", "page.tsx"));
+const STAGE78_READ_FUNCS = [
+  "getAdminFitScore",
+  "listAdminPlatformRules",
+  "matchAdminPlatformRules",
+  "listAdminPcpTemplates",
+  "listAdminFitWeights",
+  "listAdminSlotTypeDefaults",
+  "listAdminDynamicEvents",
+  "listAdminRecalcCandidates",
+  "listAdminAdapterCandidates",
+];
+for (const fn of STAGE78_READ_FUNCS) {
+  // 要"被调用"而不是"被提到"——只查函数名的话，一条 import 就能骗过这条门（种植实测过）。
+  if (!adaptPage.includes(`${fn}(`))
+    problems.push(`platform-adaptation page must call ${fn} (stage 7/8 read family is nine)`);
+  const block = apiText.split("\nexport async function ").find((chunk) =>
+    chunk.startsWith(`${fn}(`),
+  );
+  if (!block) problems.push(`lib/api.ts must define ${fn}`);
+  else if (!block.includes("ADMIN_ROLE_LIST"))
+    problems.push(`${fn} must append ADMIN_ROLE_LIST (else the Q307 read contract can't see it)`);
+}
+for (const banned of [
+  'method: "POST"',
+  'method: "PUT"',
+  'method: "DELETE"',
+  "router.refresh",
+  "/api/admin/platform-adapter/preview",
+]) {
+  if (adaptPage.includes(banned))
+    problems.push(`platform-adaptation page must stay read-only, found: ${banned}`);
+}
+{
+  const adaptMessages = messages.admin?.platformAdaptation ?? {};
+  for (const key of [...adaptPage.matchAll(/\bt\("([A-Za-z0-9]+)"/g)].map((m) => m[1])) {
+    const value = adaptMessages[key];
+    if (typeof value !== "string" || !value)
+      problems.push(`platform-adaptation message key missing: admin.platformAdaptation.${key}`);
+  }
+  const errorMessages = messages.error ?? {};
+  for (const page of [adaptPage, ledgerPage]) {
+    for (const code of [...page.matchAll(/"(4\d\d)"/g)].map((m) => m[1])) {
+      if (typeof errorMessages[code] !== "string")
+        problems.push(`error.${code} message key does not exist but a page maps it into tError`);
+    }
+  }
+}
 if (!queuePage.includes("<details>") || !queuePage.includes("JSON.stringify"))
   problems.push("review-queue payload must render as raw JSON in a details/pre fold");
 if (!/"use server"/.test(queueActions))

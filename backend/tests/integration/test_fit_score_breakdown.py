@@ -19,6 +19,8 @@ from app.platform.platform_adaptation import pa_rules
 from app.platform.platform_adaptation.models import GoalFitWeight, PublishSlot
 
 PATH = "/api/admin/publish-slots/{slot_id}/fit-score"
+# Q346（裁甲，02 C1.289）：fit-score 归入段7/8 那条 query 读闸，读它要自报管理身份。
+ADMIN = {"actor_id": "ops-1", "roles": "operations"}
 
 
 @pytest_asyncio.fixture
@@ -68,7 +70,9 @@ async def client(session_factory):
 
 async def test_breakdown_sums_to_the_scalar(client):
     """矩阵齐：breakdown 四行与标量 Σ 逐位一致，权重与矩阵行同源。"""
-    resp = await client.get(PATH.format(slot_id="slot-1"), params={"goal": "ENGAGEMENT"})
+    resp = await client.get(
+        PATH.format(slot_id="slot-1"), params={**ADMIN, "goal": "ENGAGEMENT"}
+    )
     assert resp.status_code == 200
     body = resp.json()
     # 既有键加法扩展，形状不破坏
@@ -86,7 +90,7 @@ async def test_breakdown_sums_to_the_scalar(client):
 
 async def test_incomplete_keeps_scores_visible_without_fabricated_weights(client):
     """目的未配矩阵：fit_score=None + incomplete，分项可见但 weight/contribution 为 None。"""
-    resp = await client.get(PATH.format(slot_id="slot-1"), params={"goal": "NOPE"})
+    resp = await client.get(PATH.format(slot_id="slot-1"), params={**ADMIN, "goal": "NOPE"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["fit_score"] is None
@@ -97,7 +101,7 @@ async def test_incomplete_keeps_scores_visible_without_fabricated_weights(client
 
 
 async def test_unknown_slot_is_404(client):
-    resp = await client.get(PATH.format(slot_id="nope"), params={"goal": "ENGAGEMENT"})
+    resp = await client.get(PATH.format(slot_id="nope"), params={**ADMIN, "goal": "ENGAGEMENT"})
     assert resp.status_code == 404
 
 
@@ -109,6 +113,8 @@ async def test_preview_is_read_only_no_audit_rows(client, session_factory):
             return len((await session.scalars(select(AuditLog))).all())
 
     before = await count_audit()
-    resp = await client.get(PATH.format(slot_id="slot-1"), params={"goal": "ENGAGEMENT"})
+    resp = await client.get(
+        PATH.format(slot_id="slot-1"), params={**ADMIN, "goal": "ENGAGEMENT"}
+    )
     assert resp.status_code == 200
     assert await count_audit() == before

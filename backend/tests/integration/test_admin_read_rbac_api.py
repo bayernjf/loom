@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.db import Base, get_session
 from app.main import app
+from scripts.route_auth_matrix import collect
 
 # (path, 允许角色) ——与 docs/05 表行逐一对应。
 GATED_READS = [
@@ -32,7 +33,7 @@ GATED_READS = [
     ("/api/categories", ["dictionary_admin"]),                  # 05:87  Q68
     ("/api/admin/fp-source-routes", ["operations"]),            # 05:94  Q8
     ("/api/admin/compliance-wordlist", ["operations", "internal_compliance"]),  # 05:104 Q48
-    ("/api/admin/fit-weights", ["operations"]),                 # 05:155 Q34
+    ("/api/admin/fit-weights", ["operations", "platform_admin"]),  # 05:155 Q34／Q346 甲读面统一
     ("/api/admin/ai-models", ["platform_admin"]),               # 05:225 Q82
     ("/api/admin/ai-scene-routes", ["operations", "platform_admin"]),          # 05:230 Q82
     # ---- Q113：Q109 挂【待补】三族收口 ----
@@ -43,9 +44,17 @@ GATED_READS = [
     # Q307：content-goals 读口另放行 platform_admin（组装工作台首屏要读）；写口仍只认 dictionary_admin
     ("/api/admin/content-goals", ["dictionary_admin", "platform_admin"]),   # 05 Q25 字典／Q307 读面
     ("/api/admin/cp-law-domains", ["internal_compliance"]),    # 05 Q49 敏感领域清单
-    # Q307：同上，发布位读口放行 platform_admin（`require_ops_admin_view`）；同组另五个只读口未放宽
+    # ---- Q346（负责人「按你推荐的搞」裁甲，02 C1.289）：段7/8 管理端读口统一到一条闸 ----
+    # 五张原只认 operations 的读口改挂 `require_ops_admin_view`（管理端 `/admin/platform-adaptation`
+    # 建成屏后要读它们），四张原本连 query 读闸都没有的（platform-rules／match／pcp-templates／
+    # fit-score，Q345 真进程实测零身份即 200）补同一条闸。**写口一律未动**，仍只认已验真 staff 令牌。
     ("/api/admin/publish-slots", ["operations", "platform_admin"]),  # 05 Q35 发布位档案／Q307 读面
-    ("/api/admin/slot-type-defaults", ["operations"]),         # 05 Q39 slotType 默认值
+    ("/api/admin/slot-type-defaults", ["operations", "platform_admin"]),  # 05 Q39 slotType 默认值
+    ("/api/admin/platform-rules", ["operations", "platform_admin"]),  # 05 Q36 平台规则
+    ("/api/admin/pcp-templates", ["operations", "platform_admin"]),  # 05 Q39 四模板只读
+    ("/api/admin/platform-dynamic-events", ["operations", "platform_admin"]),  # 05 Q37 动态信号
+    ("/api/admin/pcp-recalc/candidates", ["operations", "platform_admin"]),  # 05 Q41/Q42 重算候选
+    ("/api/admin/platform-adapter/candidates", ["operations", "platform_admin"]),  # 05 Q300 adapter 候选
     # ---- Q262：layerSpaces 通用底座读口（Q46 普通运营只读，platform_admin 可读） ----
     ("/api/admin/layer-spaces", ["operations", "platform_admin"]),  # 02 Q46
     # ---- Q264：三包重配待办清单只读口（Q45 重配走 Gate，operations|platform_admin 只读） ----
@@ -213,9 +222,63 @@ async def test_q113_prompts_read_is_platform_admin_only(client):
         assert resp.status_code == 403, (role, resp.status_code, resp.text)
 
 
+# ---- Q346（负责人「按你推荐的搞」裁甲，02 C1.289）：段7/8 管理端读口收到同一条闸 ----
+
+
+def _stage78_admin_gets() -> list[str]:
+    """反向枚举这一族的全部管理端 GET（不手抄清单，照 Q277 `GATED` 同型纪律）。"""
+    return sorted(
+        {
+            r.path
+            for r in collect(app.routes, [])
+            if "GET" in r.methods
+            and r.path.startswith("/api/admin")
+            and "platform_adaptation" in getattr(r.endpoint, "__module__", "")
+        }
+    )
+
+
+def test_the_stage78_family_has_exactly_ten_admin_reads() -> None:
+    """成员数钉死＝新增一条管理端 GET 却没挂读闸时，这条先红，而不是静默多一个免闸口。"""
+    paths = _stage78_admin_gets()
+    assert len(paths) == 10, paths
+
+
+@pytest.mark.parametrize("path", _stage78_admin_gets())
+async def test_every_stage78_admin_read_reaches_the_gate(client, path):
+    """九张读口（含带必填业务参数的 match／fit-score）都必须先答鉴权、再答参数。
+
+    实测 FastAPI 先求解依赖，所以角色不符时即便缺 `platform`／`goal` 也回 **403**——
+    这条探针因此不需要为每条口手写业务参数，又能保证"漏挂读闸必判红"。
+    缺 actor_id 那条只作弱判据（match／fit-score 缺业务参数同样是 422，码不可分），
+    承重的是上面那条 403。
+    """
+    denied = await client.get(path, params=[("actor_id", "nobody-1"), ("roles", "nobody")])
+    assert denied.status_code == 403, (path, denied.status_code, denied.text)
+    assert (await client.get(path)).status_code == 422, path
+
+
+async def test_q346_match_and_fit_score_pass_the_gate_for_both_admin_roles(client):
+    """正向对照：放行之后才轮到业务层（空库下 match 回 native、未知 slot 回 404）。"""
+    probes = [
+        ("/api/admin/platform-rules/match", [("platform", "xhs"), ("slot_type", "note")]),
+        ("/api/admin/publish-slots/slot-q346/fit-score", [("goal", "ENGAGEMENT")]),
+    ]
+    for path, business in probes:
+        for role in ("operations", "platform_admin"):
+            resp = await client.get(
+                path, params=[("actor_id", f"{role}-1"), ("roles", role), *business]
+            )
+            assert resp.status_code not in (401, 403, 422), (
+                path,
+                role,
+                resp.status_code,
+                resp.text,
+            )
+
+
 @pytest.mark.parametrize("path", OPEN_READS)
-async def test_matrix_open_reads_remain_actorless(client, path):
-    # 无 actor query 即 200：锁定 Q109 审计的「有意开放/口径待补」结论。
+async def test_matrix_open_reads_remain_actorless(client, path):    # 无 actor query 即 200：锁定 Q109 审计的「有意开放/口径待补」结论。
     assert (await client.get(path)).status_code == 200, path
 
 

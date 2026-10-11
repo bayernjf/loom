@@ -797,6 +797,45 @@ export async function getTenantTokenUsage(
   );
 }
 
+// Q344：回滚中心＝Q334 甲案的变更-回滚清单读口（只读聚合，不落表）。
+// mechanism 与 rollbackability 都是系统标识，界面原样展示、不翻译（docs/18 口径）。
+export interface ChangeLedgerItem {
+  id: string;
+  tenant_id: string;
+  action: string;
+  mechanism: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  actor_id: string | null;
+  created_at: string;
+  rollbackability: string;
+  /** 去哪撤的提示串，形如 `PUT /api/admin/config/{key}/rollback`——含未解析占位符，只读文本、不可直接跳转。 */
+  ops_surface: string;
+  detail: Record<string, unknown>;
+}
+
+export interface ChangeLedgerPage {
+  total: number;
+  items: ChangeLedgerItem[];
+}
+
+export interface ChangeLedgerOpts {
+  mechanism?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listChangeLedger(
+  opts?: ChangeLedgerOpts,
+): Promise<ChangeLedgerPage> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts?.mechanism) params.set("mechanism", opts.mechanism);
+  if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+  if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+  return request<ChangeLedgerPage>(`/api/admin/change-ledger?${params}`);
+}
+
 export async function provisionTenant(body: {
   tenantId: string;
   name: string | null;
@@ -1629,20 +1668,37 @@ export async function suggestAiSelect(
   });
 }
 
+// Q345：字段与后端 `_slot_view`（platform_adaptation/router.py）逐键对齐，段7/8 适配台要读
+// 四维分与限制列；组装工作台等既有消费方只取自己用的那几个键，加法扩展不影响。
 export interface AdminPublishSlot {
   slot_id: string;
   platform: string;
   code: string;
   name: string;
   slot_type: string;
+  chars_max: number | null;
+  dur_min: number | null;
+  dur_max: number | null;
+  traffic: number;
+  safe: number;
+  conv: number;
+  load: number;
+  score_source: string;
+  risk: string | null;
   gate: string;
+  source_url: string | null;
   status: string;
 }
 
-export async function getAdminPublishSlots(platform?: string): Promise<AdminPublishSlot[]> {
+export async function getAdminPublishSlots(
+  platform?: string,
+  opts: { includeArchived?: boolean } = {},
+): Promise<AdminPublishSlot[]> {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   if (platform) params.set("platform", platform);
+  // 后端 status 默认 "active"；传空串＝不加过滤＝连归档行一起回（service.list_rules 同口径）。
+  if (opts.includeArchived) params.set("status", "");
   return request<AdminPublishSlot[]>(`/api/admin/publish-slots?${params}`);
 }
 
@@ -1658,6 +1714,209 @@ export async function getAdminContentGoals(): Promise<AdminContentGoal[]> {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   return request<AdminContentGoal[]>(`/api/admin/content-goals?${params}`);
+}
+
+// ---- Q345 段7/8 平台适配台（/admin/platform-adaptation）消费的九张只读口 ----
+// Q346（负责人「按你推荐的搞」裁甲，02 C1.289）：段7/8 管理端读口统一到
+// `require_ops_admin_view`（operations＋platform_admin），原本只认 operations 的五张
+// 因此默认管理身份也读得动，本屏把九张全接上。写口一律未动，仍只认已验真 staff 令牌。
+
+export interface FitScoreRow {
+  dim: string;
+  score: number;
+  weight: number | null;
+  contribution: number | null;
+}
+
+export interface AdminFitScore {
+  slot_id: string;
+  goal: string;
+  fit_score: number | null;
+  /** 目的未配权重矩阵＝不凑分（Q34），分项仍可见、weight/contribution 为 null（Q296 甲）。 */
+  incomplete: boolean;
+  breakdown: FitScoreRow[];
+}
+
+export async function getAdminFitScore(
+  slotId: string,
+  goal: string,
+): Promise<AdminFitScore> {
+  const params = new URLSearchParams({
+    actor_id: CURRENT_ADMIN_ACTOR_ID,
+    goal,
+  });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminFitScore>(
+    `/api/admin/publish-slots/${encodeURIComponent(slotId)}/fit-score?${params}`,
+  );
+}
+
+export interface AdminPlatformRule {
+  rule_id: string;
+  selector_level: string;
+  platform: string | null;
+  slot_type: string | null;
+  slot_id: string | null;
+  country: string | null;
+  effect: string;
+  note: string | null;
+  status: string;
+}
+
+export async function listAdminPlatformRules(
+  opts: { platform?: string; includeArchived?: boolean } = {},
+): Promise<AdminPlatformRule[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.platform) params.set("platform", opts.platform);
+  if (opts.includeArchived) params.set("status", "");
+  return request<AdminPlatformRule[]>(`/api/admin/platform-rules?${params}`);
+}
+
+export interface AdminDynamicEvent {
+  event_id: string;
+  platform: string;
+  slot_id: string | null;
+  event_type: string;
+  severity: string;
+  effective_start: string;
+  effective_end: string | null;
+  note: string | null;
+  status: string;
+}
+
+export interface AdminRuleMatch {
+  effect: string | null;
+  matched_rule_ids: string[];
+  /** Q259 advisory：当前生效动态信号，只提示、不改变 effect 裁决。 */
+  events: AdminDynamicEvent[];
+}
+
+export async function matchAdminPlatformRules(input: {
+  platform: string;
+  slotType: string;
+  slotId?: string;
+}): Promise<AdminRuleMatch> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  params.set("platform", input.platform);
+  params.set("slot_type", input.slotType);
+  if (input.slotId) params.set("slot_id", input.slotId);
+  return request<AdminRuleMatch>(`/api/admin/platform-rules/match?${params}`);
+}
+
+export interface AdminPcpTemplate {
+  template_id: string;
+  code: string;
+  name: string;
+  /** Q39 四模板的 17 键权重（Σ=1.0），键序由后端字典给，前端不重排。 */
+  weights: Record<string, number>;
+}
+
+export async function listAdminPcpTemplates(): Promise<AdminPcpTemplate[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminPcpTemplate[]>(`/api/admin/pcp-templates?${params}`);
+}
+
+// ---- Q346（裁甲落地）：本屏再接上原本只认 operations 的五张只读口 ----
+
+export interface AdminFitWeight {
+  goal: string;
+  /** 四维权重（traffic/safe/conv/load），Σ=1 由写口硬校验，界面只展示不归一。 */
+  weights: Record<string, number>;
+  updated_by: string | null;
+}
+
+export async function listAdminFitWeights(): Promise<AdminFitWeight[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminFitWeight[]>(`/api/admin/fit-weights?${params}`);
+}
+
+export interface AdminSlotTypeDefault {
+  slot_type: string;
+  daily_limit_min: number | null;
+  daily_limit_max: number | null;
+  /** 约 40 列走 defaults JSON（docs/05 表行注「明细【待补】」），界面按后端给的键原样列示。 */
+  defaults: Record<string, unknown>;
+}
+
+export async function listAdminSlotTypeDefaults(): Promise<AdminSlotTypeDefault[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<AdminSlotTypeDefault[]>(`/api/admin/slot-type-defaults?${params}`);
+}
+
+export async function listAdminDynamicEvents(
+  opts: { platform?: string; includeArchived?: boolean } = {},
+): Promise<AdminDynamicEvent[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.platform) params.set("platform", opts.platform);
+  if (opts.includeArchived) params.set("status", "");
+  return request<AdminDynamicEvent[]>(`/api/admin/platform-dynamic-events?${params}`);
+}
+
+export interface AdminRecalcCandidate {
+  candidate_id: string;
+  pcp_id: string;
+  tenant_id: string;
+  product_space_id: string;
+  platform: string;
+  /** V1 候选仅 manual（AI 生成器随 V2 PCP-SCORE，docs/05 表行）。 */
+  source: string;
+  proposed_weights: Record<string, number>;
+  change_list: Record<string, unknown>[];
+  status: string;
+  rejected_reason: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+}
+
+export async function listAdminRecalcCandidates(
+  status?: string,
+): Promise<AdminRecalcCandidate[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (status) params.set("status", status);
+  return request<AdminRecalcCandidate[]>(`/api/admin/pcp-recalc/candidates?${params}`);
+}
+
+export interface AdminAdapterCandidate {
+  candidate_id: string;
+  pws_snapshot_id: string;
+  platform: string;
+  slot_type: string | null;
+  slot_id: string | null;
+  country: string | null;
+  source: string;
+  /** 裁决结果由网关四态机械生成（Q300），界面只读不判。 */
+  decision: string | null;
+  reason: string | null;
+  /** PT-PLATFORM-ADAPTER 四态里的 `refs`（JSON 数组，键名由网关输出给，界面不猜）。 */
+  refs: unknown[];
+  /** 模型列就是 Boolean（`missing: Mapped[bool]`）＝PT 四态里的 missing「无生效 PWS 不造假」。 */
+  missing: boolean;
+  status: string;
+  rejected_reason: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+}
+
+export async function listAdminAdapterCandidates(
+  status?: string,
+): Promise<AdminAdapterCandidate[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (status) params.set("status", status);
+  return request<AdminAdapterCandidate[]>(
+    `/api/admin/platform-adapter/candidates?${params}`,
+  );
 }
 
 // Q306：Q38 降级动作字典（docs/02:141 的六码）。读口沿用管理端自报身份（Q118 同型 query 闸）；
