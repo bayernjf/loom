@@ -28,6 +28,7 @@ const ADMIN_NAV_GROUPS = [
       { href: "/admin/agent-keys", labelKey: "admin.agentKeysNav" },
       { href: "/admin/staff-keys", labelKey: "admin.staffKeysNav" },
       { href: "/admin/dictionaries", labelKey: "admin.dictionariesNav" },
+      { href: "/admin/change-ledger", labelKey: "admin.changeLedgerNav" },
     ],
   },
   {

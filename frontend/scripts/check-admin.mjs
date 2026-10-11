@@ -554,6 +554,7 @@ const requiredFiles = [
   join("fcw", "assemble", "actions.ts"),
   join("fcw", "assemble", "assemble-island.tsx"),
   join("fcw", "review", "page.tsx"),
+  join("change-ledger", "page.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -664,11 +665,13 @@ if (!sidebarText.includes("/admin/fcw/review"))
   problems.push("admin sidebar must link the whitelist review queue (Q249)");
 if (!sidebarText.includes("/admin/dictionaries"))
   problems.push("admin sidebar must link the dictionary surface (Q306/Q38)");
+if (!sidebarText.includes("/admin/change-ledger"))
+  problems.push("admin sidebar must link the rollback center (Q334 甲案界面片，Q344)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  // 15＝Q306 起加入字典管理入口（此前为 14）。改这个数字必须对应一次真实的入口增删。
-  if (navCount !== 15)
-    problems.push(`admin sidebar must keep exactly 15 admin entries, got ${navCount}`);
+  // 16＝Q344 加入回滚中心入口（此前 15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
+  if (navCount !== 16)
+    problems.push(`admin sidebar must keep exactly 16 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -722,6 +725,8 @@ for (const token of [
   "listAdminFcw",
   "getAdminFcwMaterial",
   "/api/admin/fcw",
+  "listChangeLedger",
+  "/api/admin/change-ledger",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -791,6 +796,21 @@ for (const code of [
 }
 if (!queuePage.includes("data-batch-candidate"))
   problems.push("review-queue rows must expose data-batch-candidate checkboxes");
+
+// Q344 回滚中心（/admin/change-ledger）：Q334 甲案是**只读聚合面**，界面三条红线。
+const ledgerPage = readAdmin(join("change-ledger", "page.tsx"));
+for (const code of ["config_center", "pws", "fcw", "wordlist", "skill_prompt"]) {
+  if (!ledgerPage.includes(code))
+    problems.push(`change-ledger page must list mechanism code raw: ${code}`);
+}
+// ops_surface 是带未替换占位符的提示串（真进程实测），做成链接会跳到不存在的地址。
+if (/href=\{[^}]*ops_surface/.test(ledgerPage))
+  problems.push("change-ledger must not turn ops_surface into a link (it carries unresolved placeholders)");
+// 甲案不新增任何写口：这一屏不得调用回滚/作废/再编辑类接口。
+for (const banned of ["/rollback", "revoke", "freeze", "upsert"]) {
+  if (ledgerPage.includes(banned))
+    problems.push(`change-ledger page must stay read-only, found write call: ${banned}`);
+}
 if (!queuePage.includes("<details>") || !queuePage.includes("JSON.stringify"))
   problems.push("review-queue payload must render as raw JSON in a details/pre fold");
 if (!/"use server"/.test(queueActions))

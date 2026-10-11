@@ -797,6 +797,45 @@ export async function getTenantTokenUsage(
   );
 }
 
+// Q344：回滚中心＝Q334 甲案的变更-回滚清单读口（只读聚合，不落表）。
+// mechanism 与 rollbackability 都是系统标识，界面原样展示、不翻译（docs/18 口径）。
+export interface ChangeLedgerItem {
+  id: string;
+  tenant_id: string;
+  action: string;
+  mechanism: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  actor_id: string | null;
+  created_at: string;
+  rollbackability: string;
+  /** 去哪撤的提示串，形如 `PUT /api/admin/config/{key}/rollback`——含未解析占位符，只读文本、不可直接跳转。 */
+  ops_surface: string;
+  detail: Record<string, unknown>;
+}
+
+export interface ChangeLedgerPage {
+  total: number;
+  items: ChangeLedgerItem[];
+}
+
+export interface ChangeLedgerOpts {
+  mechanism?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listChangeLedger(
+  opts?: ChangeLedgerOpts,
+): Promise<ChangeLedgerPage> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts?.mechanism) params.set("mechanism", opts.mechanism);
+  if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+  if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+  return request<ChangeLedgerPage>(`/api/admin/change-ledger?${params}`);
+}
+
 export async function provisionTenant(body: {
   tenantId: string;
   name: string | null;
