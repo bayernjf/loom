@@ -149,7 +149,7 @@
 |---|---|---|
 | GET `/product-spaces/{id}/pws/readiness` | pwsReadiness 5 项机械求值 + 计数明细（PS 不存在 404） | line 2634 |
 | POST `/product-spaces/{id}/pws/evaluate` | 全绿时系统出 pws_ready 待办（whitelist_owner，7 天 due，幂等）；不全绿只回状态不出单（**有意不设角色闸**：系统提请的机械求值，Q75） | Q28/Q75 |
-| POST `/product-spaces/{id}/pws/freeze` | BO-07 冻结/重冻（**Q329〔Q242 乙案〕改判 operations：`require_internal_actor(OPERATIONS)`，service `_require_ops` 兜底；whitelist_owner 保留为 Q28 原文角色随 V2 客户侧认证回评**；非属主 403；不全绿 409 回带 5 项）；首冻 v1.0 免原因，重冻须 reason_code（缺失/未知 422，none 档 409）；返回快照+items、dup_hints、Q30 dispositions | Q29/Q30/Q31/Q33/line 7674 |
+| POST `/product-spaces/{id}/pws/freeze` | BO-07 冻结/重冻（**Q329〔Q242 乙案〕改判 operations：`require_internal_actor(OPERATIONS)`，service `_require_ops` 兜底；whitelist_owner 保留为 Q28 原文角色随 V2 客户侧认证回评**；非属主 403；不全绿 409 回带 5 项）；首冻 v1.0 免原因，重冻须 reason_code（缺失/未知 422，none 档 409）；返回快照+items、dup_hints、Q30 dispositions（**②③④ Q350 已回填**：draft 作废＋queued 重组装／forced 未发布建 q30_pws_recheck／forced published 计数＋q30_fcw_outdated_notify，见 02 C1.293） | Q29/Q30/Q31/Q33/line 7674 |
 | POST `/pws/{pws_id}/revoke` | Q32 急停（**Q329〔Q242 乙案〕改判 operations，与 freeze 同闸口径；whitelist_owner 随 V2 回评**）；仅 active frozen 可作废，否则 409；作废后可重冻新版 | Q32 |
 | GET `/product-spaces/{id}/pws`、GET `/pws/{pws_id}` | 版本列表（主版本号倒序，同刻仅 1 active）/ 版本明细含物化 items；superseded/revoked 只读 | Q31 |
 

@@ -158,7 +158,7 @@
 - 事件：freeze / refreeze（强制-建议-免三档，Q29）/ revoke / supersede；每次记录触发原因 + 操作人 + Q 依据【建议】
 - 换版四行处置落库：旧版 superseded / 草稿作废 / 未发布待复查 / 已发布不追溯（Q30）
 
-> **实现补登（2026-09-14，M6 后端切片）**：段6 随 Alembic 0006 落地（PG16 up/down/up 实测），共 3 表：`pws_snapshots`（version 唯一 `(product_space_id, version)`、status+is_active 双维、fingerprint sha256、snapshot/readiness JSON 在 PG 为 JSONB、revoked_* 急停字段）、`pws_snapshot_items`（建议名 pws_items 的物理实现，kind=atom/pwc + seq 有序 + payload 物化，唯一 `(pws_id, kind, ref_id)`）、`pws_freeze_logs`（事件含 supersede 双写）。Q30 草稿/未发布/已发布内容实体随 M8/段12，M6 dispositions 结构先行占位。字段类型/索引以迁移脚本为准。
+> **实现补登（2026-09-14，M6 后端切片）**：段6 随 Alembic 0006 落地（PG16 up/down/up 实测），共 3 表：`pws_snapshots`（version 唯一 `(product_space_id, version)`、status+is_active 双维、fingerprint sha256、snapshot/readiness JSON 在 PG 为 JSONB、revoked_* 急停字段）、`pws_snapshot_items`（建议名 pws_items 的物理实现，kind=atom/pwc + seq 有序 + payload 物化，唯一 `(pws_id, kind, ref_id)`）、`pws_freeze_logs`（事件含 supersede 双写）。Q30 草稿/未发布/已发布内容实体随 M8/段12，M6 dispositions 结构先行占位。〔**Q350 已回填（2026-10-12，02 C1.293）**：②③④ 由 `whitelist_center/service.py::_apply_q30_dispositions()` 落地，原占位销账；原文保留。〕字段类型/索引以迁移脚本为准。
 
 ### 2.4 平台适配域（段 7–8）
 
