@@ -11,13 +11,14 @@
 
 from collections.abc import AsyncGenerator
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.content.models import ContentProduct
-from app.core.db import Base, get_session
+from app.core.db import Base, get_session, settings
 from app.core.models import AuditLog
 from app.core.staff_auth.deps import get_auth_session
 from app.main import app
@@ -205,10 +206,11 @@ async def test_segment_read_rbac(client, session_factory):
 
 async def test_object_storage_unconfigured_503_and_list(client, session_factory):
     await _seed_content(session_factory)
-    # 上传：S3 未配置 → 503（不产生登记行）
+    # 上传：S3 未配置 → 503（不产生登记行）；Q351 起鉴权走 Bearer 硬闸，
+    # actor 不再经 query 自报，filename 仍是唯一保留的 query 参数。
     r = await client.post(
         "/api/admin/content/c-vs1/video-objects",
-        params=_read_params(),
+        params={"filename": "clip.mp4"},
         files={"file": ("clip.mp4", b"fake-bytes", "video/mp4")},
     )
     assert r.status_code == 503, r.text
@@ -249,3 +251,67 @@ async def test_object_register_service_audit(client, session_factory):
             ).all()
         )
         assert len(audits) == 1 and audits[0].detail["bucket"] == "loom-videos"
+
+
+# ---------- Q351（代码审查问题2）：上传口硬闸、filename 净化、体积上限 ----------
+
+
+async def test_upload_requires_token_and_ops_role(client, session_factory):
+    """上传口鉴权＝operations 硬闸：无令牌 401、缺 operations 的令牌 403、内容不存在 404。"""
+    await _seed_content(session_factory)
+    saved = client.headers.pop("Authorization", None)
+    try:
+        r = await client.post(
+            "/api/admin/content/c-vs1/video-objects",
+            params={"filename": "clip.mp4"},
+            content=b"abc",
+            headers={"Content-Type": "video/mp4"},
+        )
+        assert r.status_code == 401
+    finally:
+        if saved:
+            client.headers.update({"Authorization": saved})
+    async with acting_as(client, ["product_reviewer"]):
+        r = await client.post(
+            "/api/admin/content/c-vs1/video-objects",
+            params={"filename": "clip.mp4"},
+            content=b"abc",
+            headers={"Content-Type": "video/mp4"},
+        )
+        assert r.status_code == 403
+    r = await client.post(
+        "/api/admin/content/c-none/video-objects",
+        params={"filename": "clip.mp4"},
+        content=b"abc",
+        headers={"Content-Type": "video/mp4"},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    ["../evil.mp4", "a/b.mp4", "a\\b.mp4", "..", "", "clip\t.mp4"],
+)
+async def test_upload_rejects_unsafe_filename_422(client, session_factory, bad_name):
+    """穿越/分隔/空/控制字符文件名在触达 S3 之前拒 422（无 S3 环境也可证）。"""
+    await _seed_content(session_factory)
+    r = await client.post(
+        "/api/admin/content/c-vs1/video-objects",
+        params={"filename": bad_name},
+        content=b"abc",
+        headers={"Content-Type": "video/mp4"},
+    )
+    assert r.status_code == 422, r.text
+
+
+async def test_upload_rejects_oversized_body_413(client, session_factory, monkeypatch):
+    """Content-Length 超 video_upload_max_bytes：读 body 之前拒 413（无 S3 也可证）。"""
+    await _seed_content(session_factory)
+    monkeypatch.setattr(settings, "video_upload_max_bytes", 4)
+    r = await client.post(
+        "/api/admin/content/c-vs1/video-objects",
+        params={"filename": "clip.mp4"},
+        content=b"x" * 10,
+        headers={"Content-Type": "video/mp4"},
+    )
+    assert r.status_code == 413, r.text

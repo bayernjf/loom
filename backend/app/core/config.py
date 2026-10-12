@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     # 旋钮）：解除 Q136 前端 500 行软上限后防单次超大请求；超限整批 422。
     backfill_upload_max_rows: int = 10000
 
+    # Q351 video-studio 原片上传的请求体字节硬上限（运维防护参数，非 Q9 业务旋钮）：
+    # POST .../video-objects 走原始字节流（免 python-multipart），读 body 前查
+    # Content-Length、读完查实际长度，超限一律 413，防单次超大上传打满进程内存。
+    # 默认 500 MiB。
+    video_upload_max_bytes: int = 500 * 1024 * 1024
+
     # Q91 自研 DAG 编排器：同层并行节点的进程内信号量上限（env 运维参数，
     # 非 Q9 业务旋钮）；日预算硬停仍由 gateway 全局闸门兜底，并发不绕预算。
     orch_max_concurrency: int = 4

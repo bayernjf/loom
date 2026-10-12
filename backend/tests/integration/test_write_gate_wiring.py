@@ -89,6 +89,8 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     # 段12 video-studio 分段编目（Q336，①甲）：写口只认已验真 staff 令牌的 operations。
     ("/api/admin/content/{content_id}/video-segments", "POST"): OPS,
     ("/api/admin/video-segments/{segment_id}", "PUT"): OPS,
+    # Q351（代码审查问题2）：原片上传口由 query 自报 actor 改 operations 硬闸。
+    ("/api/admin/content/{content_id}/video-objects", "POST"): OPS,
 }
 
 # 必须一个标记都没有：只读口，以及有意不加闸的写口。

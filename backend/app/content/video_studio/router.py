@@ -37,6 +37,17 @@ def _read_actor(
     return actor
 
 
+def _safe_object_filename(filename: str) -> str:
+    """原片对象名只允许纯文件名（Q351）：拒空、路径分隔、目录穿越与控制字符。"""
+    if not filename or filename in (".", ".."):
+        raise HTTPException(status_code=422, detail="invalid filename")
+    if "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=422, detail="invalid filename")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in filename):
+        raise HTTPException(status_code=422, detail="invalid filename")
+    return filename
+
+
 def _s3_client():
     settings = get_settings()
     if not settings.s3_endpoint_url:
@@ -205,23 +216,27 @@ async def upload_video_object(
     content_id: str,
     request: Request,
     filename: str = Query(default="video.bin"),
-    actor_id: str = Query(...),
-    roles: list[str] = Query(default_factory=list),
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_internal_actor(OPERATIONS)),
 ) -> dict:
     """上传原片（原始字节流，免 python-multipart 依赖）：body=文件字节，
-    filename 经 query 传入，Content-Type 头即对象 content_type。"""
-    actor = Actor(id=actor_id, roles=roles)
-    try:
-        require_any_role(actor, OPERATIONS)
-    except PermissionDenied as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    filename 经 query 传入（Q351 起只允许纯文件名，穿越/控制字符 422），
+    Content-Type 头即对象 content_type；body 超 video_upload_max_bytes 413。
+
+    Q351：鉴权由 query 自报 actor 改为 operations 硬闸，审计人员以令牌为准。
+    """
     content = await _require_content(session, content_id)
+    _safe_object_filename(filename)
     settings = get_settings()
+    declared_length = request.headers.get("content-length")
+    if declared_length is not None and int(declared_length) > settings.video_upload_max_bytes:
+        raise HTTPException(status_code=413, detail="upload body too large")
     client = _s3_client()
     data = await request.body()
     if not data:
         raise HTTPException(status_code=422, detail="empty upload body")
+    if len(data) > settings.video_upload_max_bytes:
+        raise HTTPException(status_code=413, detail="upload body too large")
     content_type = request.headers.get("content-type", "application/octet-stream")
     object_key = f"originals/{content_id}/{filename}"
     try:

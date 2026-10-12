@@ -2168,11 +2168,9 @@ export async function uploadVideoObject(
   filename: string,
   data: Blob,
 ): Promise<VideoObjectView> {
-  const params = new URLSearchParams({
-    filename,
-    actor_id: CURRENT_ADMIN_ACTOR_ID,
-  });
-  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  // Q351：上传口已改 operations 硬闸（Authorization: Bearer 由 request() 自动附带），
+  // 不再以 query 自报 actor_id/roles；filename 仅允许纯文件名，服务端会再校验。
+  const params = new URLSearchParams({ filename });
   return request<VideoObjectView>(
     `/api/admin/content/${encodeURIComponent(contentId)}/video-objects?${params}`,
     {
