@@ -13,7 +13,7 @@
 | `customer` | 段1 提交资料、段12 审阅成品/改稿、段13 回填效果 | 客户台：products / content / compliance / workbench / analytics / settings（social-accounts、templates 为 V2 占位） |
 | `operations` | 段1 推进、段2 触发识别、段3–5 编排与 Gate 送裁、段11 组装、段12 触发生成与发布回填 | 管理台：/admin/intakes、review-workload、review-queue、content、effects、exports、fcw 等 12 页（见 §0.1 登录） |
 | `product_reviewer` | 字段池 / 原子 / PWC 三道 Gate 的人工裁决 | /admin/review-workload、/admin/review-queue |
-| `whitelist_owner` | PWS 冻结 | API（V1 无独立页面） |
+| ~~`whitelist_owner`~~ **operations**〔Q329 乙案（02 C1.272）起 PWS 冻结/吊销两口改判 operations 受闸；`whitelist_owner` 保留为 Q28 原文客户侧角色，V2 客户认证后再回评〕 | PWS 冻结/重冻/换版/吊销 | API（V1 无独立页面） |
 | `internal_compliance` | 段10 合规清洗 CCR | /admin/content（及 API） |
 | `platform_admin` | 租户、Agent Key、运营人员令牌、AI 模型与场景路由、字典管理、导出任务 | /admin/tenants、/admin/agent-keys、/admin/staff-keys、/admin/token-cost、/admin/exports |
 | `dictionary_admin` | 内容语言清单等字典维护 | API（语言清单管理） |
@@ -89,7 +89,8 @@
 
 ### 段 6 — PWS 冻结
 
-- **whitelist_owner**：`POST /api/product-spaces/{ps}/pws/freeze`。冻结即 5 门 readiness 校验，任一不过返回未就绪原因；冻结后如需变更走重冻/版本/revoke 流程。
+- **operations**（Q329 乙案，02 C1.272；原文 BO-07 角色 `whitelist_owner` 随 V2 客户认证回评）：`POST /api/product-spaces/{ps}/pws/freeze`，需 staff 令牌角色含 operations（401/403）。冻结即 5 门 readiness 校验，任一不过返回未就绪原因；**同一口兼作重冻/换版**——已存在 active 冻结版时再调必须带 Q29 `reason_code`（forced 合规类／suggested 普通增量；`unrelated_change` 409 不换版），旧版翻 superseded、新版本 frozen。急停走 `POST /api/pws/{pws_id}/revoke`（只对 active frozen 开放）。
+- **换版后下游处置（Q350，2026-10-12 起，02 C1.293）**：重冻换版时系统按**旧版 PWS** 关联的 FCW 自动做四行处置，运营无需手工逐张处理：② 草稿 FCW 自动作废并排队按新版重组装（worker 重发，原 final_id 记入任务 `results.reissues`）；③ 已生成未发布的中间态成品，仅 **forced（合规原因）** 建 `q30_pws_recheck` 待复查待办（指派 **internal_compliance**，7 天 due）；④ 已发布成品受不可变红线保护，**不回改、不追溯**，仅计数，forced 时建 `q30_fcw_outdated_notify` 待办（指派 **operations**）——**运营动作＝按待办通知客户对已发布内容自查**，suggested（普通增量）不建待办。待办在待办看板按 `assignee_role`／`todo_type` 可查（`GET /api/admin/sla/todos`，现读闸仅 `platform_admin`，Q350 未改读闸）；换版响应体同时回 `dispositions` 计数（voided/pending/outdated）与 `dup_hints`。处置另记 `pws.q30_dispositions` 审计。
 
 ### 段 10 — 合规清洗
 

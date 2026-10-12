@@ -76,6 +76,147 @@ def _require_ops(actor) -> None:
         raise RoleNotAllowed("PWS freeze/revoke requires operations role (Q329: BO-07 reassigned from whitelist_owner)")
 
 
+# Q30 ②③④（Q350 清单二 #15 甲）：换版时对旧版关联 FCW 的真实处置。
+TODO_TYPE_Q30_RECHECK = "q30_pws_recheck"
+TODO_TYPE_Q30_OUTDATED = "q30_fcw_outdated_notify"
+
+
+async def _apply_q30_dispositions(
+    session,
+    *,
+    ps: ProductSpace,
+    old_pws: PwsSnapshot,
+    new_pws: PwsSnapshot,
+    tier: str | None,
+    reason_code: str | None,
+    actor,
+) -> dict:
+    """Q30 四行处置的 ②③④（①＝旧版 superseded 只读，已由调用方落库）。
+
+    ② draft FCW：复用 FCW 版本机 revoke 作废其 active 快照，并按同 platform/goal/
+       country/slot 建 queued 重组装任务（指向新版 pws_id），由 worker 重发；
+    ③ 未发布成品（publish_status != published 的非 draft 行）：forced（合规类
+       原因）时建合规待复查待办，suggested 不强制（Q30 ③ 只对合规原因强制重生成）；
+    ④ 已发布成品：FCW 行受 exit_guard 不可变，不回改、不追溯，仅计数＋建合规提醒
+       待办（Q30 ④ 合规类原因「提醒到人」），通知客户自查。
+    """
+    # 惰性 import：final 包反向引用 product 包模型，避开模块加载环。
+    from app.final.final_whitelist.models import (
+        PUBLISH_DRAFT,
+        PUBLISH_PUBLISHED,
+        FcwAssemblyTask,
+        FinalContentWhitelist,
+    )
+    from app.final.final_whitelist.service import revoke_fcw
+
+    forced = tier == pws_rules.REFREEZE_FORCED
+    old_fcws = (
+        await session.scalars(
+            select(FinalContentWhitelist).where(
+                FinalContentWhitelist.pws_id == old_pws.pws_id
+            )
+        )
+    ).all()
+
+    draft_voided: list[str] = []
+    unpublished_pending = False
+    published_outdated = 0
+    now = _now()
+
+    for fcw in old_fcws:
+        if fcw.publish_status == PUBLISH_DRAFT:
+            # ② 作废草稿（其 active frozen 快照 → revoked），再排队按新版重组装。
+            await revoke_fcw(
+                session,
+                fcw.final_id,
+                f"Q30 ② old PWS {old_pws.version} superseded by {new_pws.version}",
+                actor,
+            )
+            session.add(
+                FcwAssemblyTask(
+                    tenant_id=ps.tenant_id,
+                    product_space_id=ps.product_space_id,
+                    pws_id=new_pws.pws_id,
+                    platform=fcw.platform,
+                    goal=fcw.goal,
+                    country=fcw.country,
+                    requested_count=1,
+                    slot_ids=[fcw.slot_id],
+                    status="queued",
+                    results={"reissues": {"voided_final_id": fcw.final_id}},
+                    created_by=actor.id,
+                )
+            )
+            draft_voided.append(fcw.final_id)
+        elif fcw.publish_status == PUBLISH_PUBLISHED:
+            # ④ 不追溯：仅计数；合规类原因建提醒待办到人。
+            published_outdated += 1
+            if forced:
+                session.add(
+                    OpsTodo(
+                        tenant_id=ps.tenant_id,
+                        todo_type=TODO_TYPE_Q30_OUTDATED,
+                        entity_type="final_content_whitelist",
+                        entity_id=fcw.final_id,
+                        assignee_role=OPERATIONS,
+                        detail={
+                            "reason_code": reason_code,
+                            "old_pws_id": old_pws.pws_id,
+                            "new_pws_id": new_pws.pws_id,
+                            "action": "notify_customer_self_check",
+                        },
+                        due_at=now + timedelta(days=pws_rules.ready_todo_due_days()),
+                    )
+                )
+        else:
+            # ③ 已生成未发布（非 draft 的中间态）：合规原因强制进待复查。
+            if forced:
+                unpublished_pending = True
+                session.add(
+                    OpsTodo(
+                        tenant_id=ps.tenant_id,
+                        todo_type=TODO_TYPE_Q30_RECHECK,
+                        entity_type="final_content_whitelist",
+                        entity_id=fcw.final_id,
+                        assignee_role="internal_compliance",
+                        detail={
+                            "reason_code": reason_code,
+                            "old_pws_id": old_pws.pws_id,
+                            "new_pws_id": new_pws.pws_id,
+                        },
+                        due_at=now + timedelta(days=pws_rules.ready_todo_due_days()),
+                    )
+                )
+
+    # ③ 保留原占位契约：forced（合规原因）恒为真——即使旧版下尚无 FCW 实体，
+    # 也表达「该产品材料有待复查义务」（test_pws_api 依赖此布尔位）；
+    # 有未发布实体时上面已按实体建待办，此处只是同一义务的聚合格口。
+    unpublished_pending = forced
+
+    await append_audit(
+        session,
+        tenant_id=ps.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="pws.q30_dispositions",
+        entity_type="pws_snapshot",
+        entity_id=new_pws.pws_id,
+        detail={
+            "old_version": old_pws.version,
+            "draft_voided": draft_voided,
+            "unpublished_pending_recheck": unpublished_pending,
+            "published_outdated": published_outdated,
+            "tier": tier,
+        },
+    )
+    return {
+        "superseded_version": old_pws.version,
+        "draft_fcws_voided": draft_voided,
+        "unpublished_pending_recheck": unpublished_pending,
+        "published_marked_outdated": published_outdated,
+    }
+
+
 # ---------- Q28 pwsReadiness 5 项 ----------
 
 async def evaluate_readiness(session, product_space_id: str) -> dict:
@@ -422,14 +563,19 @@ async def freeze(session, product_space_id: str, body, actor) -> dict:
                 actor_id=actor.id,
             )
         )
-        # Q30 四行处置：①旧版只读已落库；②草稿作废/③未发布待复查/④已发布标记
-        # 的对象（段11 FCW、段12 成品）尚未实现，计数占位随 M8/段12 接入。
-        dispositions = {
-            "superseded_version": active.version,
-            "draft_fcws_voided": [],
-            "unpublished_pending_recheck": tier == pws_rules.REFREEZE_FORCED,
-            "published_marked_outdated": 0,
-        }
+        # Q30 四行处置（Q350 清单二 #15 甲：②③④ 回填，①＝上方 superseded 只读）：
+        # ② 旧版 draft FCW 作废快照并按新版排队重组装；
+        # ③ forced（合规类原因）旧版材料进合规待复查待办；
+        # ④ 旧版已发布成品不追溯（exit_guard 禁改 FCW 行），仅计数＋合规提醒到人。
+        dispositions = await _apply_q30_dispositions(
+            session,
+            ps=ps,
+            old_pws=active,
+            new_pws=snapshot,
+            tier=tier,
+            reason_code=body.reason_code,
+            actor=actor,
+        )
     else:
         session.add(
             PwsFreezeLog(
