@@ -10,8 +10,10 @@ Threshold values have no authoritative source in docs; per the "no invented
 red lines" rule they take the default-tier value 0.85 rather than a guessed
 stricter number. Operations can adjust via the Q7 CRUD afterwards (every
 change is audited). ON CONFLICT DO NOTHING preserves any operations-edited
-or pre-existing row (same pattern as 0021/0049); downgrade removes exactly
-these two seed industries.
+or pre-existing row (same pattern as 0021/0049); downgrade deletes a row only
+when its full column fingerprint still matches the seed (industry + keywords
+JSONB + threshold 0.85 + sensitive/enabled flags + is_default=false), so a
+row operations has since customized via Q7 CRUD is left untouched.
 
 Revision ID: 0057_q7_sensitive_industry_seeds
 Revises: 0056_video_segments_objects
@@ -31,13 +33,16 @@ down_revision: str | None = "0056_video_segments_objects"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_SEED_INDUSTRIES = ("food", "maternal_infant")
+# industry -> 种子 keywords（downgrade 指纹的一部分，逐字对应 upgrade 的插入行）。
+_SEED_KEYWORDS = {
+    "food": ["食品"],
+    "maternal_infant": ["母婴"],
+}
 
 
-def upgrade() -> None:
-    bind = op.get_bind()
+def _industries_table():
     json_type = sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
-    industries = sa.table(
+    return sa.table(
         "c1_industry_thresholds",
         sa.column("industry", sa.String),
         sa.column("keywords", json_type),
@@ -46,19 +51,33 @@ def upgrade() -> None:
         sa.column("enabled", sa.Boolean),
         sa.column("is_default", sa.Boolean),
     )
+
+
+def upgrade() -> None:
+    bind = op.get_bind()
+    industries = _industries_table()
     bind.execute(
         postgresql.insert(industries).on_conflict_do_nothing(),
         [
-            {"industry": "food", "keywords": ["食品"], "threshold": 0.85,
-             "sensitive": True, "enabled": True, "is_default": False},
-            {"industry": "maternal_infant", "keywords": ["母婴"], "threshold": 0.85,
-             "sensitive": True, "enabled": True, "is_default": False},
+            {"industry": name, "keywords": keywords, "threshold": 0.85,
+             "sensitive": True, "enabled": True, "is_default": False}
+            for name, keywords in _SEED_KEYWORDS.items()
         ],
     )
 
 
 def downgrade() -> None:
-    names = ", ".join(f"'{name}'" for name in _SEED_INDUSTRIES)
-    op.execute(
-        f"DELETE FROM c1_industry_thresholds WHERE industry IN ({names})"
-    )
+    # 只删「整行指纹仍与种子一致」的行：运营经 Q7 CRUD 改过 threshold/keywords/
+    # 开关位的定制行必须保留（升/降级对称，不误删运营数据）。
+    bind = op.get_bind()
+    industries = _industries_table()
+    for name, keywords in _SEED_KEYWORDS.items():
+        bind.execute(
+            industries.delete()
+            .where(industries.c.industry == name)
+            .where(industries.c.keywords == keywords)
+            .where(industries.c.threshold == 0.85)
+            .where(industries.c.sensitive.is_(True))
+            .where(industries.c.enabled.is_(True))
+            .where(industries.c.is_default.is_(False))
+        )
