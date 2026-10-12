@@ -266,12 +266,15 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
             )
         )
     ).all()
-    ready_sets: dict[str, frozenset] = {}
-    for p in ready_pwcs:
-        items = await session.scalars(
-            select(PwcComboItem.atom_id).where(PwcComboItem.pwc_id == p.pwc_id)
-        )
-        ready_sets[p.pwc_id] = frozenset(items.all())
+    # Q351（代码审查问题3）：一次 IN 查询取回全部待用池组合的 atom_id，
+    # 替代逐 PWC 单查（N+1）；复用下方 list_combo_items 同一口径。
+    items_by_pwc = await list_combo_items(
+        session, [p.pwc_id for p in ready_pwcs]
+    )
+    ready_sets: dict[str, frozenset] = {
+        p.pwc_id: frozenset(it.atom_id for it in items_by_pwc.get(p.pwc_id, ()))
+        for p in ready_pwcs
+    }
 
     created: list[ConditionPackage] = []
     for combo, combo_atoms in loaded:
