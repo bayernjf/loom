@@ -469,3 +469,16 @@
 - **待负责人**：**新增两项待裁＝docs/19 清单二第 10／11 项（段7/8 读闸口径，工程侧各推荐甲）**，其余等外部输入＝agnes 视频 `mode`＋转写契约（待供应商）＋复检名单（待业务方）＋agency 价格＋支付通道（待业务方）＋现网部署（服务器/域名/真 ACME）。
 
 〔**滚档注记（Q350）**：本条按「最近 5 条」上限逐字搬入，正文七行只做一处机械变换＝行首 `> ` 引用标记去掉（归档内以正文承载）。搬入后自 handoff 切下并替换为指针行，`diff` 证七行字节一致；标题里「2026-10-11」是该批落档时间戳，不是滚档时间。〕
+
+## 二十七、Q346 banner（2026-10-13 滚入，Q351 批按「最近 5 条」上限滚出）
+
+**其前（2026-10-11）：Q346 段7/8 管理端读口统一到一条闸＝docs/19 清单二第 10／11 两项按甲裁并落地＋这一族读口的反向枚举守卫（**后端代码＋测试＋前端代码＋文档，零迁移零新表零新读口**；测试 1275→**1297 passed＋10 skipped／收集 1307**〔＋22 全在 `test_admin_read_rbac_api.py`＝48→70，用 `--collect-only` 对 HEAD 副本与工作区各测坐实；全量 198.24s、ruff 净、eval 101/101〕、覆盖率 `app/` **71.39%／14,238**（分母 −7＝删掉只认 operations 的读闸 helper）、核心层 99.34%／604 持平、头仍 `0056_video_segments_objects`／73 表·787 列，前端 tsc＋八门全绿；02 C1.289）**——负责人「按你推荐的搞」＝上一批我自己登记、并各附推荐的两项待裁**都按甲**一次裁掉：五张 operations-only 读口放宽＋四张零身份即可读的管理面 GET 补闸。
+- **① 读侧一条闸、写侧一字未动**：router 里 `require_operations_view` 整个删除，本族十条管理端 GET（publish-slots／fit-score／fit-weights／platform-rules／platform-rules/match／slot-type-defaults／pcp-templates／动态信号／重算候选／adapter 候选）统一挂 `require_ops_admin_view`（operations＋platform_admin；缺 `actor_id` 422／角色不符 403），写口仍是 `require_internal_actor(OPERATIONS)`。真进程四型身份矩阵复测十条全对；**写侧复测同数**（写口 140／路由级带凭证依赖 56／`GATED` 53／其余 84 口仍 body 自报）。放宽依据沿 Q307 原口径＝**"有人读才放宽"**——是因为这一屏真的开始读它们。
+- **② 前端补齐九节**：`lib/api.ts` 加五个读函数＋五个类型，`/admin/platform-adaptation` 从四节扩到九节（＋目的权重矩阵，并排标出**哪些目的还没配矩阵**＝那正是 fit-score"不凑分"的原因；＋slotType 默认值／动态信号／重算候选／adapter 候选，JSON 明细一律折叠原样给、不替后端猜列名）。Q345 那条"禁消费这五张"的红线同批**翻成**"九张口必须全部被调用且都带 `ADMIN_ROLE_LIST`"。侧栏仍 17、ts/tsx 仍 112。
+- **③ 反向枚举守卫（把"漏挂读闸"变成判据）**：`test_admin_read_rbac_api.py` 用 `route_auth_matrix.collect(app.routes)` 现枚举本模块全部管理端 GET（成员数钉死 10）逐条断言 `roles=nobody`→403；实测 FastAPI 先求解依赖、后校验必填参数，所以 `match`／`fit-score` 不必手写业务参数也承重（缺 actor_id 的 422 对它们是弱判据）。今后新增一条管理端 GET 漏挂读闸＝当场判红，不必再人肉扫。
+- **④ 真跑与种植查出的四处自写假设错**（都是"门看不见"的那类）：`platform_adapter_candidates.missing` 是**布尔列**不是字符串数组（第一版 `.map()` 浏览器会炸、tsc 却过）、`refs` 形状未约束（改 `unknown[]`）、守卫第一版只查函数名被一条 import 骗过（改查调用形态 `${fn}(` 才证伪）、`platform-dynamic-events` 的 `status=""` 原被当"按空串过滤"（同族 `list_slots`／`list_rules` 是"不过滤"）→ 管理端同一个「含归档行」chip 在事件节行为相反，已统一并补用例。五条种植各判红后按 sha256 还原。
+- **⑤ 登记两件事（工程侧不代裁、也不顺手改）**：**（a）一条工具缺陷**＝`route_auth_matrix.describe()` 用 `inspect.getsource` 匹配标记串，**注释里出现 `require_internal_actor` 就会把只查角色的读闸误归成凭证闸**；A/B（`git worktree` 在 HEAD 与工作区各跑一次）＝`no-route-level-gate 133→129` 是真补闸，而 `other-dep 49→54` 的 +5 里有 1 条纯属这种记账位移（docs/23 §0.1 已写明，修法牵动多处分桶读数，留单独一批）。**（b）残留不对称**＝`GET /api/admin/content-goals` 仍只认 dictionary_admin／platform_admin，带 `operations` 复测仍 **403**（属 `product/condition` 族，不在本次点工两项内；compose 默认身份不受影响），要不要并进来属**新裁决**。
+- **【复判不变】**① 达标／② 达标（Q295 后保持）／③ 未达标（现网部署＋真 ACME 未证；客户侧认证已裁决后置 V2）。
+- **待负责人**：本批把 docs/19 清单二第 10／11 两项**销账**（都按甲裁并落地）；**新冒出一项属裁决的**＝`GET /api/admin/content-goals` 是否也并入段7/8 那条统一读闸（现只认 dictionary_admin／platform_admin，带 operations 实测 403；工程侧没动，见上条⑤(b)）。仍等外部输入＝agnes 视频 `mode`＋转写契约（待供应商）＋复检名单（待业务方）＋agency 价格＋支付通道（待业务方）＋现网部署（服务器/域名/真 ACME）。
+
+〔**滚档注记（Q351）**：本条按「最近 5 条」上限逐字搬入，正文八行只做一处机械变换＝行首 `> ` 引用标记去掉（归档内以正文承载）。搬入后自 handoff 切下并替换为指针行，`diff` 证八行字节一致；标题里「2026-10-11」是该批落档时间戳，不是滚档时间。〕

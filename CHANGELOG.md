@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q351 项目级代码审查四问题一次修复＝PWS 身份钉死令牌／原片上传口硬闸＋filename 净化＋body 上限／run_funnel 消 N+1／0057 downgrade 六列指纹（2026-10-13；**代码＋测试＋文档，零新迁移**（同窗口修订 0057，73 表·787 列不变）；测试 1303→**1315 passed＋10 skipped／收集 1325**、ruff 九文件净、前端 tsc＋七检查器全绿；02 C1.294）** —— 负责人对 HEAD `2ef3c76` 审查报告批「A」＝问题 1–4 照单全收。
+  - **问题1（Major，安全）**：PWS freeze/revoke 两口 Q329 已挂 `require_internal_actor(OPERATIONS)` 却仍透传 `body.actor`，审计 actor 可被请求体伪造——router 调 service 前以令牌身份覆盖 `body.actor.id/roles`；新增身份钉死测试，旧两负向用例改以令牌角色判 403。
+  - **问题2（Major，安全，一口三修）**：`POST /api/admin/content/{id}/video-objects` 由 query 自报 actor 改 operations 凭证闸（401/403，GATED 已登记）；filename 净化（空/`.`/`..`/含 `/`、`\`/控制字符 →422，封路径穿越）；body 上限 `LOOM_VIDEO_UPLOAD_MAX_BYTES`（默认 500 MiB，Content-Length 与实际长度两道，超限 413；空 body 422；S3 未配置 503、存储故障 502）。前端删 actor query，Bearer 统一附带。新增 8 测试。
+  - **问题3（Minor，性能）**：`run_funnel` ready 池逐 PWC 单查改 `list_combo_items` 一次 IN 批量，消 N+1；行为口径不变。
+  - **问题4（Minor，迁移安全）**：0057 downgrade 由无条件按 industry 删除改为六列全指纹删除（industry＋keywords＋threshold 0.85＋sensitive/enabled/is_default），运营经 Q7 CRUD 定制的行不再被误删；upgrade 抽 `_SEED_KEYWORDS` 常量列表驱动、ON CONFLICT DO NOTHING 幂等不变。新增纯逻辑迁移单测 3 例；真 PG16（pgvector 镜像）容器 loom-q351-pg 三轮 up/downgrade/up 实测定制行保留、种子行恢复，跑完已删。
+  - **合龙**：docs/02 追加 C1.294＋续编索引、handoff 顶部 Q351 banner（Q350 转其前、Q346 滚入归档「二十七、」节）、AGENTS/docs-08/docs/README 权威行前移、README 状态段前插、docs/05 Q351 追认块（原文不改）、docs/21 上传 SOP 刷新、docs/10 §2.8 0057 注记、docs/15 env 清单、docs/16 §4 基线行、docs/23 §0.1 写口分桶读数刷新。【复判不变】① 达标／② 达标／③ 未达标（现网部署＋真 ACME）；纯工程修复，活跃待裁项仍归零。
 - **Q350 docs/19 清单二 #12/#13/#14/#15 一次裁决并落地＝读闸统一／敏感旗标派生／国家级规则随 V2／Q30 换版 ②③④ 回填（2026-10-12；**代码＋迁移＋测试＋文档**；测试 1297→**1303 passed＋10 skipped／收集 1313**、ruff 净、迁移 0056→**0057**〔纯数据种子，73 表·787 列不变、真 PG16 NO DRIFT〕；02 C1.293）** —— 负责人「按你推荐搞」＝#12/#13/#15 甲案、#14 乙案，四项一次收口。
   - **#12 甲**：`require_content_goals_view` 读闸加放 `operations`（Q118→Q307→Q350 第三次放宽读面），与段7/8 一条闸；写口仍只认 dictionary_admin，customer 仍 403。
   - **#13 甲（含前置种子）**：迁移 `0057_q7_sensitive_industry_seeds` 补 Q7 食品/母婴两敏感行业（阈值 0.85 取默认档，不臆造；ON CONFLICT DO NOTHING）；`start_modeling` 建 ProductSpace 时 `_derive_industry_flags()` 从最新 C1Record＋Q7 `sensitive` 派生 `industry_tag`/`sensitive_industry`（零 UI、单一事实源）。Q11/Q14/Q49 三路径自此可真实触发。
