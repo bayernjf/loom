@@ -8,9 +8,9 @@
 
 ## 0. 结论摘要
 
-1. **逐条计数**：本期共验收 **96 条**（决策 75 行〔Q1–Q72，**Q60a/b/c 拆行、Q22a/b 并入 Q22**〕＋结构性硬闸/红线 21 条）＝ **✅ 58 ／ 🟡 32 ／ ⬜ 6**。
+1. **逐条计数**：本期共验收 **96 条**（决策 75 行〔Q1–Q72，**Q60a/b/c 拆行、Q22a/b 并入 Q22**〕＋结构性硬闸/红线 21 条）＝ **✅ 58 ／ 🟡 32 ／ ⬜ 5**〔**Q350 订正**：原 ⬜6 中第 16 条国家级规则经负责人裁乙案随 V2（02 C1.293），不再算 V1 缺口，故 V1 口径 ⬜6→⬜5；原始时点计数见 §1 Q347 注记〕。
 2. **V1 主链（Q73 权威范围＝段 1→6→10→11）逐条口径下并非全绿**：该范围 41 条＝**✅ 28 ／ 🟡 13 ／ ⬜ 0**。即"主链路可跑通"与"逐条满足"是两件事——`docs/23 §8.1` 的"已闭环 ✅"是按**段级可运行**判的，本档按**条级**判，多出 13 条半成品（明细见 §8.1）。
-3. **⬜ 6 条集中在段 13 分析面与两条横切**：Q44（目的配比软提示）、Q63/Q64/Q65（KUP 三关/两级审批/校准月报）、国家级规则 R-030/R-031/R-032＋`countries` 表、资金动作 HumanGate。前三属 V2 已挂账，后两条需点工（见 §8）。
+3. **⬜ 5 条集中在段 13 分析面与一条横切**〔Q350 订正〕：Q44（目的配比软提示）、Q63/Q64/Q65（KUP 三关/两级审批/校准月报）、资金动作 HumanGate，均随 V2 已挂账（见 §8）；国家级规则 R-030/R-031/R-032＋`countries` 表原在本数内，**Q350 经负责人裁乙案正式随 V2、从「V1 缺口」重归类为「V2 规划」**（V1 段10 核心清洗已 ✅，scope cut 见第 16 条注记与 02 C1.293）。
 4. **本批新坐实的 8 处**（既有段级文档未写入的条级事实）：见 §9。其中 **Q11↔Q7 联动断裂**（`ProductSpace.sensitive_industry` 全仓零赋值）与 **国家级规则零落库**两条，落在 V1 范围内且影响年级牌第二批 witnesses，建议优先裁决是否点工。
 
 ## 1. 口径与方法
@@ -184,7 +184,7 @@
 | 13 | slotRuleByType **13 类**默认值（含单账号日发布限量） | 🟡 | 迁移 `0008_m11_stage78:82-90` `slot_type_defaults`；`models.py:117-133` daily_limit_min/max | **13 类未种子**：约 40 列原文未给出，`defaults` JSON 占位（`models.py:120-122`） |
 | 14 | 平台层 **4 条红线** | ✅ | `models.py:262-263`、`service.py:920-940`（approve 只解除 pending、`advisory_only:True`，唯一出口仍是段11）；AI 候选一律 pending_review（`:895-917`） | — |
 | 15 | 合规底座 **4 维**（CP-BAN/CP-DOWN/CP-LAW/CP-CLEAN） | 🟡 | CP-BAN/DOWN：`compliance_wordlist` 表 + action=ban/downgrade + downgrade_target（迁移 `0004:27`，字典 `0051`）；CP-LAW：`cp_law_sensitive_domains`（`0007:38`）+ law_reviews；CP-CLEAN：`ccr_rules.py:18,96` status=clean | **CP-BAN 默认 6 词（permanent removal/cure/treat/根治/保证有效/100%）未种子**：全仓无匹配，词库空表待运营录入 |
-| 16 | 国家级规则 **R-030/R-031/R-032** + countries 事实库 | ⬜ | 【无证据，未落地】实测 `rg "create_table('countries'\|R-030" backend/alembic/versions/*.py backend/app/` **零命中**；56 个迁移无 countries 表；无 GDPR/NMPA/FDA 代码引用 | 仅存于 `docs/10:220`、`docs/04:259` 规格登记——**落在段10（V1 范围）却零实现** |
+| 16 | 国家级规则 **R-030/R-031/R-032** + countries 事实库 | ⬜→**V2** | 【Q350 裁乙案随 V2，02 C1.293】Q347 实测零落库属实（无 `countries` 表／无 GDPR/NMPA/FDA 代码引用）；**负责人明示接受 scope cut：V1 段10 以「核心清洗 ✅（CP-BAN/CP-DOWN/CP-CLEAN＋law_review）、国家级管辖扩展层随 V2」交付**——三管辖规则文本（GDPR 留资字段/NMPA/FDA 措辞）无权威来源，硬做即臆造红线。〔裁决前证据原文保留：仅存于 `docs/10:220`、`docs/04:259` 规格登记〕 | **不再计为 V1 缺口**（V1 口径 ⬜6→⬜5）；V2 启动前提＝业务方给三管辖权威文本 |
 | 17 | Agent **三条边界**（max_turns+max_tokens+emergency_stop） | 🟡 | `config_center/seeds.py:78-83` 登记三组数（10/8000、6/6000、20/4000） | **emergency_stop 与 Agent 注册表本体未落**（seeds 注"注册表本体在 M12"，无代码） |
 | 18a | RBAC 红线操作须对应角色 + 人工 Gate | ✅ | PWS 冻结 `whitelist_center/router.py:90`+`service.py:72-76`；原子正式化 `atom/router.py:31`；合规废弃 `atom/router.py:33`；Prompt 修改 `model_registry/gateway.py:233` PLATFORM_ADMIN | ⚠ 已裁决偏差：PWS 冻结由 PRD 的 BO-07 改判 operations（Q329/Q242 乙），见 §9-⑦ |
 | 18b | Prompt 治理（只读 + 编辑必走 ChangeProposal + 版本 +0.1） | 🟡 | `model_registry/gateway.py:234-246`（v0.1 起步、minor+1、`skill_prompt_versions` 追加 + append_audit） | **无 ChangeProposal 实体**（走 `publish_prompt` 直写+审计）；版本恒 `v0.N` 非通用 +0.1 |
@@ -222,7 +222,7 @@
 | Q51 | 只扫 frozen 快照，未接 draft FCW 与段12 未发布成品 | 随 Q30 一并回填 |
 | #5 | readiness ⑤ 语义漂移（pending_gate FieldPool 数 vs 字段） | 二选一并注明，避免语义继续漂 |
 | #15 | CP-BAN 默认 6 词未种子 | 纯数据迁移补 seed |
-| #16 | 国家级规则 R-030/031/032 + countries 零实现 | 需先确认"算 V1 还是 V2"（属产品口径裁决） |
+| #16 | ~~国家级规则 R-030/031/032 + countries 零实现~~ **Q350 裁乙案随 V2**（02 C1.293）：V1 显式 scope cut，不再算 V1 缺口；V2 待业务方三管辖权威文本 | ✅ 已裁决（2026-10-12） |
 
 ### 8.2 需外部规格输入（工程侧不可自推）
 
@@ -246,9 +246,9 @@ Q37 自动采集｜Q43 第 18 池｜#17 之外 Agent 注册表本体｜Q70 分�
 
 ## 9. 本批新坐实的 8 处（条级事实，段级文档未写入）
 
-1. **Q11↔Q7 联动断裂**：`rg "sensitive_industry *=" backend/app/` **零命中** —— 旗标只有列定义（default=False）与 18 处读取，无任何写入点 ⇒ Q11 强制、Q14 敏感批大小、Q49 兜底三条路径在真实数据下恒不触发。
-2. **Q30 ②③④ 是代码内自注的占位**（`whitelist_center/service.py:424-432`），不是文档没写——docs/13:98 已登记①，但 ②③④ 至今仍是 `draft_fcws_voided=[]`／`published_marked_outdated=0`。
-3. **国家级规则零落库**：`rg "create_table('countries'|R-030"` 零命中，而 R-030/R-031/R-032 属 docs/01 段10 硬规格（V1 范围内）。
+1. **Q11↔Q7 联动断裂**：`rg "sensitive_industry *=" backend/app/` **零命中** —— 旗标只有列定义（default=False）与 18 处读取，无任何写入点 ⇒ Q11 强制、Q14 敏感批大小、Q49 兜底三条路径在真实数据下恒不触发。〔**Q350 已修复（02 C1.293）**：迁移 0057 补 Q7 食品/母婴敏感种子＋`_derive_industry_flags()` 在 `start_modeling` 派生写入；本条作为 Q347 时点事实原文保留〕
+2. **Q30 ②③④ 是代码内自注的占位**（`whitelist_center/service.py:424-432`），不是文档没写——docs/13:98 已登记①，但 ②③④ 至今仍是 `draft_fcws_voided=[]`／`published_marked_outdated=0`。〔**Q350 已回填（02 C1.293）**：`_apply_q30_dispositions()` 替换占位，② draft 作废＋queued 重组装／③ forced 待复查／④ published 计数＋提醒，三例测试；本条作为 Q347 时点事实原文保留〕
+3. **国家级规则零落库**：`rg "create_table('countries'|R-030"` 零命中，而 R-030/R-031/R-032 属 docs/01 段10 硬规格（V1 范围内）。〔**Q350 裁乙案随 V2（02 C1.293）**：负责人明示接受 V1 scope cut，本条事实成立但不再计为 V1 缺口（⬜6→⬜5）；原文保留〕
 4. **Q63/Q64/Q65 是"配置项已登记、零消费方"**：三个 `kup.*`／`calibration.*` 键全仓只命中 seeds 行；`Q61` 的 `hot.*` 同型。
 5. **Q47 只有文档登记、零代码**：`docs/06:191` 写明"复用 Q9"，但 `app/decision/layer_strategy/` 无消费。
 6. **#5 语义漂移**：实现把 PRD 的「pending_gate 字段=0」落成「pending_gate 的 FieldPool 数=0」，两者在"池已批但池内字段还在挂起"场景下结论相反。
