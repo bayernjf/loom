@@ -89,6 +89,8 @@ async def freeze(
     session: AsyncSession = Depends(get_session),
     verified: Actor = Depends(require_internal_actor(OPERATIONS)),
 ):
+    body.actor.id = verified.id
+    body.actor.roles = list(verified.roles)
     try:
         result = await service.freeze(session, product_space_id, body, body.actor)
     except service.ProductSpaceNotFound as exc:
@@ -121,6 +123,8 @@ async def revoke(
     session: AsyncSession = Depends(get_session),
     verified: Actor = Depends(require_internal_actor(OPERATIONS)),
 ):
+    body.actor.id = verified.id
+    body.actor.roles = list(verified.roles)
     try:
         snapshot = await service.revoke(session, pws_id, body.reason, body.actor)
     except service.PwsNotFound as exc:

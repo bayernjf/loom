@@ -33,7 +33,7 @@
   - 有 active 动态信号 → `pending_review`
   - 其余 → `allow`；返回体 `gate` 恒 `pending_review`
 - **构造器自述缺口（最权威的一句）**：`synthetic.py:307`——「**业务接线（候选投递/HumanGate 裁决/平台审核员界面）随 V2 后续片**」。
-- docs/08:116（Q260 落地行）逐字同义：「**候选投递/HumanGate/平台审核员界面随 V2**」。
+- docs/08:150（Q260 落地行）逐字同义：「**候选投递/HumanGate/平台审核员界面随 V2**」。
 
 ### 2.2 未落（反向枚举实测，非推理）
 
@@ -132,7 +132,7 @@ Prompt v0.1 要求的返回契约（`seeds.py:281`）是五键：`{"missing", "d
 | 「平台适配候选」Gate 登记（展示口径角色） | docs/06:187（§7 人工 Gate 点位总览） |
 | 红旗 S2 原文 | docs/03:18 |
 | V1 不含 PLATFORM-ADAPTER AI Skill | docs/08:50、docs/08:51（V2 段7/8 完整） |
-| 「候选投递/HumanGate/平台审核员界面随 V2」 | docs/08:142（Q260）、docs/04:232（Q259 遗留片） |
+| 「候选投递/HumanGate/平台审核员界面随 V2」 | docs/08:150（Q260）、docs/04:232（Q259 遗留片） |
 | 「业务接线随 V2 后续片」自述 | `backend/app/core/model_registry/synthetic.py:307` |
 | **Q38 降级动作字典口径定稿 ✅（六动作）** | docs/02 C1.6 Q38（:141）、docs/10:377、docs/12:148 |
 | **Q38 字典零代码落地**（反向枚举零命中） | `backend/` 全量 grep `REMOVE_BRAND`/`SOFT_CTA`/`action_dict` |

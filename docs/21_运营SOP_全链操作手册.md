@@ -127,7 +127,7 @@
    - 新建：`POST /api/admin/content/{content_id}/video-segments`（**operations 凭证闸**，body 带 actor 占位即可、人员以令牌为准）；type 六值 `hook/intro/body/climax/ending/cta`，`seq` 缺省自动接尾，`start_ms/end_ms` 无供应商时间戳时可留空。
    - 编辑：`PUT /api/admin/video-segments/{segment_id}`（同闸）。**只改分段元数据，不动成品 body**；改 `text` 会落新文本并标 `needs_regen=true`——重生成走既有 generate/regenerate 链路，本口不代触发；每次编辑响应回带 `script_recheck`（屏4 CCR 复检，advisory 不阻断）。
 2. **原片留档**（`video_objects` 登记＋仓内 MinIO，只存原片）：
-   - 上传：`POST /api/admin/content/{content_id}/video-objects?filename=clip.mp4&actor_id=&roles=operations`，body＝文件原始字节、Content-Type 头即对象类型；S3 未配置（`LOOM_S3_ENDPOINT_URL` 空）回 503 且不产生登记行。
+   - 上传（Q351 起 **operations 凭证闸**，人员以 `Authorization: Bearer` staff 令牌为准，不再收 query 自报 actor）：`POST /api/admin/content/{content_id}/video-objects?filename=clip.mp4`，body＝文件原始字节、Content-Type 头即对象类型；`filename` 只许纯文件名（含路径分隔/`..`/控制字符 422），body 超 `LOOM_VIDEO_UPLOAD_MAX_BYTES`（默认 500 MiB）回 413、空 body 422；S3 未配置（`LOOM_S3_ENDPOINT_URL` 空）回 503 且不产生登记行。
    - 列表：`GET /api/admin/content/{content_id}/video-objects`；播放/下载走后端代理只读流 `GET /api/admin/video-objects/{object_id}/stream`——**不暴露 MinIO 直连地址**。
 3. 转写与成片复检未接线：agnes 转写契约【待供应商】、视频专用检测名单【待业务方】，屏4 复检对象暂为脚本文本（Q328 口径）。
 

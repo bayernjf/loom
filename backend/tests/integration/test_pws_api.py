@@ -23,7 +23,12 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
-from tests.integration.staff_tokens import bearer, issue_write_token
+from tests.integration.staff_tokens import (
+    DEFAULT_WRITE_ROLES,
+    acting_as,
+    bearer,
+    issue_write_token,
+)
 
 OWNER = {"id": "owner-1", "roles": ["whitelist_owner"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
@@ -226,15 +231,13 @@ async def test_ready_todo_escalates_after_7_days(client, session_factory):
 
 async def test_freeze_blocked_when_not_green_and_role(client, session_factory):
     ps_id = await _make_ps(session_factory)
-    # Q329（Q242 乙案）后角色闸 = operations：客户角色 whitelist_owner 与空角色均 403（红线角色闸优先）。
-    denied = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
-    )
+    # Q329（Q242 乙案）后角色闸 = operations；Q351 起身份只认 staff 令牌——
+    # body 自报客户角色不再是身份，缺 operations 的真令牌 403（红线角色闸优先）。
+    async with acting_as(client, ["product_reviewer"]):
+        denied = await client.post(
+            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+        )
     assert denied.status_code == 403
-    denied2 = await client.post(
-        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": NOBODY}
-    )
-    assert denied2.status_code == 403
 
     red = await client.post(
         f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
@@ -341,11 +344,12 @@ async def test_revoke_cuts_consumption_and_refreeze(client, session_factory):
         )
     ).json()["pws"]
 
-    denied = await client.post(
-        f"/api/pws/{v1['pws_id']}/revoke",
-        json={"reason": "外部新规追溯命中", "actor": NOBODY},
-    )
-    assert denied.status_code == 403  # Q329：非 operations 角色 403（service 兜底）
+    async with acting_as(client, ["product_reviewer"]):
+        denied = await client.post(
+            f"/api/pws/{v1['pws_id']}/revoke",
+            json={"reason": "外部新规追溯命中", "actor": NOBODY},
+        )
+    assert denied.status_code == 403  # Q329/Q351：令牌缺 operations 角色 403（service 兜底同理）
     missing = await client.post(
         "/api/pws/nope/revoke", json={"reason": "x", "actor": OPS}
     )
@@ -393,6 +397,56 @@ async def test_snapshot_immutable_after_source_change(client, session_factory):
     # 但就绪门②随即变红（已批准原子 <3），不能直接重冻
     red = await client.get(f"/api/product-spaces/{ps_id}/pws/readiness")
     assert red.json()["checks"]["enough_approved_atoms"] is False
+
+
+# ---------- Q351（代码审查问题1）：freeze/revoke 审计身份只认真令牌 ----------
+
+async def test_freeze_revoke_identity_comes_from_token_not_body(
+    client, session_factory
+):
+    """body.actor 自报他人 id/角色不得落库：snapshot 与 AuditLog 一律记令牌人员。
+
+    修复前 router 虽挂了 require_internal_actor(OPERATIONS)，调 service 时却仍传
+    body.actor，验真身份被丢弃；这里用合法 operations 令牌＋自报 OWNER 身份打两口，
+    钉住 created_by/revoked_by 与审计 actor_id/roles 全部等于令牌身份（s-writer）。
+    """
+    from sqlalchemy import select
+
+    from app.core.models import AuditLog
+
+    ps_id = await _green_ps(client, session_factory)
+
+    freeze = await client.post(
+        f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OWNER}
+    )
+    assert freeze.status_code == 200, freeze.text
+    pws = freeze.json()["pws"]
+    assert pws["created_by"] == "s-writer"
+
+    async with session_factory() as session:
+        row = (
+            await session.scalars(
+                select(AuditLog).where(AuditLog.action == "pws.freeze")
+            )
+        ).one()
+        assert row.actor_id == "s-writer"
+        assert row.actor_roles == DEFAULT_WRITE_ROLES
+
+    revoked = await client.post(
+        f"/api/pws/{pws['pws_id']}/revoke",
+        json={"reason": "令牌身份钉住", "actor": OWNER},
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["revoked_by"] == "s-writer"
+
+    async with session_factory() as session:
+        row = (
+            await session.scalars(
+                select(AuditLog).where(AuditLog.action == "pws.revoke")
+            )
+        ).one()
+        assert row.actor_id == "s-writer"
+        assert row.actor_roles == DEFAULT_WRITE_ROLES
 
 
 # ---------- Q350（清单二 #15 甲）：Q30 换版 ②③④ 真实处置 ----------
