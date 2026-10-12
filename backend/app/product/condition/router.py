@@ -42,9 +42,12 @@ def require_content_goals_view(
     # 保证存在的身份是 compose 里 `LOOM_ADMIN_ROLES` 的默认值 platform_admin
     # （`frontend/lib/api.ts` 只用这一组角色自报）。只放宽"读"——写口 upsert/archive
     # 仍只认 dictionary_admin。
+    # Q350（清单二 #12 甲案）：再放行 operations，与段7/8 统一读闸
+    # （require_ops_admin_view 同口径），自此管理端两种自报身份都能读到 fit-score
+    # 目的芯片的数据源；写口仍只认 dictionary_admin，本函数只管读。
     actor = Actor(id=actor_id, roles=roles)
     try:
-        require_any_role(actor, DICTIONARY_ADMIN, PLATFORM_ADMIN)
+        require_any_role(actor, DICTIONARY_ADMIN, PLATFORM_ADMIN, OPERATIONS)
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return actor

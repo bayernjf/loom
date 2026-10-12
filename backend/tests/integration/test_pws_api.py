@@ -393,3 +393,199 @@ async def test_snapshot_immutable_after_source_change(client, session_factory):
     # 但就绪门②随即变红（已批准原子 <3），不能直接重冻
     red = await client.get(f"/api/product-spaces/{ps_id}/pws/readiness")
     assert red.json()["checks"]["enough_approved_atoms"] is False
+
+
+# ---------- Q350（清单二 #15 甲）：Q30 换版 ②③④ 真实处置 ----------
+
+async def _seed_fcw_on_pws(
+    session_factory,
+    *,
+    tenant: str,
+    ps_id: str,
+    pws_id: str,
+    publish_status: str,
+    final_id: str | None = None,
+):
+    from app.final.final_whitelist.models import (
+        FcwSnapshot,
+        FinalContentWhitelist,
+    )
+    from tests.integration.fcw_rows import add_fcw
+
+    final_id = final_id or f"fin-{pws_id}-{publish_status}"
+    async with session_factory() as session:
+        fcw = FinalContentWhitelist(
+            final_id=final_id,
+            tenant_id=tenant,
+            product_space_id=ps_id,
+            pws_id=pws_id,
+            pwc_id="pwc-1",
+            pcp_id="pcp-1",
+            csp_package_id="csp-1",
+            cstp_package_id="cstp-1",
+            cep_package_id="cep-1",
+            platform="douyin",
+            slot_id="slot-1",
+            goal="ENGAGEMENT",
+            country=None,
+            score=None,
+            score_detail={},
+            score_incomplete=False,
+            guards={},
+            guards_passed=True,
+            publish_status=publish_status,
+            issued_by="ops-1",
+        )
+        await add_fcw(session, [fcw])
+        session.add(
+            FcwSnapshot(
+                final_id=final_id,
+                tenant_id=tenant,
+                product_space_id=ps_id,
+                version="v1",
+                status="frozen",
+                is_active=True,
+                platform="douyin",
+                slot_id="slot-1",
+                goal="ENGAGEMENT",
+                country=None,
+                snapshot={},
+                created_by="ops-1",
+            )
+        )
+        await session.commit()
+    return final_id
+
+
+async def test_q30_refreeze_voids_draft_fcw_and_queues_reassembly(
+    client, session_factory
+):
+    ps_id = await _green_ps(client, session_factory)
+    v1 = (
+        await client.post(
+            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
+        )
+    ).json()["pws"]
+    final_id = await _seed_fcw_on_pws(
+        session_factory,
+        tenant="t1",
+        ps_id=ps_id,
+        pws_id=v1["pws_id"],
+        publish_status="draft",
+    )
+
+    v2 = await client.post(
+        f"/api/product-spaces/{ps_id}/pws/freeze",
+        json={"actor": OPS, "reason_code": "asset_increment"},
+    )
+    assert v2.status_code == 200, v2.text
+    assert v2.json()["dispositions"]["draft_fcws_voided"] == [final_id]
+
+    from sqlalchemy import select
+
+    from app.final.final_whitelist.models import FcwAssemblyTask, FcwSnapshot
+
+    async with session_factory() as session:
+        snap = (
+            await session.scalars(
+                select(FcwSnapshot).where(FcwSnapshot.final_id == final_id)
+            )
+        ).one()
+        assert snap.status == "revoked" and snap.is_active is False
+        task = (
+            await session.scalars(
+                select(FcwAssemblyTask).where(
+                    FcwAssemblyTask.product_space_id == ps_id
+                )
+            )
+        ).one()
+        # ② 重组装任务指向新版 pws，且为 queued（由 worker 重发，不在换版事务内跑）。
+        assert task.status == "queued"
+        assert task.pws_id == v2.json()["pws"]["pws_id"]
+        assert task.slot_ids == ["slot-1"]
+        assert task.results["reissues"]["voided_final_id"] == final_id
+
+
+async def test_q30_forced_refreeze_marks_published_outdated_and_notifies(
+    client, session_factory
+):
+    ps_id = await _green_ps(client, session_factory)
+    v1 = (
+        await client.post(
+            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
+        )
+    ).json()["pws"]
+    final_id = await _seed_fcw_on_pws(
+        session_factory,
+        tenant="t1",
+        ps_id=ps_id,
+        pws_id=v1["pws_id"],
+        publish_status="published",
+    )
+
+    # forced（合规原因 wordlist_hit）：④ 计数 + 提醒到人；③ 义务布尔位为真。
+    v2 = await client.post(
+        f"/api/product-spaces/{ps_id}/pws/freeze",
+        json={"actor": OPS, "reason_code": "wordlist_hit"},
+    )
+    assert v2.status_code == 200, v2.text
+    disp = v2.json()["dispositions"]
+    assert disp["published_marked_outdated"] == 1
+    assert disp["draft_fcws_voided"] == []
+    assert disp["unpublished_pending_recheck"] is True
+
+    from sqlalchemy import select
+
+    from app.product.whitelist_center.service import TODO_TYPE_Q30_OUTDATED
+
+    async with session_factory() as session:
+        notify = (
+            await session.scalars(
+                select(OpsTodo).where(
+                    OpsTodo.todo_type == TODO_TYPE_Q30_OUTDATED,
+                    OpsTodo.entity_id == final_id,
+                )
+            )
+        ).all()
+        assert len(notify) == 1
+        assert notify[0].detail["action"] == "notify_customer_self_check"
+
+
+async def test_q30_suggested_refreeze_counts_published_without_notify(
+    client, session_factory
+):
+    ps_id = await _green_ps(client, session_factory)
+    v1 = (
+        await client.post(
+            f"/api/product-spaces/{ps_id}/pws/freeze", json={"actor": OPS}
+        )
+    ).json()["pws"]
+    await _seed_fcw_on_pws(
+        session_factory,
+        tenant="t1",
+        ps_id=ps_id,
+        pws_id=v1["pws_id"],
+        publish_status="published",
+    )
+
+    # suggested（asset_increment，非合规原因）：④ 仍计数，但不提醒到人；③ 义务位为假。
+    v2 = await client.post(
+        f"/api/product-spaces/{ps_id}/pws/freeze",
+        json={"actor": OPS, "reason_code": "asset_increment"},
+    )
+    disp = v2.json()["dispositions"]
+    assert disp["published_marked_outdated"] == 1
+    assert disp["unpublished_pending_recheck"] is False
+
+    from sqlalchemy import select
+
+    from app.product.whitelist_center.service import TODO_TYPE_Q30_OUTDATED
+
+    async with session_factory() as session:
+        assert (
+            await session.scalar(
+                select(OpsTodo).where(
+                    OpsTodo.todo_type == TODO_TYPE_Q30_OUTDATED
+                )
+            )
+        ) is None

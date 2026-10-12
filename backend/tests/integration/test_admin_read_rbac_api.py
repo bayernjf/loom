@@ -41,8 +41,8 @@ GATED_READS = [
     ("/api/admin/g2-candidates", ["dictionary_admin"]),         # 05:98  GET/POST 同行 Q13/Q68
     ("/api/admin/skill-prompts", ["platform_admin"]),           # 05:233-234 写口同组 Q82-4
     # ---- Q118：Q117 审计发现 Q109 穷举遗漏的 4 个 ----
-    # Q307：content-goals 读口另放行 platform_admin（组装工作台首屏要读）；写口仍只认 dictionary_admin
-    ("/api/admin/content-goals", ["dictionary_admin", "platform_admin"]),   # 05 Q25 字典／Q307 读面
+    # Q307 放行 platform_admin；Q350（清单二 #12 甲）再放行 operations，与段7/8 一条读闸
+    ("/api/admin/content-goals", ["dictionary_admin", "platform_admin", "operations"]),   # 05 Q25 字典／Q307/Q350 读面
     ("/api/admin/cp-law-domains", ["internal_compliance"]),    # 05 Q49 敏感领域清单
     # ---- Q346（负责人「按你推荐的搞」裁甲，02 C1.289）：段7/8 管理端读口统一到一条闸 ----
     # 五张原只认 operations 的读口改挂 `require_ops_admin_view`（管理端 `/admin/platform-adaptation`
@@ -141,19 +141,20 @@ async def test_categories_read_denies_operations(client):
 # ---- Q118：漏网 4 读口的角色边界 ----
 
 async def test_q307_content_goals_read_matrix_and_the_untouched_write(client):
-    """Q118 原判据是"只认 dictionary_admin"；Q307 按甲把**读**面放行 platform_admin。
+    """Q118 原判据是"只认 dictionary_admin"；Q307 按甲把**读**面放行 platform_admin；
+    Q350（清单二 #12 甲）再放行 operations，与段7/8 读闸统一。
 
-    改的是已裁的东西，所以这里把新边界钉牢：operations 与 customer 仍在读面被拒；
-    dictionary_admin／platform_admin 可读；写口 upsert 仍只认 dictionary_admin——
+    改的是已裁的东西，所以这里把新边界钉牢：customer 仍在读面被拒；
+    operations／dictionary_admin／platform_admin 可读；写口 upsert 仍只认 dictionary_admin——
     读面放宽不等于写面放宽，这条断言就是那道口子的封条。
     """
-    for role in ("operations", "customer"):
+    for role in ("customer",):
         resp = await client.get(
             "/api/admin/content-goals",
             params=[("actor_id", f"{role}-1"), ("roles", role)],
         )
         assert resp.status_code == 403, (role, resp.status_code, resp.text)
-    for role in ("dictionary_admin", "platform_admin"):
+    for role in ("dictionary_admin", "platform_admin", "operations"):
         ok = await client.get(
             "/api/admin/content-goals",
             params=[("actor_id", f"{role}-1"), ("roles", role)],

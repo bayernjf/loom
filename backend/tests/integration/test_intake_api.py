@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
@@ -352,3 +353,108 @@ async def test_ops_queue_follows_transitions(client, seeded_common_fields):
         params=[("actor_id", "ops-1"), ("roles", "operations"), ("status", "submitted")],
     )
     assert [item["intake_id"] for item in r.json()["items"]] == [intake_id]
+
+
+# ---------- Q350（清单二 #13 甲）：PS 行业旗标从 C1 识别 + Q7 阈值表派生 ----------
+
+async def _to_approved(client, intake_id):
+    await _fire(client, intake_id, "submit", actor=CUSTOMER)
+    await _fire(client, intake_id, "wf01_confirm", actor=OPS)
+    await _fire(client, intake_id, "ops_confirm", actor=OPS)
+    await _fire(client, intake_id, "send_review", actor=OPS)
+    await _fire(client, intake_id, "review_approve", actor=OPS)
+
+
+async def _seed_industry_and_record(session_factory, *, intake_id, industry, sensitive):
+    from app.product.modeling.models import C1IndustryThreshold, C1Record
+
+    async with session_factory() as session:
+        session.add(
+            C1IndustryThreshold(
+                industry=industry, keywords=[], threshold=0.85, sensitive=sensitive,
+                enabled=True, is_default=False,
+            )
+        )
+        session.add(
+            C1Record(
+                tenant_id="t1", intake_id=intake_id, signals={"text": 0.9}, conf=0.95,
+                industry=industry, branch="direct_approve", top_candidates=[], top_gap=0.2,
+            )
+        )
+        await session.commit()
+
+
+async def test_start_modeling_derives_sensitive_flag_from_q7(
+    client, session_factory, seeded_common_fields
+):
+    r = await client.post(
+        "/api/intakes", json={"tenant_id": "t1", "profile": {"f_name": "血压计", "f_brief": "医用"}}
+    )
+    intake_id = r.json()["intake_id"]
+    await _to_approved(client, intake_id)
+    await _seed_industry_and_record(
+        session_factory, intake_id=intake_id, industry="medical", sensitive=True
+    )
+
+    assert (await _fire(client, intake_id, "start_modeling", actor=OPS)).status_code == 200
+
+    from app.product.product_intake.models import ProductSpace
+
+    async with session_factory() as session:
+        ps = (
+            await session.scalars(
+                select(ProductSpace).where(ProductSpace.intake_id == intake_id)
+            )
+        ).one()
+        assert ps.industry_tag == "medical"
+        assert ps.sensitive_industry is True
+
+
+async def test_start_modeling_non_sensitive_industry_flag_false(
+    client, session_factory, seeded_common_fields
+):
+    r = await client.post(
+        "/api/intakes", json={"tenant_id": "t1", "profile": {"f_name": "耳机", "f_brief": "数码"}}
+    )
+    intake_id = r.json()["intake_id"]
+    await _to_approved(client, intake_id)
+    await _seed_industry_and_record(
+        session_factory, intake_id=intake_id, industry="electronics", sensitive=False
+    )
+
+    assert (await _fire(client, intake_id, "start_modeling", actor=OPS)).status_code == 200
+
+    from app.product.product_intake.models import ProductSpace
+
+    async with session_factory() as session:
+        ps = (
+            await session.scalars(
+                select(ProductSpace).where(ProductSpace.intake_id == intake_id)
+            )
+        ).one()
+        assert ps.industry_tag == "electronics"
+        assert ps.sensitive_industry is False
+
+
+async def test_start_modeling_without_c1_record_keps_flags_neutral(
+    client, session_factory, seeded_common_fields
+):
+    # 无 C1 识别记录的异常建模路径：不臆造行业，两列保持 NULL/false 默认。
+    r = await client.post(
+        "/api/intakes", json={"tenant_id": "t1", "profile": {"f_name": "未识别货", "f_brief": "x"}}
+    )
+    intake_id = r.json()["intake_id"]
+    await _to_approved(client, intake_id)
+
+    assert (await _fire(client, intake_id, "start_modeling", actor=OPS)).status_code == 200
+
+    from app.product.product_intake.models import ProductSpace
+
+    async with session_factory() as session:
+        ps = (
+            await session.scalars(
+                select(ProductSpace).where(ProductSpace.intake_id == intake_id)
+            )
+        ).one()
+        assert ps.industry_tag is None
+        assert ps.sensitive_industry is False

@@ -31,6 +31,31 @@ async def _required_common_fids(session: AsyncSession) -> list[str]:
     return sorted(rows.all())
 
 
+async def _derive_industry_flags(
+    session: AsyncSession, intake_id: str
+) -> tuple[str | None, bool]:
+    """Q350（清单二 #13 甲）：从 C1 识别记录 + Q7 阈值表派生行业旗标。
+
+    取该 intake 最新一条 C1Record 的行业，回查 c1_industry_thresholds.sensitive；
+    识别记录不存在（未经 C1 的异常建模路径）→ (None, False)，阈值行被运营删光时
+    按非敏感处理（与 workbench/risk.py「行业字典无该行按非敏感」同口径）。
+    """
+    # 惰性 import：modeling.service 反向依赖本包的 statemachine/IntakeNotFound。
+    from app.product.modeling.models import C1IndustryThreshold, C1Record
+
+    record = (
+        await session.scalars(
+            select(C1Record)
+            .where(C1Record.intake_id == intake_id)
+            .order_by(C1Record.created_at.desc())
+        )
+    ).first()
+    if record is None:
+        return None, False
+    threshold_row = await session.get(C1IndustryThreshold, record.industry)
+    return record.industry, bool(threshold_row is not None and threshold_row.sensitive)
+
+
 async def create_intake(
     session: AsyncSession, *, tenant_id: str, profile: dict, actor_id: str | None = None
 ) -> ProductIntakeApplication:
@@ -174,11 +199,17 @@ async def apply_event(
     space: ProductSpace | None = None
     if event == "start_modeling":
         # 已通过→建模中：生成 PS 并整体复制资料快照（Q74）。
+        # Q350（清单二 #13 甲）：industry_tag/sensitive_industry 从 C1 识别落定的
+        # 行业派生——Q7 阈值表 `sensitive` 旗标是唯一事实源（medical/食品/母婴…），
+        # 零 UI；没有识别记录（异常路径）时两列保持 NULL/false 默认，不臆造行业。
+        industry_tag, sensitive_industry = await _derive_industry_flags(session, intake_id)
         space = ProductSpace(
             tenant_id=intake.tenant_id,
             intake_id=intake.intake_id,
             lifecycle=sm.MODELING,
             profile_snapshot=dict(intake.profile),
+            industry_tag=industry_tag,
+            sensitive_industry=sensitive_industry,
         )
         session.add(space)
 
