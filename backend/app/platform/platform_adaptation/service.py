@@ -9,11 +9,14 @@ from datetime import UTC, datetime, timedelta, timezone
 from sqlalchemy import func, select
 
 from app.core.audit import append_audit
+from app.core.config import get_settings
 from app.core.config_center.knobs import knob
+from app.core.effects import service as effects_service
 from app.core.model_registry import gateway
 from app.core.model_registry.seeds import SCENE_PLATFORM_ADAPTER
 from app.decision.layer_strategy.models import Package
 from app.platform.platform_adaptation import pa_rules
+from app.platform.platform_adaptation.fit_learning import propose_fit_from_metrics
 from app.platform.platform_adaptation.models import (
     GoalFitWeight,
     PcpRecalcCandidate,
@@ -51,6 +54,10 @@ HOUR_KEY = "platform.recalc_hour"
 TZ_OFFSET_KEY = "platform.recalc_tz_offset_hours"
 TODO_DUE_DAYS_KEY = "platform.recalc_todo_due_days"
 CYCLE = timedelta(days=7)
+
+# ---- Q352：fit_score 自学习 advisory（把 Q325 的映射算子接进 fit-score 读面）----
+# 观察窗（天）走配置中心热更；进程门控 LOOM_FIT_LEARNING_ENABLED 默认关（见 core/config.py）。
+FIT_LEARNING_WINDOW_KEY = "platform.fit_learning_window_days"
 
 
 class RoleNotAllowed(Exception):
@@ -241,6 +248,37 @@ async def archive_slot(session, slot_id: str, actor) -> None:
     )
 
 
+async def _fit_learning(session, slot_id: str, goal: str) -> dict | None:
+    """Q352：段7 自学习 advisory——把 `fit_learning` 的候选分摆进 fit-score 读面。
+
+    返回 None＝「不给建议」的两种情形：门控 `LOOM_FIT_LEARNING_ENABLED` 关（默认），
+    或窗口内无可学数据（Q293：数据源缺失不按零值处理、不凑分）。
+    只读派生、不落库、**不改 `publish_slots` 四维静态分**、不建候选、不进任何 Gate；
+    `scores` 只含有数据源的可学维度（traffic/conv/load 的子集），`safe` 恒缺席——
+    无效果指标可学、维持人工评估（Q325 拍板）。
+    """
+    if not get_settings().fit_learning_enabled:
+        return None
+    window_days = int(knob(FIT_LEARNING_WINDOW_KEY))
+    sample = await effects_service.slot_effect_metrics(
+        session,
+        slot_id=slot_id,
+        goal=goal,
+        captured_from=_now() - timedelta(days=window_days),
+    )
+    proposal = propose_fit_from_metrics(sample["metrics"], sample_size=sample["records"])
+    if proposal is None:
+        return None
+    return {
+        "scores": proposal.scores,
+        "confidence": proposal.confidence,
+        "sample_records": sample["records"],
+        "sample_contents": sample["contents"],
+        "window_days": window_days,
+        "truncated": sample["truncated"],
+    }
+
+
 async def fit_score(session, slot_id: str, goal: str) -> dict:
     """Q34 派生值（不落库）：fit_score = Σ(维度分 × 目的权重)。
 
@@ -249,10 +287,13 @@ async def fit_score(session, slot_id: str, goal: str) -> dict:
     Q296 甲加法扩展：回带 ``breakdown`` 四行分项（dim/score/weight/contribution，
     与聚合函数同权重同序，Σ(contribution) == fit_score 可自校验；incomplete 时
     weight/contribution 为 None——分可见、不造聚合）。
+    Q352 加法扩展：再回带 ``learning``（自学习 advisory，门控默认关＝恒 None；
+    人工分与聚合口径一字不变，建议只作并列展示、不参与裁决）。
     """
     slot = await session.get(PublishSlot, slot_id)
     if slot is None:
         raise SlotNotFound(slot_id)
+    learning = await _fit_learning(session, slot_id, goal)
     row = await session.get(GoalFitWeight, goal)
     if row is None:
         return {
@@ -264,6 +305,7 @@ async def fit_score(session, slot_id: str, goal: str) -> dict:
                 {"dim": dim, "score": getattr(slot, dim), "weight": None, "contribution": None}
                 for dim in pa_rules.FIT_DIMS
             ],
+            "learning": learning,
         }
     return {
         "slot_id": slot_id,
@@ -271,6 +313,7 @@ async def fit_score(session, slot_id: str, goal: str) -> dict:
         "fit_score": pa_rules.compute_fit_score(slot, row.weights),
         "incomplete": False,
         "breakdown": pa_rules.fit_score_breakdown(slot, row.weights),
+        "learning": learning,
     }
 
 

@@ -57,6 +57,10 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     # ---- 段12 内容（先登记，Q56/Q57）----
     ("content.ai_quality_threshold", "content", "float", 0.85, "Q57/line5196", {"min": 0.0, "max": 1.0}),
     ("content.regen_limit", "content", "int", 3, "Q56", {"min": 1}),
+    # Q354：真视频生成**每日已提交秒数上限**（供应商按秒计价，720P ¥0.15/秒起）。这是"逐单
+    # 人工 Gate 之外"的第二道闸：只统计已 submitted 的任务，超限后 approve 一律 409。
+    # 上限值本身【原文未给出，待业务】＝工程给的保守默认 120 秒/日，热更可改。
+    ("content.video_real_daily_seconds_cap", "content", "int", 120, "Q354 甲案（原文未给出）", {"min": 0}),
     # Q187/C4：discarded 终态成品的保留窗口（天）。Q124 只裁"作废回池"、未给清理
     # 口径（docs/20 §6.5 C4 明列"归档策略未定义"），180 天为工程甲案推荐值、原文
     # 未给出；甲案已经负责人 2026-09-25 追认（02 C1.134），调值走配置中心热更不改码。
@@ -103,6 +107,11 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     # 提醒待办的截止时长（天）：与 PWS 就绪提醒同型（pws.ready_todo_due_days=7），到期经
     # sweep 置 escalated（审计动作沿用默认 sla.todo_escalated，docs/10 §4）。
     ("platform.recalc_todo_due_days", "platform", "int", 7, "Q294 甲案（原文未给出）", {"min": 1}),
+    # Q352：fit_score 自学习 advisory 的**观察窗**。Q293 把「观察窗与回溯口径」列为真自学习
+    # 四份待补业务规则之一＝【原文未给出，待补】，故默认值取工程甲案推荐（近 90 天，与 Q61
+    # 爆款窗口同量纲便于运营理解），业务定口径后走配置中心热更、不改码。窗口只在
+    # LOOM_FIT_LEARNING_ENABLED 开启时被读。
+    ("platform.fit_learning_window_days", "platform", "int", 90, "Q352 甲案（原文未给出）", {"min": 1, "max": 365}),
     # ---- 计费与订阅（D3.11-6 展示价，Q335；仅展示不扣费，改价走 config.update 审计）----
     # agency 档价格原文未给【待业务方回填】，不播种子（SEED 缺位即「待补」展示口径）。
     ("billing.price_monthly_usd.basic", "billing", "int", 999, "docs/09 D3.11-6", {"min": 0}),

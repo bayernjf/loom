@@ -1,4 +1,4 @@
-"""SLA sweep 作业登记（Q49/Q18/Q24/Q51；Q187 第五作业 discard_purge；Q294 第六作业 pcp_weekly_recalc_scan）。
+"""SLA sweep 作业登记（Q49/Q18/Q24/Q51；Q187 第五作业 discard_purge；Q294 第六作业 pcp_weekly_recalc_scan；Q354 第七作业 video_generation_poll）。
 
 每个作业签名 (session, now) -> int（影响行数），不自行提交，提交/回滚由 runner 统一，
 保证单个作业失败不污染其他作业。跨域依赖（decision/content 包）惰性导入，避免 core
@@ -89,6 +89,23 @@ async def job_pcp_weekly_recalc_scan(session: AsyncSession, now: datetime) -> in
     return await scan_weekly_recalc_reminders(session, now)
 
 
+async def job_video_generation_poll(session: AsyncSession, now: datetime) -> int:
+    """Q354：第 7 个登记作业＝轮询段12 真视频生成任务＋收口超时。
+
+    形制照 Q294（复用 300s tick ＋ Q89 leader 锁 ＋ Q139 协作中止 ＋ Q151 PG fence，
+    不新建第二个 asyncio 循环）；env 门控 ``LOOM_VIDEO_REAL_ENABLED`` 默认关，关时
+    空转返回 0。**轮询不是重试**——本作业只查已提交任务的状态，绝不重复提交（一次
+    提交＝一次花钱）；到 `video_task_timeout_seconds` 仍未终态的行置 `timed_out` 并开
+    运营待办，由人决定是否重新发起。
+    """
+    from app.content.video_studio.service import sweep_video_generation_tasks
+    from app.core.config import get_settings
+
+    if not get_settings().video_real_enabled:
+        return 0
+    return await sweep_video_generation_tasks(session, now)
+
+
 # 登记顺序即执行顺序。
 JOBS = [
     ("todo_escalation", job_todo_escalation),
@@ -97,4 +114,5 @@ JOBS = [
     ("wordlist_activation", job_wordlist_activation),
     ("discard_purge", job_discard_purge),
     ("pcp_weekly_recalc_scan", job_pcp_weekly_recalc_scan),
+    ("video_generation_poll", job_video_generation_poll),
 ]

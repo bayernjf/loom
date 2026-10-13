@@ -819,3 +819,70 @@ async def customer_analytics(
         "truncated": truncated,
         "scan_limit": ANALYTICS_SCAN_LIMIT,
     }
+
+
+# ---------- Q352 段7 fit_score 自学习采样（发布位维度的只读稀疏聚合） ----------
+
+# 内存聚合扫描硬上限，与 customer_analytics 同型（beta 单机数据量小，超出置 truncated）。
+SLOT_SAMPLE_SCAN_LIMIT = 10000
+
+
+async def slot_effect_metrics(
+    session: AsyncSession,
+    *,
+    slot_id: str,
+    goal: str,
+    captured_from: datetime,
+) -> dict:
+    """某发布位×某目的在窗口内 matched 效果记录的稀疏聚合（Q352，供 advisory 消费）。
+
+    口径逐条对齐本文件既有聚合，不另立一套：
+    - 只统计 matched（孤儿是未认领数据，不参与任何派生）；
+    - metrics 稀疏＝缺席键不落、绝不补 0（数据纪律硬性），六计数按存在键累加，
+      ``read_rate`` 为比率不可求和、仅对含该键的记录取平均；
+    - 超上限时按 ``captured_at`` 倒序保留**较新**的记录，``truncated`` 如实回传
+      （不静默截窗）。
+    无任何记录时 ``metrics`` 为空 dict——消费方据此走「数据不足、不触发」。
+    """
+    stmt = (
+        select(EffectRecord)
+        .join(ContentProduct, ContentProduct.content_id == EffectRecord.matched_content_id)
+        .where(
+            EffectRecord.status == STATUS_MATCHED,
+            EffectRecord.matched_content_id.is_not(None),
+            ContentProduct.slot_id == slot_id,
+            ContentProduct.goal == goal,
+            EffectRecord.captured_at >= captured_from,
+        )
+        .order_by(EffectRecord.captured_at.desc())
+        .limit(SLOT_SAMPLE_SCAN_LIMIT + 1)
+    )
+    rows = list(await session.scalars(stmt))
+    truncated = len(rows) > SLOT_SAMPLE_SCAN_LIMIT
+    rows = rows[:SLOT_SAMPLE_SCAN_LIMIT]
+
+    metrics: dict[str, float] = {}
+    rate_sum = 0.0
+    rate_count = 0
+    contents: set[str] = set()
+
+    for row in rows:
+        contents.add(str(row.matched_content_id))
+        for key in METRIC_COUNTERS:
+            value = (row.metrics or {}).get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                metrics[key] = metrics.get(key, 0) + value
+        read_rate = (row.metrics or {}).get("read_rate")
+        if isinstance(read_rate, (int, float)) and not isinstance(read_rate, bool):
+            rate_sum += float(read_rate)
+            rate_count += 1
+
+    if rate_count:
+        metrics["read_rate"] = rate_sum / rate_count
+
+    return {
+        "metrics": metrics,
+        "records": len(rows),
+        "contents": len(contents),
+        "truncated": truncated,
+    }

@@ -363,9 +363,12 @@ export interface ContentSemanticResult {
 }
 
 export interface ContentReviewHits {
-  bans: CcrBanHit[];
-  downgrades: CcrDowngradeHit[];
-  block_required: boolean;
+  // 段12 视频载体按 Q323 不跑文本复检，后端把 review_hits 直接写成 {}
+  // （backend/app/content/service.py:284）⇒ 三键都是"复检跑过才有"，缺席＝没复检，
+  // 不是"干净"。界面必须显式区分，否则读到 undefined 当场抛（浏览器实测过一次）。
+  bans?: CcrBanHit[];
+  downgrades?: CcrDowngradeHit[];
+  block_required?: boolean;
   semantic?: ContentSemanticResult;
 }
 
@@ -1728,6 +1731,20 @@ export interface FitScoreRow {
   contribution: number | null;
 }
 
+/**
+ * Q352 段7 自学习 advisory（门控 `LOOM_FIT_LEARNING_ENABLED` 默认关＝本字段恒 null）。
+ * `scores` 只含有数据源的可学维度（traffic/conv/load 的子集），`safe` 恒缺席——
+ * 无效果指标可学，维持人工评估。只作对照展示，不参与任何裁决。
+ */
+export interface FitLearningAdvisory {
+  scores: Record<string, number>;
+  confidence: number;
+  sample_records: number;
+  sample_contents: number;
+  window_days: number;
+  truncated: boolean;
+}
+
 export interface AdminFitScore {
   slot_id: string;
   goal: string;
@@ -1735,6 +1752,8 @@ export interface AdminFitScore {
   /** 目的未配权重矩阵＝不凑分（Q34），分项仍可见、weight/contribution 为 null（Q296 甲）。 */
   incomplete: boolean;
   breakdown: FitScoreRow[];
+  /** 自学习建议（Q352）；门控关或窗口内无可学数据时为 null。 */
+  learning: FitLearningAdvisory | null;
 }
 
 export async function getAdminFitScore(
@@ -2178,5 +2197,101 @@ export async function uploadVideoObject(
       headers: { "Content-Type": data.type || "application/octet-stream" },
       body: data,
     },
+  );
+}
+
+// Q354：段12 真视频生成任务（异步任务 ＋ 逐单人工 Gate）。
+// 读口 operations | platform_admin（inline ADMIN_ROLE_LIST，Q307 契约门看得见）；
+// 写口（create/approve/reject/sync）一律 operations 凭证硬闸，body 里没有 actor 可自报，
+// Bearer 由 request() 统一附带。**approve 才是花钱那一步**，create 只登记。
+export interface VideoGenerationTaskView {
+  task_id: string;
+  content_id: string;
+  final_id: string;
+  tenant_id: string;
+  provider: string;
+  model_code: string;
+  mode: string;
+  prompt: string;
+  seconds: number;
+  size: string;
+  aspect_ratio: string;
+  status: string;
+  vendor_video_id: string | null;
+  vendor_task_id: string | null;
+  url: string | null;
+  error: string | null;
+  polls: number;
+  created_by: string | null;
+  created_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  last_polled_at: string | null;
+  finished_at: string | null;
+}
+
+export async function listVideoGenerationTasks(
+  contentId: string,
+): Promise<VideoGenerationTaskView[]> {
+  const params = new URLSearchParams({
+    actor_id: CURRENT_ADMIN_ACTOR_ID,
+    content_id: contentId,
+  });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<VideoGenerationTaskView[]>(
+    `/api/admin/video-generation-tasks?${params}`,
+  );
+}
+
+export async function createVideoGenerationTask(
+  contentId: string,
+  body: {
+    mode: string;
+    prompt: string;
+    seconds: number;
+    size: string;
+    aspectRatio: string;
+  },
+): Promise<VideoGenerationTaskView> {
+  return request<VideoGenerationTaskView>(
+    `/api/admin/content/${encodeURIComponent(contentId)}/video-generation-tasks`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        mode: body.mode,
+        prompt: body.prompt,
+        seconds: body.seconds,
+        size: body.size,
+        aspect_ratio: body.aspectRatio,
+      }),
+    },
+  );
+}
+
+export async function approveVideoGenerationTask(
+  taskId: string,
+): Promise<VideoGenerationTaskView> {
+  return request<VideoGenerationTaskView>(
+    `/api/admin/video-generation-tasks/${encodeURIComponent(taskId)}/approve`,
+    { method: "POST" },
+  );
+}
+
+export async function rejectVideoGenerationTask(
+  taskId: string,
+  reason: string,
+): Promise<VideoGenerationTaskView> {
+  return request<VideoGenerationTaskView>(
+    `/api/admin/video-generation-tasks/${encodeURIComponent(taskId)}/reject`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+  );
+}
+
+export async function syncVideoGenerationTask(
+  taskId: string,
+): Promise<VideoGenerationTaskView> {
+  return request<VideoGenerationTaskView>(
+    `/api/admin/video-generation-tasks/${encodeURIComponent(taskId)}/sync`,
+    { method: "POST" },
   );
 }

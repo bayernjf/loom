@@ -3,7 +3,7 @@
 > **性质**：把 `docs/01_PRD_产品需求规格.md` 的 13 段规格与 `docs/02` Q1–Q72 决策口径，拆成**可逐条打勾的条目**，每条给落地状态 + 可溯源证据 + 缺口。与 `docs/24`（段级比对）互补：本档回答「哪一条满足／哪一条没满足」，不重述段级结论。
 > **状态口径**（沿用 docs/23 §8）：✅ 已落地｜🟡 部分/有缺口｜⬜ 未启动。
 > **判定纪律**：**只记实测读到的事实**（`文件:行号`／迁移号／配置键名）。无证据一律写【无证据，未落地】，不推测、不用"应该已实现"。
-> **实现侧基线**：Q350（2026-10-12，02 C1.293）＝后端 **1303 passed＋10 skipped／收集 1313**、Alembic 头 `0057_q7_sensitive_industry_seeds`（纯数据种子，**73 表·787 列**不变）、覆盖率 `app/` **71.29%**〔14,272 语句〕、核心层 99.34%〔604〕、管理端侧栏 17 项／前端零改动。
+> **实现侧基线**：Q354（2026-10-13，02 C1.297）＝后端 **1372 passed＋11 skipped／收集 1383**、Alembic 头 `0059_video_generation_tasks`、**74 表·811 列**、迁移文件 **59**、覆盖率 `app/` **71.16%**（14,732 语句）／核心层 **99.34%／604**、eval **101/101**、操作面 **251＝写 144／读 107**、`GATED` **58**、sweep 作业 **7**；前端 `tsc`＋八检查器全绿、侧栏 **17**、ts/tsx **112**（本批零新文件）。〔上一条 Q352 基线（1328＋10／1338、头 0058、73 表·787 列、71.14%）保留为历史时点。〕
 > **登记**：本台账随 Q347 批落地（2026-10-11，docs/02 C1.290）；Q350 批同步行状态与计数（见各条注记）。
 
 ## 0. 结论摘要
@@ -140,14 +140,14 @@
 
 | # | PRD 口径 | 状态 | 证据 | 缺口 |
 |---|---|---|---|---|
-| Q44 | 内容目的配比＝软提示（任务页 30 天分布黄条 + 段13 健康度栏目），不硬拦 | ⬜ | 仅字典表有 ratio_min/max（`condition/models.py:43-46`、`router.py:93`） | 【无证据，未落地】无近 30 天分布聚合、无健康度栏目；`core/dashboards/` 仅 token_cost/review_workload 两盘。同 `docs/24:85`「未见独立落地」 |
+| Q44 | 内容目的配比＝软提示（任务页 30 天分布黄条 + 段13 健康度栏目），不硬拦 | ⬜ | 仅字典表有 ratio_min/max（`condition/models.py:43-46`、`router.py:93`） | 【无证据，未落地】无近 30 天分布聚合、无健康度栏目；`core/dashboards/` 仅 token_cost/review_workload 两盘。同 `docs/24:86`「未见独立落地」〔Q353 随等外部输入表插一行由 `:85` 下推〕 |
 | Q45 | 三元组配一份复用，满 20 次/PCP 更新触发重配走 Gate | ✅ | `seeds.py:76` `package.reuse_threshold=20`；`layer_strategy/service.py:111-124` 查重→`PackageExists`；迁移 `0048_packages_active_triple_unique`；`final_whitelist/service.py:559-573` usage+1 与阈值审计；`platform_adaptation/service.py:579-607`；`router.py:152` reuse-pending；`layer_strategy/service.py:171-182` 清零+审计 | — |
 | Q46 | layerSpaces 增删改仅平台级管理员，普通运营只读，变更显示影响面 | ✅ | `layer_strategy/router.py:26` `_admin_gate=require_internal_actor(PLATFORM_ADMIN)`，写口 `:211/:231/:255`；影响面 `router.py:198`+`service.py:244` 409 `{active_package_refs}`；审计 tenant=`_platform`；迁移 `0047_layer_spaces` | 管理端 UI 缺（docs/23 §11.20 孤儿读口含 layer-spaces） |
 | Q47 | 三包必审线复用 Q9 的 0.85 同一配置项 | 🟡 | Q9 键存在（`seeds.py:17`）；`docs/06:191` 契约表登记「0.85 细看线（复用 Q9）｜Q47」 | **未接线**：`rg "needs_detail_conf" app/decision/layer_strategy/` 零命中，三包 conf 不触发任何必审；`review.batch_pass_confidence`（`seeds.py:85`）是审核台批量通过用的另一键，非同一消费者 |
 | Q56 | 重生成上限 3 次（须有配置页面），超限转人工或作废回池记难产原因 | 🟡 | 后端齐：`seeds.py:59` `content.regen_limit=3`；`content/statemachine.py:75-78`；`content/service.py:385-387` 超限 422；`service.py:450-486` `discard_content` reason 必填 + `content.discarded` 审计；迁移 `0032_content_discard` | **无前端配置功能页**（Q56 明确要求）：前端全仓零 `regen_limit`／`/api/config` 引用，仅后端 `PUT /api/config/{key}` |
 | Q57 | AI 质量分降级"辅助参考"，阈值 0.85 配置化 | ✅ | `content/quality.py:62-66` `quality_advisory_for`（不发证不驳回）；`seeds.py:58` `content.ai_quality_threshold=0.85`；前端明示文案 `messages/zh-CN.json` `.content.qualityAdvisoryNote` 渲染于 `content/[contentId]/page.tsx:106-112` | 段13 相关性校准后置（原文明示本期不做） |
 | Q58 | 语言＝发布位市场 ∩ 产品语言，各语言版独立成品，清单配置化 | ✅ | `content/languages.py:51-82,154-170`（`fcw.country` ∩ `PS.target_languages`）；唯一约束 `(final_id,language,kind)` `content/models.py:46`；迁移 `0028_content_languages`；`router.py:400` set_target_languages | — |
-| Q59 | 客户三动作 + 复检四项（词库/语义/施工指令/国家规则） | 🟡 | 三动作 ✅ `content/statemachine.py:7-10`、`service.py:367-374`（reject reason 非空 422）、`router.py:479`→`service.py:416` 改稿强制重跑复检；①② ✅ `service.py:172-196` + `content/semantic.py:1-15`（advisory） | **③④【待补】**：`service.py:180` 自注「施工指令核对/国家规则核对 原文未给实现口径，仍占位」；同 `docs/12:162`、`docs/05:377` |
+| Q59 | 客户三动作 + 复检四项（词库/语义/施工指令/国家规则） | 🟡 | 三动作 ✅ `content/statemachine.py:7-10`、`service.py:367-374`（reject reason 非空 422）、`router.py:479`→`service.py:416` 改稿强制重跑复检；①② ✅ `service.py:172-196` + `content/semantic.py:1-15`（advisory） | **③④【待补】**：`service.py:180` 自注「施工指令核对/国家规则核对 原文未给实现口径，仍占位」；同 `docs/12:162`、`docs/05:381`（**Q354 随 docs/05 文末插 Q354 契约块 2 行，由 `:379` 下推＝`:381`**） |
 | Q60 | 外部 Agent 推送制 `POST /api/effect-callback`；缺席记"—"、时序追加、(content_id,captured_at) 幂等 | ✅ | `core/effects/router.py:68-89`；`effects/service.py:96-125`（稀疏化不补 0）、`:236-305`（同键覆盖/新时点追加）；迁移 `0034_effect_records:61-66` `uq_effect_content_captured`；`tests/integration/test_effect_callback_api.py` | — |
 | Q60a | 运营回填链接/ID 建映射；不对得上进孤儿队列人工认领 | ✅ | 迁移 `0033_content_publish:29-40`；`effects/router.py:295-308` 孤儿队列、`:211-269` 认领/批量、`:272-292` 解绑；迁移 `0035_effect_claims`；`effects/service.py:465-548` | 匹配仍只按 content_id，`platform_post_id` 只留存不自动绑定（docs/08:316） |
 | Q60b | Agent 推送 API Key 鉴权，一 Agent 一 Key 可吊销 | ✅ | 迁移 `0019_agent_api_keys`；`core/api_keys/models.py`；`api_keys/service.py:124-135` `require_agent_key`；吊销 `api_keys/router.py:67`（docs/22:44 登记 platform_admin 红线） | — |
@@ -238,7 +238,7 @@
 | #13 | slotRuleByType 约 40 列默认值【原文未给出】 |
 | Q61 | 爆款绝对门槛与自动判定是否提前点工 |
 | Q63/Q64/Q65 | KUP 分析面是否提前点工（现列 P3/V2） |
-| 结算 | agnes 视频 `mode`＋转写契约（待供应商）、复检名单/agency 价格/支付通道（待业务方）、现网部署＋真 ACME |
+| 结算 | ~~agnes 视频 `mode`~~〔**Q353 订正**：`mode` 三值（`text`／`keyframe`／`reference`）与异步轮询契约已由官方接入文档 `wiki.agnes-ai.com/zh-Hans/docs/agnes-video-25` 取得，不再属"待供应商"；本项改记＝供应商侧**免费档视频队列容量**（现测按官方形状两发均 `503 video_queue_full`，成功路径仍未验证）＋**接线三件待拍**（docs/19 清单二第 17 项：异步任务态落点／失败与超时口径／成本·限流·是否过 Gate），且真视频驱动属我方实现缺口（`drivers.py` 现只有 synthetic 与 OpenAI chat）〕＋转写契约（待供应商）、复检名单/agency 价格/支付通道（待业务方）、现网部署＋真 ACME〔**Q354 落地**＝「接线三件待拍」已**裁毕并落地**（docs/19 清单二第 17 项销账，02 C1.297）＝新表 `video_generation_tasks`（迁移 0059）＋异步驱动 `video_drivers.py`＋`approve` 逐单人工 Gate（唯一花钱口、四写口全 operations 凭证硬闸）＋**零自动重试**（失败/超时置终态＋开运营待办）＋配置中心当日秒数上限 120＋门控 `LOOM_VIDEO_REAL_ENABLED` 默认关＋第 7 个 sweep 作业。本台账 96 条计数**不变**（真视频生成不属 Q1–Q72 任一条目，也非结构性硬闸）。**仍未证的只有外部条件**＝供应商队列容量与首次成功样本（10 次实测全 `503 video_queue_full`）。〕 |
 
 ### 8.3 与原文明示"本期不做"一致，非缺口
 

@@ -10,7 +10,7 @@ from app.core.actor import Actor
 class AIModelCreate(BaseModel):
     model_code: str = Field(min_length=1, max_length=64)
     provider: str = Field(min_length=1, max_length=32)
-    capability: Literal["chat", "embedding"] = "chat"
+    capability: Literal["chat", "embedding", "video"] = "chat"
     input_price_per_1m: float = Field(default=0, ge=0)
     output_price_per_1m: float = Field(default=0, ge=0)
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
@@ -25,7 +25,7 @@ class AIModelPatch(BaseModel):
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     daily_budget: float | None = Field(default=None, ge=0)
     status: str | None = None  # active / disabled
-    capability: Literal["chat", "embedding"] | None = None
+    capability: Literal["chat", "embedding", "video"] | None = None
     fallback_model_id: str | None = None
     actor: Actor
 
@@ -34,7 +34,7 @@ class AIModelView(BaseModel):
     model_id: str
     model_code: str
     provider: str
-    capability: Literal["chat", "embedding"] = "chat"
+    capability: Literal["chat", "embedding", "video"] = "chat"
     input_price_per_1m: float
     output_price_per_1m: float
     currency_code: str | None

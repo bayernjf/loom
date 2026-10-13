@@ -96,6 +96,13 @@ services:
       # Q294：段8 每周重算**提醒**（第六个 sweep 作业，只开 OpsTodo、不产权重），默认关。
       # 开启后周节奏读配置中心 platform.recalc_weekday/_hour/_tz_offset_hours（热更，不入 env）。
       LOOM_PCP_WEEKLY_SCAN_ENABLED: ${LOOM_PCP_WEEKLY_SCAN_ENABLED:-false}
+      # Q352：段7 fit_score 自学习 advisory（只把建议附到 fit-score 读面，不写回静态分、不进 Gate），默认关。
+      # 观察窗不占 env——读配置中心 platform.fit_learning_window_days（迁移 0058 播种，热更即生效）。
+      LOOM_FIT_LEARNING_ENABLED: ${LOOM_FIT_LEARNING_ENABLED:-false}
+      # Q354：段12 真视频生成（供应商异步任务）。默认关＝四个写口一律 409、既有 synthetic 链路一字不变。
+      # 开启后仍须运营逐单 approve 才向供应商提交（花钱过人工 Gate），且日上限走配置中心
+      # content.video_real_daily_seconds_cap；超时/失败一律不自动重投（只开运营待办）。
+      LOOM_VIDEO_REAL_ENABLED: ${LOOM_VIDEO_REAL_ENABLED:-false}
     expose: ["8000"]
     depends_on:
       postgres: {condition: service_healthy}

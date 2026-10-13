@@ -665,6 +665,52 @@ if (!fcwRouterText.includes('@router.get("/api/fcw")'))
 if (!fcwRouterText.includes('"/api/fcw/{final_id}/material.json"'))
   problems.push("backend final_whitelist router must keep material.json export (Q155)");
 
+// Q354：段12 视频载体行的 review_hits 是 {}（backend app/content/service.py:284，Q323
+// 明确不跑文本复检），而三处页面都读 hits.bans/.downgrades。无守卫时整页服务端异常
+// （真进程打开 /admin/content 实测 TypeError → Application error，tsc 与其余七门全绿）。
+// 判据＝凡读这两个数组长度的文件，必须既有缺席兜底、又如实标出"没复检"而不是"无异常"。
+for (const rel of [
+  join(shell, "content", "page.tsx"),
+  join(shell, "content", "[contentId]", "page.tsx"),
+  join(root, "app", "[locale]", "admin", "content", "page.tsx"),
+]) {
+  const text = readFileSync(rel, "utf8");
+  if (!/\.bans\.length|\.downgrades\.length/.test(text)) continue;
+  if (!/hits\.bans \?\? \[\]/.test(text) || !/hits\.downgrades \?\? \[\]/.test(text))
+    problems.push(`${rel} reads review_hits arrays without an absent-key guard (video rows ship {})`);
+  if (!/flagNotReviewed|videoNoTextReview/.test(text))
+    problems.push(`${rel} must label an unreviewed row as such (never render it as clean)`);
+}
+
+// 内容三页的文案键必须真实存在：MISSING_MESSAGE 只在浏览器/服务端渲染时现形，
+// tsc 与其余门全绿（Q354 实测：把 flagNotReviewed 写成 admin 命名空间的键，
+// 整页正文渲染为空）。这里按文件自己的 getTranslations("ns") 绑定逐个键回查。
+for (const rel of [
+  join(shell, "content", "page.tsx"),
+  join(shell, "content", "[contentId]", "page.tsx"),
+  join(root, "app", "[locale]", "admin", "content", "page.tsx"),
+]) {
+  const text = readFileSync(rel, "utf8");
+  const bindings = new Map();
+  for (const m of text.matchAll(
+    /const (\w+) = (?:await )?(?:get|use)Translations\("([^"]+)"\)/g,
+  )) {
+    bindings.set(m[1], m[2]);
+  }
+  for (const [name, ns] of bindings) {
+    const leaf = ns.split(".").reduce((node, part) => (node ? node[part] : undefined), messages);
+    if (!leaf || typeof leaf !== "object") {
+      problems.push(`${rel}: namespace ${ns} (translator ${name}) does not exist in messages`);
+      continue;
+    }
+    for (const use of text.matchAll(new RegExp(`\\b${name}\\("(\\w[\\w.]*)"\\)`, "g"))) {
+      const value = use[1].split(".").reduce((node, part) => (node ? node[part] : undefined), leaf);
+      if (typeof value !== "string" || !value)
+        problems.push(`${rel}: missing message key ${ns}.${use[1]} (used via ${name})`);
+    }
+  }
+}
+
 if (problems.length > 0) {
   console.error(`check-content: ${problems.length} problem(s)\n${problems.join("\n")}`);
   process.exit(1);

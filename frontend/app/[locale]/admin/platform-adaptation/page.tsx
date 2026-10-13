@@ -371,6 +371,7 @@ export default async function PlatformAdaptationAdminPage({
                     <th>{t("colScore")}</th>
                     <th>{t("colWeight")}</th>
                     <th>{t("colContribution")}</th>
+                    <th>{t("colLearned")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -382,11 +383,32 @@ export default async function PlatformAdaptationAdminPage({
                       <td>{num(row.score)}</td>
                       <td>{num(row.weight)}</td>
                       <td>{num(row.contribution)}</td>
+                      {/* Q352：自学习建议与人工分并列一列；没学到东西就如实留空，不补 0。 */}
+                      <td>{num(fit.learning?.scores[row.dim])}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            <p className={styles.metaLine} data-testid="platform-adaptation-learning">
+              {fit.learning
+                ? t("learnMeta", {
+                    records: fit.learning.sample_records,
+                    contents: fit.learning.sample_contents,
+                    window: fit.learning.window_days,
+                    confidence: num(fit.learning.confidence),
+                  })
+                : t("learnNone")}
+            </p>
+            {fit.learning && (
+              <p className={styles.notice} data-testid="platform-adaptation-learning-caveat">
+                {t("learnCaveat")}
+              </p>
+            )}
+            {fit.learning?.truncated && (
+              <p className={styles.notice}>{t("learnTruncated")}</p>
+            )}
 
             <p className={styles.metaLine} data-testid="platform-adaptation-match">
               {t("matchEffect", {

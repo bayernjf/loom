@@ -71,6 +71,11 @@ export default async function ContentDetailPage({
 
   const hits = content.review_hits;
   const semantic = hits.semantic;
+  // 段12 视频载体按 Q323 不跑文本复检，后端把 review_hits 写成 {}（service.py:284）：
+  // 键缺席＝没复检，既不能渲染成"未命中禁用语"，也不能读 undefined.length（实测整页 500）。
+  const reviewed = hits.bans !== undefined || hits.downgrades !== undefined;
+  const bans = hits.bans ?? [];
+  const downgrades = hits.downgrades ?? [];
 
   return (
     <div>
@@ -126,38 +131,44 @@ export default async function ContentDetailPage({
 
       <h2 className={styles.subtitle}>{t("reviewTitle")}</h2>
       <div className={styles.island}>
-        {hits.bans.length > 0 ? (
-          <>
-            <p className={styles.flagBan}>
-              {t("bansTitle", { count: hits.bans.length })}
-            </p>
-            <ul className={styles.hitList}>
-              {hits.bans.map((hit) => (
-                <li key={hit.entry_id} className={styles.mono}>
-                  {hit.word}
-                </li>
-              ))}
-            </ul>
-          </>
+        {!reviewed ? (
+          <p className={styles.notice}>{t("flagNotReviewed")}</p>
         ) : (
-          <p className={styles.flagOk}>{t("bansClean")}</p>
-        )}
-        {hits.downgrades.length > 0 ? (
           <>
-            <p className={styles.flagWarn}>
-              {t("downgradesTitle", { count: hits.downgrades.length })}
-            </p>
-            <ul className={styles.hitList}>
-              {hits.downgrades.map((hit) => (
-                <li key={hit.entry_id}>
-                  <span className={styles.mono}>{hit.word}</span>
-                  {" → "}
-                  <span className={styles.mono}>{hit.downgrade_target}</span>
-                </li>
-              ))}
-            </ul>
+            {bans.length > 0 ? (
+              <>
+                <p className={styles.flagBan}>
+                  {t("bansTitle", { count: bans.length })}
+                </p>
+                <ul className={styles.hitList}>
+                  {bans.map((hit) => (
+                    <li key={hit.entry_id} className={styles.mono}>
+                      {hit.word}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className={styles.flagOk}>{t("bansClean")}</p>
+            )}
+            {downgrades.length > 0 ? (
+              <>
+                <p className={styles.flagWarn}>
+                  {t("downgradesTitle", { count: downgrades.length })}
+                </p>
+                <ul className={styles.hitList}>
+                  {downgrades.map((hit) => (
+                    <li key={hit.entry_id}>
+                      <span className={styles.mono}>{hit.word}</span>
+                      {" → "}
+                      <span className={styles.mono}>{hit.downgrade_target}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </>
-        ) : null}
+        )}
         <h3 className={styles.subtitle}>{t("semanticTitle")}</h3>
         {semantic?.checked ? (
           <SemanticFindings findings={semantic.findings} t={t} />
@@ -176,7 +187,7 @@ export default async function ContentDetailPage({
       {content.status === "review" ? (
         <DecisionIsland
           contentId={content.content_id}
-          blockRequired={hits.block_required}
+          blockRequired={hits.block_required ?? false}
         />
       ) : null}
 

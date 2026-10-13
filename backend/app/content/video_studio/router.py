@@ -283,3 +283,133 @@ async def stream_video_object(
         media_type=obj.content_type or "application/octet-stream",
         headers={"Content-Disposition": f'inline; filename="{obj.object_key.rsplit("/", 1)[-1]}"'},
     )
+
+
+# ---------- 真视频生成任务（Q354：异步任务 ＋ 逐单人工 Gate） ----------
+
+
+class VideoTaskCreateRequest(BaseModel):
+    mode: str = "text"
+    prompt: str
+    seconds: int = 5
+    size: str = "720P"
+    aspect_ratio: str = "16:9"
+
+
+class VideoTaskRejectRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+def _video_task_error(exc: Exception) -> HTTPException:
+    """领域异常 → HTTP：不存在 404；入参 422；状态／门控／上限／路由一律 409。"""
+    if isinstance(exc, service.VideoTaskNotFound):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, service.VideoTaskValidation):
+        return HTTPException(status_code=422, detail=str(exc))
+    return HTTPException(status_code=409, detail=str(exc))
+
+
+@router.get("/api/admin/video-generation-tasks")
+async def list_video_generation_tasks(
+    content_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(_read_actor),
+) -> list[dict]:
+    rows = await service.list_video_tasks(
+        session, content_id=content_id, status=status, limit=limit
+    )
+    return [service.video_task_view(row) for row in rows]
+
+
+@router.get("/api/admin/video-generation-tasks/{task_id}")
+async def get_video_generation_task(
+    task_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(_read_actor),
+) -> dict:
+    try:
+        task = await service.get_video_task(session, task_id)
+    except service.VideoTaskNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return service.video_task_view(task)
+
+
+@router.post("/api/admin/content/{content_id}/video-generation-tasks", status_code=201)
+async def create_video_generation_task(
+    content_id: str,
+    body: VideoTaskCreateRequest,
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_internal_actor(OPERATIONS)),
+) -> dict:
+    """登记一次真视频生成请求。**零外部调用、零花费**；花钱发生在 approve。"""
+    content = await _require_content(session, content_id)
+    try:
+        task = await service.create_video_task(
+            session,
+            content=content,
+            actor=actor,
+            mode=body.mode,
+            seconds=body.seconds,
+            size=body.size,
+            aspect_ratio=body.aspect_ratio,
+            prompt=body.prompt,
+        )
+    except service.VIDEO_TASK_ERRORS as exc:
+        await session.rollback()
+        raise _video_task_error(exc) from exc
+    await session.commit()
+    return service.video_task_view(task)
+
+
+@router.post("/api/admin/video-generation-tasks/{task_id}/approve")
+async def approve_video_generation_task(
+    task_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_internal_actor(OPERATIONS)),
+) -> dict:
+    """人工 Gate 放行＝唯一会向供应商提交（花钱）的口。单次提交，失败置终态＋开待办。
+
+    上游返回 503（队列满／限流）不算成功也不重投：本口一律 200 回任务视图，由状态字段
+    （`failed`）与运营待办表达结果——把"要不要再花一次钱"留在人手里（Q354 裁决②）。
+    """
+    try:
+        task = await service.approve_video_task(session, task_id, actor)
+    except service.VIDEO_TASK_ERRORS as exc:
+        await session.rollback()
+        raise _video_task_error(exc) from exc
+    await session.commit()
+    return service.video_task_view(task)
+
+
+@router.post("/api/admin/video-generation-tasks/{task_id}/reject")
+async def reject_video_generation_task(
+    task_id: str,
+    body: VideoTaskRejectRequest,
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_internal_actor(OPERATIONS)),
+) -> dict:
+    try:
+        task = await service.reject_video_task(session, task_id, actor, body.reason)
+    except service.VIDEO_TASK_ERRORS as exc:
+        await session.rollback()
+        raise _video_task_error(exc) from exc
+    await session.commit()
+    return service.video_task_view(task)
+
+
+@router.post("/api/admin/video-generation-tasks/{task_id}/sync")
+async def sync_video_generation_task(
+    task_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_internal_actor(OPERATIONS)),
+) -> dict:
+    """查一次外部任务状态（轮询不花钱；超时口径把悬着的任务收口成 timed_out）。"""
+    try:
+        task = await service.sync_video_task(session, task_id, actor)
+    except service.VIDEO_TASK_ERRORS as exc:
+        await session.rollback()
+        raise _video_task_error(exc) from exc
+    await session.commit()
+    return service.video_task_view(task)

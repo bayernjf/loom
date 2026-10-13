@@ -271,3 +271,94 @@ export async function uploadVideoObjectAction(
     return { ok: false, status: "unknown" };
   }
 }
+
+// Q354：段12 真视频生成任务（异步任务 ＋ 逐单人工 Gate）。
+// 四个写口都是 operations 凭证硬闸（body 无 actor 可自报，Bearer 由 request() 附带）；
+// 409 的 detail 必须原样回带给运营——「门控未开／当日上限已到／已有未终结任务／
+// 注册表未配 video 模型」这四句是"为什么这次没花钱"的唯一答案，不能吞成通用文案。
+export type VideoTasksResult =
+  | { ok: true; tasks: import("@/lib/api").VideoGenerationTaskView[] }
+  | { ok: false; status: 403 | 404 | "unknown" };
+
+export type VideoTaskResult =
+  | { ok: true; task: import("@/lib/api").VideoGenerationTaskView }
+  | { ok: false; status: 403 | 404 | 409 | 422; detail: string | null }
+  | { ok: false; status: "unconfigured" | "missing_role" | "unknown" };
+
+export async function listVideoTasksAction(
+  contentId: string,
+): Promise<VideoTasksResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unknown" };
+  try {
+    const { listVideoGenerationTasks } = await import("@/lib/api");
+    return { ok: true, tasks: await listVideoGenerationTasks(contentId) };
+  } catch (err) {
+    if (err instanceof ApiError && [403, 404].includes(err.status)) {
+      return { ok: false, status: err.status as 403 | 404 };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+async function runVideoTaskCall(
+  call: () => Promise<import("@/lib/api").VideoGenerationTaskView>,
+): Promise<VideoTaskResult> {
+  if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
+  if (!ADMIN_ROLE_LIST.includes("operations")) {
+    return { ok: false, status: "missing_role" };
+  }
+  try {
+    return { ok: true, task: await call() };
+  } catch (err) {
+    if (err instanceof ApiError && KNOWN_STATUSES.has(err.status)) {
+      return {
+        ok: false,
+        status: err.status as 403 | 404 | 409 | 422,
+        detail: errorDetail(err.message),
+      };
+    }
+    return { ok: false, status: "unknown" };
+  }
+}
+
+export async function createVideoTaskAction(
+  contentId: string,
+  input: {
+    mode: string;
+    prompt: string;
+    seconds: number;
+    size: string;
+    aspectRatio: string;
+  },
+): Promise<VideoTaskResult> {
+  if (!input.prompt.trim()) return { ok: false, status: 422, detail: null };
+  const { createVideoGenerationTask } = await import("@/lib/api");
+  return runVideoTaskCall(() =>
+    createVideoGenerationTask(contentId, {
+      mode: input.mode,
+      prompt: input.prompt.trim(),
+      seconds: input.seconds,
+      size: input.size,
+      aspectRatio: input.aspectRatio,
+    }),
+  );
+}
+
+export async function approveVideoTaskAction(taskId: string): Promise<VideoTaskResult> {
+  const { approveVideoGenerationTask } = await import("@/lib/api");
+  return runVideoTaskCall(() => approveVideoGenerationTask(taskId));
+}
+
+export async function rejectVideoTaskAction(
+  taskId: string,
+  reason: string,
+): Promise<VideoTaskResult> {
+  if (!reason.trim()) return { ok: false, status: 422, detail: null };
+  const { rejectVideoGenerationTask } = await import("@/lib/api");
+  return runVideoTaskCall(() => rejectVideoGenerationTask(taskId, reason.trim()));
+}
+
+export async function syncVideoTaskAction(taskId: string): Promise<VideoTaskResult> {
+  const { syncVideoGenerationTask } = await import("@/lib/api");
+  return runVideoTaskCall(() => syncVideoGenerationTask(taskId));
+}
