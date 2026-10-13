@@ -66,7 +66,7 @@
 | PLATFORM-ADAPTER 真模型业务接入 | 等供应商规格＋eval/golden | docs/02 Q296/Q300、design-v2-platform-adapter-business |
 | fit_score 真自学习 | 被学的量无数据源（Q293 材料待裁） | docs/02 Q296/Q299 |
 | agnes 视频 `mode` 合法取值 | ~~原文未给【待补】~~ **〔Q353 已取得，本行改判〕＝规格不再待补**：官方接入文档 `wiki.agnes-ai.com/zh-Hans/docs/agnes-video-25` 写明 `mode` 三值 `text`／`keyframe`／`reference`＋全参数＋异步轮询契约；**真卡点换成两件**＝供应商侧免费档队列常满（现测两发均 `503 video_queue_full`，成功路径仍未验证）＋**我方无异步视频驱动**（`drivers.py` 只有 synthetic 与 OpenAI chat，`generation.py:214` 把返回当 chat JSON `{"video_ref"}` 读）。旧句"待补"的来由＝Q254 只翻了 `AgnesAI-Models` 模型目录（那份确实不列 `mode`），未翻 video 接入页＝取证面不足 | Q254 五种候选全 400／**Q353 订正**、docs/19 清单二第 6 项与第 17 项 |
-| ~~段12 真视频接线（Q353 新增待拍三件）~~ → **已裁已落（Q354）**；剩外部条件＝**供应商侧视频队列容量＋首次成功样本** | 供应商侧（非裁决） | docs/19 清单二第 17 项**已销账**（三件全按甲落地，02 C1.297）；我方驱动/表/Gate/上限都已在仓内，实测到「参数被供应商接受」为止（10 次全 `503 video_queue_full`），**拿到 `video_id` 并轮询到 `completed` 的真成功仍未证**，故 `test_video_drivers.py` 留一条缺 key 即 skip 的真供应商用例 |
+| ~~段12 真视频接线（Q353 新增待拍三件）~~ → **已裁已落（Q354）**；剩外部条件＝**供应商侧视频队列容量＋首次成功样本** | 供应商侧（非裁决） | docs/19 清单二第 17 项**已销账**（三件全按甲落地，02 C1.297）；我方驱动/表/Gate/上限都已在仓内，实测到「参数被供应商接受」为止（11 次全 `503 video_queue_full`，2026-10-14 复测仍满），**拿到 `video_id` 并轮询到 `completed` 的真成功仍未证**，故 `test_video_drivers.py` 留一条缺 key 即 skip 的真供应商用例 |
 | 付费档第 5 档额度 | 业务方给数 | docs/23 §8.5 |
 
 ### 5.2 未点工大项（纯工程，需点工）

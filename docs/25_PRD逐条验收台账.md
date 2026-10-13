@@ -238,7 +238,7 @@
 | #13 | slotRuleByType 约 40 列默认值【原文未给出】 |
 | Q61 | 爆款绝对门槛与自动判定是否提前点工 |
 | Q63/Q64/Q65 | KUP 分析面是否提前点工（现列 P3/V2） |
-| 结算 | ~~agnes 视频 `mode`~~〔**Q353 订正**：`mode` 三值（`text`／`keyframe`／`reference`）与异步轮询契约已由官方接入文档 `wiki.agnes-ai.com/zh-Hans/docs/agnes-video-25` 取得，不再属"待供应商"；本项改记＝供应商侧**免费档视频队列容量**（现测按官方形状两发均 `503 video_queue_full`，成功路径仍未验证）＋**接线三件待拍**（docs/19 清单二第 17 项：异步任务态落点／失败与超时口径／成本·限流·是否过 Gate），且真视频驱动属我方实现缺口（`drivers.py` 现只有 synthetic 与 OpenAI chat）〕＋转写契约（待供应商）、复检名单/agency 价格/支付通道（待业务方）、现网部署＋真 ACME〔**Q354 落地**＝「接线三件待拍」已**裁毕并落地**（docs/19 清单二第 17 项销账，02 C1.297）＝新表 `video_generation_tasks`（迁移 0059）＋异步驱动 `video_drivers.py`＋`approve` 逐单人工 Gate（唯一花钱口、四写口全 operations 凭证硬闸）＋**零自动重试**（失败/超时置终态＋开运营待办）＋配置中心当日秒数上限 120＋门控 `LOOM_VIDEO_REAL_ENABLED` 默认关＋第 7 个 sweep 作业。本台账 96 条计数**不变**（真视频生成不属 Q1–Q72 任一条目，也非结构性硬闸）。**仍未证的只有外部条件**＝供应商队列容量与首次成功样本（10 次实测全 `503 video_queue_full`）。〕 |
+| 结算 | ~~agnes 视频 `mode`~~〔**Q353 订正**：`mode` 三值（`text`／`keyframe`／`reference`）与异步轮询契约已由官方接入文档 `wiki.agnes-ai.com/zh-Hans/docs/agnes-video-25` 取得，不再属"待供应商"；本项改记＝供应商侧**免费档视频队列容量**（现测按官方形状两发均 `503 video_queue_full`，成功路径仍未验证）＋**接线三件待拍**（docs/19 清单二第 17 项：异步任务态落点／失败与超时口径／成本·限流·是否过 Gate），且真视频驱动属我方实现缺口（`drivers.py` 现只有 synthetic 与 OpenAI chat）〕＋转写契约（待供应商）、复检名单/agency 价格/支付通道（待业务方）、现网部署＋真 ACME〔**Q354 落地**＝「接线三件待拍」已**裁毕并落地**（docs/19 清单二第 17 项销账，02 C1.297）＝新表 `video_generation_tasks`（迁移 0059）＋异步驱动 `video_drivers.py`＋`approve` 逐单人工 Gate（唯一花钱口、四写口全 operations 凭证硬闸）＋**零自动重试**（失败/超时置终态＋开运营待办）＋配置中心当日秒数上限 120＋门控 `LOOM_VIDEO_REAL_ENABLED` 默认关＋第 7 个 sweep 作业。本台账 96 条计数**不变**（真视频生成不属 Q1–Q72 任一条目，也非结构性硬闸）。**仍未证的只有外部条件**＝供应商队列容量与首次成功样本（11 次实测全 `503 video_queue_full`，末次 2026-10-14）。〕 |
 
 ### 8.3 与原文明示"本期不做"一致，非缺口
 
