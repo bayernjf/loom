@@ -413,7 +413,7 @@ async def _enable_real_llm(client: AsyncClient):
     r = await client.post(
         "/api/admin/ai-models",
         json={
-            "model_code": "agnes-2.5-flash",
+            "model_code": "agnes-3.0-flash",
             "provider": "agnes",
             "capability": "chat",
             "currency_code": "USD",
