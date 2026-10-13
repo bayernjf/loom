@@ -109,7 +109,7 @@ def scripted(monkeypatch):
 async def _generate():
     return await drivers.OpenAICompatibleDriver().generate(
         scene="ARTICLE-GEN",
-        model_code="agnes-2.5-flash",
+        model_code="agnes-3.0-flash",
         user_message="hi",
         api_key="k",
         provider="agnes",
