@@ -40,18 +40,24 @@ function ReviewFlags({
   tContent: Translator;
 }) {
   const hits = item.review_hits;
+  // 键缺席＝这条成品从没跑过文本复检（段12 视频载体，Q323）。既不能当"无异常"，
+  // 也不能读 undefined.length（真进程实测：整页 500）。
+  if (hits.bans === undefined && hits.downgrades === undefined)
+    return <span className={styles.notice}>{tContent("flagNotReviewed")}</span>;
+  const bans = hits.bans ?? [];
+  const downgrades = hits.downgrades ?? [];
   if (hits.block_required)
     return (
       <span className={styles.riskCritical}>
-        {tContent("flagBlocked", { count: hits.bans.length })}
+        {tContent("flagBlocked", { count: bans.length })}
       </span>
     );
   const semanticFindings = hits.semantic?.checked
     ? hits.semantic.findings.length
     : 0;
   const warnings: string[] = [];
-  if (hits.downgrades.length > 0)
-    warnings.push(tContent("flagDowngrade", { count: hits.downgrades.length }));
+  if (downgrades.length > 0)
+    warnings.push(tContent("flagDowngrade", { count: downgrades.length }));
   if (semanticFindings > 0)
     warnings.push(tContent("flagSemantic", { count: semanticFindings }));
   if (warnings.length === 0)

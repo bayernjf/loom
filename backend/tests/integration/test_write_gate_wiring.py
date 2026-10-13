@@ -91,6 +91,12 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/admin/video-segments/{segment_id}", "PUT"): OPS,
     # Q351（代码审查问题2）：原片上传口由 query 自报 actor 改 operations 硬闸。
     ("/api/admin/content/{content_id}/video-objects", "POST"): OPS,
+    # Q354 段12 真视频生成任务：四个写口一律 operations 硬闸。approve 是唯一会向供应商
+    # 提交（花钱）的口，故它与其余三口同样不许自报身份——审计人员以令牌为准（Q351 纪律）。
+    ("/api/admin/content/{content_id}/video-generation-tasks", "POST"): OPS,
+    ("/api/admin/video-generation-tasks/{task_id}/approve", "POST"): OPS,
+    ("/api/admin/video-generation-tasks/{task_id}/reject", "POST"): OPS,
+    ("/api/admin/video-generation-tasks/{task_id}/sync", "POST"): OPS,
 }
 
 # 必须一个标记都没有：只读口，以及有意不加闸的写口。

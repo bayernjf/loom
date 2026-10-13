@@ -135,6 +135,25 @@ class Settings(BaseSettings):
     # 周节奏是业务口径（原文未给），故走配置中心热更而非 env（Q9 旋钮纪律）。
     pcp_weekly_scan_enabled: bool = False
 
+    # Q352 段7 fit_score 自学习 **advisory**（`platform_adaptation/fit_learning.py` 映射
+    # traffic←plays／conv←inquiries+conversions／load←read_rate，safe 无指标可学恒维持人工）：
+    # 默认关。关闭时 `GET /api/admin/publish-slots/{id}/fit-score` 的 `learning` 键恒为 null，
+    # 现有人工四维与聚合口径一字不变；开启后只在响应里**附加**一段只读建议（窗口取配置中心
+    # `platform.fit_learning_window_days`），**不写 `publish_slots` 静态分、不建候选、不进
+    # 任何 Gate**——Q293 已定「真自学习须业务先给四份规则」，本门控开着也只是把建议摆给人看。
+    fit_learning_enabled: bool = False
+
+    # Q354 段12 真视频生成（供应商异步任务）：默认关。关时 `video_generation_tasks` 四口写口一律
+    # **409 拒绝**（既有 synthetic VIDEO-GEN 链路一字不变、发证不卡），开启后仍须**人工逐单 approve
+    # 才向供应商提交**（花钱动作过人工 Gate，同 Q87 restock_auto 纪律）。真值来自模型注册表：
+    # VIDEO-GEN 场景必须路由到 `capability="video"` 的 active 模型（synthetic 路由会被 409 挡回）。
+    video_real_enabled: bool = False
+    # 单个任务从 submitted 起允许轮询多久，超时置 `timed_out`＋开待办（运维参数，非 Q9 业务旋钮）。
+    video_task_timeout_seconds: float = 900.0
+    # 第 7 个 sweep 作业的最小轮询间隔（同 submitted 任务两次外部查询之间至少隔这么久；
+    # 轮询不是重试——不重复提交、不再花钱。运维参数，非 Q9 业务旋钮）。
+    video_task_poll_interval_seconds: float = 20.0
+
     # Q232 MCP 对外面（docs/22）：默认关＝纯加法、可回滚。关闭时 `POST /mcp` 回 404，
     # 开启后仍需 Q88 Agent Key（缺失/错误/吊销 401），且工具面只有 plan 模式三件：
     # 不生成正文、不发 final_id、不代替人工 Gate。

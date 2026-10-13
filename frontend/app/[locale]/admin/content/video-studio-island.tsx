@@ -7,9 +7,14 @@ import {
   getContentDetailAction,
   getScriptRecheckAction,
   getVideoWhitelistMaterialAction,
+  approveVideoTaskAction,
   createVideoSegmentAction,
+  createVideoTaskAction,
   listVideoObjectsAction,
   listVideoSegmentsAction,
+  listVideoTasksAction,
+  rejectVideoTaskAction,
+  syncVideoTaskAction,
   updateVideoSegmentTextAction,
   uploadVideoObjectAction,
   type WhitelistMaterialResult,
@@ -33,6 +38,25 @@ const MATERIAL_LAYERS = [
   "expression",
   "compliance",
 ] as const;
+
+// Q354：真视频生成任务的取值域＝官方接入文档（Q353 取证）＋后端
+// app/content/video_studio/models.py 的 VIDEO_MODES/VIDEO_SIZES/VIDEO_ASPECT_RATIOS
+// 同源；越界后端当场 422，界面不静默改值。
+const VIDEO_MODES = ["text", "keyframe", "reference"] as const;
+const VIDEO_SIZES = ["720P", "1080P", "1K", "2K"] as const;
+const VIDEO_ASPECT_RATIOS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] as const;
+const VIDEO_SECONDS_MIN = 4;
+const VIDEO_SECONDS_MAX = 12;
+// 状态文案键必须先证实存在再取：后端若新增一个态，t(`taskStatusName.新态`) 会在浏览器
+// 控制台抛 MISSING_MESSAGE 而 tsc／SSR 全绿（Q344 那一族），所以未知状态原样显示。
+const VIDEO_TASK_STATUS_KEYS = new Set([
+  "pending_approval",
+  "submitted",
+  "completed",
+  "failed",
+  "timed_out",
+  "rejected",
+]);
 
 function layerCount(layer: Record<string, unknown> | undefined): number {
   if (!layer) return 0;
@@ -103,6 +127,18 @@ export function VideoStudioIsland({
   const [editText, setEditText] = useState<Record<string, string>>({});
   const [catalogMsg, setCatalogMsg] = useState<string | null>(null);
   const [objectMsg, setObjectMsg] = useState<string | null>(null);
+  // Q354：真视频生成任务（登记≠花钱，approve 才是花钱那一步）。
+  const [tasks, setTasks] = useState<Awaited<ReturnType<typeof listVideoTasksAction>> | null>(
+    null,
+  );
+  const [taskMsg, setTaskMsg] = useState<string | null>(null);
+  const [newMode, setNewMode] = useState<string>("text");
+  const [newPrompt, setNewPrompt] = useState("");
+  const [newSeconds, setNewSeconds] = useState(5);
+  const [newSize, setNewSize] = useState("720P");
+  const [newAspect, setNewAspect] = useState("16:9");
+  const [confirmApproveId, setConfirmApproveId] = useState<string | null>(null);
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
 
   function toggle() {
     const next = !open;
@@ -126,6 +162,11 @@ export function VideoStudioIsland({
     if (!objects) {
       startTransition(async () => {
         setObjects(await listVideoObjectsAction(contentId));
+      });
+    }
+    if (!tasks) {
+      startTransition(async () => {
+        setTasks(await listVideoTasksAction(contentId));
       });
     }
   }
@@ -218,6 +259,72 @@ export function VideoStudioIsland({
     });
   }
 
+  function reloadTasks() {
+    startTransition(async () => {
+      setTasks(await listVideoTasksAction(contentId));
+    });
+  }
+
+  function taskFailureText(result: { status: string | number; detail?: string | null }) {
+    const status = String(result.status);
+    if (status === "403" || status === "missing_role") return t("actorMissingRole");
+    if (status === "unconfigured") return t("actorUnconfigured");
+    // 409 的 detail 是「为什么这次没花钱」的唯一答案（门控未开／当日上限已到／
+    // 已有未终结任务／注册表未配 video 模型），必须原样回显，不吞成通用文案。
+    if (status === "409" || status === "404") {
+      return result.detail ? `${result.detail}` : t("taskOpFailed");
+    }
+    if (status === "422") return t("taskBadParams");
+    return t("taskOpFailed");
+  }
+
+  function submitCreateTask() {
+    setTaskMsg(null);
+    startTransition(async () => {
+      const result = await createVideoTaskAction(contentId, {
+        mode: newMode,
+        prompt: newPrompt,
+        seconds: newSeconds,
+        size: newSize,
+        aspectRatio: newAspect,
+      });
+      if (result.ok) {
+        setNewPrompt("");
+        setTaskMsg(t("taskCreated"));
+        reloadTasks();
+      } else {
+        setTaskMsg(taskFailureText(result));
+      }
+    });
+  }
+
+  function submitTaskAction(
+    action: "approve" | "reject" | "sync",
+    taskId: string,
+    reason?: string,
+  ) {
+    setTaskMsg(null);
+    setConfirmApproveId(null);
+    startTransition(async () => {
+      const call =
+        action === "approve"
+          ? approveVideoTaskAction(taskId)
+          : action === "reject"
+            ? rejectVideoTaskAction(taskId, reason ?? "")
+            : syncVideoTaskAction(taskId);
+      const result = await call;
+      if (result.ok) {
+        setTaskMsg(
+          action === "approve" ? t("taskApproved") : action === "reject" ? t("taskRejectedMsg") : t("taskSynced"),
+        );
+        reloadTasks();
+      } else {
+        setTaskMsg(taskFailureText(result));
+        reloadTasks();
+      }
+    });
+  }
+
   const segments =
     whitelist && whitelist.ok ? scriptSegments(whitelist.pack) : [];
 
@@ -286,6 +393,185 @@ export function VideoStudioIsland({
                   : t("resultLoadFailed")}
               </p>
             )}
+          </section>
+          <section>
+            <h3 className={styles.sectionTitle}>{t("taskTitle")}</h3>
+            <p className={styles.notice}>{t("taskIntro")}</p>
+            {tasks === null ? (
+              <p className={styles.notice}>
+                {pending ? t("loading") : t("loadPending")}
+              </p>
+            ) : tasks.ok ? (
+              tasks.tasks.length === 0 ? (
+                <p className={styles.notice}>{t("taskEmpty")}</p>
+              ) : (
+                <ul className={styles.detailList}>
+                  {tasks.tasks.map((task) => (
+                    <li key={task.task_id}>
+                      <span className={styles.metaLine}>
+                        {VIDEO_TASK_STATUS_KEYS.has(task.status)
+                          ? t(`taskStatusName.${task.status}`)
+                          : task.status}
+                        {" · "}
+                        {task.mode} / {task.seconds}s / {task.size} /{" "}
+                        {task.aspect_ratio}
+                      </span>
+                      <span className={styles.metaLine}>
+                        {t("taskPromptLabel")}: {task.prompt}
+                      </span>
+                      <span className={styles.metaLine}>
+                        {t("taskTrailLabel")}: {t("taskPollsLabel")}{task.polls}
+                        {task.approved_by
+                          ? ` · ${t("taskApprovedByLabel")}${task.approved_by}`
+                          : ""}
+                        {task.error ? ` · ${task.error}` : ""}
+                      </span>
+                      {task.url ? (
+                        <span className={styles.metaLine}>
+                          {t("taskUrlLabel")}: {task.url}
+                        </span>
+                      ) : null}
+                      {task.status === "pending_approval" ? (
+                        <span className={styles.metaLine}>
+                          {confirmApproveId === task.task_id ? (
+                            <>
+                              <span className={styles.riskMedium}>
+                                {t("taskCostWarn", {
+                                  seconds: task.seconds,
+                                  model: task.model_code,
+                                })}
+                              </span>
+                              <button
+                                type="button"
+                                className={styles.planChip}
+                                disabled={pending}
+                                onClick={() =>
+                                  submitTaskAction("approve", task.task_id)
+                                }
+                              >
+                                {t("taskConfirmYes")}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.planChip}
+                                onClick={() => setConfirmApproveId(null)}
+                              >
+                                {t("taskConfirmCancel")}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className={styles.planChip}
+                                disabled={pending}
+                                onClick={() => setConfirmApproveId(task.task_id)}
+                              >
+                                {t("taskApprove")}
+                              </button>
+                              <input
+                                placeholder={t("taskRejectPlaceholder")}
+                                onChange={(event) =>
+                                  setRejectReasons((prev) => ({
+                                    ...prev,
+                                    [task.task_id]: event.target.value,
+                                  }))
+                                }
+                              />
+                              <button
+                                type="button"
+                                className={styles.planChip}
+                                disabled={pending}
+                                onClick={() =>
+                                  submitTaskAction(
+                                    "reject",
+                                    task.task_id,
+                                    rejectReasons[task.task_id] ?? "",
+                                  )
+                                }
+                              >
+                                {t("taskReject")}
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      ) : task.status === "submitted" ? (
+                        <span className={styles.metaLine}>
+                          <button
+                            type="button"
+                            className={styles.planChip}
+                            disabled={pending}
+                            onClick={() => submitTaskAction("sync", task.task_id)}
+                          >
+                            {t("taskSync")}
+                          </button>
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : (
+              <p className={styles.riskMedium}>
+                {tasks.status === 403
+                  ? t("actorMissingRole")
+                  : t("taskLoadFailed")}
+              </p>
+            )}
+            <p className={styles.metaLine}>
+              <select
+                value={newMode}
+                onChange={(event) => setNewMode(event.target.value)}
+              >
+                {VIDEO_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={VIDEO_SECONDS_MIN}
+                max={VIDEO_SECONDS_MAX}
+                value={newSeconds}
+                onChange={(event) => setNewSeconds(Number(event.target.value))}
+              />
+              <select
+                value={newSize}
+                onChange={(event) => setNewSize(event.target.value)}
+              >
+                {VIDEO_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={newAspect}
+                onChange={(event) => setNewAspect(event.target.value)}
+              >
+                {VIDEO_ASPECT_RATIOS.map((aspect) => (
+                  <option key={aspect} value={aspect}>
+                    {aspect}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={newPrompt}
+                placeholder={t("taskPromptPlaceholder")}
+                onChange={(event) => setNewPrompt(event.target.value)}
+              />
+              <button
+                type="button"
+                className={styles.planChip}
+                disabled={pending || !newPrompt.trim()}
+                onClick={submitCreateTask}
+              >
+                {t("taskAdd")}
+              </button>
+            </p>
+            <p className={styles.notice}>{t("taskNoSpendHint")}</p>
+            {taskMsg ? <p className={styles.notice}>{taskMsg}</p> : null}
           </section>
           <section>
             <h3 className={styles.sectionTitle}>{t("segmentTitle")}</h3>

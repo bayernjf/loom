@@ -1315,6 +1315,88 @@ for (const token of [
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
 }
 
+// Q354：段12 真视频生成任务面（登记≠花钱，approve 才是花钱那一步，失败不自动重投）。
+// 五条判据，逐条种植判红过：
+// ① 岛必须真调用五个口（漏一个＝能力存在但可达面没有，docs/23 §11.20 孤儿那一族）；
+// ② 花钱动作必须过界面内的二次确认，且调用点恰一处；
+// ③ 浏览器侧禁定时器轮询——刷新由运营点按或第 7 个 sweep 作业承担，不许自己打；
+// ④ lib/api.ts 的读函数必须自带 ADMIN_ROLE_LIST，否则 Q307 可读性契约门从 api.ts
+//    反解时看不见它＝判据静默退化（Q345 同纪律）；
+// ⑤ 后端四个写口必须仍挂 require_internal_actor(OPERATIONS)；
+// ⑥ 界面用到的文案键（含六个状态名）必须真实存在（MISSING_MESSAGE 只在浏览器现形）。
+const VIDEO_TASK_ACTIONS = [
+  "listVideoTasksAction",
+  "createVideoTaskAction",
+  "approveVideoTaskAction",
+  "rejectVideoTaskAction",
+  "syncVideoTaskAction",
+];
+for (const fn of VIDEO_TASK_ACTIONS) {
+  if (!videoStudioIsland.includes(`${fn}(`))
+    problems.push(`video-studio island must call ${fn} (video task surface)`);
+  if (!contentOpsActions.includes(`export async function ${fn}`))
+    problems.push(`admin/content/actions.ts must export ${fn}`);
+}
+if (!videoStudioIsland.includes("confirmApproveId === task.task_id"))
+  problems.push("video task approve must sit behind an explicit confirm (it spends money)");
+const approveCallSites = (videoStudioIsland.match(/approveVideoTaskAction\(/g) ?? []).length;
+if (approveCallSites !== 1)
+  problems.push(`approve must have exactly one call site, found ${approveCallSites}`);
+for (const banned of ["setInterval", "setTimeout"]) {
+  if (videoStudioIsland.includes(banned))
+    problems.push(`video-studio island must not poll from the browser (${banned})`);
+}
+{
+  const listBlock = apiText.split("\nexport async function ").find((chunk) =>
+    chunk.startsWith("listVideoGenerationTasks("),
+  );
+  if (!listBlock) problems.push("lib/api.ts must define listVideoGenerationTasks");
+  else if (!listBlock.includes("ADMIN_ROLE_LIST"))
+    problems.push(
+      "listVideoGenerationTasks must append ADMIN_ROLE_LIST (else the Q307 read contract can't see it)",
+    );
+}
+{
+  const videoRouter = readFileSync(
+    join(repoRoot, "backend", "app", "content", "video_studio", "router.py"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+  const taskPosts = videoRouter
+    .split("\n@router.post(")
+    .slice(1)
+    // 只看装饰器首行：块体会一直延伸到下一个装饰器，用整块匹配会把相邻路由
+    // （如 Q351 的 video-objects 上传口）误算进来（实测 5≠4）。
+    .filter((block) => block.split("\n")[0].includes("video-generation-tasks"));
+  if (taskPosts.length !== 4)
+    problems.push(`video task write routes must be 4 (create/approve/reject/sync), found ${taskPosts.length}`);
+  for (const block of taskPosts) {
+    if (!block.includes("require_internal_actor(OPERATIONS)"))
+      problems.push(
+        `video task write route must keep the operations credential gate: ${block.split("\n")[0].trim()}`,
+      );
+  }
+}
+{
+  const contentOpsMessages = messages.admin?.contentOps ?? {};
+  for (const key of [...videoStudioIsland.matchAll(/\bt\("([A-Za-z0-9]+)"/g)].map((m) => m[1])) {
+    const value = contentOpsMessages[key];
+    if (typeof value !== "string" || !value)
+      problems.push(`video-studio message key missing: admin.contentOps.${key}`);
+  }
+  const statusMessages = contentOpsMessages.taskStatusName ?? {};
+  for (const status of [
+    "pending_approval",
+    "submitted",
+    "completed",
+    "failed",
+    "timed_out",
+    "rejected",
+  ]) {
+    if (typeof statusMessages[status] !== "string" || !statusMessages[status])
+      problems.push(`video task status message missing: taskStatusName.${status}`);
+  }
+}
+
 // Windows 检出（core.autocrlf=true）下后端源码可能为 CRLF，统一归一为 LF，
 // 使下方跨行字面量匹配与平台无关（LF 检出时此 replace 为空操作）。
 const contentRouter = readFileSync(
