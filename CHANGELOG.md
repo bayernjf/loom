@@ -762,3 +762,9 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 ## 待办（未入本日志）
 
 - V1 任务包排期（工期/人员/优先级待负责人提供资源信息）、两个基准 HTML 找回（阻塞 12 占位名单核对与 line 溯源）、10 建表要素 DBA 复核——见 [handoff.md](handoff.md) 待办区。
+- **Q357 Q9 硬编码守卫＋Q68 存量上户口扫描＝把两条「只有人工登记、没有强制手段」的缺口变成可执行判据（2026-10-14；后端测试＋只读脚本，零迁移零前端零生产代码；测试 1372→**1392 passed＋11 skipped／收集 1403**〔净 ＋20；本机单跑 157.45s〕、头仍 `0059_video_generation_tasks`／74 表·811 列·迁移文件 59；覆盖率未复测＝`app/` 生产代码零变化故不产新读数；02 C1.300）**——负责人点工「先搞一部分」。
+  - **A4＝Q9 从人工登记变可执行守卫**＝`tests/unit/test_no_magic_numbers.py`：**AST 扫 `app/**/*.py` 浮点常量**（注释/字符串天然不计入）＋**棘轮 `ALLOWLIST`**（实扫须完全相等：新增未登记浮点判红、登记项消失也判红）＋`PENDING_BUSINESS_CALIBRATION`（待业务给真值的数值须持续显式登记，当前只有 `fit_learning` 的归一化基准）；存量 21 文件 35 值逐个附理由；整数本批刻意不纳入并写明理由。
+  - **A5＝Q68 存量上户口扫描器**＝`backend/scripts/check_field_fid_registry.py`（只读、不代处置）：黑户落库/悬空引用＝阻断 exit 1；非 active 引用与 `c7_runs` 留痕只报不改、`pending_gate` 候选计数＝提示；缺表或无 `alembic_version` 行＝exit 2；`--json`/`--dsn` 与 `check_master_data.py` 同款。处置（补 fid 还是建候选）是裁决，转正归 Q13。
+  - **真进程查出一处单测盖不到的缺陷**＝`AsyncSession.run_sync` 传的是**同步 Session 而非 Connection**，直接 `inspect(session)` 抛 `No inspection system is available` ⇒ 表存在性判定须经 `get_bind()` 拿引擎再 inspect。首跑本机真迁移库即失败，已修并补 4 条 `run()` 用例（脏/干净/缺表/无 alembic 四种退出码）。真进程双路＝本机真库 **exit 0 干净**（模板 0／G2 字段 12／c7_runs 0／pending 候选 2）＋非 Loom 库 **exit 2**。
+  - **判据承重**＝A4 种植验证：往 `pwc_rules.py` 插 `PLANTED = 0.73` ⇒ 判红并精确报出未登记值，还原复绿。销账 docs/25 Q9 行缺口与 §8.2 Q68 存量行；扫描器登记进 docs/19 清单一。
+  - **刻意不做**＝不把归一化基准搬进配置中心（需迁移且仍等业务真值）、不代处置存量、**A1（Q56 重生成上限配置页）未开工**（新增侧栏一级入口＋RBAC 归属属产品决定）、不扫整数。

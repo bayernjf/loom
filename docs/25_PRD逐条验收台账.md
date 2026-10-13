@@ -62,7 +62,7 @@
 | # | PRD 口径 | 状态 | 证据 | 缺口 |
 |---|---|---|---|---|
 | Q8 | 来源路由表运营可配、默认 6 路、每路带"依据来源" | ✅ | `fieldpool/models.py:36-45`；迁移 `0003_m3_stage3:91-108` 播种 6 路；`planning.py:70,129-130`（source_ref 空判 `VIOL_MISSING_EVIDENCE`）；`model_registry/field_plan.py:84-86` 动态读启用路由；`0053:62-74` 另加第 7 路 case_evidence（超配） | **灵感库本体未建**＝产品基准段3 的 MVP 模块（product-inspiration：通用＋产品专属两层）无表、无 CRUD、无界面；七路中 `common_inspiration`／`product_inspiration` 两路只有路由名、没有数据本体（AI 拆维度取不到内容）＝纯工程缺口、可点工，登记于 docs/24 §5.2〔2026-10-14 补记〕 |
-| Q9 | 0.85 细看线配置化 + 全局魔法数字一律配置化 | 🟡 | 0.85 落：`seeds.py:17` `fieldpool.needs_detail_conf`→`planning.py:23-25,101`；docs/02 §C2 表已登记该键 |  **"禁止硬编码"无强制手段**：无 lint／哨兵测试扫残留魔法数字，`docs/23` 全文无配置化审计条目，仅靠人工登记 seeds |
+| Q9 | 0.85 细看线配置化 + 全局魔法数字一律配置化 | 🟡 | 0.85 落：`seeds.py:17` `fieldpool.needs_detail_conf`→`planning.py:23-25,101`；docs/02 §C2 表已登记该键 |  **"禁止硬编码"无强制手段：~~无 lint／哨兵测试扫残留魔法数字，`docs/23` 全文无配置化审计条目，仅靠人工登记 seeds~~ **✅ 2026-10-14 Q357 已补**＝`tests/unit/test_no_magic_numbers.py`：AST 扫 `app/**/*.py` 浮点常量（注释/字符串天然不计入）＋**棘轮 `ALLOWLIST`**（逐文件登记存量、实扫须完全相等：新增未登记浮点与登记项消失都判红）＋`PENDING_BUSINESS_CALIBRATION`（待业务给真值的数值须持续显式登记，当前只有 `fit_learning` 的 `_REF_PLAYS/_REF_CONV`＝清单二第 16 项②）；存量实测 21 文件 35 值逐个附「为什么可以留在代码里」；**整数本批刻意不纳入**（理由写进文件头）；种植验证（插 `PLANTED = 0.73`）判红后按原样还原 |
 | Q10 | 相似度≥0.9 标疑似重复，人工终裁 | ✅ | `planning.py:28-30,74-75,102`；`seeds.py:18` `=0.9`；`models.py:102-103`（dup/related_fid）；终裁走 `pool.gate=pending_gate`（`service.py:168`）；`test_fieldpool_planning.py:108` | — |
 | Q11 | risk_control：敏感行业强制 ≥1 个 | ✅ | 强制逻辑：`planning.py:118,142-143`（sensitive 且无 risk_control → violation）、`fieldpool/service.py:157`、`test_fieldpool_planning.py:38`；〔**Q350 补派生链路（02 C1.293）**：`product_intake/service.py:34` `_derive_industry_flags()` 在 `start_modeling` 从最新 C1Record＋Q7 `sensitive` 旗标派生写入，迁移 0057 补种子〕 | ~~旗标无派生链路恒 False~~ 已销（§9-① 注记同） |
 | Q12 | 维度 >8 留 Top8 余入备选；<3 标不达标转人工 | ✅ | `planning.py:113-147`；`seeds.py:19-20`（3/8）；`models.py:84,104-106` 落 selected/backup；`service.py:179-` 双状态；单测 `:70,:82` | — |
@@ -233,7 +233,7 @@
 | Q41 | AI 重算生成器；`pcp.recalc_*` 与"事件→权重"映射规则（业务方） |
 | Q44 | 配比健康度栏目的口径与页面归属（产品口径） |
 | Q59 ③④ | 复检"施工指令核对/国家规则核对"的实现口径【原文未给】 |
-| Q68 存量 | `fid:'-'` 存量上户口扫描的一次性处置口径 |
+| ~~Q68 存量~~ | **✅ 2026-10-14 Q357 已补扫描器**＝`backend/scripts/check_field_fid_registry.py`（只读、不代处置；黑户落库/悬空引用＝阻断 exit 1，非 active 字段引用与 `c7_runs` 历史留痕只报不改、`pending_gate` 候选计数＝提示，缺表或无 `alembic_version` 行＝exit 2）｜**余下的是裁决不是工程**：真扫出存量后"补 fid 还是建候选"由人定，转正权限归 Q13 字典管理员 |
 | #11 | R-X01~X05 跨层规则【原文未给出，待补】 |
 | #13 | slotRuleByType 约 40 列默认值【原文未给出】 |
 | Q61 | 爆款绝对门槛与自动判定是否提前点工 |
