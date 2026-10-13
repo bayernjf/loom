@@ -3,7 +3,7 @@
 > **性质**：把 `docs/01_PRD_产品需求规格.md` 的 13 段规格与 `docs/02` Q1–Q72 决策口径，拆成**可逐条打勾的条目**，每条给落地状态 + 可溯源证据 + 缺口。与 `docs/24`（段级比对）互补：本档回答「哪一条满足／哪一条没满足」，不重述段级结论。
 > **状态口径**（沿用 docs/23 §8）：✅ 已落地｜🟡 部分/有缺口｜⬜ 未启动。
 > **判定纪律**：**只记实测读到的事实**（`文件:行号`／迁移号／配置键名）。无证据一律写【无证据，未落地】，不推测、不用"应该已实现"。
-> **实现侧基线**：Q354（2026-10-13，02 C1.297）＝后端 **1372 passed＋11 skipped／收集 1383**、Alembic 头 `0059_video_generation_tasks`、**74 表·811 列**、迁移文件 **59**、覆盖率 `app/` **71.16%**（14,732 语句）／核心层 **99.34%／604**、eval **101/101**、操作面 **251＝写 144／读 107**、`GATED` **58**、sweep 作业 **7**；前端 `tsc`＋八检查器全绿、侧栏 **17**、ts/tsx **112**（本批零新文件）。〔上一条 Q352 基线（1328＋10／1338、头 0058、73 表·787 列、71.14%）保留为历史时点。〕
+> **实现侧基线**：Q357（2026-10-14，02 C1.300）＝后端 **1392 passed＋11 skipped／收集 1403**（本机单跑 157.45s；Q357 零迁移零前端零生产代码，测试净 ＋20＝Q9 硬编码守卫 5＋Q68 上户口扫描器 15）、Alembic 头 `0059_video_generation_tasks`、**74 表·811 列**、迁移文件 **59**、覆盖率 `app/` **71.16%**（14,732 语句，**Q354 现测；Q357 生产代码零变化故未复测**）／核心层 **99.34%／604**、eval **101/101**、操作面 **251＝写 144／读 107**（Q357 零新端点，复测同数）、`GATED` **58**、sweep 作业 **7**；前端 `tsc`＋八检查器全绿、侧栏 **17**、ts/tsx **112**（Q357 无前端变化）。〔上一条 Q354 基线（1372＋11／1383、71.16%）保留为历史时点。〕
 > **登记**：本台账随 Q347 批落地（2026-10-11，docs/02 C1.290）；Q350 批同步行状态与计数（见各条注记）。
 
 ## 0. 结论摘要
@@ -61,8 +61,8 @@
 
 | # | PRD 口径 | 状态 | 证据 | 缺口 |
 |---|---|---|---|---|
-| Q8 | 来源路由表运营可配、默认 6 路、每路带"依据来源" | ✅ | `fieldpool/models.py:36-45`；迁移 `0003_m3_stage3:91-108` 播种 6 路；`planning.py:70,129-130`（source_ref 空判 `VIOL_MISSING_EVIDENCE`）；`model_registry/field_plan.py:84-86` 动态读启用路由；`0053:62-74` 另加第 7 路 case_evidence（超配） | — |
-| Q9 | 0.85 细看线配置化 + 全局魔法数字一律配置化 | 🟡 | 0.85 落：`seeds.py:17` `fieldpool.needs_detail_conf`→`planning.py:23-25,101`；docs/02 §C2 表已登记该键 |  **"禁止硬编码"无强制手段**：无 lint／哨兵测试扫残留魔法数字，`docs/23` 全文无配置化审计条目，仅靠人工登记 seeds |
+| Q8 | 来源路由表运营可配、默认 6 路、每路带"依据来源" | ✅ | `fieldpool/models.py:36-45`；迁移 `0003_m3_stage3:91-108` 播种 6 路；`planning.py:70,129-130`（source_ref 空判 `VIOL_MISSING_EVIDENCE`）；`model_registry/field_plan.py:84-86` 动态读启用路由；`0053:62-74` 另加第 7 路 case_evidence（超配） | **灵感库本体未建**＝产品基准段3 的 MVP 模块（product-inspiration：通用＋产品专属两层）无表、无 CRUD、无界面；七路中 `common_inspiration`／`product_inspiration` 两路只有路由名、没有数据本体（AI 拆维度取不到内容）＝纯工程缺口、可点工，登记于 docs/24 §5.2〔2026-10-14 补记〕 |
+| Q9 | 0.85 细看线配置化 + 全局魔法数字一律配置化 | 🟡 | 0.85 落：`seeds.py:17` `fieldpool.needs_detail_conf`→`planning.py:23-25,101`；docs/02 §C2 表已登记该键 |  **"禁止硬编码"无强制手段：~~无 lint／哨兵测试扫残留魔法数字，`docs/23` 全文无配置化审计条目，仅靠人工登记 seeds~~ **✅ 2026-10-14 Q357 已补**＝`tests/unit/test_no_magic_numbers.py`：AST 扫 `app/**/*.py` 浮点常量（注释/字符串天然不计入）＋**棘轮 `ALLOWLIST`**（逐文件登记存量、实扫须完全相等：新增未登记浮点与登记项消失都判红）＋`PENDING_BUSINESS_CALIBRATION`（待业务给真值的数值须持续显式登记，当前只有 `fit_learning` 的 `_REF_PLAYS/_REF_CONV`＝清单二第 16 项②）；存量实测 21 文件 35 值逐个附「为什么可以留在代码里」；**整数本批刻意不纳入**（理由写进文件头）；种植验证（插 `PLANTED = 0.73`）判红后按原样还原 |
 | Q10 | 相似度≥0.9 标疑似重复，人工终裁 | ✅ | `planning.py:28-30,74-75,102`；`seeds.py:18` `=0.9`；`models.py:102-103`（dup/related_fid）；终裁走 `pool.gate=pending_gate`（`service.py:168`）；`test_fieldpool_planning.py:108` | — |
 | Q11 | risk_control：敏感行业强制 ≥1 个 | ✅ | 强制逻辑：`planning.py:118,142-143`（sensitive 且无 risk_control → violation）、`fieldpool/service.py:157`、`test_fieldpool_planning.py:38`；〔**Q350 补派生链路（02 C1.293）**：`product_intake/service.py:34` `_derive_industry_flags()` 在 `start_modeling` 从最新 C1Record＋Q7 `sensitive` 旗标派生写入，迁移 0057 补种子〕 | ~~旗标无派生链路恒 False~~ 已销（§9-① 注记同） |
 | Q12 | 维度 >8 留 Top8 余入备选；<3 标不达标转人工 | ✅ | `planning.py:113-147`；`seeds.py:19-20`（3/8）；`models.py:84,104-106` 落 selected/backup；`service.py:179-` 双状态；单测 `:70,:82` | — |
@@ -140,7 +140,7 @@
 
 | # | PRD 口径 | 状态 | 证据 | 缺口 |
 |---|---|---|---|---|
-| Q44 | 内容目的配比＝软提示（任务页 30 天分布黄条 + 段13 健康度栏目），不硬拦 | ⬜ | 仅字典表有 ratio_min/max（`condition/models.py:43-46`、`router.py:93`） | 【无证据，未落地】无近 30 天分布聚合、无健康度栏目；`core/dashboards/` 仅 token_cost/review_workload 两盘。同 `docs/24:86`「未见独立落地」〔Q353 随等外部输入表插一行由 `:85` 下推〕 |
+| Q44 | 内容目的配比＝软提示（任务页 30 天分布黄条 + 段13 健康度栏目），不硬拦 | ⬜ | 仅字典表有 ratio_min/max（`condition/models.py:43-46`、`router.py:93`） | 【无证据，未落地】无近 30 天分布聚合、无健康度栏目；`core/dashboards/` 仅 token_cost/review_workload 两盘。同 `docs/24:87`「未见独立落地」〔Q353 随等外部输入表插一行由 `:85` 下推；2026-10-14 随 docs/24 §5.2 增「灵感库本体」一行由 `:86` 下推为 `:87`〕 |
 | Q45 | 三元组配一份复用，满 20 次/PCP 更新触发重配走 Gate | ✅ | `seeds.py:76` `package.reuse_threshold=20`；`layer_strategy/service.py:111-124` 查重→`PackageExists`；迁移 `0048_packages_active_triple_unique`；`final_whitelist/service.py:559-573` usage+1 与阈值审计；`platform_adaptation/service.py:579-607`；`router.py:152` reuse-pending；`layer_strategy/service.py:171-182` 清零+审计 | — |
 | Q46 | layerSpaces 增删改仅平台级管理员，普通运营只读，变更显示影响面 | ✅ | `layer_strategy/router.py:26` `_admin_gate=require_internal_actor(PLATFORM_ADMIN)`，写口 `:211/:231/:255`；影响面 `router.py:198`+`service.py:244` 409 `{active_package_refs}`；审计 tenant=`_platform`；迁移 `0047_layer_spaces` | 管理端 UI 缺（docs/23 §11.20 孤儿读口含 layer-spaces） |
 | Q47 | 三包必审线复用 Q9 的 0.85 同一配置项 | 🟡 | Q9 键存在（`seeds.py:17`）；`docs/06:191` 契约表登记「0.85 细看线（复用 Q9）｜Q47」 | **未接线**：`rg "needs_detail_conf" app/decision/layer_strategy/` 零命中，三包 conf 不触发任何必审；`review.batch_pass_confidence`（`seeds.py:85`）是审核台批量通过用的另一键，非同一消费者 |
@@ -233,12 +233,12 @@
 | Q41 | AI 重算生成器；`pcp.recalc_*` 与"事件→权重"映射规则（业务方） |
 | Q44 | 配比健康度栏目的口径与页面归属（产品口径） |
 | Q59 ③④ | 复检"施工指令核对/国家规则核对"的实现口径【原文未给】 |
-| Q68 存量 | `fid:'-'` 存量上户口扫描的一次性处置口径 |
+| ~~Q68 存量~~ | **✅ 2026-10-14 Q357 已补扫描器**＝`backend/scripts/check_field_fid_registry.py`（只读、不代处置；黑户落库/悬空引用＝阻断 exit 1，非 active 字段引用与 `c7_runs` 历史留痕只报不改、`pending_gate` 候选计数＝提示，缺表或无 `alembic_version` 行＝exit 2）｜**余下的是裁决不是工程**：真扫出存量后"补 fid 还是建候选"由人定，转正权限归 Q13 字典管理员 |
 | #11 | R-X01~X05 跨层规则【原文未给出，待补】 |
 | #13 | slotRuleByType 约 40 列默认值【原文未给出】 |
 | Q61 | 爆款绝对门槛与自动判定是否提前点工 |
 | Q63/Q64/Q65 | KUP 分析面是否提前点工（现列 P3/V2） |
-| 结算 | ~~agnes 视频 `mode`~~〔**Q353 订正**：`mode` 三值（`text`／`keyframe`／`reference`）与异步轮询契约已由官方接入文档 `wiki.agnes-ai.com/zh-Hans/docs/agnes-video-25` 取得，不再属"待供应商"；本项改记＝供应商侧**免费档视频队列容量**（现测按官方形状两发均 `503 video_queue_full`，成功路径仍未验证）＋**接线三件待拍**（docs/19 清单二第 17 项：异步任务态落点／失败与超时口径／成本·限流·是否过 Gate），且真视频驱动属我方实现缺口（`drivers.py` 现只有 synthetic 与 OpenAI chat）〕＋转写契约（待供应商）、复检名单/agency 价格/支付通道（待业务方）、现网部署＋真 ACME〔**Q354 落地**＝「接线三件待拍」已**裁毕并落地**（docs/19 清单二第 17 项销账，02 C1.297）＝新表 `video_generation_tasks`（迁移 0059）＋异步驱动 `video_drivers.py`＋`approve` 逐单人工 Gate（唯一花钱口、四写口全 operations 凭证硬闸）＋**零自动重试**（失败/超时置终态＋开运营待办）＋配置中心当日秒数上限 120＋门控 `LOOM_VIDEO_REAL_ENABLED` 默认关＋第 7 个 sweep 作业。本台账 96 条计数**不变**（真视频生成不属 Q1–Q72 任一条目，也非结构性硬闸）。**仍未证的只有外部条件**＝供应商队列容量与首次成功样本（10 次实测全 `503 video_queue_full`）。〕 |
+| 结算 | ~~agnes 视频 `mode`~~〔**Q353 订正**：`mode` 三值（`text`／`keyframe`／`reference`）与异步轮询契约已由官方接入文档 `wiki.agnes-ai.com/zh-Hans/docs/agnes-video-25` 取得，不再属"待供应商"；本项改记＝供应商侧**免费档视频队列容量**（现测按官方形状两发均 `503 video_queue_full`，成功路径仍未验证）＋**接线三件待拍**（docs/19 清单二第 17 项：异步任务态落点／失败与超时口径／成本·限流·是否过 Gate），且真视频驱动属我方实现缺口（`drivers.py` 现只有 synthetic 与 OpenAI chat）〕＋转写契约（待供应商）、复检名单/agency 价格/支付通道（待业务方）、现网部署＋真 ACME〔**Q354 落地**＝「接线三件待拍」已**裁毕并落地**（docs/19 清单二第 17 项销账，02 C1.297）＝新表 `video_generation_tasks`（迁移 0059）＋异步驱动 `video_drivers.py`＋`approve` 逐单人工 Gate（唯一花钱口、四写口全 operations 凭证硬闸）＋**零自动重试**（失败/超时置终态＋开运营待办）＋配置中心当日秒数上限 120＋门控 `LOOM_VIDEO_REAL_ENABLED` 默认关＋第 7 个 sweep 作业。本台账 96 条计数**不变**（真视频生成不属 Q1–Q72 任一条目，也非结构性硬闸）。**仍未证的只有外部条件**＝供应商队列容量与首次成功样本（11 次实测全 `503 video_queue_full`，末次 2026-10-14）。〕 |
 
 ### 8.3 与原文明示"本期不做"一致，非缺口
 

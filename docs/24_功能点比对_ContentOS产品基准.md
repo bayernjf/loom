@@ -4,7 +4,7 @@
 > **基准来源（外部，未改动仅读取）**：
 > - `/Users/jiangfeng/Downloads/项目2-loom-重要/ContentOS_核心业务主链梳理_v1.md`（13 段主链 + §10 规则定稿 Q1–Q72 + §10.9 配置化清单；文件名 v1 系历史命名，实为 2026-07-22 版）
 > - `/Users/jiangfeng/Downloads/项目2-loom-重要/ContentOS_SaaS后台完整体系全景图_V1.0_项目北极星.html`（33 项功能点清单，含远期规划项）
-> **实现现状侧基线**：docs/23 §8 功能点全景 + docs/09 全景体系各菜单实现注记 + docs/02（最高 **C1.299＝Q356**）+ handoff（**Q354 后基线 1372 passed＋11 skipped／收集 1383、头 `0059_video_generation_tasks`（新建 1 表）、74 表·811 列、迁移文件 59、覆盖率 `app/` 71.16%〔14,732 语句／missed 4,249〕／核心层 99.34%〔604，持平〕、操作面 251（写 144／读 107）、`GATED` 58、sweep 作业 7**；Q352 快照＝**1328 passed＋10 skipped／收集 1338、头 0058、73 表·787 列、71.14%〔14,331／missed 4,136〕**；Q351 快照＝**1315 passed＋10 skipped／收集 1325、头仍 0057（同窗口修订 0057）**；Q351 快照＝**1315 passed＋10 skipped／收集 1325、头仍 0057（同窗口修订 0057）**；Q350 快照＝**1303 passed＋10 skipped／收集 1313**；Q346–Q349 基线为 **1297 passed＋10 skipped／收集 1307**〔Q346 本机带 `--cov` 复跑 198.24s；Q345 曾同数复跑 210.19s，Q343 双证原文见上方保留；此前多处抄写的「1273」是含 2 例沙箱误红的读数，与「收集 1285」不能同时成立；Q344/Q345 两批零后端改动、读数不变；Q346 是后端读闸批，涨的 22 条全在读闸矩阵测试里；Q347/Q348/Q349 三批纯文档零后端改动、读数不变〕、头 `0056_video_segments_objects`、73 表·787 列、覆盖率 `app/` **71.39%**〔14,238 语句／missed 4,074；Q343 读数 71.40%／14,245〔CI runner 同 SHA 71.41%〕，分母 −7＝Q346 删掉一条只认 operations 的读闸 helper〕／核心层 99.34%〔604 语句，持平〕；管理端侧栏 **17** 项＝Q345 新增「平台适配台」`/admin/platform-adaptation`（16 项＝Q344 新增「回滚中心」`/admin/change-ledger`）——本行由 Q349 刷新（Q347/Q348 两纯文档批漏刷、本批一并补登），前值 C1.289＝Q346／C1.288＝Q345／C1.287＝Q344／C1.286＝Q343／1273 passed／71.85%）。
+> **实现现状侧基线**：docs/23 §8 功能点全景 + docs/09 全景体系各菜单实现注记 + docs/02（最高 **C1.300＝Q357**）+ handoff（**Q357 后基线 1392 passed＋11 skipped／收集 1403、头 `0059_video_generation_tasks`（新建 1 表）、74 表·811 列、迁移文件 59、覆盖率 `app/` 71.16%〔14,732 语句／missed 4,249〕／核心层 99.34%〔604，持平〕、操作面 251（写 144／读 107）、`GATED` 58、sweep 作业 7**；Q352 快照＝**1328 passed＋10 skipped／收集 1338、头 0058、73 表·787 列、71.14%〔14,331／missed 4,136〕**；Q351 快照＝**1315 passed＋10 skipped／收集 1325、头仍 0057（同窗口修订 0057）**；Q350 快照＝**1303 passed＋10 skipped／收集 1313**；Q346–Q349 基线为 **1297 passed＋10 skipped／收集 1307**〔Q346 本机带 `--cov` 复跑 198.24s；Q345 曾同数复跑 210.19s，Q343 双证原文见上方保留；此前多处抄写的「1273」是含 2 例沙箱误红的读数，与「收集 1285」不能同时成立；Q344/Q345 两批零后端改动、读数不变；Q346 是后端读闸批，涨的 22 条全在读闸矩阵测试里；Q347/Q348/Q349 三批纯文档零后端改动、读数不变〕、头 `0056_video_segments_objects`、73 表·787 列、覆盖率 `app/` **71.39%**〔14,238 语句／missed 4,074；Q343 读数 71.40%／14,245〔CI runner 同 SHA 71.41%〕，分母 −7＝Q346 删掉一条只认 operations 的读闸 helper〕／核心层 99.34%〔604 语句，持平〕；管理端侧栏 **17** 项＝Q345 新增「平台适配台」`/admin/platform-adaptation`（16 项＝Q344 新增「回滚中心」`/admin/change-ledger`）——本行由 Q349 刷新（Q347/Q348 两纯文档批漏刷、本批一并补登），前值 C1.289＝Q346／C1.288＝Q345／C1.287＝Q344／C1.286＝Q343／1273 passed／71.85%）。
 > **登记**：本报告随 Q322 批落地（2026-10-09，docs/02 C1.265，纯文档零代码零迁移零测试变化）。
 
 ## 0. 结论摘要
@@ -61,12 +61,12 @@
 
 | 项 | 阻塞 | 出处 |
 |---|---|---|
-| DIM-SOURCE 7 路来源路由表 | 原文未给【待补】 | docs/09 D3.5、docs/02 Q8 相关挂账 |
+| ~~DIM-SOURCE 7 路来源路由表~~ **〔2026-10-14 订正〕路由表早已齐、旧挂账关闭**：迁移 `0003` 播 6 路（含 `common_inspiration`／`product_inspiration`）、`0053` 补第 7 路 `case_evidence`（Q325），消费方 `model_registry/field_plan.py` 动态读 enabled 路由 ⇒ "原文未给"不成立；该项真缺口改记为「**灵感库本体未建**」，已移入 §5.2（纯工程、非外部规格） | 已无外部阻塞 | docs/10:113、迁移 0003／0053、docs/25 Q8 行 |
 | 合理性校验「8 种检测名单＋综合评分公式」 | 原文未给【待补】，禁臆造 | docs/09 D3.5-3 |
 | PLATFORM-ADAPTER 真模型业务接入 | 等供应商规格＋eval/golden | docs/02 Q296/Q300、design-v2-platform-adapter-business |
 | fit_score 真自学习 | 被学的量无数据源（Q293 材料待裁） | docs/02 Q296/Q299 |
 | agnes 视频 `mode` 合法取值 | ~~原文未给【待补】~~ **〔Q353 已取得，本行改判〕＝规格不再待补**：官方接入文档 `wiki.agnes-ai.com/zh-Hans/docs/agnes-video-25` 写明 `mode` 三值 `text`／`keyframe`／`reference`＋全参数＋异步轮询契约；**真卡点换成两件**＝供应商侧免费档队列常满（现测两发均 `503 video_queue_full`，成功路径仍未验证）＋**我方无异步视频驱动**（`drivers.py` 只有 synthetic 与 OpenAI chat，`generation.py:214` 把返回当 chat JSON `{"video_ref"}` 读）。旧句"待补"的来由＝Q254 只翻了 `AgnesAI-Models` 模型目录（那份确实不列 `mode`），未翻 video 接入页＝取证面不足 | Q254 五种候选全 400／**Q353 订正**、docs/19 清单二第 6 项与第 17 项 |
-| ~~段12 真视频接线（Q353 新增待拍三件）~~ → **已裁已落（Q354）**；剩外部条件＝**供应商侧视频队列容量＋首次成功样本** | 供应商侧（非裁决） | docs/19 清单二第 17 项**已销账**（三件全按甲落地，02 C1.297）；我方驱动/表/Gate/上限都已在仓内，实测到「参数被供应商接受」为止（10 次全 `503 video_queue_full`），**拿到 `video_id` 并轮询到 `completed` 的真成功仍未证**，故 `test_video_drivers.py` 留一条缺 key 即 skip 的真供应商用例 |
+| ~~段12 真视频接线（Q353 新增待拍三件）~~ → **已裁已落（Q354）**；剩外部条件＝**供应商侧视频队列容量＋首次成功样本** | 供应商侧（非裁决） | docs/19 清单二第 17 项**已销账**（三件全按甲落地，02 C1.297）；我方驱动/表/Gate/上限都已在仓内，实测到「参数被供应商接受」为止（11 次全 `503 video_queue_full`，2026-10-14 复测仍满），**拿到 `video_id` 并轮询到 `completed` 的真成功仍未证**，故 `test_video_drivers.py` 留一条缺 key 即 skip 的真供应商用例 |
 | 付费档第 5 档额度 | 业务方给数 | docs/23 §8.5 |
 
 ### 5.2 未点工大项（纯工程，需点工）
@@ -76,12 +76,13 @@
 | video-studio 段12 视频支线（白名单信息区/分段编辑器/内容清洗区/生成结果区） | VIDEO-GEN 引擎预备切片已落（Q252）＋后端载体切片已落（Q323 `invoke_video_gen`＋kind 分流＋7 测试）＋管理端两屏 UI 已落（Q324：白名单信息区/生成结果区只读）；**Q326** 内置浏览器两屏验收通过并修复屏2 跨租户详情 404（新增管理端 `GET /api/admin/content/{id}` 跨租户只读口＋前端改调）；分段视图/内容清洗区操作面已随 **Q328** 全部按推荐甲落地（design-video-studio-segment-cleaning.md 已翻 ✅：S1 只读分段视图〔屏3〕＋S2 脚本复检〔屏4〕＋`GET /api/admin/content/{id}/script-recheck`）；分段编目＋对象存储已随 **Q336** 落地（①③甲），剩转写（agnes 契约【待供应商】）/成片复检（名单【待业务方】）） | docs/23 §8.5、Q252、Q323、Q324、Q326 |
 | WF-07 AI 选包四 Skill（docs/12 #21–24） | ✅ 规格已定稿（**Q325**，docs/12 §3.2 四份 v0.1）＋操作面已随 **Q328** 落地（`runtime/workflows/WF-07.yaml`＋`POST /api/ai-select/suggest`＋组装台「AI 选包建议」区；AI 只产候选、采用走统一审核台） | docs/23 §8.3 P2、docs/12 §3.2、Q325 |
 | 段9/12「选料只能从字典里选」运行期强校验 | Q323 核实收口：goal 维度强校验已闭环（E1.1 `_validate_goal` 404＋PWC `unknown_goals` 判红，只认 Q25 目的字典）；其余 16 池为 PCP 权重维度无自由池值输入点；Q38 六码随段7 点工挂账 | docs/02 C1.266、Q323 |
+| 灵感库本体（product-inspiration，产品基准段3 的法定拆维度来源，MVP 模块） | **未建**：无表、无 CRUD、无界面——DIM-SOURCE 七路中 `common_inspiration`／`product_inspiration` 两路自迁移 `0003` 起只有路由名、没有数据本体，AI 拆维度时这两路取不到内容。纯工程缺口、可点工，不属外部规格阻塞（原 §5.1「路由表原文未给」旧挂账随本行登记关闭） | 产品基准 §2 段3（灵感库＝通用＋产品专属两层）、docs/25 Q8 行〔2026-10-14 补记〕 |
 
 ### 5.3 V2/V3 规划（未做，不阻塞 MVP）
 
 - 段13 KUP 提案/爆款自动判定/校准报表（Q61/Q63/Q65）
 - P5 厚度：知识库系统（D3.7）、Memory 6 层（D3.13）、客户自助门户、反馈归因分析页、跨表亲和度自学习
-- V3 辅助系统 10 个（D3.12）：Knowledge Graph/Evidence Center/Simulation Sandbox/Rollback Center/Drift Detection/Human Feedback Loop/Context Pack Builder（Evaluation+Golden 已在 V1）
+- V3 辅助系统 10 个（D3.12）：Knowledge Graph/Evidence Center/Simulation Sandbox/Drift Detection/Human Feedback Loop/Context Pack Builder 仍未启动；**Rollback Center 甲案只读聚合面已落**＝`GET /api/admin/change-ledger`（Q334）＋管理端 `/admin/change-ledger` 屏（Q344），乙＝Prompt 版本回滚写口／丙＝通用快照-恢复未裁（乙标 `no_surface` 挂账，design-v3-rollback-center.md）；Evaluation+Golden 已在 V1〔**2026-10-14 订正**：本行原把 Rollback Center 平列在"未做"里，与其甲案已落地的事实不符〕
 - 周边（D9.5）：计费订阅（D3.11-6）、社媒账号管理、完整 BI、Webhook 推送体系、SDK 嵌入、移动端、国际化界面、白牌定制
 - 内容目的配比软提示仪表盘（Q44）：未见独立落地，随段9 后续核对
 
