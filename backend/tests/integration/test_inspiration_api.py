@@ -10,11 +10,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
+from app.core.tenants.models import Tenant
 from app.main import app
 from app.product.inspiration import service as inspiration_service
 from app.product.inspiration.models import InspirationEntry
 from app.product.product_intake.models import ProductSpace
-from app.core.tenants.models import Tenant
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 ADMIN = {"id": "admin-1", "roles": ["platform_admin"]}
