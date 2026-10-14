@@ -183,6 +183,29 @@ CONFLICT_PRECHECK_PROMPT_VARIABLES = [
     "target_range",
 ]
 
+# Q18：段4 缺证据候选的 AI 补证据一轮（operations 显式触发，真模型调用不自动）。
+SCENE_ATOM_EVIDENCE = "ATOM-EVIDENCE"
+ATOM_EVIDENCE_PROMPT_VERSION = "v0.1"
+ATOM_EVIDENCE_PROMPT_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:ATOM-EVIDENCE:v0.1")
+)
+
+ATOM_EVIDENCE_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段4 的 ATOM-EVIDENCE Skill：为一个缺证据的原子候选补一轮证据。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【待补证据的原子候选】
+内容：$content
+风险等级：$risk_level
+事实类型：$fact_type（空字符串表示通用人类表达原子）
+
+硬性规则（Q18 v0.1 工程口径，原文未给）：
+1. 证据必须来自候选内容可直接支撑的事实来源/场景描述，禁止臆造文献、禁止伪造外部链接。
+2. 证据为一段可读的中文说明（约 50–200 字），说明该表达成立的依据。
+3. 只输出 {"evidence": "..."}；无法给出合规证据时 evidence 给空字符串。
+4. 该证据仍需人工 Gate 复核，不因 AI 补证自动放行。
+"""
+
+ATOM_EVIDENCE_PROMPT_VARIABLES = ["content", "risk_level", "fact_type"]
+
 SCENE_ARTICLE_GEN = "ARTICLE-GEN"
 ARTICLE_GEN_PROMPT_VERSION = "v0.1"
 ARTICLE_GEN_PROMPT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:ARTICLE-GEN:v0.1"))

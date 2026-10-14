@@ -432,6 +432,15 @@ def build_pt_content_goal_tag(variables: dict) -> dict:
 BUILDERS["PT-CONTENT-GOAL-TAG"] = build_pt_content_goal_tag
 
 
+def build_atom_evidence(variables: dict) -> dict:
+    """Q18：AI 补证据替身（确定性、非空；真 LLM 路径输出同形状 JSON）。"""
+    content = variables.get("content", "")
+    return {"evidence": f"AI 补证（synthetic）：{content} 系产品既有表达，可用于复核。"}
+
+
+BUILDERS["ATOM-EVIDENCE"] = build_atom_evidence
+
+
 def _embed_one(text: str) -> list[float]:
     # 字袋哈希向量：ascii 词 + CJK 单字 + CJK 相邻二元组，各桶 ±1 计数后
     # L2 归一化。相同文本必相同向量；共享长前缀的文本余弦高（确定性、无随机）。
