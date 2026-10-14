@@ -1274,6 +1274,96 @@ export async function revokeAgentKey(keyId: string): Promise<AgentKeyView> {
   );
 }
 
+// Q359：租户灵感库运营配置台（消费 Q358 /api/admin/inspiration-entries 四端点）。
+// 读写同闸 operations/platform_admin：读口 actor 走 query（Q307 契约，重复 roles），
+// 写口 actor 在请求体（InspirationCreate/Update/Delete 均内嵌 actor）。layer 为
+// 闭合枚举码（common/product），product 层必须绑 product_space_id。
+export interface InspirationEntryView {
+  entry_id: string;
+  tenant_id: string;
+  layer: string;
+  product_space_id: string | null;
+  content: string;
+  tags: string[];
+  enabled: boolean;
+  usage_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface InspirationListQuery {
+  tenantId: string;
+  layer?: string;
+  productSpaceId?: string;
+  enabled?: boolean;
+}
+
+export async function listInspirationEntries(
+  query: InspirationListQuery,
+): Promise<InspirationEntryView[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  params.set("tenant_id", query.tenantId);
+  if (query.layer) params.set("layer", query.layer);
+  if (query.productSpaceId) params.set("product_space_id", query.productSpaceId);
+  if (query.enabled !== undefined) params.set("enabled", String(query.enabled));
+  return request<InspirationEntryView[]>(`/api/admin/inspiration-entries?${params}`);
+}
+
+export async function createInspirationEntry(input: {
+  tenantId: string;
+  layer: string;
+  productSpaceId?: string | null;
+  content: string;
+  tags: string[];
+  enabled: boolean;
+}): Promise<InspirationEntryView> {
+  return request<InspirationEntryView>("/api/admin/inspiration-entries", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      layer: input.layer,
+      product_space_id: input.productSpaceId?.trim() || null,
+      content: input.content,
+      tags: input.tags,
+      enabled: input.enabled,
+      actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+    }),
+  });
+}
+
+export async function updateInspirationEntry(
+  entryId: string,
+  input: { content?: string; tags?: string[]; enabled?: boolean },
+): Promise<InspirationEntryView> {
+  return request<InspirationEntryView>(
+    `/api/admin/inspiration-entries/${encodeURIComponent(entryId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        content: input.content,
+        tags: input.tags,
+        enabled: input.enabled,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
+export async function deleteInspirationEntry(
+  entryId: string,
+): Promise<{ deleted: string }> {
+  return request<{ deleted: string }>(
+    `/api/admin/inspiration-entries/${encodeURIComponent(entryId)}`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
 // Q168：中台导出任务管理（消费 Q132/Q137 /api/exports/jobs；中台无 RBAC 闸，actor 留痕）。
 export interface ExportJobView {
   job_id: string;
