@@ -40,6 +40,7 @@ const requiredKeys = [
   "admin.fcwNav",
   "admin.changeLedgerNav",
   "admin.platformAdaptationNav",
+  "admin.inspirationEntriesNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -372,6 +373,54 @@ const requiredKeys = [
   ...[
     "title",
     "intro",
+    "tenantLabel",
+    "tenantPlaceholder",
+    "querySubmit",
+    "needTenant",
+    "layerLabel",
+    "layerAll",
+    "layerOptionCommon",
+    "layerOptionProduct",
+    "enabledLabel",
+    "enabledAll",
+    "stateEnabled",
+    "stateDisabled",
+    "productSpaceLabel",
+    "productSpacePlaceholder",
+    "productSpaceCreateLabel",
+    "productSpaceCreatePlaceholder",
+    "createTitle",
+    "contentLabel",
+    "contentPlaceholder",
+    "tagsLabel",
+    "tagsPlaceholder",
+    "enabledCreateLabel",
+    "createSubmit",
+    "listTitle",
+    "empty",
+    "loadFailed",
+    "colContent",
+    "colLayer",
+    "colProductSpace",
+    "colTags",
+    "colEnabled",
+    "colUsage",
+    "colUpdated",
+    "colAction",
+    "edit",
+    "save",
+    "cancel",
+    "saved",
+    "created",
+    "deleteSubmit",
+    "deleteConfirm",
+    "deleted",
+    "actorUnconfigured",
+    "actorMissingRole",
+  ].map((k) => `admin.inspirationEntries.${k}`),
+  ...[
+    "title",
+    "intro",
     "issueTitle",
     "staffIdLabel",
     "staffIdPlaceholder",
@@ -558,6 +607,10 @@ const requiredFiles = [
   join("fcw", "review", "page.tsx"),
   join("change-ledger", "page.tsx"),
   join("platform-adaptation", "page.tsx"),
+  join("inspiration-entries", "page.tsx"),
+  join("inspiration-entries", "actions.ts"),
+  join("inspiration-entries", "create-island.tsx"),
+  join("inspiration-entries", "edit-island.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -672,11 +725,13 @@ if (!sidebarText.includes("/admin/change-ledger"))
   problems.push("admin sidebar must link the rollback center (Q334 甲案界面片，Q344)");
 if (!sidebarText.includes("/admin/platform-adaptation"))
   problems.push("admin sidebar must link the stage 7/8 platform adaptation console (Q345)");
+if (!sidebarText.includes("/admin/inspiration-entries"))
+  problems.push("admin sidebar must link the inspiration library console (Q359)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  // 17＝Q345 加入平台适配台（此前 16＝Q344 加入回滚中心，15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
-  if (navCount !== 17)
-    problems.push(`admin sidebar must keep exactly 17 admin entries, got ${navCount}`);
+  // 18＝Q359 加入灵感库（此前 17＝Q345 加入平台适配台，16＝Q344 加入回滚中心，15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
+  if (navCount !== 18)
+    problems.push(`admin sidebar must keep exactly 18 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -740,6 +795,11 @@ for (const token of [
   "/api/admin/platform-rules",
   "/api/admin/platform-rules/match",
   "/api/admin/pcp-templates",
+  "listInspirationEntries",
+  "createInspirationEntry",
+  "updateInspirationEntry",
+  "deleteInspirationEntry",
+  "/api/admin/inspiration-entries",
   "actor_id",
 ]) {
   if (!apiText.includes(token)) problems.push(`lib/api.ts must contain ${token}`);
@@ -1944,6 +2004,104 @@ for (const route of ['"/api/admin/fcw"', '"/api/admin/fcw/{final_id}/material"']
 for (const token of ["require_fcw_admin_view", "OPERATIONS", "PLATFORM_ADMIN"]) {
   if (!fcwRouter.includes(token))
     problems.push(`backend fcw admin endpoints must gate via ${token}`);
+}
+
+// Q359：灵感库运营配置台（/admin/inspiration-entries）＝Q358 后端 CRUD 的前端切片。
+// 口径：列表只读 RSC（tenant_id 必填查询，Q307 读契约带 ADMIN_ROLE_LIST）；
+// 新建/编辑/启停/删除走 Server Action（operations 或 platform_admin 预检），
+// 删除为终态动作必须 confirm；文案键回查防 MISSING_MESSAGE（Q344 教训）。
+const iePage = readAdmin(join("inspiration-entries", "page.tsx"));
+const ieActions = readAdmin(join("inspiration-entries", "actions.ts"));
+const ieCreate = readAdmin(join("inspiration-entries", "create-island.tsx"));
+const ieEdit = readAdmin(join("inspiration-entries", "edit-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(iePage))
+  problems.push("inspiration-entries/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(iePage) || /https?:\/\//.test(iePage))
+  problems.push("inspiration-entries/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (iePage.includes(forbidden))
+    problems.push(`inspiration-entries/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of [
+  "listInspirationEntries(",
+  "CreateEntryIsland",
+  "EntryRowActions",
+  'name="tenant_id"',
+  'data-testid="inspiration-entries-admin"',
+]) {
+  if (!iePage.includes(token))
+    problems.push(`inspiration-entries page must use ${token}`);
+}
+if (!/^"use server"/m.test(ieActions))
+  problems.push("inspiration-entries/actions.ts must be a Server Action module");
+for (const token of [
+  "createInspirationEntryAction",
+  "updateInspirationEntryAction",
+  "deleteInspirationEntryAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "unconfigured",
+  "missing_role",
+  "createInspirationEntry",
+  "updateInspirationEntry",
+  "deleteInspirationEntry",
+]) {
+  if (!ieActions.includes(token))
+    problems.push(`inspiration-entries actions must contain ${token}`);
+}
+for (const status of [403, 404, 409, 422]) {
+  if (!ieActions.includes(String(status)))
+    problems.push(`inspiration-entries actions must map failure status ${status}`);
+}
+for (const [name, text] of [["create-island", ieCreate], ["edit-island", ieEdit]]) {
+  if (!/^"use client"/m.test(text))
+    problems.push(`inspiration-entries ${name} must be a client island`);
+  if (text.includes("@/lib/api") || /\bfetch\s*\(/.test(text) || /https?:\/\//.test(text))
+    problems.push(`inspiration-entries ${name} must call only the Server Action, never the API directly`);
+  if (!text.includes("router.refresh"))
+    problems.push(`inspiration-entries ${name} must refresh the RSC view after success`);
+}
+if (!ieEdit.includes("window.confirm"))
+  problems.push("inspiration-entries edit island must confirm the terminal delete action");
+if (!getKey(messages, "admin.inspirationEntries.deleteConfirm")?.includes("{id}"))
+  problems.push("admin.inspirationEntries.deleteConfirm must contain the {id} placeholder");
+{
+  // Q307 读契约：list 函数块内必须带 ADMIN_ROLE_LIST（反解按 export 切块，种植可测）。
+  const block = apiText.split("\nexport async function ").find((chunk) =>
+    chunk.startsWith("listInspirationEntries("),
+  );
+  if (!block) problems.push("lib/api.ts must define listInspirationEntries");
+  else if (!block.includes("ADMIN_ROLE_LIST"))
+    problems.push("listInspirationEntries must append ADMIN_ROLE_LIST (else the Q307 read contract can't see it)");
+}
+{
+  // 文案键回查：页面＋两岛的 t("...") 必须真实存在于 admin.inspirationEntries。
+  const ieMessages = messages.admin?.inspirationEntries ?? {};
+  for (const [name, text] of [["page", iePage], ["create-island", ieCreate], ["edit-island", ieEdit]]) {
+    for (const key of [...text.matchAll(/\bt\("([A-Za-z0-9]+)"/g)].map((m) => m[1])) {
+      const value = ieMessages[key];
+      if (typeof value !== "string" || !value)
+        problems.push(`inspiration-entries message key missing: admin.inspirationEntries.${key} (${name})`);
+    }
+  }
+  const errorMessages = messages.error ?? {};
+  for (const text of [iePage, ieActions, ieCreate, ieEdit]) {
+    for (const code of [...text.matchAll(/"(4\d\d)"/g)].map((m) => m[1])) {
+      if (typeof errorMessages[code] !== "string")
+        problems.push(`error.${code} message key does not exist but inspiration-entries maps it into tError`);
+    }
+  }
+}
+const inspRouter = readFileSync(
+  join(repoRoot, "backend", "app", "product", "inspiration", "router.py"), "utf8",
+);
+for (const route of ['"/admin/inspiration-entries"', '"/admin/inspiration-entries/{entry_id}"']) {
+  if (!inspRouter.includes(route))
+    problems.push(`backend inspiration router must register ${route}`);
+}
+for (const token of ["require_inspiration_view", "OPERATIONS", "PLATFORM_ADMIN"]) {
+  if (!inspRouter.includes(token))
+    problems.push(`backend inspiration admin endpoints must gate via ${token}`);
 }
 
 if (problems.length > 0) {
