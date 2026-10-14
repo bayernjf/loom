@@ -46,6 +46,7 @@ from app.platform.platform_adaptation.router import router as platform_router
 from app.product.atom.router import router as atom_router
 from app.product.condition.router import router as pwc_router
 from app.product.fieldpool.router import router as fieldpool_router
+from app.product.inspiration.router import router as inspiration_router
 from app.product.modeling.router import router as modeling_router
 from app.product.product_intake.router import router as intake_router
 from app.product.whitelist_center.router import router as pws_router
@@ -173,6 +174,7 @@ async def _permission_denied_handler(_: Request, exc: PermissionDenied) -> JSONR
 app.include_router(intake_router)
 app.include_router(modeling_router)
 app.include_router(fieldpool_router)
+app.include_router(inspiration_router)
 app.include_router(wordlist_router)
 app.include_router(downgrade_actions_router)
 app.include_router(pool_options_router)
