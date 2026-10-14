@@ -74,11 +74,11 @@
 |---|---|---|---|---|
 | Q14 | 批次 20/50 配置化，敏感 20／非敏感 50，运营可改 | ✅ | `config_center/seeds.py:24-25`；`atom/atom_rules.py:25-30,109-110`；`model_registry/atom_expand.py:109-111` 按 `ps.sensitive_industry` 取默认；`model_registry/schemas.py:117` 入参可改 | ~~实际取值受 Q11 旗标恒 False 影响~~〔Q350 派生链路已落，影响消除；§9-① 注记〕 |
 | Q15 | FieldPool 目标原子数 15–30，达标停拓 | ✅ | `fieldpool/models.py:69-70`；`planning.py:33-38`；`fieldpool/schemas.py:37-38` Gate 可改；停拓 `atom_expand.py:88-92` + `atom_rules.py:211-213` `target_reached()` | 手动追加批次不受限（代码注释明示） |
-| Q16 | 亲和度不设硬淘汰线；仅排序 + <0.5 标"低亲和" | 🟡 | 标记落：`atom_rules.py:33-34,118-119`、`seeds.py:26` `atom.low_affinity_line=0.5`、`atom/service.py:196`、`models.py:126` | **排序未落地**：候选列表一律 `order_by(created_at)`（`atom/service.py:284,298,310`） |
+| Q16 | 亲和度不设硬淘汰线；仅排序 + <0.5 标"低亲和" | ✅ | 标记落：`atom_rules.py:33-34,118-119`、`seeds.py:26` `atom.low_affinity_line=0.5`、`atom/service.py:196`、`models.py:126`；排序落（Q360 C1.302）：三列表查询加 `sort` 参数（`atom/service.py` `_apply_sort`，affinity 降序 nulls_last，默认 created_at 原契约），两读口 `sort: Literal["created_at","affinity"]` | ~~排序未落地~~ Q360 已销（2026-10-14） |
 | Q17 | risk 双轨（词表强制/AI 兜底/只升不降）+ 词表后台 CRUD | ✅ | `atom_rules.py:141-146` `grade_risk()`；只升：`atom/service.py:619-630`（`risk_source=="wordlist"` → `RiskOverrideForbidden`）；词表 CRUD `core/compliance_wordlist/router.py:59-108`、`service.py:62-147` | — |
-| Q18 | pending_evidence：AI 自动补一轮 → 运营待办 → 7 天超时自动驳回（可复活） | 🟡 | 超时驳回 ✅ `atom/service.py:543-567` `sweep_evidence_timeouts()`；复活 ✅ `atom/service.py:503-540`；`seeds.py:28` `atom.evidence_timeout_days=7` | **"AI 自动补一轮"未落**（仅人工补证据口 `atom/service.py:470-500`）；**运营待办未落**（`rg "evidence" app/core/workbench/` 零命中） |
-| Q19 | AI 标簇 + 推荐保留项（亲和度最高），被合并记 alias 不删 | 🟡 | 成簇 `atom_rules.py:237-277`（Q86 起为 embedding 本地确定性算）；推荐规则 `atom_rules.py:199-208` `pick_cluster_keeper()`；保留 alias ✅ `atom/service.py:572-614`（status=merged、alias_of）、`:355` | `pick_cluster_keeper` **未接线自动推荐**（需人工传 `keeper_candidate_id`，`atom/schemas.py:61`） |
-| Q20 | 冻结/解冻=运营；合规暂停=合规角色；已废弃恢复重走审核 | 🟡 | 冻结解冻=operations `atom/service.py:706-724`；合规暂停/恢复=internal_compliance `atom/service.py:726-745` | **"废弃恢复重走审核"未落**：atom 域无 restore（`rg "restore" app/product/atom/` 零命中；同名 restore 只在 fieldpool 维度 `fieldpool/router.py:239`） |
+| Q18 | pending_evidence：AI 自动补一轮 → 运营待办 → 7 天超时自动驳回（可复活） | ✅ | 超时驳回 ✅ `atom/service.py:543-567` `sweep_evidence_timeouts()`；复活 ✅ `atom/service.py:503-540`；`seeds.py:28` `atom.evidence_timeout_days=7`；人工补证 `atom/service.py:470-500`；AI 补证（Q360 C1.302）＝`ATOM-EVIDENCE` 场景（`model_registry/seeds.py` 提示词 v0.1 工程口径）＋operations 显式端点 `/atom-candidates/{id}/evidence/ai-supplement`（Q354 同族花钱纪律：逐单过人不自动，失败不重试保持 pending_evidence）；运营待办＝`atom_rules.TODO_TYPE_EVIDENCE`＋`OpsTodo`（落 pending_evidence 即开、补证/超时自动关，幂等） | ~~AI 自动补一轮未落~~／~~运营待办未落~~ Q360 已销（2026-10-14） |
+| Q19 | AI 标簇 + 推荐保留项（亲和度最高），被合并记 alias 不删 | ✅ | 成簇 `atom_rules.py:237-277`（Q86 起为 embedding 本地确定性算）；推荐规则 `atom_rules.py:199-208` `pick_cluster_keeper()`；保留 alias ✅ `atom/service.py:572-614`（status=merged、alias_of）、`:355`；自动推荐接线（Q360 C1.302）＝读口 `/atom-clusters/{id}/members` 返 `recommended_keeper_id` 供界面预填＋`ClusterResolveRequest.keeper_candidate_id` 可省略（service 用 `pick_cluster_keeper` 兜底） | ~~pick_cluster_keeper 未接线~~ Q360 已销（2026-10-14；"落推荐值到候选行"经裁以读口+可选入参实现，前端无 atom 页面故无预填 UI） |
+| Q20 | 冻结/解冻=运营；合规暂停=合规角色；已废弃恢复重走审核 | ✅ | 冻结解冻=operations `atom/service.py:706-724`；合规暂停/恢复=internal_compliance `atom/service.py:726-745`；废弃恢复（Q360 C1.302）＝`POST /api/atoms/{id}/restore`（operations 凭证闸，GATED 登记）：新建 manual 批次候选重走 Gate/冲突/证据流程、旧实例保持 deprecated 留痕、事实原子值先排除自身再查重（line 11189） | ~~废弃恢复重走审核未落~~ Q360 已销（2026-10-14） |
 
 ### 3.4 段 5 · PWC（Q21–Q27）
 
@@ -210,10 +210,10 @@
 | ~~Q11 + Q14 + Q49~~ | ~~旗标全仓零赋值，三路径恒不触发~~ **Q350 已裁甲并落地（02 C1.293）**：Q7 派生＋0057 种子 | ✅ 已销（2026-10-12） |
 | Q7 | ~~缺食品/母婴种子~~ Q350 已补迁移 0057（0.85 默认档）；**残留**：原文 0.90 阈值待业务权威确认 | 待业务方给阈值口径后改配置（纯配置，无工程缺口） |
 | Q9 | "魔法数字禁止硬编码"无强制手段 | 加一条 lint/哨兵测试，或明确"靠人工登记"并写入纪律 |
-| Q16 | 候选列表未按亲和度排序 | `atom/service.py` 加可选排序参数 |
-| Q18 | AI 自动补证据一轮 + 运营待办 | 接 volcengine ark One 轮 LLM 补证据 + 五型外新增 evidence todo_type |
-| Q19 | `pick_cluster_keeper` 未接线自动推荐 | 落推荐值到候选行，界面预填 |
-| Q20 | 原子"恢复重走审核" | 新增 atom restore 端点（对标 fieldpool restore） |
+| ~~Q16~~ | ~~候选列表未按亲和度排序~~ **Q360 已裁甲并落地（02 C1.302）**：三列表加 `sort` 参数，读口 `sort=affinity` | ✅ 已销（2026-10-14） |
+| ~~Q18~~ | ~~AI 自动补证据一轮 + 运营待办~~ **Q360 已落地（02 C1.302）**：ATOM-EVIDENCE 场景（operations 显式端点）＋evidence todo_type 待办 | ✅ 已销（2026-10-14） |
+| ~~Q19~~ | ~~`pick_cluster_keeper` 未接线自动推荐~~ **Q360 已落地（02 C1.302）**：members 读口返推荐值＋resolve 可省略 keeper | ✅ 已销（2026-10-14） |
+| ~~Q20~~ | ~~原子"恢复重走审核"~~ **Q360 已落地（02 C1.302）**：新增 `/atoms/{id}/restore`（对标 fieldpool restore） | ✅ 已销（2026-10-14） |
 | Q21 | 检测项开关/顺序配置化 + 排序限量截断 | seeds 加 detector 键（参考 Q39 模板做法） |
 | Q25 | 录入端"内容用途"未绑定 ContentGoal 字典 | 录入校验改为取字典枚举 |
 | Q26 | 预筛未实现 ⇒ "跳预筛"无从验证 | 随 Q21 一并处理 |

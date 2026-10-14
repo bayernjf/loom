@@ -3,6 +3,12 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q360 段4 原子缺口批一次收口＝Q16 排序参数／Q18 AI 补证一轮＋运营待办／Q19 keeper 自动推荐／Q20 废弃恢复重走审核（2026-10-14；**后端代码＋测试＋文档，零迁移零前端**；测试 **1409 passed＋11 skipped**（全量单跑 117.29s）、ruff 涉改九文件净、写口矩阵 GATED **46→48**（＋2 均 OPS）；02 C1.302）**——负责人点工「从 B 类工程缺口点工一批（Q16/Q18/Q20 等）」，docs/25 §3.3 四行销账。
+  - **Q16 排序**：`atom/service.py` 三列表查询加 `_apply_sort`（affinity 降序 nulls_last，默认 created_at 保原契约），两 GET 读口加 `sort: Literal["created_at","affinity"]`（非法值 422）。
+  - **Q18 AI 补证＋运营待办**：新 `ATOM-EVIDENCE` 场景（seeds 提示词 v0.1，工程口径标注"原文未给"）＋ operations 显式端点 `/atom-candidates/{id}/evidence/ai-supplement`（Q354 花钱纪律：逐单过人不自动、失败不重试、候选保持 pending_evidence；上游不可用 409／配置错 422／输出非法 502）；新 `todo_type="evidence"` 运营待办（落 pending_evidence 即幂等开，补证/超时自动关），synthetic 替身 `build_atom_evidence` 注册。
+  - **Q19 keeper 推荐**：`GET /atom-clusters/{id}/members` 返 `recommended_keeper_id`（供界面预填）；`ClusterResolveRequest.keeper_candidate_id` 可省略，省略时用 `pick_cluster_keeper` 兜底。
+  - **Q20 废弃恢复**：`POST /atoms/{id}/restore`（operations 凭证闸）：新建 manual 批次候选重走 Gate/冲突/证据流程、旧实例保持 deprecated 留痕、事实原子值排除自身（atom_id+candidate_id）再查重（line 11189）。
+  - **自查修掉两处真缺陷**：① `_resolve_evidence_todo` 只写 resolved_at 不置 status ⇒ 复活后误判旧待办仍 open 不再开新待办（集成用例先红后绿）；② 事实原子恢复首版只排除 atom_id、未排除已批准候选行（status=approved 恒 live）⇒ 永远无法恢复。**刻意不做**＝AI 补证不自动串链；不建前端（无 atom 管理页面）；不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）。
 - **Q359 灵感库运营配置台前端切片＝管理端 `/admin/inspiration-entries` 列表／过滤／新建／编辑／删除／启停（2026-10-14；**纯前端批，零后端零迁移零测试变化**；后端基线＝Q358 时点〔头 `0060_inspiration_entries`／75 表·821 列·迁移文件 60〕，复跑相关面 `pytest -k inspiration` **10 passed**；前端 tsc 净＋八检查器全绿〔check-admin ＋Q359 判据块〕；管理端侧栏 17→**18** 项；前端 ts/tsx 112→**116**；02 C1.301）**——负责人点工「把你能搞的做了」＝补 Q358 刻意留下的「无界面」缺口（Q358 ⑤ 挂账的运营配置台切片）。
   - **读侧照 Q307 契约**：`lib/api.ts` 新增 `InspirationEntryView` 九字段与 list/create/update/delete 四函数，读函数块内 `append("roles", ...)` 遍历 `ADMIN_ROLE_LIST`；RSC 页面 `force-dynamic` 只读，tenant_id 必填过滤＋layer/product_space_id/enabled 可选，无 tenantId 渲提示、403/404/409/422 渲 `ErrorState`。
   - **写侧三岛照 actions 范式**：`actions.ts`（`"use server"`）三 Action＋两态预检（unconfigured/missing_role）＋create 本地先挡 422；create/edit 两 client 岛禁直连 API，成功 `router.refresh()`，删除走 `window.confirm`（`deleteConfirm` 含 `{id}`）；tags 按 `[,，]` 分隔、product 层条件渲染 productSpaceId。
