@@ -6,6 +6,7 @@ WF-03 四 Skill（ATOM-EXPAND/CANON/AFFINITY/CONFLICT-PRECHECK）的 AI 通道�
 M4 接收结构化候选做确定性处理。
 """
 
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
@@ -13,6 +14,8 @@ from sqlalchemy import select
 
 from app.core.audit import append_audit
 from app.core.compliance_wordlist import service as wl_service
+from app.core.model_registry import gateway
+from app.core.model_registry.seeds import SCENE_ATOM_EVIDENCE
 from app.product.atom import atom_rules
 from app.product.atom.models import (
     AtomBatch,
@@ -21,6 +24,7 @@ from app.product.atom.models import (
     ProductAtomInstance,
 )
 from app.product.fieldpool.models import FieldPool, FPDimension
+from app.product.modeling.models import OpsTodo
 from app.product.product_intake.models import ProductSpace
 
 
@@ -72,6 +76,14 @@ class GateNotAllowed(Exception):
 
 class RiskOverrideForbidden(Exception):
     pass
+
+
+class AtomEvidenceOutputInvalid(Exception):
+    pass
+
+
+# Q18：AI 补证单轮输出长度上限（整数，不参与 Q357 浮点守卫）。
+EVIDENCE_AI_MAX_CHARS = 2000
 
 
 def _now() -> datetime:
@@ -214,6 +226,8 @@ async def submit_batch(session, product_space_id: str, body, actor, *, embedding
                     detail={"risk_level": grade.level, "risk_source": grade.source},
                 )
             )
+        if candidate.status == atom_rules.CAND_PENDING_EVIDENCE:
+            await _ensure_evidence_todo(session, candidate, due)
 
     await append_audit(
         session,
@@ -245,69 +259,81 @@ async def _approved_atom_count(session, product_space_id: str) -> int:
     return len(rows.all())
 
 
-async def _fact_value_exists(session, normalized: str) -> bool:
-    """line 11189：事实原子值全局唯一（跨产品/跨租户严禁复用）。"""
+async def _fact_value_exists(
+    session,
+    normalized: str,
+    *,
+    exclude_atom_id: str | None = None,
+    exclude_candidate_id: str | None = None,
+) -> bool:
+    """line 11189：事实原子值全局唯一（跨产品/跨租户严禁复用）。
+
+    exclude_atom_id/exclude_candidate_id：Q20 恢复时排除被恢复原子自身——
+    其废弃实例与其已批准候选行都是"已存在"，不排除则事实原子永远无法恢复。
+    """
     live_candidate_statuses = [
         atom_rules.CAND_PENDING_REVIEW,
         atom_rules.CAND_PENDING_EVIDENCE,
         atom_rules.CAND_APPROVED,
     ]
-    c_rows = await session.scalars(
-        select(AtomCandidate.candidate_id).where(
-            AtomCandidate.normalized == normalized,
-            AtomCandidate.fact_type.is_not(None),
-            AtomCandidate.status.in_(live_candidate_statuses),
-        )
+    c_stmt = select(AtomCandidate.candidate_id).where(
+        AtomCandidate.normalized == normalized,
+        AtomCandidate.fact_type.is_not(None),
+        AtomCandidate.status.in_(live_candidate_statuses),
     )
-    if c_rows.first() is not None:
+    if exclude_candidate_id is not None:
+        c_stmt = c_stmt.where(AtomCandidate.candidate_id != exclude_candidate_id)
+    if (await session.scalars(c_stmt)).first() is not None:
         return True
-    a_rows = await session.scalars(
-        select(ProductAtomInstance.atom_id).where(
-            ProductAtomInstance.normalized == normalized,
-            ProductAtomInstance.fact_type.is_not(None),
-            ProductAtomInstance.status != atom_rules.ATOM_ARCHIVED,
-        )
+    a_stmt = select(ProductAtomInstance.atom_id).where(
+        ProductAtomInstance.normalized == normalized,
+        ProductAtomInstance.fact_type.is_not(None),
+        ProductAtomInstance.status != atom_rules.ATOM_ARCHIVED,
     )
-    return a_rows.first() is not None
+    if exclude_atom_id is not None:
+        a_stmt = a_stmt.where(ProductAtomInstance.atom_id != exclude_atom_id)
+    return (await session.scalars(a_stmt)).first() is not None
 
 
 # ---------- 查询 ----------
 
-async def list_batch_candidates(session, batch_id: str) -> Sequence[AtomCandidate]:
+def _apply_sort(stmt, sort: str, model):
+    """Q16：可选排序参数；created_at=原序（默认，保持既有契约），affinity=亲和度降序（NULL 最后）。"""
+    if sort == "affinity":
+        return stmt.order_by(model.affinity.desc().nulls_last(), model.created_at)
+    return stmt.order_by(model.created_at)
+
+
+async def list_batch_candidates(
+    session, batch_id: str, *, sort: str = "created_at"
+) -> Sequence[AtomCandidate]:
     batch = await session.get(AtomBatch, batch_id)
     if batch is None:
         raise BatchNotFound(batch_id)
-    return (
-        await session.scalars(
-            select(AtomCandidate)
-            .where(AtomCandidate.batch_id == batch_id)
-            .order_by(AtomCandidate.created_at)
-        )
-    ).all()
+    stmt = select(AtomCandidate).where(AtomCandidate.batch_id == batch_id)
+    return (await session.scalars(_apply_sort(stmt, sort, AtomCandidate))).all()
 
 
 async def list_ps_candidates(
-    session, product_space_id: str, status: str | None = None
+    session, product_space_id: str, status: str | None = None, *, sort: str = "created_at"
 ) -> Sequence[AtomCandidate]:
     stmt = select(AtomCandidate).where(
         AtomCandidate.product_space_id == product_space_id
     )
     if status is not None:
         stmt = stmt.where(AtomCandidate.status == status)
-    return (
-        await session.scalars(stmt.order_by(AtomCandidate.created_at))
-    ).all()
+    return (await session.scalars(_apply_sort(stmt, sort, AtomCandidate))).all()
 
 
 async def list_atoms(
-    session, product_space_id: str, status: str | None = None
+    session, product_space_id: str, status: str | None = None, *, sort: str = "created_at"
 ) -> Sequence[ProductAtomInstance]:
     stmt = select(ProductAtomInstance).where(
         ProductAtomInstance.product_space_id == product_space_id
     )
     if status is not None:
         stmt = stmt.where(ProductAtomInstance.status == status)
-    return (await session.scalars(stmt.order_by(ProductAtomInstance.created_at))).all()
+    return (await session.scalars(_apply_sort(stmt, sort, ProductAtomInstance))).all()
 
 
 async def _open_conflict_types(session, candidate_id: str) -> set[str]:
@@ -467,6 +493,60 @@ async def reject_candidate(session, candidate_id: str, reason: str, actor) -> At
 
 # ---------- Q18 证据 ----------
 
+async def _ensure_evidence_todo(session, cand: AtomCandidate, now: datetime) -> None:
+    """Q18：缺证据候选自动开运营待办（todo_type=evidence，幂等不重复开）。
+
+    运营待办=PRD「AI 自动补一轮 → 运营待办」的确定性半边：候选一旦落
+    pending_evidence 即开待办，人工/AI 补证后由 _resolve_evidence_todo 关闭。
+    """
+    if cand.status != atom_rules.CAND_PENDING_EVIDENCE:
+        return
+    open_todo = (
+        await session.scalars(
+            select(OpsTodo).where(
+                OpsTodo.todo_type == atom_rules.TODO_TYPE_EVIDENCE,
+                OpsTodo.entity_type == "atom_candidate",
+                OpsTodo.entity_id == cand.candidate_id,
+                OpsTodo.status == "open",
+            )
+        )
+    ).first()
+    if open_todo is not None:
+        return
+    session.add(
+        OpsTodo(
+            tenant_id=cand.tenant_id,
+            todo_type=atom_rules.TODO_TYPE_EVIDENCE,
+            entity_type="atom_candidate",
+            entity_id=cand.candidate_id,
+            assignee_role=atom_rules.ROLE_OPERATIONS,
+            detail={
+                "reason": "evidence_missing",
+                "evidence_due_days": atom_rules.evidence_timeout_days(),
+            },
+            due_at=cand.evidence_due_at or now,
+        )
+    )
+
+
+async def _resolve_evidence_todo(session, cand: AtomCandidate, resolution: str) -> None:
+    """证据到位（人工/AI）或超时驳回时关闭对应 open 待办。"""
+    open_todos = (
+        await session.scalars(
+            select(OpsTodo).where(
+                OpsTodo.todo_type == atom_rules.TODO_TYPE_EVIDENCE,
+                OpsTodo.entity_type == "atom_candidate",
+                OpsTodo.entity_id == cand.candidate_id,
+                OpsTodo.status == "open",
+            )
+        )
+    ).all()
+    for t in open_todos:
+        t.status = "resolved"
+        t.resolved_at = _now()
+        t.resolution = resolution
+
+
 async def supplement_evidence(session, candidate_id: str, evidence: str, actor) -> AtomCandidate:
     cand = await session.get(AtomCandidate, candidate_id)
     if cand is None:
@@ -476,6 +556,7 @@ async def supplement_evidence(session, candidate_id: str, evidence: str, actor) 
     cand.evidence = evidence
     cand.status = atom_rules.CAND_PENDING_REVIEW
     cand.evidence_due_at = None
+    await _resolve_evidence_todo(session, cand, "evidence_supplied")
     # high 补证据后 evidence_required 冲突解除；disabled_expression 不解。
     conflicts = (
         await session.scalars(
@@ -496,6 +577,76 @@ async def supplement_evidence(session, candidate_id: str, evidence: str, actor) 
         action="atom.evidence_supplement",
         entity_type="atom_candidate",
         entity_id=candidate_id,
+    )
+    return cand
+
+
+async def ai_supplement_evidence(session, candidate_id: str, actor) -> AtomCandidate:
+    """Q18：AI 自动补证据一轮（ATOM-EVIDENCE 场景，经模型网关单轮调用）。
+
+    Q354 同族花钱纪律：真模型调用默认不自动、由 operations 显式触发（端点挂
+    凭证闸）；失败（上游/预算/输出非法）一律不重试、候选保持 pending_evidence，
+    既有 evidence 待办继续挂在运营面前，7 天超时路径不变。
+    """
+    cand = await session.get(AtomCandidate, candidate_id)
+    if cand is None:
+        raise CandidateNotFound(candidate_id)
+    if atom_rules.ROLE_OPERATIONS not in actor.roles:
+        raise GateNotAllowed("AI evidence supplement requires operations role")
+    if cand.status != atom_rules.CAND_PENDING_EVIDENCE:
+        raise GateNotAllowed(f"candidate is {cand.status}, not pending_evidence")
+
+    invocation = await gateway.invoke(
+        session,
+        SCENE_ATOM_EVIDENCE,
+        variables={
+            "content": cand.content,
+            "risk_level": cand.risk_level,
+            "fact_type": cand.fact_type or "",
+        },
+    )
+    try:
+        payload = json.loads(invocation.text)
+    except json.JSONDecodeError as exc:
+        raise AtomEvidenceOutputInvalid("AI evidence output is not valid JSON") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("evidence"), str):
+        raise AtomEvidenceOutputInvalid("AI evidence output must be a JSON object with evidence string")
+    text = payload["evidence"].strip()
+    if not text:
+        raise AtomEvidenceOutputInvalid("AI produced empty evidence")
+    truncated = len(text) > EVIDENCE_AI_MAX_CHARS
+    if truncated:
+        text = text[:EVIDENCE_AI_MAX_CHARS]
+
+    cand.evidence = text
+    cand.status = atom_rules.CAND_PENDING_REVIEW
+    cand.evidence_due_at = None
+    # high 补证据后 evidence_required 冲突解除；disabled_expression 不解。
+    conflicts = (
+        await session.scalars(
+            select(AtomConflict).where(
+                AtomConflict.candidate_id == candidate_id,
+                AtomConflict.resolved_at.is_(None),
+            )
+        )
+    ).all()
+    for c in conflicts:
+        if c.type == atom_rules.CONFLICT_EVIDENCE_REQUIRED:
+            c.resolved_at = _now()
+    await _resolve_evidence_todo(session, cand, "evidence_ai_supplied")
+    await append_audit(
+        session,
+        tenant_id=cand.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="atom.evidence_ai_supplement",
+        entity_type="atom_candidate",
+        entity_id=candidate_id,
+        detail={
+            "model_code": invocation.model_code,
+            "chars": len(text),
+            "truncated": truncated,
+        },
     )
     return cand
 
@@ -525,6 +676,7 @@ async def revive_candidate(session, candidate_id: str, actor) -> AtomCandidate:
         cand.evidence_due_at = _now() + timedelta(
             days=atom_rules.evidence_timeout_days()
         )
+        await _ensure_evidence_todo(session, cand, _now())
     cand.reject_reason = None
     cand.decided_by = None
     cand.decided_at = None
@@ -555,6 +707,7 @@ async def sweep_evidence_timeouts(session, now: datetime) -> int:
         cand.status = atom_rules.CAND_REJECTED
         cand.reject_reason = atom_rules.REJECT_EVIDENCE_TIMEOUT
         cand.decided_at = now
+        await _resolve_evidence_todo(session, cand, "evidence_timeout")
         await append_audit(
             session,
             tenant_id=cand.tenant_id,
@@ -569,8 +722,19 @@ async def sweep_evidence_timeouts(session, now: datetime) -> int:
 
 # ---------- Q19 同义词簇 ----------
 
+async def cluster_members(session, cluster_id: str) -> tuple[list[AtomCandidate], str | None]:
+    """Q19：簇成员 + pick_cluster_keeper 自动推荐（亲和度最高者；供界面预填）。"""
+    members = (
+        await session.scalars(
+            select(AtomCandidate).where(AtomCandidate.cluster_id == cluster_id)
+        )
+    ).all()
+    recommended = atom_rules.pick_cluster_keeper(members)
+    return list(members), (recommended.candidate_id if recommended is not None else None)
+
+
 async def resolve_cluster(
-    session, cluster_id: str, keeper_candidate_id: str, actor
+    session, cluster_id: str, keeper_candidate_id: str | None, actor
 ) -> list[AtomCandidate]:
     members = (
         await session.scalars(
@@ -581,6 +745,12 @@ async def resolve_cluster(
         raise CandidateNotFound(cluster_id)
     if atom_rules.ROLE_REVIEWER not in actor.roles:
         raise GateNotAllowed("cluster resolution requires product_reviewer role")
+    # Q19：keeper 未显式给出时用自动推荐（亲和度最高者）预填。
+    if keeper_candidate_id is None:
+        recommended = atom_rules.pick_cluster_keeper(members)
+        if recommended is None:
+            raise CandidateNotFound(cluster_id)
+        keeper_candidate_id = recommended.candidate_id
     keeper = next((m for m in members if m.candidate_id == keeper_candidate_id), None)
     if keeper is None:
         raise CandidateNotFound(keeper_candidate_id)
@@ -782,6 +952,100 @@ async def deprecate_atom(session, atom_id: str, actor) -> ProductAtomInstance:
         entity_id=atom.atom_id,
     )
     return atom
+
+
+async def restore_atom(session, atom_id: str, actor) -> AtomCandidate:
+    """Q20：已废弃原子恢复＝视同新原子重走审核。
+
+    不做原地复活（旧实例保持 deprecated 留痕）；新建一条 manual 批次候选
+    （source=manual，batch_size=1 作恢复审计载体）进入既有 Gate/冲突/证据
+    流程，审核员 approve 后才派生新的正式实例。
+    """
+    atom = await _get_atom(session, atom_id)
+    _require_role(actor, atom_rules.ROLE_OPERATIONS)
+    if atom.status != atom_rules.ATOM_DEPRECATED:
+        raise GateNotAllowed(f"only deprecated atoms can be restored (atom is {atom.status})")
+    if atom.fact_type is not None and await _fact_value_exists(
+        session,
+        atom.normalized,
+        exclude_atom_id=atom.atom_id,
+        exclude_candidate_id=atom.candidate_id,
+    ):
+        raise FactAtomConflict(
+            f"product-fact atom value already exists elsewhere: {atom.content}"
+        )
+
+    batch = AtomBatch(
+        tenant_id=atom.tenant_id,
+        product_space_id=atom.product_space_id,
+        pool_id=atom.pool_id,
+        batch_size=1,
+        source="manual",
+        sensitive_snapshot=False,  # 恢复审计载体；敏感快照不参与任何 Gate 判定
+        submitted_by=actor.id,
+    )
+    session.add(batch)
+    await session.flush()
+
+    has_evidence = bool((atom.evidence or "").strip())
+    now = _now()
+    cand = AtomCandidate(
+        tenant_id=atom.tenant_id,
+        batch_id=batch.batch_id,
+        product_space_id=atom.product_space_id,
+        pool_id=atom.pool_id,
+        dimension_id=atom.dimension_id,
+        fid=atom.fid,
+        content=atom.content,
+        normalized=atom.normalized,
+        fact_type=atom.fact_type,
+        risk_level=atom.risk_level,
+        risk_source=atom.risk_source,
+        matched_words=[],
+        affinity=atom.affinity,
+        low_affinity=atom_rules.is_low_affinity(atom.affinity),
+        evidence=atom.evidence,
+        evidence_due_at=(
+            None
+            if has_evidence
+            else now + timedelta(days=atom_rules.evidence_timeout_days())
+        ),
+        status=(
+            atom_rules.CAND_PENDING_REVIEW
+            if has_evidence
+            else atom_rules.CAND_PENDING_EVIDENCE
+        ),
+        submitted_by=actor.id,
+    )
+    session.add(cand)
+    await session.flush()
+    grade = atom_rules.RiskGrade(level=atom.risk_level, source=atom.risk_source)
+    for ctype, cstatus in atom_rules.conflicts_for(grade, has_evidence=has_evidence):
+        session.add(
+            AtomConflict(
+                candidate_id=cand.candidate_id,
+                type=ctype,
+                status=cstatus,
+                detail={"risk_level": atom.risk_level, "risk_source": atom.risk_source},
+            )
+        )
+    if cand.status == atom_rules.CAND_PENDING_EVIDENCE:
+        await _ensure_evidence_todo(session, cand, now)
+    await append_audit(
+        session,
+        tenant_id=atom.tenant_id,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="atom.restore",
+        entity_type="product_atom_instance",
+        entity_id=atom.atom_id,
+        detail={
+            "batch_id": batch.batch_id,
+            "candidate_id": cand.candidate_id,
+            "reenters_review": True,
+        },
+    )
+    return cand
 
 
 async def archive_atom(session, atom_id: str, actor) -> ProductAtomInstance:

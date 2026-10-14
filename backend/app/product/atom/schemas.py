@@ -58,7 +58,8 @@ class EvidenceRequest(BaseModel):
 
 
 class ClusterResolveRequest(BaseModel):
-    keeper_candidate_id: str
+    # Q19：省略时用 pick_cluster_keeper 自动推荐值预填（界面预填）。
+    keeper_candidate_id: str | None = None
     actor: Actor
 
 
