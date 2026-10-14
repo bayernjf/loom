@@ -31,6 +31,7 @@ from app.product.fieldpool.service import (
     GateNotAllowed,
     ProductSpaceNotFound,
 )
+from app.product.inspiration import service as inspiration_service
 from app.product.product_intake.models import G2Field, ProductSpace
 
 SYSTEM_ACTOR = Actor(id="system:llm-gateway", roles=[])
@@ -95,6 +96,13 @@ async def invoke_field_plan(
     ).all()
     active_fids = {row[0] for row in active_rows}
 
+    # Q358：DIM-SOURCE 两路灵感来源（common/product）的真实内容——此前只有路由名、
+    # 取不到内容。拉取该租户 enabled 的通用层 + 本产品专属层条目，注入提示词作依据。
+    insp_entries = await inspiration_service.get_context_for_planning(
+        session, tenant_id=ps.tenant_id, product_space_id=product_space_id
+    )
+    insp_text = inspiration_service.format_inspiration_context(insp_entries)
+
     profile = dict(ps.profile_snapshot or {})
     profile_lines = [f"- {key}: {value}" for key, value in profile.items()]
 
@@ -109,6 +117,12 @@ async def invoke_field_plan(
         ),
         "dim_range": f"{dim_min}-{dim_max}",
         "target_atom_range": f"{target_min}-{target_max}",
+        # Q358：灵感库依据内容（模板渲染用）；空时由 format_inspiration_context 给「（无）」。
+        "inspiration_entries": insp_text,
+        "_inspiration": [
+            {"entry_id": e.entry_id, "layer": e.layer, "content": e.content}
+            for e in insp_entries
+        ],
         # 合成替身驱动用（机读），不进模板占位：
         "_profile": {str(k): str(v) for k, v in profile.items()},
         "_sensitive": ps.sensitive_industry,

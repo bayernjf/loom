@@ -124,6 +124,11 @@ $enabled_routes
 【G2 active 字段】（fid 只能复用下表内字段；提新字段时不要给 fid，改给 definition）
 $active_g2_fields
 
+【灵感库条目】（source_route 取 common_inspiration / product_inspiration 时，只能引用下列真实条目：
+通用层对该租户所有产品共享，产品专属层仅本产品可用；source_ref 写 inspiration:<entry_id>；
+列表为空时不得编造，改走 user_input 或 category_template 等其它来源）
+$inspiration_entries
+
 【硬性边界】维度数 $dim_range（PT-FP-PLAN/Q12）；目标原子数 $target_atom_range（Q15），target_atom_min/target_atom_max 必须原样回传。
 每条维度必须含非空 field_name、role（product_attribute 或 risk_control，且 ≥1 条 product_attribute）、source_route、confidence（0..1 置信度，<0.85 仅转人工细看 Q9）、source_ref（依据红线 line 14081：只许引用上表资料中的真实来源，如 g2:<fid>、product_profile:<资料键>、industry_tag:<标签>；禁止编造）。
 similarity/related_fid 可省略（疑似重复 ≥0.9 仅标记，Q10，人工终裁）。
@@ -138,6 +143,7 @@ DIM_MERGE_PROMPT_VARIABLES = [
     "industry_tag",
     "enabled_routes",
     "active_g2_fields",
+    "inspiration_entries",
     "dim_range",
     "target_atom_range",
 ]
