@@ -205,6 +205,38 @@ def _dim(i, **kw):
     return base
 
 
+async def _promote_pending_candidates(client: AsyncClient) -> None:
+    """Q13 转正全部 pending 的 G2 字段候选（就绪门 ⑤ 要求池内无挂起字段）。
+
+    #5 语义修正（Q361，docs/25 §8.1）：无 fid 维度行会创建 wf02_dim_source
+    候选并引用它（candidate_id 非空、fid 未回填）；冻结前须 promote。
+    """
+    from tests.integration.staff_tokens import acting_as
+
+    async with acting_as(client, ["dictionary_admin"]):
+        cands = (
+            await client.get(
+                "/api/admin/g2-candidates",
+                params={
+                    "status": "pending_gate",
+                    "actor_id": "dict-1",
+                    "roles": "dictionary_admin",
+                },
+            )
+        ).json()
+    for c in cands:
+        async with acting_as(client, ["dictionary_admin"]):
+            r = await client.post(
+                f"/api/admin/g2-candidates/{c['candidate_id']}/promote",
+                json={
+                    "fid": f"f_promoted_{c['candidate_id'][:8]}",
+                    "cat": "selling",
+                    "actor": {"id": "dict-1", "roles": ["dictionary_admin"]},
+                },
+            )
+        assert r.status_code == 200, r.text
+
+
 async def _drive(client: AsyncClient) -> dict:
     tenant_id = f"t-e2e-{RUN_ID}"
 
@@ -263,6 +295,7 @@ async def _drive(client: AsyncClient) -> dict:
         json={"decision": "approve", "actor": REVIEWER},
     )
     assert gate.status_code == 200, gate.text
+    await _promote_pending_candidates(client)
 
     cur = await client.get(f"/api/product-spaces/{ps_id}/field-pools/current")
     dim_ids = [d["dimension_id"] for d in cur.json()["dimensions"]]

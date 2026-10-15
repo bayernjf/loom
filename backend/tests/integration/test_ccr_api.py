@@ -105,6 +105,39 @@ async def _make_ps(session_factory, *, tenant="t1", industry="general", sensitiv
         return ps.product_space_id
 
 
+async def _promote_pending_candidates(client):
+    """Q13 转正全部 pending 的 G2 字段候选（就绪门 ⑤ 要求池内无挂起字段）。
+
+    #5 语义修正（Q361，docs/25 §8.1）：提交池子时无 fid 维度行会创建
+    wf02_dim_source 候选并引用它（candidate_id 非空、fid 未回填）；PWS 冻结前
+    须 promote（回填 fid），否则 PRD line 2634「pending_gate 字段=0」不满足。
+    """
+    from tests.integration.staff_tokens import acting_as
+
+    async with acting_as(client, ["dictionary_admin"]):
+        cands = (
+            await client.get(
+                "/api/admin/g2-candidates",
+                params={
+                    "status": "pending_gate",
+                    "actor_id": "dict-1",
+                    "roles": "dictionary_admin",
+                },
+            )
+        ).json()
+    for c in cands:
+        async with acting_as(client, ["dictionary_admin"]):
+            r = await client.post(
+                f"/api/admin/g2-candidates/{c['candidate_id']}/promote",
+                json={
+                    "fid": f"f_promoted_{c['candidate_id'][:8]}",
+                    "cat": "selling",
+                    "actor": {"id": "dict-1", "roles": ["dictionary_admin"]},
+                },
+            )
+        assert r.status_code == 200, r.text
+
+
 async def _freeze(
     client,
     ps_id,
@@ -125,6 +158,7 @@ async def _freeze(
         json={"decision": "approve", "actor": REVIEWER},
     )
     assert gate_resp.status_code == 200, gate_resp.text
+    await _promote_pending_candidates(client)
     cur = await client.get(f"/api/product-spaces/{ps_id}/field-pools/current")
     dim_ids = [d["dimension_id"] for d in cur.json()["dimensions"]]
     items = [
