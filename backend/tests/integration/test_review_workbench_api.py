@@ -349,6 +349,112 @@ async def test_queue_filters_and_paginates(client, session_factory):
     ]
 
 
+# ---------- Q47 三包必审线（needs_detail 复用 Q9 细看线） ----------
+
+
+async def _seed_needs_detail_queue(session_factory):
+    async with session_factory() as session:
+        session.add_all([
+            _run("r-wf07", confidence=None, at=NOW - timedelta(hours=1)),
+            _candidate(
+                "c-pkg-low",
+                run_id="r-wf07",
+                wf_id="WF-07",
+                target_type="package_draft",
+                payload={
+                    "goals": [
+                        {"goal": "种草", "confidence": 0.92},
+                        {"goal": "转化", "confidence": 0.85},
+                        {"goal": "复购", "confidence": 0.78},
+                    ]
+                },
+                at=NOW - timedelta(hours=1),
+                candidate_index=0,
+            ),
+            _candidate(
+                "c-pkg-ok",
+                run_id="r-wf07",
+                wf_id="WF-07",
+                target_type="package_draft",
+                payload={
+                    "structures": [
+                        {"structure": "痛点-方案", "confidence": 0.9, "partial": False},
+                        {"structure": "清单", "confidence": 0.85, "partial": True},
+                    ]
+                },
+                at=NOW - timedelta(hours=1),
+                candidate_index=1,
+            ),
+            _candidate(
+                "c-pkg-noconf",
+                run_id="r-wf07",
+                wf_id="WF-07",
+                target_type="package_draft",
+                payload={"tone": "亲切", "style": "口语化"},
+                at=NOW - timedelta(hours=1),
+                candidate_index=2,
+            ),
+            _candidate(
+                "c-pkg-boundary",
+                run_id="r-wf07",
+                wf_id="WF-07",
+                target_type="package_draft",
+                payload={"goal": "种草", "confirmed": True, "confidence": 0.85},
+                at=NOW - timedelta(hours=1),
+                candidate_index=3,
+            ),
+            _candidate(
+                "c-other-lowconf",
+                run_id="r-wf07",
+                wf_id="WF-04",
+                target_type="pwc_combo",
+                payload={"combos": [{"atom_ids": ["a1"], "confidence": 0.1}]},
+                at=NOW - timedelta(hours=1),
+                candidate_index=4,
+            ),
+        ])
+        await session.commit()
+
+
+async def test_queue_marks_package_draft_needs_detail_by_q9_line(
+    client, session_factory
+):
+    await _seed_needs_detail_queue(session_factory)
+    resp = await client.get(
+        "/api/review-workbench/candidates", params=_params(OPS, limit=200)
+    )
+    assert resp.status_code == 200, resp.text
+    rows = {row["candidate_id"]: row for row in resp.json()["candidates"]}
+    assert set(rows) == {
+        "c-pkg-low",
+        "c-pkg-ok",
+        "c-pkg-noconf",
+        "c-pkg-boundary",
+        "c-other-lowconf",
+    }
+
+    # 任一 confidence < 0.85 → 需细看；全量达标 / 无 conf / 恰等于线 → 不标。
+    assert rows["c-pkg-low"]["needs_detail"] is True
+    assert rows["c-pkg-ok"]["needs_detail"] is False
+    assert rows["c-pkg-noconf"]["needs_detail"] is False
+    assert rows["c-pkg-boundary"]["needs_detail"] is False
+    # 非 package_draft 候选不参与 Q47 判定，恒 False。
+    assert rows["c-other-lowconf"]["needs_detail"] is False
+
+
+async def test_existing_queue_rows_all_expose_needs_detail_false(
+    client, session_factory
+):
+    # 既有种子无 package_draft：序列化必须带键且全 False（不破坏旧消费方）。
+    await _seed_queue(session_factory)
+    resp = await client.get(
+        "/api/review-workbench/candidates", params=_params(REVIEWER, limit=200)
+    )
+    assert resp.status_code == 200, resp.text
+    for row in resp.json()["candidates"]:
+        assert row["needs_detail"] is False
+
+
 # ---------- 批量通过预检（任何失败不留写入） ----------
 
 
