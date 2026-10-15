@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 
+from app.content.models import CONTENT_DISCARDED, ContentProduct
 from app.core.audit import append_audit
 from app.core.compliance_wordlist import service as wl_service
 from app.core.compliance_wordlist.models import ComplianceWordlistEntry
@@ -629,7 +630,9 @@ async def rescan_for_entry(session, entry: ComplianceWordlistEntry) -> list[dict
     """词条保存生效即扫 active 冻结快照；命中产出 wordlist_hit 强制重冻待办。
 
     自动只"触发"Q29 强制档——重冻新版本仍须 BO-07 人工执行（红线 line 7674，
-    与 M6 无全自动冻结一致）。draft FCW 随 M8 接入；段12 未发布成品随段12。
+    与 M6 无全自动冻结一致）。draft FCW 随 M8 接入；段12 未发布成品（Q362）
+    同扫：范围取命中快照的产品空间集合，排除 discarded、三发布列任一为空即
+    未发布，body 直接命中词条才建待办（assignee 同 Q30③ internal_compliance）。
     """
     now = _now()
     if entry.status != "active":
@@ -760,6 +763,71 @@ async def rescan_for_entry(session, entry: ComplianceWordlistEntry) -> list[dict
                 action="ccr.wordlist_rescan",
                 entity_type="final_content_whitelist",
                 entity_id=fcw.final_id,
+                detail={"entry_id": entry.entry_id, "word": entry.word},
+            )
+
+    # Q51（Q362）：段12 未发布成品同扫。成品自带 body 文本，词条命中在
+    # Python 侧判定（与快照段同模式）；SQL 侧先收窄：范围取命中快照的产品
+    # 空间集合（沿用快照段 industry 过滤口径）、排除 discarded、body 非空、
+    # 三发布列（published_url/platform_post_id/published_at）任一为空即
+    # 未发布（Q125/Q60c：三列非空组合才是"已发布"信号，不回改不追溯）。
+    # 待办 assignee 取 internal_compliance，与 Q30③ 未发布成品强制复查同口径。
+    hit_ps_ids = {row["product_space_id"] for row in impacted}
+    if hit_ps_ids:
+        products = (
+            await session.scalars(
+                select(ContentProduct).where(
+                    ContentProduct.product_space_id.in_(hit_ps_ids),
+                    ContentProduct.status != CONTENT_DISCARDED,
+                    ContentProduct.body.isnot(None),
+                    (ContentProduct.published_url.is_(None))
+                    | (ContentProduct.platform_post_id.is_(None))
+                    | (ContentProduct.published_at.is_(None)),
+                )
+            )
+        ).all()
+        for product in products:
+            if needle not in product.body.casefold():
+                continue
+            open_product_todo = (
+                await session.scalars(
+                    select(OpsTodo).where(
+                        OpsTodo.tenant_id == product.tenant_id,
+                        OpsTodo.todo_type == ccr_rules.TODO_TYPE_WORDLIST_RESCAN,
+                        OpsTodo.entity_type == "content_product",
+                        OpsTodo.entity_id == product.content_id,
+                        OpsTodo.status.in_(["open", "escalated"]),
+                    )
+                )
+            ).first()
+            if open_product_todo is not None:
+                continue
+            todo = OpsTodo(
+                tenant_id=product.tenant_id,
+                todo_type=ccr_rules.TODO_TYPE_WORDLIST_RESCAN,
+                entity_type="content_product",
+                entity_id=product.content_id,
+                assignee_role=ccr_rules.ROLE_INTERNAL_COMPLIANCE,
+                detail={
+                    "reason_code": ccr_rules.REASON_WORDLIST_HIT,
+                    "entry_id": entry.entry_id,
+                    "word": entry.word,
+                    "country": entry.country,
+                    "product_space_id": product.product_space_id,
+                    "final_id": product.final_id,
+                },
+                due_at=now + timedelta(days=pws_rules.ready_todo_due_days()),
+            )
+            session.add(todo)
+            await session.flush()
+            await append_audit(
+                session,
+                tenant_id=product.tenant_id,
+                actor_id=None,
+                actor_roles=None,
+                action="ccr.wordlist_rescan",
+                entity_type="content_product",
+                entity_id=product.content_id,
                 detail={"entry_id": entry.entry_id, "word": entry.word},
             )
     return impacted
