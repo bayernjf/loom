@@ -665,6 +665,7 @@ export interface ReviewQueueCandidate {
   risk_level: string;
   risk_rank: number;
   risk_reason: string;
+  needs_detail: boolean;
   batch_eligible: boolean;
 }
 

@@ -1,8 +1,11 @@
-"""统一审核工作台服务（Q70 一期，Q93/C1.37）。
+"""统一审核工作台服务（Q70 一期，Q93/C1.37，Q47 三包必审线）。
 
 列表：skill7 候选跨 target_type 统一出队，风险归一见 risk.py，
 按 risk_rank DESC, created_at ASC 排序；批量通过复用 skill7
 decide_candidate（confirmed），每条仍过所属 WF Gate 角色与适配器全部规则。
+三包（package_draft）候选按 Q47 复用 Q9 细看线标 needs_detail：
+payload 内任一 confidence < fieldpool.needs_detail_conf 即需细看，
+同一配置项管全链，不另设数值；无 confidence 不标（不编造）。
 """
 
 from datetime import UTC, datetime
@@ -21,6 +24,40 @@ from app.core.workbench import risk
 from app.product.modeling.models import C1IndustryThreshold
 
 BATCH_CONFIDENCE_KEY = "review.batch_pass_confidence"
+NEEDS_DETAIL_CONF_KEY = "fieldpool.needs_detail_conf"
+PACKAGE_DRAFT_TARGET = "package_draft"
+
+
+def _payload_confidences(node) -> list[float]:
+    """递归收集 payload 内全部 confidence 数值键（Q47 三包 conf 数据源）。"""
+    found: list[float] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if (
+                key == "confidence"
+                and isinstance(value, int | float)
+                and not isinstance(value, bool)
+            ):
+                found.append(float(value))
+            else:
+                found.extend(_payload_confidences(value))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_payload_confidences(item))
+    return found
+
+
+def needs_detail(target_type: str, payload: dict | None) -> bool:
+    """Q47 三包必审线：复用 Q9 fieldpool.needs_detail_conf，同一配置项管全链。
+
+    仅 package_draft 候选参与判定；payload 内任一 confidence < 线即需细看
+    （边界对齐 fieldpool `<` 语义，等于线不标）；无 confidence 不标
+    （不编造），非三包候选恒 False。compute-on-read，knob 调参即生效。
+    """
+    if target_type != PACKAGE_DRAFT_TARGET or not isinstance(payload, dict):
+        return False
+    line = knob(NEEDS_DETAIL_CONF_KEY)
+    return any(conf < line for conf in _payload_confidences(payload))
 
 
 class WorkbenchCandidateMissing(Exception):
@@ -100,6 +137,7 @@ async def _enrich(
             "risk_level": level,
             "risk_rank": risk.RISK_RANK[level],
             "risk_reason": reason,
+            "needs_detail": needs_detail(cand.target_type, cand.payload),
         }
     return enriched
 
@@ -143,6 +181,7 @@ def _candidate_view(cand: SkillCandidate, meta: dict, *, now: datetime) -> dict:
         "risk_level": meta["risk_level"],
         "risk_rank": meta["risk_rank"],
         "risk_reason": meta["risk_reason"],
+        "needs_detail": meta["needs_detail"],
         "batch_eligible": eligible if cand.state == "pending_review" else False,
     }
 

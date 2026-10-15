@@ -528,6 +528,7 @@
       "colRisk": "风险",
       "colReason": "风险依据",
       "colConfidence": "置信度",
+      "needsDetail": "需细看",
       "colWait": "已等待",
       "colCreated": "创建时间",
       "colTenant": "租户",
