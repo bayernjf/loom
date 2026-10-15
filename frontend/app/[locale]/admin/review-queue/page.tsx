@@ -197,7 +197,12 @@ function CandidateTable({
                 </span>
                 <span className={styles.metaLine}>{cand.risk_reason}</span>
               </td>
-              <td className={styles.num}>{confidenceText(cand.confidence)}</td>
+              <td className={styles.num}>
+                    {confidenceText(cand.confidence)}
+                    {cand.needs_detail ? (
+                      <span className={styles.metaLine}>{t("needsDetail")}</span>
+                    ) : null}
+                  </td>
               <td>{cand.wait_seconds === null ? "—" : formatWait(cand.wait_seconds)}</td>
               <td>{cand.wf_id}</td>
               <td>{cand.skill_id}</td>

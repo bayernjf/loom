@@ -1,8 +1,8 @@
 """段5 PWC（WF-04 确定性切片）API 集成测试。
 
-覆盖 docs/08 M5 验收行：Q21 漏斗限量、Q22/Q22a/Q22b 评分（AI 失败不凑分）、
-Q23 重合标重、Q24 取用去重/冷却/全平台用尽、Q25 contentGoals 字典、
-Q26 手拼不豁免合规、Q27 库容、Q71 按分排序消费与 restock 信号。
+覆盖 docs/08 M5 验收行：Q21 漏斗限量截断/检测项与预筛开关（Q362）、
+Q22/Q22a/Q22b 评分（AI 失败不凑分）、Q23 重合标重、Q24 取用去重/冷却/全平台用尽、
+Q25 contentGoals 字典、Q26 手拼跳预筛不豁免合规、Q27 库容、Q71 按分排序消费与 restock 信号。
 """
 
 from collections.abc import AsyncGenerator
@@ -12,6 +12,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.config_center.cache import config_cache
 from app.core.db import Base, get_session
 from app.core.staff_auth.deps import get_auth_session
 from app.main import app
@@ -51,6 +52,13 @@ async def session_factory():
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def config_overrides():
+    """Q362：json 键配置覆写（按键合并整体透传），收尾清缓存回落种子默认。"""
+    yield config_cache.apply
+    config_cache.invalidate()
 
 
 @pytest_asyncio.fixture
@@ -154,6 +162,38 @@ def _combo(atom_ids, **kw):
     return base
 
 
+async def _mk_atoms(client, ps_id, pairs):
+    """Q362：按 [(content, dim_idx)] 一批造核准原子，返回 {content: atom_id}。
+
+    dim_idx 取字段池维度下标（_approved_pool 一次造 3 维）。截断用例需要
+    同维度多原子来构造互异 atom 集（同批次组合按 frozenset 去重）。
+    """
+    pool = await _approved_pool(client, ps_id)
+    dim_ids = [d["dimension_id"] for d in pool["dimensions"]]
+    items = [
+        {
+            "content": content,
+            "dimension_id": dim_ids[idx],
+            "ai_risk": "low",
+            "evidence": "客服语料",
+        }
+        for content, idx in pairs
+    ]
+    resp = await client.post(
+        f"/api/product-spaces/{ps_id}/atom-batches", json={"items": items, "actor": OPS}
+    )
+    assert resp.status_code == 200, resp.text
+    for c in resp.json()["candidates"]:
+        ok = await client.post(
+            f"/api/atom-candidates/{c['candidate_id']}/approve",
+            json={"actor": REVIEWER},
+        )
+        assert ok.status_code == 200, ok.text
+    atoms = await client.get(f"/api/product-spaces/{ps_id}/atoms")
+    by_content = {a["content"]: a["atom_id"] for a in atoms.json()}
+    return {content: by_content[content] for content, _ in pairs}
+
+
 async def _funnel(client, ps_id, combos, **extra):
     body = {"combos": combos, "actor": OPS, **extra}
     return await client.post(f"/api/product-spaces/{ps_id}/pwc/funnel", json=body)
@@ -196,11 +236,6 @@ async def test_funnel_structural_validation(client, session_factory):
     )
     assert dup.status_code == 422
 
-    big = await _funnel(
-        client, ps_id, [_combo(atoms)] * 51, batch_size=50
-    )
-    assert big.status_code == 422
-
     bad_goal = await _funnel(
         client, ps_id, [_combo(atoms, goals=["NOPE"])]
     )
@@ -214,6 +249,93 @@ async def test_cross_tenant_atom_rejected(client, session_factory):
     resp = await _funnel(client, ps1, [_combo([atoms1[0], atoms2[0]])])
     assert resp.status_code == 422
     assert "another product space" in resp.text
+
+
+# ---------- Q362：Q21 限量截断 / 检测项与预筛开关、Q26 手拼跳预筛 ----------
+
+async def test_funnel_truncates_to_batch_size_after_scoring(client, session_factory):
+    # 空池多样性=1：high(0.9/0.9)→0.94、mid(0.8/0.6)→0.82、low(0.2/0.2)→0.52
+    ps_id = await _make_ps(session_factory)
+    atoms = await _mk_atoms(
+        client, ps_id, [("甲一", 0), ("甲二", 0), ("乙一", 1), ("乙二", 1)]
+    )
+    combos = [
+        _combo([atoms["甲一"], atoms["乙一"]], logic_score=0.9, fit_score=0.9),
+        _combo([atoms["甲一"], atoms["乙二"]], logic_score=0.2, fit_score=0.2),
+        _combo([atoms["甲二"], atoms["乙一"]], logic_score=0.8, fit_score=0.6),
+    ]
+    resp = await _funnel(client, ps_id, combos, batch_size=2)
+    assert resp.status_code == 200, resp.text
+    # 按分降序截 2 条：0.94/0.82 落库，0.52 溢出不落库（原超限报错口径废弃）
+    assert [round(p["score"], 6) for p in resp.json()] == [0.94, 0.82]
+    persisted = await client.get(f"/api/product-spaces/{ps_id}/pwcs")
+    assert {round(p["score"], 6) for p in persisted.json()} == {0.94, 0.82}
+
+
+async def test_detector_switch_gates_compliance(
+    client, session_factory, config_overrides
+):
+    ps_id, atoms = await _seeded_ps(client, session_factory)
+    wl = await client.post(
+        "/api/admin/compliance-wordlist",
+        json={"item": {"word": "温和", "level": "critical", "action": "ban"},
+              "actor": OPS},
+    )
+    assert wl.status_code == 200, wl.text
+    blocked = await _funnel(client, ps_id, [_combo(atoms)])
+    assert blocked.json()[0]["gate_status"] == "blocked"
+
+    # 关掉合规检测项：同一组合不再 block（顺序重排也走这份清单）
+    config_overrides(
+        {
+            "pwc.detectors": [
+                {"name": "logic_ai", "enabled": False},
+                {"name": "compliance_wordlist", "enabled": False},
+                {"name": "fit_ai", "enabled": False},
+            ]
+        }
+    )
+    off = await _funnel(client, ps_id, [_combo(atoms)])
+    assert off.status_code == 200, off.text
+    assert off.json()[0]["gate_status"] == "pending"
+
+    # 启用未实现的 AI 检测项：诚实报错 422，不静默跳过（开了像没开＝造假）
+    config_overrides({"pwc.detectors": [{"name": "logic_ai", "enabled": True}]})
+    unimplemented = await _funnel(client, ps_id, [_combo(atoms)])
+    assert unimplemented.status_code == 422
+    assert "not implemented" in unimplemented.text
+
+
+async def test_prefilter_switch_and_manual_skip(
+    client, session_factory, config_overrides
+):
+    ps_id, atoms = await _seeded_ps(client, session_factory)
+    # 开启未实现的预筛规则（数据源【原文未给出，待补】）：ai 源诚实报错 422
+    config_overrides(
+        {
+            "pwc.prefilter_rules": [
+                {"name": "dimension_mutex", "enabled": False},
+                {"name": "market_filter", "enabled": True},
+                {"name": "customer_exclusion", "enabled": False},
+            ]
+        }
+    )
+    ai = await _funnel(client, ps_id, [_combo(atoms)])
+    assert ai.status_code == 422
+    assert "not implemented" in ai.text
+
+    # Q26：手拼跳预筛——同一配置下 manual 照走校验+检测+评分+Gate，正常产出
+    manual = await _funnel(client, ps_id, [_combo(atoms)], source="manual")
+    assert manual.status_code == 200, manual.text
+    pwc = manual.json()[0]
+    assert pwc["gate_status"] == "pending"
+    assert pwc["source"] == "manual"
+
+    # Q26：手拼不豁免结构校验——未知原子仍 422
+    unknown = await _funnel(
+        client, ps_id, [_combo([atoms[0], "atom-nope"])], source="manual"
+    )
+    assert unknown.status_code == 422
 
 
 # ---------- Q22 评分 / Q22b AI 失败 ----------

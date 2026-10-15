@@ -57,7 +57,8 @@ PROFILE = {
     "f_language": "zh-CN",
     "f_channel": "短视频",
     "f_audience": "18-35 岁干皮人群",
-    "f_content_usage": "种草",
+    # Q25（Q362）：内容用途取值绑定 contentGoals 字典，自由文本提交闸拒收。
+    "f_content_usage": GOAL,
 }
 
 

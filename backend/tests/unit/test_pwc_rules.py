@@ -2,6 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from app.core.config_center.cache import config_cache
 from app.core.config_center.knobs import knob
 from app.product.condition import pwc_rules as r
 
@@ -85,6 +88,61 @@ def test_pool_health_bands():
     assert r.pool_health(50) == "low"
     assert r.pool_health(99) == "healthy_below_target"
     assert r.pool_health(100) == "target"
+
+
+# ---------- Q21 漏斗全链配置化（Q362：检测项开关与顺序 / 预筛规则开关） ----------
+
+
+def test_detectors_default_seed_and_order():
+    # 种子默认＝合规词表开、两个 AI 检测关（通道随 M10），名单保序。
+    assert r.detectors() == [
+        (r.DETECTOR_COMPLIANCE_WORDLIST, True),
+        (r.DETECTOR_LOGIC_AI, False),
+        (r.DETECTOR_FIT_AI, False),
+    ]
+
+
+def test_prefilter_rules_default_all_off():
+    # 三规则数据源【原文未给出，待补】：只落开关骨架，默认全关。
+    assert r.prefilter_rules() == [
+        (r.PREFILTER_DIMENSION_MUTEX, False),
+        (r.PREFILTER_MARKET_FILTER, False),
+        (r.PREFILTER_CUSTOMER_EXCLUSION, False),
+    ]
+
+
+def test_switch_config_overrides_and_defends_bad_values():
+    """json 键整体透传（Q361 范式）：名单/结构合法性在消费侧防御，不静默放行。"""
+    try:
+        # 配置与种子默认不一致时以配置为准（顺序、子集都是配置说了算）
+        config_cache.apply(
+            {"pwc.detectors": [{"name": r.DETECTOR_LOGIC_AI, "enabled": True}]}
+        )
+        assert r.detectors() == [(r.DETECTOR_LOGIC_AI, True)]
+        # 未知名 → 防御性 ValueError
+        config_cache.apply({"pwc.detectors": [{"name": "nope", "enabled": True}]})
+        with pytest.raises(ValueError):
+            r.detectors()
+        # 坏结构（非 list / 缺字段）→ 同样防御
+        config_cache.apply({"pwc.prefilter_rules": {"market_filter": True}})
+        with pytest.raises(ValueError):
+            r.prefilter_rules()
+        config_cache.apply({"pwc.prefilter_rules": [{"name": "market_filter"}]})
+        with pytest.raises(ValueError):
+            r.prefilter_rules()
+    finally:
+        config_cache.invalidate()
+    # 清空后回落种子默认（seeds 为单一事实源）
+    assert r.detectors() == [
+        (r.DETECTOR_COMPLIANCE_WORDLIST, True),
+        (r.DETECTOR_LOGIC_AI, False),
+        (r.DETECTOR_FIT_AI, False),
+    ]
+    assert r.prefilter_rules() == [
+        (r.PREFILTER_DIMENSION_MUTEX, False),
+        (r.PREFILTER_MARKET_FILTER, False),
+        (r.PREFILTER_CUSTOMER_EXCLUSION, False),
+    ]
 
 
 def test_constants_traceability():
