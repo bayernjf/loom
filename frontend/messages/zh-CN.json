@@ -611,6 +611,7 @@
     "fcwReviewNav": "待审候选",
     "dictionariesNav": "字典管理",
     "inspirationEntriesNav": "灵感库",
+    "systemConfigNav": "运行配置",
     "changeLedgerNav": "回滚中心",
     "changeLedger": {
       "title": "回滚中心",
@@ -1063,6 +1064,23 @@
       "statusRevoked": "已吊销",
       "actorUnconfigured": "未配置平台管理员身份（LOOM_ADMIN_ACTOR_ID），无法签发或吊销。",
       "actorMissingRole": "当前管理员身份缺少 platform_admin 角色，无法签发或吊销。"
+    },
+    "systemConfig": {
+      "title": "运行配置",
+      "intro": "配置中心运营面：当前仅重生成上限（content.regen_limit）一项，读取与修改均仅平台管理员；每次修改落版本历史与审计，可在回滚中心查看。",
+      "contentSectionTitle": "内容生产（content）",
+      "metaLine": "版本 {version} · 更新人 {by} · {at}",
+      "loadFailed": "配置加载失败",
+      "regenLimitLabel": "重生成上限（content.regen_limit）",
+      "regenLimitHint": "正文 QC 不达标时的自动重生成次数上限，超限转人工；最小 1，默认 3。",
+      "changeNoteLabel": "变更说明",
+      "changeNotePlaceholder": "选填，写入版本历史",
+      "invalidLimit": "请输入不小于 1 的整数。",
+      "save": "保存",
+      "saving": "保存中…",
+      "saved": "已保存。",
+      "actorUnconfigured": "未配置平台管理员身份（LOOM_ADMIN_ACTOR_ID），无法修改配置。",
+      "actorMissingRole": "当前管理员身份缺少 platform_admin 角色，无法修改配置。"
     },
     "inspirationEntries": {
       "title": "灵感库",

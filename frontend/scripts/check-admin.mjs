@@ -41,6 +41,7 @@ const requiredKeys = [
   "admin.changeLedgerNav",
   "admin.platformAdaptationNav",
   "admin.inspirationEntriesNav",
+  "admin.systemConfigNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -136,6 +137,7 @@ const requiredKeys = [
     "batchSuccess",
     "selectFirst",
     "notEligible",
+    "needsDetail",
     "prev",
     "next",
     "pageInfo",
@@ -421,6 +423,23 @@ const requiredKeys = [
   ...[
     "title",
     "intro",
+    "contentSectionTitle",
+    "metaLine",
+    "loadFailed",
+    "regenLimitLabel",
+    "regenLimitHint",
+    "changeNoteLabel",
+    "changeNotePlaceholder",
+    "invalidLimit",
+    "save",
+    "saving",
+    "saved",
+    "actorUnconfigured",
+    "actorMissingRole",
+  ].map((k) => `admin.systemConfig.${k}`),
+  ...[
+    "title",
+    "intro",
     "issueTitle",
     "staffIdLabel",
     "staffIdPlaceholder",
@@ -611,6 +630,9 @@ const requiredFiles = [
   join("inspiration-entries", "actions.ts"),
   join("inspiration-entries", "create-island.tsx"),
   join("inspiration-entries", "edit-island.tsx"),
+  join("config", "page.tsx"),
+  join("config", "actions.ts"),
+  join("config", "config-island.tsx"),
   join("_components", "DateRangeFilter.tsx"),
 ];
 
@@ -727,11 +749,13 @@ if (!sidebarText.includes("/admin/platform-adaptation"))
   problems.push("admin sidebar must link the stage 7/8 platform adaptation console (Q345)");
 if (!sidebarText.includes("/admin/inspiration-entries"))
   problems.push("admin sidebar must link the inspiration library console (Q359)");
+if (!sidebarText.includes("/admin/config"))
+  problems.push("admin sidebar must link the runtime config console (Q364/Q56)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  // 18＝Q359 加入灵感库（此前 17＝Q345 加入平台适配台，16＝Q344 加入回滚中心，15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
-  if (navCount !== 18)
-    problems.push(`admin sidebar must keep exactly 18 admin entries, got ${navCount}`);
+  // 19＝Q364 加入运行配置台（此前 18＝Q359 加入灵感库，17＝Q345 加入平台适配台，16＝Q344 加入回滚中心，15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
+  if (navCount !== 19)
+    problems.push(`admin sidebar must keep exactly 19 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -2102,6 +2126,81 @@ for (const route of ['"/admin/inspiration-entries"', '"/admin/inspiration-entrie
 for (const token of ["require_inspiration_view", "OPERATIONS", "PLATFORM_ADMIN"]) {
   if (!inspRouter.includes(token))
     problems.push(`backend inspiration admin endpoints must gate via ${token}`);
+}
+
+// Q364：运行配置台（/admin/config）＝Q56 配置功能页的前端切片。配置中心读写均仅
+// platform_admin（Q113，未随 Q345 统一读闸放宽 operations）；页面只读 RSC 直读当前值
+// 与版本元信息，修改走 client 岛 → Server Action（本地 guard 两态预检零请求，同 Q167）；
+// 文案键回查防 MISSING_MESSAGE（Q344 教训）。
+const cfgPage = readAdmin(join("config", "page.tsx"));
+const cfgActions = readAdmin(join("config", "actions.ts"));
+const cfgIsland = readAdmin(join("config", "config-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(cfgPage))
+  problems.push("config/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(cfgPage) || /https?:\/\//.test(cfgPage))
+  problems.push("config/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (cfgPage.includes(forbidden))
+    problems.push(`config/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of [
+  "getConfigItem(",
+  "RegenLimitConfigIsland",
+  "content.regen_limit",
+  'data-testid="system-config-admin"',
+]) {
+  if (!cfgPage.includes(token))
+    problems.push(`config page must use ${token}`);
+}
+if (!/^"use server"/m.test(cfgActions))
+  problems.push("config/actions.ts must be a Server Action module");
+for (const token of [
+  "updateRegenLimitAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "unconfigured",
+  "missing_role",
+  "updateConfigItem",
+]) {
+  if (!cfgActions.includes(token))
+    problems.push(`config actions must contain ${token}`);
+}
+for (const status of [403, 404, 422]) {
+  if (!cfgActions.includes(String(status)))
+    problems.push(`config actions must map failure status ${status}`);
+}
+if (!/^"use client"/m.test(cfgIsland))
+  problems.push("config/config-island.tsx must be a client island");
+if (cfgIsland.includes("@/lib/api") || /\bfetch\s*\(/.test(cfgIsland) || /https?:\/\//.test(cfgIsland))
+  problems.push("config island must call only the Server Action, never the API directly");
+if (!cfgIsland.includes("router.refresh"))
+  problems.push("config island must refresh the RSC view after success");
+{
+  // Q113 读契约：getConfigItem 函数块内必须带 ADMIN_ROLE_LIST（反解按 export 切块）。
+  const block = apiText.split("\nexport async function ").find((chunk) =>
+    chunk.startsWith("getConfigItem("),
+  );
+  if (!block) problems.push("lib/api.ts must define getConfigItem");
+  else if (!block.includes("ADMIN_ROLE_LIST"))
+    problems.push("getConfigItem must append ADMIN_ROLE_LIST (platform_admin read gate)");
+}
+{
+  // 文案键回查：页面＋岛的 t("...") 必须真实存在于 admin.systemConfig。
+  const cfgMessages = messages.admin?.systemConfig ?? {};
+  for (const [name, text] of [["page", cfgPage], ["island", cfgIsland]]) {
+    for (const key of [...text.matchAll(/\bt\("([A-Za-z0-9]+)"/g)].map((m) => m[1])) {
+      const value = cfgMessages[key];
+      if (typeof value !== "string" || !value)
+        problems.push(`config message key missing: admin.systemConfig.${key} (${name})`);
+    }
+  }
+}
+const cfgRouter = readFileSync(
+  join(repoRoot, "backend", "app", "core", "config_center", "router.py"), "utf8",
+);
+for (const token of ['prefix="/api/admin/config"', "PLATFORM_ADMIN"]) {
+  if (!cfgRouter.includes(token))
+    problems.push(`backend config_center router must contain ${token}`);
 }
 
 if (problems.length > 0) {

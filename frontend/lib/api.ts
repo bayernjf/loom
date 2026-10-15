@@ -1365,6 +1365,48 @@ export async function deleteInspirationEntry(
   );
 }
 
+// Q364（Q56 配置功能页）：配置中心单项读/写（/api/admin/config/{key}）。
+// 读口 actor 走 query（Q113 读契约，重复 roles）；写口 actor 在请求体。
+// 配置中心读写均仅 platform_admin（Q113，未随 Q345 统一读闸放宽 operations）。
+// value 为 JSON 原值（int 键即 number）；PUT 后服务端返回更新后的完整项。
+export interface ConfigItemView {
+  key: string;
+  category: string;
+  value: unknown;
+  value_type: string;
+  validation: Record<string, unknown> | null;
+  source_ref: string | null;
+  version: number;
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+export async function getConfigItem(key: string): Promise<ConfigItemView> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return request<ConfigItemView>(
+    `/api/admin/config/${encodeURIComponent(key)}?${params}`,
+  );
+}
+
+export async function updateConfigItem(
+  key: string,
+  value: unknown,
+  changeNote?: string,
+): Promise<ConfigItemView> {
+  return request<ConfigItemView>(
+    `/api/admin/config/${encodeURIComponent(key)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        value,
+        change_note: changeNote?.trim() || null,
+        actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
+      }),
+    },
+  );
+}
+
 // Q168：中台导出任务管理（消费 Q132/Q137 /api/exports/jobs；中台无 RBAC 闸，actor 留痕）。
 export interface ExportJobView {
   job_id: string;
