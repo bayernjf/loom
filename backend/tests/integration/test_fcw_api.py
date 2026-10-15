@@ -129,6 +129,39 @@ async def _make_ps(session_factory, *, tenant="t1", industry="general", sensitiv
         return ps.product_space_id
 
 
+async def _promote_pending_candidates(client):
+    """Q13 转正全部 pending 的 G2 字段候选（就绪门 ⑤ 要求池内无挂起字段）。
+
+    提交池子时无 fid 的维度行会创建 wf02_dim_source 候选并引用它（candidate_id
+    非空、fid 未回填）；PWS 冻结前须 promote（回填 fid）——PRD line 2634
+    「pending_gate 字段=0」。#5 语义修正（Q361）后此步骤成为就绪门前置。
+    """
+    from tests.integration.staff_tokens import acting_as
+
+    async with acting_as(client, ["dictionary_admin"]):
+        cands = (
+            await client.get(
+                "/api/admin/g2-candidates",
+                params={
+                    "status": "pending_gate",
+                    "actor_id": "dict-1",
+                    "roles": "dictionary_admin",
+                },
+            )
+        ).json()
+    for c in cands:
+        async with acting_as(client, ["dictionary_admin"]):
+            r = await client.post(
+                f"/api/admin/g2-candidates/{c['candidate_id']}/promote",
+                json={
+                    "fid": f"f_promoted_{c['candidate_id'][:8]}",
+                    "cat": "selling",
+                    "actor": {"id": "dict-1", "roles": ["dictionary_admin"]},
+                },
+            )
+        assert r.status_code == 200, r.text
+
+
 async def _freeze(client, ps_id, contents=("温和洁面", "水润肤感", "清爽质地")):
     dims = [_dim(1, fid="f_a"), _dim(2, fid="f_b"), _dim(3)]
     pool = await client.post(
@@ -141,6 +174,7 @@ async def _freeze(client, ps_id, contents=("温和洁面", "水润肤感", "清�
         f"/api/field-pools/{pool_id}/gate",
         json={"decision": "approve", "actor": REVIEWER},
     )
+    await _promote_pending_candidates(client)
     cur = await client.get(f"/api/product-spaces/{ps_id}/field-pools/current")
     dim_ids = [d["dimension_id"] for d in cur.json()["dimensions"]]
     items = [
@@ -456,6 +490,7 @@ async def test_law_review_blocks_g6_until_approved(client, session_factory):
     await client.post(
         f"/api/field-pools/{pool_id}/gate", json={"decision": "approve", "actor": REVIEWER}
     )
+    await _promote_pending_candidates(client)
     cur = await client.get(f"/api/product-spaces/{ps_id}/field-pools/current")
     dim_ids = [d["dimension_id"] for d in cur.json()["dimensions"]]
     items = [

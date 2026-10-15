@@ -192,6 +192,20 @@ async def submit_plan(session, product_space_id: str, body, actor) -> FieldPool:
                 ).first()
                 if existing is not None:
                     candidate_id = existing.candidate_id
+                    # Q13/Q68（docs/25 §8.1 #5 语义修正，Q361）：候选已转正
+                    # （promote 建 G2Field、回填首引用维度 fid）后，同名新维度
+                    # 直接引用转正字段的 fid——「已转正字段」不得再计为挂起字段。
+                    if existing.status == "approved":
+                        promoted = (
+                            await session.scalars(
+                                select(G2Field).where(
+                                    G2Field.field_name == d.field_name,
+                                    G2Field.status == "active",
+                                )
+                            )
+                        ).first()
+                        if promoted is not None:
+                            d.fid = promoted.fid
                 else:
                     candidate = G2FieldCandidate(
                         tenant_id=ps.tenant_id,

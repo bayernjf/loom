@@ -120,6 +120,43 @@ async def _approved_pool(client, ps_id):
     assert gate.status_code == 200, gate.text
 
 
+async def _promote_pending_candidates(client, session_factory, ps_id):
+    """Q13 转正池内挂起的新字段候选（口径 B 语义：就绪门 ⑤ 要求无挂起字段）。
+
+    提交池子时无 fid 的维度行会创建 wf02_dim_source 候选并引用它
+    （FPDimension.candidate_id 非空、fid 未回填）——按 PRD line 2634
+    「pending_gate 字段=0」，这些候选转正（promote 回填 fid）前 PWS 不能就绪。
+    """
+    from sqlalchemy import select
+
+    from app.product.fieldpool.models import FieldPool, FPDimension
+
+    async with session_factory() as session:
+        rows = (
+            await session.scalars(
+                select(FPDimension.candidate_id)
+                .join(FieldPool, FPDimension.pool_id == FieldPool.pool_id)
+                .where(
+                    FieldPool.product_space_id == ps_id,
+                    FPDimension.candidate_id.is_not(None),
+                    FPDimension.fid.is_(None),
+                )
+            )
+        ).all()
+        candidate_ids = [c for c in rows if c is not None]
+    for i, cid in enumerate(candidate_ids):
+        async with acting_as(client, ["dictionary_admin"]):
+            r = await client.post(
+                f"/api/admin/g2-candidates/{cid}/promote",
+                json={
+                    "fid": f"f_promoted_{i}",
+                    "cat": "selling",
+                    "actor": {"id": "dict-1", "roles": ["dictionary_admin"]},
+                },
+            )
+        assert r.status_code == 200, r.text
+
+
 async def _approve_atoms(client, ps_id, contents):
     await _approved_pool(client, ps_id)
     pool = await client.get(f"/api/product-spaces/{ps_id}/field-pools/current")
@@ -159,6 +196,7 @@ async def _one_ready_pwc(client, ps_id, atom_ids):
 async def _green_ps(client, session_factory):
     ps_id = await _make_ps(session_factory)
     atoms = await _approve_atoms(client, ps_id, ("温和洁面", "水润肤感", "清爽质地"))
+    await _promote_pending_candidates(client, session_factory, ps_id)
     await _one_ready_pwc(client, ps_id, atoms)
     return ps_id
 
@@ -176,6 +214,28 @@ async def test_readiness_gates_and_ps_404(client, session_factory):
     assert body["all_green"] is False
     assert body["checks"]["approved_field_pool"] is False
     assert body["counts"]["approved_atoms"] == 0
+
+
+async def test_readiness_gate5_counts_pending_gate_fields_not_pools(
+    client, session_factory
+):
+    """#5 语义修正（Q361，docs/25 §8.1）：⑤ 数池内挂起的新字段候选——
+    FPDimension 引用未转正候选（candidate_id 非空、fid 未回填），而不是
+    gate=pending_gate 的 FieldPool 池子数（旧口径让「池内挂起字段」漏检）。
+    走真实 API 流程：提交含无 fid 维度的池子 → approve → ⑤ 红；Q13 转正后
+    promote 回填 fid → ⑤ 复绿。"""
+    ps_id = await _make_ps(session_factory)
+    await _approved_pool(client, ps_id)
+
+    body = (await client.get(f"/api/product-spaces/{ps_id}/pws/readiness")).json()
+    assert body["checks"]["no_pending_gate_fields"] is False
+    assert body["counts"]["pending_gate_fields"] == 1
+
+    await _promote_pending_candidates(client, session_factory, ps_id)
+
+    body = (await client.get(f"/api/product-spaces/{ps_id}/pws/readiness")).json()
+    assert body["checks"]["no_pending_gate_fields"] is True
+    assert body["counts"]["pending_gate_fields"] == 0
 
 
 async def test_evaluate_creates_todo_once_and_freeze_resolves(client, session_factory):

@@ -94,6 +94,9 @@ WORDLIST_EDITOR_ROLES = frozenset({ROLE_OPERATIONS, ROLE_COMPLIANCE})
 
 REJECT_EVIDENCE_TIMEOUT = "evidence_timeout"
 
+# Q18：缺证据候选开运营待办（docs/25 §8.1：五型外新增 evidence todo_type）。
+TODO_TYPE_EVIDENCE = "evidence"
+
 # approveAtomGuard 违规码（顺序对应 line 2633 的 10 项；⑩writeAudit 在 service 落）。
 GUARD_WRONG_PS = "wrong_product_space"
 GUARD_WRONG_POOL = "wrong_field_pool"

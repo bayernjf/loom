@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.core.config_center.cache import config_cache
 from app.product.whitelist_center import pws_rules as r
 
 
@@ -33,6 +34,40 @@ def test_refreeze_tier_mapping():
     assert r.refreeze_tier("unrelated_change") == r.REFREEZE_NONE
     with pytest.raises(ValueError):
         r.refreeze_tier("nope")
+
+
+def test_refreeze_tier_uses_config_knob_when_seeded():
+    """Q29 配置化（Q361）：映射整体可热更于配置中心 pws.refreeze_tier_map。
+
+    配置与代码默认不一致时以配置为准；配置缺失回落代码默认；配置写入非法
+    档位由消费侧防御（不静默放行）。
+    """
+    try:
+        config_cache.apply(
+            {
+                "pws.refreeze_tier_map": {
+                    # 运营把「强制」档的合规暂停调成「建议」档
+                    "atom_compliance_suspend": "suggested",
+                    # 运营把普通增量调成「免」
+                    "asset_increment": "none",
+                }
+            }
+        )
+        assert r.refreeze_tier("atom_compliance_suspend") == r.REFREEZE_SUGGESTED
+        assert r.refreeze_tier("asset_increment") == r.REFREEZE_NONE
+        # 配置映射未覆盖的原因码＝未知原因，仍不放行
+        with pytest.raises(ValueError):
+            r.refreeze_tier("wordlist_hit")
+
+        # 配置写入非法档位 → 消费侧防御，不静默放行
+        config_cache.apply({"pws.refreeze_tier_map": {"unrelated_change": "banana"}})
+        with pytest.raises(ValueError):
+            r.refreeze_tier("unrelated_change")
+    finally:
+        config_cache.invalidate()
+    # 清空后回落代码默认（seeds 播种值＝本模块常量，单一事实源对账）
+    assert r.refreeze_tier("atom_compliance_suspend") == r.REFREEZE_FORCED
+    assert r.refreeze_tier("unrelated_change") == r.REFREEZE_NONE
 
 
 def test_fingerprint_order_insensitive_and_distinct():

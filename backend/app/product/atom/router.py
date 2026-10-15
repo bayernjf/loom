@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -197,9 +199,11 @@ async def llm_expand(
 async def list_candidates(
     product_space_id: str,
     status: str | None = None,
+    sort: Literal["created_at", "affinity"] = "created_at",
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
-    rows = await service.list_ps_candidates(session, product_space_id, status)
+    """Q16：sort=affinity 时按亲和度降序（NULL 最后），默认保持 created_at 原序。"""
+    rows = await service.list_ps_candidates(session, product_space_id, status, sort=sort)
     conflicts = await service.list_conflicts(session, [c.candidate_id for c in rows])
     by_cand: dict[str, list] = {}
     for c in conflicts:
@@ -211,9 +215,10 @@ async def list_candidates(
 async def list_atoms(
     product_space_id: str,
     status: str | None = None,
+    sort: Literal["created_at", "affinity"] = "created_at",
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
-    rows = await service.list_atoms(session, product_space_id, status)
+    rows = await service.list_atoms(session, product_space_id, status, sort=sort)
     return [_atom_view(a) for a in rows]
 
 
@@ -304,6 +309,44 @@ async def supplement_evidence(
     return await _candidate_with_conflicts(session, cand)
 
 
+@router.post("/atom-candidates/{candidate_id}/evidence/ai-supplement")
+async def ai_supplement_evidence(
+    candidate_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    """Q18：operations 显式触发 AI 补证据一轮（Q354 同族：真模型调用逐单过人）。"""
+    try:
+        cand = await service.ai_supplement_evidence(session, candidate_id, verified)
+        await session.commit()
+    except service.CandidateNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="candidate not found") from exc
+    except service.GateNotAllowed as exc:
+        detail = str(exc)
+        await session.rollback()
+        raise HTTPException(
+            status_code=403 if "requires" in detail else 409, detail=detail
+        ) from exc
+    except gateway.ModelUnavailable as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.BudgetExhausted as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except gateway.ModelConfigError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except gateway.GenerationUpstreamError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except service.AtomEvidenceOutputInvalid as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return await _candidate_with_conflicts(session, cand)
+
+
 @router.post("/atom-candidates/{candidate_id}/revive")
 async def revive_candidate(
     candidate_id: str, body: LifecycleRequest, session: AsyncSession = Depends(get_session)
@@ -321,6 +364,26 @@ async def revive_candidate(
         await session.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return await _candidate_with_conflicts(session, cand)
+
+
+@router.get("/atom-clusters/{cluster_id}/members")
+async def cluster_members(
+    cluster_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Q19：簇成员 + pick_cluster_keeper 自动推荐（界面预填 keeper）。"""
+    members, recommended = await service.cluster_members(session, cluster_id)
+    conflicts = await service.list_conflicts(
+        session, [c.candidate_id for c in members]
+    )
+    by_cand: dict[str, list] = {}
+    for c in conflicts:
+        by_cand.setdefault(c.candidate_id, []).append(c)
+    return {
+        "cluster_id": cluster_id,
+        "recommended_keeper_id": recommended,
+        "members": [_candidate_view(c, by_cand.get(c.candidate_id)) for c in members],
+    }
 
 
 @router.post("/atom-clusters/{cluster_id}/resolve")
@@ -481,6 +544,32 @@ async def deprecate_atom(
             status_code=403 if "requires" in detail else 409, detail=detail
         ) from exc
     return _atom_view(atom)
+
+
+@router.post("/atoms/{atom_id}/restore")
+async def restore_atom(
+    atom_id: str,
+    body: LifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    """Q20：已废弃原子恢复＝新建候选重走审核（旧实例保持 deprecated 留痕）。"""
+    try:
+        cand = await service.restore_atom(session, atom_id, verified)
+        await session.commit()
+    except service.AtomNotFound as exc:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="atom not found") from exc
+    except service.GateNotAllowed as exc:
+        detail = str(exc)
+        await session.rollback()
+        raise HTTPException(
+            status_code=403 if "requires" in detail else 409, detail=detail
+        ) from exc
+    except service.FactAtomConflict as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return await _candidate_with_conflicts(session, cand)
 
 
 @router.post("/atoms/{atom_id}/archive")

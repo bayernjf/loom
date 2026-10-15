@@ -3,13 +3,13 @@
 > **性质**：把 `docs/01_PRD_产品需求规格.md` 的 13 段规格与 `docs/02` Q1–Q72 决策口径，拆成**可逐条打勾的条目**，每条给落地状态 + 可溯源证据 + 缺口。与 `docs/24`（段级比对）互补：本档回答「哪一条满足／哪一条没满足」，不重述段级结论。
 > **状态口径**（沿用 docs/23 §8）：✅ 已落地｜🟡 部分/有缺口｜⬜ 未启动。
 > **判定纪律**：**只记实测读到的事实**（`文件:行号`／迁移号／配置键名）。无证据一律写【无证据，未落地】，不推测、不用"应该已实现"。
-> **实现侧基线**：Q359（2026-10-14，02 C1.301；**纯前端批**）＝后端基线按 **Q358 时点**：Alembic 头 `0060_inspiration_entries`、**75 表·821 列**、迁移文件 **60**（Q358 建 `inspiration_entries`＋`/api/admin/inspiration-entries` 四端点，测试净 +10；`pytest -k inspiration` **10 passed** 本批复跑）；全量测试读数仍为 **Q357 时点 1392 passed＋11 skipped／收集 1403**（Q358/Q359 均未全量复跑，不产新读数）、覆盖率 `app/` **71.16%**（14,732 语句，**Q354 现测**）／核心层 **99.34%／604**、eval **101/101**、操作面 **251＝写 144／读 107**（Q357 时点；Q358 新增四端点后矩阵未重跑，不产新读数）、`GATED` **58**、sweep 作业 **7**；前端 `tsc`＋八检查器全绿、侧栏 **17→18**（Q359 加「灵感库」）、ts/tsx **112→116**（本批实测）。〔**Q358 批未前移本行＝该批合龙欠账，照 Q343 先例只注记不回改、由 Q359 一并补齐（docs/02 C1.301 ④）**；上一条 Q357 基线（1392＋11／1403、头 0059／74 表·811 列）保留为历史时点。〕
+> **实现侧基线**：Q361（2026-10-15，02 C1.303；**段4/段10/PWS 缺口批＝#5 readiness ⑤ 语义修正＋#15 CP-BAN 默认 6 词种子＋Q29 重冻三档配置化**）＝Alembic 头 **`0062_pws_refreeze_tiers_seed`**、**75 表·821 列**、迁移文件 **62**（0061＝CP-BAN 6 词纯数据种子、0062＝Q29 refreeze 映射配置键种子，均纯数据零建表；真 PG16 `upgrade head→downgrade -1→-1→re-upgrade` 状态对称、运营定制行 downgrade 保留 re-upgrade 不覆盖）；后端全量 **1419 passed＋11 skipped／收集 1430**（全量单跑 96.62s；较 Q360 1409 净 ＋10＝0061/0062 合同测试 8 例＋Q29 配置覆盖单测＋readiness ⑤ 口径 B 集成用例＋fieldpool「已转正候选同名维度回填 fid」跨 PS 用例）、ruff 全仓净、`GATED` 仍 **48**（本批零新写口）、覆盖率未复测（不产新读数）；前端零改动。〔**Q358 批未前移本行＝该批合龙欠账，照 Q343 先例只注记不回改、由 Q359 一并补齐（docs/02 C1.301 ④）**；上一条 Q359 基线（后端按 Q358 时点 0060／75 表·821 列／迁移 60、全量读数 Q357 时点 1392＋11／1403）保留为历史时点。〕
 > **登记**：本台账随 Q347 批落地（2026-10-11，docs/02 C1.290）；Q350 批同步行状态与计数（见各条注记）。
 
 ## 0. 结论摘要
 
-1. **逐条计数**：本期共验收 **96 条**（决策 75 行〔Q1–Q72，**Q60a/b/c 拆行、Q22a/b 并入 Q22**〕＋结构性硬闸/红线 21 条）＝ **✅ 61 ／ 🟡 30 ／ ⬜ 5**〔**Q350 订正（02 C1.293）**：① 第 16 条国家级规则裁乙案随 V2，状态落「✅ 已裁决」（原 ⬜6→⬜5 同时 ✅58→59）；② Q11、Q30 两条经 Q350 代码批满足，🟡→✅（59→61、🟡32→30）。合计仍 96。原始时点计数见 §1 Q347 注记〕。
-2. **V1 主链（Q73 权威范围＝段 1→6→10→11）逐条口径下并非全绿**：该范围 41 条＝**✅ 30 ／ 🟡 11 ／ ⬜ 0**〔Q350：Q11（段3）、Q30（段6）升 ✅〕。即"主链路可跑通"与"逐条满足"是两件事——`docs/23 §8.1` 的"已闭环 ✅"是按**段级可运行**判的，本档按**条级**判，未销差异 11 条半成品（Q350 前为 13，明细见 §8.1）。
+1. **逐条计数**：本期共验收 **96 条**（决策 75 行〔Q1–Q72，**Q60a/b/c 拆行、Q22a/b 并入 Q22**〕＋结构性硬闸/红线 21 条）＝ **✅ 64 ／ 🟡 27 ／ ⬜ 5**〔**Q361 订正（02 C1.303）**：Q29 重冻三档配置化、#5 readiness ⑤ 语义修正、#15 CP-BAN 默认 6 词种子三条升 ✅（61→64、🟡30→27）；Q350 订正：① 第 16 条国家级规则裁乙案随 V2，状态落「✅ 已裁决」（原 ⬜6→⬜5 同时 ✅58→59）；② Q11、Q30 两条经 Q350 代码批满足，🟡→✅。合计仍 96。原始时点计数见 §1 Q347 注记〕。
+2. **V1 主链（Q73 权威范围＝段 1→6→10→11）逐条口径下并非全绿**：该范围 41 条＝**✅ 31 ／ 🟡 10 ／ ⬜ 0**〔Q361：Q29（段6）升 ✅；Q350：Q11（段3）、Q30（段6）升 ✅〕。即"主链路可跑通"与"逐条满足"是两件事——`docs/23 §8.1` 的"已闭环 ✅"是按**段级可运行**判的，本档按**条级**判，未销差异 10 条半成品（Q361 前为 11，明细见 §8.1）。
 3. **⬜ 5 条集中在段 13 分析面与一条横切**〔Q350 订正〕：Q44（目的配比软提示）、Q63/Q64/Q65（KUP 三关/两级审批/校准月报）、资金动作 HumanGate，均随 V2 已挂账（见 §8）；国家级规则 R-030/R-031/R-032＋`countries` 表原在本数内，**Q350 经负责人裁乙案正式随 V2、从「V1 缺口」重归类为「V2 规划」**（V1 段10 核心清洗已 ✅，scope cut 见第 16 条注记与 02 C1.293）。
 4. **本批新坐实的 8 处**（既有段级文档未写入的条级事实）：见 §9〔**Q350 处置**：① Q11↔Q7 联动断裂已裁甲修复（派生＋0057 种子）；② Q30 占位已回填（见各条注记）；③ 国家级规则裁乙案随 V2、不再计 V1 缺口；其余 5 处状态不变〕。~~其中 Q11↔Q7 联动断裂与国家级规则零落库两条建议优先裁决~~ 已裁决（2026-10-12）。
 
@@ -74,11 +74,11 @@
 |---|---|---|---|---|
 | Q14 | 批次 20/50 配置化，敏感 20／非敏感 50，运营可改 | ✅ | `config_center/seeds.py:24-25`；`atom/atom_rules.py:25-30,109-110`；`model_registry/atom_expand.py:109-111` 按 `ps.sensitive_industry` 取默认；`model_registry/schemas.py:117` 入参可改 | ~~实际取值受 Q11 旗标恒 False 影响~~〔Q350 派生链路已落，影响消除；§9-① 注记〕 |
 | Q15 | FieldPool 目标原子数 15–30，达标停拓 | ✅ | `fieldpool/models.py:69-70`；`planning.py:33-38`；`fieldpool/schemas.py:37-38` Gate 可改；停拓 `atom_expand.py:88-92` + `atom_rules.py:211-213` `target_reached()` | 手动追加批次不受限（代码注释明示） |
-| Q16 | 亲和度不设硬淘汰线；仅排序 + <0.5 标"低亲和" | 🟡 | 标记落：`atom_rules.py:33-34,118-119`、`seeds.py:26` `atom.low_affinity_line=0.5`、`atom/service.py:196`、`models.py:126` | **排序未落地**：候选列表一律 `order_by(created_at)`（`atom/service.py:284,298,310`） |
+| Q16 | 亲和度不设硬淘汰线；仅排序 + <0.5 标"低亲和" | ✅ | 标记落：`atom_rules.py:33-34,118-119`、`seeds.py:26` `atom.low_affinity_line=0.5`、`atom/service.py:196`、`models.py:126`；排序落（Q360 C1.302）：三列表查询加 `sort` 参数（`atom/service.py` `_apply_sort`，affinity 降序 nulls_last，默认 created_at 原契约），两读口 `sort: Literal["created_at","affinity"]` | ~~排序未落地~~ Q360 已销（2026-10-14） |
 | Q17 | risk 双轨（词表强制/AI 兜底/只升不降）+ 词表后台 CRUD | ✅ | `atom_rules.py:141-146` `grade_risk()`；只升：`atom/service.py:619-630`（`risk_source=="wordlist"` → `RiskOverrideForbidden`）；词表 CRUD `core/compliance_wordlist/router.py:59-108`、`service.py:62-147` | — |
-| Q18 | pending_evidence：AI 自动补一轮 → 运营待办 → 7 天超时自动驳回（可复活） | 🟡 | 超时驳回 ✅ `atom/service.py:543-567` `sweep_evidence_timeouts()`；复活 ✅ `atom/service.py:503-540`；`seeds.py:28` `atom.evidence_timeout_days=7` | **"AI 自动补一轮"未落**（仅人工补证据口 `atom/service.py:470-500`）；**运营待办未落**（`rg "evidence" app/core/workbench/` 零命中） |
-| Q19 | AI 标簇 + 推荐保留项（亲和度最高），被合并记 alias 不删 | 🟡 | 成簇 `atom_rules.py:237-277`（Q86 起为 embedding 本地确定性算）；推荐规则 `atom_rules.py:199-208` `pick_cluster_keeper()`；保留 alias ✅ `atom/service.py:572-614`（status=merged、alias_of）、`:355` | `pick_cluster_keeper` **未接线自动推荐**（需人工传 `keeper_candidate_id`，`atom/schemas.py:61`） |
-| Q20 | 冻结/解冻=运营；合规暂停=合规角色；已废弃恢复重走审核 | 🟡 | 冻结解冻=operations `atom/service.py:706-724`；合规暂停/恢复=internal_compliance `atom/service.py:726-745` | **"废弃恢复重走审核"未落**：atom 域无 restore（`rg "restore" app/product/atom/` 零命中；同名 restore 只在 fieldpool 维度 `fieldpool/router.py:239`） |
+| Q18 | pending_evidence：AI 自动补一轮 → 运营待办 → 7 天超时自动驳回（可复活） | ✅ | 超时驳回 ✅ `atom/service.py:543-567` `sweep_evidence_timeouts()`；复活 ✅ `atom/service.py:503-540`；`seeds.py:28` `atom.evidence_timeout_days=7`；人工补证 `atom/service.py:470-500`；AI 补证（Q360 C1.302）＝`ATOM-EVIDENCE` 场景（`model_registry/seeds.py` 提示词 v0.1 工程口径）＋operations 显式端点 `/atom-candidates/{id}/evidence/ai-supplement`（Q354 同族花钱纪律：逐单过人不自动，失败不重试保持 pending_evidence）；运营待办＝`atom_rules.TODO_TYPE_EVIDENCE`＋`OpsTodo`（落 pending_evidence 即开、补证/超时自动关，幂等） | ~~AI 自动补一轮未落~~／~~运营待办未落~~ Q360 已销（2026-10-14） |
+| Q19 | AI 标簇 + 推荐保留项（亲和度最高），被合并记 alias 不删 | ✅ | 成簇 `atom_rules.py:237-277`（Q86 起为 embedding 本地确定性算）；推荐规则 `atom_rules.py:199-208` `pick_cluster_keeper()`；保留 alias ✅ `atom/service.py:572-614`（status=merged、alias_of）、`:355`；自动推荐接线（Q360 C1.302）＝读口 `/atom-clusters/{id}/members` 返 `recommended_keeper_id` 供界面预填＋`ClusterResolveRequest.keeper_candidate_id` 可省略（service 用 `pick_cluster_keeper` 兜底） | ~~pick_cluster_keeper 未接线~~ Q360 已销（2026-10-14；"落推荐值到候选行"经裁以读口+可选入参实现，前端无 atom 页面故无预填 UI） |
+| Q20 | 冻结/解冻=运营；合规暂停=合规角色；已废弃恢复重走审核 | ✅ | 冻结解冻=operations `atom/service.py:706-724`；合规暂停/恢复=internal_compliance `atom/service.py:726-745`；废弃恢复（Q360 C1.302）＝`POST /api/atoms/{id}/restore`（operations 凭证闸，GATED 登记）：新建 manual 批次候选重走 Gate/冲突/证据流程、旧实例保持 deprecated 留痕、事实原子值先排除自身再查重（line 11189） | ~~废弃恢复重走审核未落~~ Q360 已销（2026-10-14） |
 
 ### 3.4 段 5 · PWC（Q21–Q27）
 
@@ -97,7 +97,7 @@
 | # | PRD 口径 | 状态 | 证据 | 缺口 |
 |---|---|---|---|---|
 | Q28 | 5 门全绿出待办 + 人工冻结，7 天未冻升级 | ✅ | `whitelist_center/pws_rules.py:11-13`；`service.py:159-203`（全绿建 OpsTodo，due_at=+7d）；升级走通用 `core/sla/jobs.py:19-20,94`；`seeds.py:48` `pws.ready_todo_due_days=7`；人工写口 `router.py:85` | BO-07 已按 Q329 改判 operations（见 §9-⑦） |
-| Q29 | 重冻三档 + 清单配置化 | 🟡 | 三档落：`pws_rules.py:34-51,88-92`；`service.py:275-277,357` 落 refreeze_tier | **未配置化**：仍是代码常量（`pws_rules.py:43` 自注"M10 配置中心前为代码常量"），`seeds.py` 无 `pws.refreeze*` 键 |
+| Q29 | 重冻三档 + 清单配置化 | ✅ | 三档落：`pws_rules.py:34-51,88-92`；`service.py:275-277,357` 落 refreeze_tier；**Q361 配置化（02 C1.303）**：`seeds.py` 加 `pws.refreeze_tier_map` json 键（默认 6 原因码→forced/suggested/none，validation `{}`），`refreeze_tier()` 改读 knob 缺键回退代码常量、非法档位 ValueError；迁移 **0062** 播种（照 0058 模式，downgrade 双指纹比对） | — |
 | Q30 | 换版四行处置 | ✅ | ① `service.py` 旧版 `is_active=False`+superseded+superseded_by；〔**Q350 ②③④ 已回填（02 C1.293）**：`whitelist_center/service.py:84` `_apply_q30_dispositions()`——② draft FCW `revoke_fcw` 作废＋建指向新版的 queued 重组装任务；③ forced 未发布行建 `q30_pws_recheck`（internal_compliance）；④ published 不回改仅计数＋forced 建 `q30_fcw_outdated_notify`（operations）；另记 `pws.q30_dispositions` 审计，三例测试〕 | — |
 | Q31 | 大版本递增／全保留／同刻 1 active | ✅ | `pws_rules.py:82-85` `next_version()`；迁移 `0006_m6_stage6:56` `uq_pws_ps_version`；`service.py:398-400`；`docs/10:150-153` | — |
 | Q32 | revoked 急停 + 审计 + 立即断消费 | ✅ | `service.py:481-515`（revoked+ revoked_by/at/reason + freeze_logs + `pws.revoke` 审计）；断消费点 `decision/compliance_center/service.py:289`、`platform_adaptation/service.py:795`、`final_whitelist/service.py:863` | — |
@@ -107,9 +107,9 @@
 
 | # | PRD 口径 | 状态 | 证据 | 缺口 |
 |---|---|---|---|---|
-| Q48 | 全链一张合规词库 + CP-LAW 单独小表 | ✅ | `core/compliance_wordlist/models.py:20-52`（word/level/action/downgrade_target/country/industry/生效期/layer）；三关卡同源 `atom/service.py:151`／`condition/service.py:255`／`compliance_center/service.py:294`／`content/service.py:186`；CP-LAW `compliance_center/models.py:29` + 迁移 `0007_m7_stage10` | 词库默认词条未种子（见硬闸 #15） |
+| Q48 | 全链一张合规词库 + CP-LAW 单独小表 | ✅ | `core/compliance_wordlist/models.py:20-52`（word/level/action/downgrade_target/country/industry/生效期/layer）；三关卡同源 `atom/service.py:151`／`condition/service.py:255`／`compliance_center/service.py:294`／`content/service.py:186`；CP-LAW `compliance_center/models.py:29` + 迁移 `0007_m7_stage10`；**Q361：底座 6 词默认词条已种子（迁移 0061，见硬闸 #15 翻正）** | — |
 | Q49 | 敏感领域自动触发 + 合规待办 + Guard⑥ + 通用 SLA 引擎 | ✅ | `models.py:40-50` `law_reviews`；`service.py:165-210` `ensure_law_review` + OpsTodo（指派 internal_compliance）；`ccr_rules.py:27-33,122`；`core/sla/policies.py:19-45`；`seeds.py:50` `ccr.law_review_due_hours=48`；Guard⑥ `fcw_rules.py:171-183` |  ~~触发旗标之一 `ps.sensitive_industry` 恒 False~~〔Q350 派生链路已落，兜底路径可触发；领域清单主路径本不受影响〕 |
-| Q50 | 国家>平台>底座，不可配置 | ✅ | `compliance_center/ccr_rules.py:7-14` `LAYER_PRIORITY` 硬编码无 knob；`:38-45` 同级从严；`compliance_wordlist/models.py:31` layer 列 | 底座词条本身未种子，优先级逻辑正确但无数据可跑（硬闸 #15） |
+| Q50 | 国家>平台>底座，不可配置 | ✅ | `compliance_center/ccr_rules.py:7-14` `LAYER_PRIORITY` 硬编码无 knob；`:38-45` 同级从严；`compliance_wordlist/models.py:31` layer 列；**Q361：底座词条已种子（0061，base 层不可配置语义有数据可跑）** | — |
 | Q51 | 词表生效即扫 active 快照/draft FCW/未发布成品 | 🟡 | `compliance_wordlist/router.py:31-35` `_q51_rescan`；`compliance_center/service.py:628-658` 扫 frozen 快照→强制重冻待办；**draft FCW 扫描 M8 已接**（`service.py:710-740` 同事务建 rescan 待办，V1 draft 通道未开通常为空集）；`ccr_rules.py:34-36` | **未发布中间态成品仍未接**（Q350 ②③④ 已建 q30 待办机制，词表生效即扫这一路未并）；Q350 未改本项，维持 🟡 |
 
 ### 3.7 段 11 · FCW 组装（Q52–Q55）
@@ -183,7 +183,7 @@
 | 12 | publishSlots **四维静态分** + AI 拓展候选四维全 0 + pending_gate | 🟡 | `platform_adaptation/models.py:62-72`（traffic/safe/conv/load + score_source）；`pa_rules.py:31,89-96` 聚合 | **AI 新位"四维 0 + pending_gate"无入口**：`pa_rules.py:50` 定义 `GATE_PENDING` 后未接线，`publish_slots.gate` 默认 approved |
 | 13 | slotRuleByType **13 类**默认值（含单账号日发布限量） | 🟡 | 迁移 `0008_m11_stage78:82-90` `slot_type_defaults`；`models.py:117-133` daily_limit_min/max | **13 类未种子**：约 40 列原文未给出，`defaults` JSON 占位（`models.py:120-122`） |
 | 14 | 平台层 **4 条红线** | ✅ | `models.py:262-263`、`service.py:920-940`（approve 只解除 pending、`advisory_only:True`，唯一出口仍是段11）；AI 候选一律 pending_review（`:895-917`） | — |
-| 15 | 合规底座 **4 维**（CP-BAN/CP-DOWN/CP-LAW/CP-CLEAN） | 🟡 | CP-BAN/DOWN：`compliance_wordlist` 表 + action=ban/downgrade + downgrade_target（迁移 `0004:27`，字典 `0051`）；CP-LAW：`cp_law_sensitive_domains`（`0007:38`）+ law_reviews；CP-CLEAN：`ccr_rules.py:18,96` status=clean | **CP-BAN 默认 6 词（permanent removal/cure/treat/根治/保证有效/100%）未种子**：全仓无匹配，词库空表待运营录入 |
+| 15 | 合规底座 **4 维**（CP-BAN/CP-DOWN/CP-LAW/CP-CLEAN） | ✅ | CP-BAN/DOWN：`compliance_wordlist` 表 + action=ban/downgrade + downgrade_target（迁移 `0004:27`，字典 `0051`）；CP-LAW：`cp_law_sensitive_domains`（`0007:38`）+ law_reviews；CP-CLEAN：`ccr_rules.py:18,96` status=clean；**Q361：CP-BAN 默认 6 词（permanent removal/cure/treat/根治/保证有效/100%）已种子＝迁移 0061（critical/ban/base/active，ON CONFLICT DO NOTHING，downgrade 四列指纹删，02 C1.303）** | — |
 | 16 | 国家级规则 **R-030/R-031/R-032** + countries 事实库 | ⬜→**V2** | 【Q350 裁乙案随 V2，02 C1.293】Q347 实测零落库属实（无 `countries` 表／无 GDPR/NMPA/FDA 代码引用）；**负责人明示接受 scope cut：V1 段10 以「核心清洗 ✅（CP-BAN/CP-DOWN/CP-CLEAN＋law_review）、国家级管辖扩展层随 V2」交付**——三管辖规则文本（GDPR 留资字段/NMPA/FDA 措辞）无权威来源，硬做即臆造红线。〔裁决前证据原文保留：仅存于 `docs/10:220`、`docs/04:259` 规格登记〕 | **不再计为 V1 缺口**（V1 口径 ⬜6→⬜5）；V2 启动前提＝业务方给三管辖权威文本 |
 | 17 | Agent **三条边界**（max_turns+max_tokens+emergency_stop） | 🟡 | `config_center/seeds.py:78-83` 登记三组数（10/8000、6/6000、20/4000） | **emergency_stop 与 Agent 注册表本体未落**（seeds 注"注册表本体在 M12"，无代码） |
 | 18a | RBAC 红线操作须对应角色 + 人工 Gate | ✅ | PWS 冻结 `whitelist_center/router.py:90`+`service.py:72-76`；原子正式化 `atom/router.py:31`；合规废弃 `atom/router.py:33`；Prompt 修改 `model_registry/gateway.py:233` PLATFORM_ADMIN | ⚠ 已裁决偏差：PWS 冻结由 PRD 的 BO-07 改判 operations（Q329/Q242 乙），见 §9-⑦ |
@@ -201,27 +201,27 @@
 
 ## 8. 缺口清单（按可处置性归类）
 
-### 8.1 V1 范围内、纯工程可自推（建议优先，11 条 🟡 + 3 条硬闸）〔Q350：Q11 簇与 Q30 两条已销，表中保留删除线行〕
+### 8.1 V1 范围内、纯工程可自推（建议优先，10 条 🟡）〔Q361：Q29 与硬闸 #5/#15 已销，表中保留删除线行；Q350：Q11 簇与 Q30 两条已销，表中保留删除线行〕
 
-> 这 14 条未销项的存在，是「docs/23 §8.1 写的 V1 主链全部 ✅」与「本档条级判定」的唯一差异来源——差异不是矛盾，是**粒度**：前者判"这段能不能跑"，本档判"这条有没有按定稿口径做完"。
+> 这 10 条未销项的存在，是「docs/23 §8.1 写的 V1 主链全部 ✅」与「本档条级判定」的唯一差异来源——差异不是矛盾，是**粒度**：前者判"这段能不能跑"，本档判"这条有没有按定稿口径做完"。
 
 | 条 | 缺口一句话 | 处置建议 |
 |---|---|---|
 | ~~Q11 + Q14 + Q49~~ | ~~旗标全仓零赋值，三路径恒不触发~~ **Q350 已裁甲并落地（02 C1.293）**：Q7 派生＋0057 种子 | ✅ 已销（2026-10-12） |
 | Q7 | ~~缺食品/母婴种子~~ Q350 已补迁移 0057（0.85 默认档）；**残留**：原文 0.90 阈值待业务权威确认 | 待业务方给阈值口径后改配置（纯配置，无工程缺口） |
 | Q9 | "魔法数字禁止硬编码"无强制手段 | 加一条 lint/哨兵测试，或明确"靠人工登记"并写入纪律 |
-| Q16 | 候选列表未按亲和度排序 | `atom/service.py` 加可选排序参数 |
-| Q18 | AI 自动补证据一轮 + 运营待办 | 接 volcengine ark One 轮 LLM 补证据 + 五型外新增 evidence todo_type |
-| Q19 | `pick_cluster_keeper` 未接线自动推荐 | 落推荐值到候选行，界面预填 |
-| Q20 | 原子"恢复重走审核" | 新增 atom restore 端点（对标 fieldpool restore） |
+| ~~Q16~~ | ~~候选列表未按亲和度排序~~ **Q360 已裁甲并落地（02 C1.302）**：三列表加 `sort` 参数，读口 `sort=affinity` | ✅ 已销（2026-10-14） |
+| ~~Q18~~ | ~~AI 自动补证据一轮 + 运营待办~~ **Q360 已落地（02 C1.302）**：ATOM-EVIDENCE 场景（operations 显式端点）＋evidence todo_type 待办 | ✅ 已销（2026-10-14） |
+| ~~Q19~~ | ~~`pick_cluster_keeper` 未接线自动推荐~~ **Q360 已落地（02 C1.302）**：members 读口返推荐值＋resolve 可省略 keeper | ✅ 已销（2026-10-14） |
+| ~~Q20~~ | ~~原子"恢复重走审核"~~ **Q360 已落地（02 C1.302）**：新增 `/atoms/{id}/restore`（对标 fieldpool restore） | ✅ 已销（2026-10-14） |
 | Q21 | 检测项开关/顺序配置化 + 排序限量截断 | seeds 加 detector 键（参考 Q39 模板做法） |
 | Q25 | 录入端"内容用途"未绑定 ContentGoal 字典 | 录入校验改为取字典枚举 |
 | Q26 | 预筛未实现 ⇒ "跳预筛"无从验证 | 随 Q21 一并处理 |
-| Q29 | 重冻三档清单未配置化 | seeds 加 `pws.refreeze*` 键 |
+| ~~Q29~~ | ~~重冻三档清单未配置化~~ **Q361 已落地（02 C1.303）**：`pws.refreeze_tier_map` 配置键＋迁移 0062 播种，`refreeze_tier()` 读 knob | ✅ 已销（2026-10-15） |
 | ~~Q30~~ | ~~②③④ 占位~~ **Q350 已裁甲并回填（02 C1.293）**：`_apply_q30_dispositions()` | ✅ 已销（2026-10-12） |
 | Q51 | 只扫 frozen 快照，未接 draft FCW 与段12 未发布成品 | 随 Q30 一并回填 |
-| #5 | readiness ⑤ 语义漂移（pending_gate FieldPool 数 vs 字段） | 二选一并注明，避免语义继续漂 |
-| #15 | CP-BAN 默认 6 词未种子 | 纯数据迁移补 seed |
+| ~~#5~~ | ~~readiness ⑤ 语义漂移（pending_gate FieldPool 数 vs 字段）~~ **Q361 已落地（02 C1.303）**：口径定为**池内挂起的新字段候选数**（FPDimension 引用未转正候选＝candidate_id 非空＋fid 空，Q13 转正前），而非池子数；fieldpool `_persist` 对已转正候选的同名新维度直接回填 fid（跨 PS 复用不误挂） | ✅ 已销（2026-10-15） |
+| ~~#15~~ | ~~CP-BAN 默认 6 词未种子~~ **Q361 已落地（02 C1.303）**：迁移 0061 纯数据种子（critical/ban/base/active，downgrade 指纹删） | ✅ 已销（2026-10-15） |
 | #16 | ~~国家级规则 R-030/031/032 + countries 零实现~~ **Q350 裁乙案随 V2**（02 C1.293）：V1 显式 scope cut，不再算 V1 缺口；V2 待业务方三管辖权威文本 | ✅ 已裁决（2026-10-12） |
 
 ### 8.2 需外部规格输入（工程侧不可自推）
@@ -251,7 +251,7 @@ Q37 自动采集｜Q43 第 18 池｜#17 之外 Agent 注册表本体｜Q70 分�
 3. **国家级规则零落库**：`rg "create_table('countries'|R-030"` 零命中，而 R-030/R-031/R-032 属 docs/01 段10 硬规格（V1 范围内）。〔**Q350 裁乙案随 V2（02 C1.293）**：负责人明示接受 V1 scope cut，本条事实成立但不再计为 V1 缺口（⬜6→⬜5）；原文保留〕
 4. **Q63/Q64/Q65 是"配置项已登记、零消费方"**：三个 `kup.*`／`calibration.*` 键全仓只命中 seeds 行；`Q61` 的 `hot.*` 同型。
 5. **Q47 只有文档登记、零代码**：`docs/06:191` 写明"复用 Q9"，但 `app/decision/layer_strategy/` 无消费。
-6. **#5 语义漂移**：实现把 PRD 的「pending_gate 字段=0」落成「pending_gate 的 FieldPool 数=0」，两者在"池已批但池内字段还在挂起"场景下结论相反。
+6. **#5 语义漂移**：实现把 PRD 的「pending_gate 字段=0」落成「pending_gate 的 FieldPool 数=0」，两者在"池已批但池内字段还在挂起"场景下结论相反。**Q361 已修正（02 C1.303）**＝口径定为**池内挂起的新字段候选数**（FPDimension 引用未转正候选：candidate_id 非空＋fid 未回填，Q13 转正 Gate 前）；fieldpool `_persist` 对已转正候选（approved）的同名新维度行直接回填转正字段 fid——「已转正字段」不再计为挂起，跨 PS 同名复用不误挂（详见 §8.1 #5 销账行）。
 7. **#18a 已裁决偏差**：PWS 冻结角色由 PRD 的 BO-07 实际为 operations（Q329），需在 PRD 侧补注记或在代码侧回归原文。
 8. **#3/#18b 形态差异**：skill7 缺持久化 `ai_suggested`（Q76 实现补）；Prompt 无 ChangeProposal 实体（直写+审计）。
 

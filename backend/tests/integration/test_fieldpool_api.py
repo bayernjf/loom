@@ -309,6 +309,51 @@ async def test_candidate_promotion_requires_dictionary_admin(client, session_fac
     assert again.status_code == 409
 
 
+async def test_same_named_dimension_after_promotion_reuses_fid_across_ps(
+    client, session_factory
+):
+    """Q361（docs/25 §8.1 #5 语义修正）：「已转正字段不得再计为挂起字段」。
+
+    候选是全局字典资产（wf02_dim_source 同名跨 PS 复用）。某 PS 池子提交时
+    创建的候选转正（promote 建 G2Field）后，另一 PS 再提交同名字段维度的池子，
+    新维度行应直接引用转正字段的 fid——而不是 candidate_id 非空、fid 留空
+    （那会被就绪门 ⑤ 判成挂起字段）。
+    """
+    ps1 = await _make_ps(session_factory)
+    first = (await _submit(client, ps1, [_dim(1, fid="f_a"), _dim(2, fid="f_b"), _dim(3)])).json()
+    candidate_id = next(
+        d["candidate_id"] for d in first["dimensions"] if d["field_name"] == "维度3"
+    )
+    ok = await client.post(
+        f"/api/admin/g2-candidates/{candidate_id}/promote",
+        json={"fid": "f_new", "actor": DICT_ADMIN},
+    )
+    assert ok.status_code == 200
+
+    # 另一 PS 提交同名字段：候选已 approved ⇒ 维度行直接带转正 fid。
+    ps2 = await _make_ps(session_factory)
+    second = (await _submit(client, ps2, [_dim(1, fid="f_a"), _dim(2, fid="f_b"), _dim(3)])).json()
+    dim = next(d for d in second["dimensions"] if d["field_name"] == "维度3")
+    assert dim["fid"] == "f_new"
+
+    # 且该维度行不再被视为挂起字段（candidate 已 approved，fid 已回填）。
+    async with session_factory() as session:
+        from sqlalchemy import select
+
+        from app.product.fieldpool.models import FPDimension
+
+        row = (
+            await session.scalars(
+                select(FPDimension).where(
+                    FPDimension.dimension_id == dim["dimension_id"]
+                )
+            )
+        ).first()
+        assert row is not None
+        assert row.fid == "f_new"
+        assert row.candidate_id == candidate_id
+
+
 # ---------- Q8 路由表 ----------
 
 async def test_source_route_crud_and_in_use_protection(client, session_factory):
@@ -336,3 +381,4 @@ async def test_source_route_crud_and_in_use_protection(client, session_factory):
 async def test_submit_for_unknown_product_space_404(client):
     resp = await _submit(client, "nonexistent", [_dim(1), _dim(2), _dim(3)])
     assert resp.status_code == 404
+

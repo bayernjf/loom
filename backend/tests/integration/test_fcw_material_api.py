@@ -33,6 +33,7 @@ from tests.integration.test_fcw_api import (
     _dim,
     _freeze,
     _make_ps,
+    _promote_pending_candidates,
     _seed_static_inputs,
 )
 
@@ -114,6 +115,7 @@ async def _prepare(client, session_factory, *, industry="general"):
             f"/api/field-pools/{pool_id}/gate",
             json={"decision": "approve", "actor": REVIEWER},
         )
+        await _promote_pending_candidates(client)
         cur = await client.get(f"/api/product-spaces/{ps_id}/field-pools/current")
         dim_ids = [d["dimension_id"] for d in cur.json()["dimensions"]]
         items = [

@@ -16,7 +16,7 @@ from app.product.atom.atom_rules import ATOM_APPROVED
 from app.product.atom.models import AtomCandidate, AtomConflict, ProductAtomInstance
 from app.product.condition import pwc_rules
 from app.product.condition.models import ConditionPackage, PwcComboItem
-from app.product.fieldpool.models import FieldPool
+from app.product.fieldpool.models import FieldPool, FPDimension
 from app.product.modeling.models import OpsTodo
 from app.product.product_intake.models import ProductSpace
 from app.product.whitelist_center import pws_rules
@@ -266,13 +266,20 @@ async def evaluate_readiness(session, product_space_id: str) -> dict:
         )
     ) or 0
 
-    pending_pool_count = (
+    # ⑤ pending_gate 字段=0（PRD line 2634 原文；docs/25 §8.1 #5 语义修正，Q361）：
+    # 数的是**池内挂起的新字段候选**——FPDimension 引用未转正候选（candidate_id
+    # 非空且 fid 未回填，Q13 转正 Gate 前）的维度行数，而不是旧口径
+    # 「gate=pending_gate 的 FieldPool 池子数」（池子非 approved 已由 ① 拦下，
+    # 旧口径让「池内挂起字段」漏检）。转正后 promote_candidate 回填 fid ⇒ 计数归零。
+    pending_field_count = (
         await session.scalar(
             select(func.count())
-            .select_from(FieldPool)
+            .select_from(FPDimension)
+            .join(FieldPool, FPDimension.pool_id == FieldPool.pool_id)
             .where(
                 FieldPool.product_space_id == product_space_id,
-                FieldPool.gate == "pending_gate",
+                FPDimension.candidate_id.is_not(None),
+                FPDimension.fid.is_(None),
             )
         )
     ) or 0
@@ -282,7 +289,7 @@ async def evaluate_readiness(session, product_space_id: str) -> dict:
         "enough_approved_atoms": approved_atom_count >= pws_rules.min_approved_atoms(),
         "active_pwc": active_pwc_count >= pws_rules.min_active_pwcs(),
         "no_unresolved_blocked_conflict": blocked_conflict_count == 0,
-        "no_pending_gate_fields": pending_pool_count == 0,
+        "no_pending_gate_fields": pending_field_count == 0,
     }
     return {
         "checks": checks,
@@ -291,7 +298,7 @@ async def evaluate_readiness(session, product_space_id: str) -> dict:
             "approved_atoms": approved_atom_count,
             "active_pwcs": active_pwc_count,
             "unresolved_blocked_conflicts": blocked_conflict_count,
-            "pending_gate_pools": pending_pool_count,
+            "pending_gate_fields": pending_field_count,
         },
         "pool_id": pool.pool_id if pool is not None else None,
     }

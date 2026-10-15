@@ -26,6 +26,9 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/atom-candidates/{candidate_id}/reject", "POST"): REVIEWER,
     ("/api/atom-clusters/{cluster_id}/resolve", "POST"): REVIEWER,
     ("/api/atom-candidates/{candidate_id}/risk-override", "POST"): REVIEWER,
+    # Q360：AI 补证据（花钱动作，Q354 同族逐单过人）与废弃恢复重走审核=operations。
+    ("/api/atom-candidates/{candidate_id}/evidence/ai-supplement", "POST"): OPS,
+    ("/api/atoms/{atom_id}/restore", "POST"): OPS,
     ("/api/atoms/{atom_id}/freeze", "POST"): OPS,
     ("/api/atoms/{atom_id}/unfreeze", "POST"): OPS,
     ("/api/atoms/{atom_id}/compliance-suspend", "POST"): COMPLIANCE,
