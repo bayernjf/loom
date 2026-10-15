@@ -86,10 +86,23 @@ def next_version(existing_versions: list[str]) -> str:
 
 
 def refreeze_tier(reason_code: str) -> str:
-    """Q29：原因码 → 强制/建议/免；未知原因不放行（避免静默当增量）。"""
-    if reason_code not in REASON_REFREEZE_TIER:
+    """Q29：原因码 → 强制/建议/免；未知原因不放行（避免静默当增量）。
+
+    Q29 配置化（docs/25 §3.3 销账，Q361）：映射整体可热更于配置中心
+    ``pws.refreeze_tier_map``（json 键，seeds 播种默认值=本模块代码默认）。
+    缺键（未加载/未播种）回落 REASON_REFREEZE_TIER；配置与代码默认不一致时
+    以配置为准——本模块常量保留为「默认值」而非唯一事实源（同 knob 语义）。
+    档位非法（配置写入坏值）在此消费侧防御，不静默放行。
+    """
+    tier_map = knob("pws.refreeze_tier_map")
+    if tier_map is None:
+        tier_map = REASON_REFREEZE_TIER
+    if reason_code not in tier_map:
         raise ValueError(f"unknown refreeze reason: {reason_code}")
-    return REASON_REFREEZE_TIER[reason_code]
+    tier = tier_map[reason_code]
+    if tier not in (REFREEZE_FORCED, REFREEZE_SUGGESTED, REFREEZE_NONE):
+        raise ValueError(f"invalid refreeze tier for {reason_code!r}: {tier!r}")
+    return tier
 
 
 def snapshot_fingerprint(atom_ids: list[str], pwc_ids: list[str]) -> str:

@@ -46,6 +46,23 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("pws.min_approved_atoms", "pws", "int", 3, "line2634", {"min": 0}),
     ("pws.min_active_pwcs", "pws", "int", 1, "line2634", {"min": 0}),
     ("pws.ready_todo_due_days", "pws", "int", 7, "Q28", {"min": 1}),
+    # Q29 重冻三档触发原因码→档位映射（docs/01 line 100：合规/事实变更强制、普通增量建议、无关变更免）。
+    # json 键：运营可整体调整映射而不用发版；缺键回落 pws_rules.REASON_REFREEZE_TIER 代码默认。
+    (
+        "pws.refreeze_tier_map",
+        "pws",
+        "json",
+        {
+            "atom_compliance_suspend": "forced",
+            "atom_deprecated": "forced",
+            "wordlist_hit": "forced",
+            "product_fact_change": "forced",
+            "asset_increment": "suggested",
+            "unrelated_change": "none",
+        },
+        "Q29",
+        {},  # json 键整体透传（coerce 不做深层校验）；档位合法性由 pws_rules.refreeze_tier 消费侧防御
+    ),
     # ---- 段10 合规 / 横切 SLA（Q49）----
     ("ccr.law_review_due_hours", "sla", "int", 48, "Q49", {"min": 1}),
     ("sla.yellow_hours", "sla", "int", 24, "Q49", {"min": 1}),
