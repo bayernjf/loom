@@ -794,3 +794,17 @@
 - **⑤ 刻意不做**＝不动后端任何文件（四端点与 DIM-MERGE 接线 Q358 已钉住）；不写种子假数据；不碰存量库 DIM-MERGE 模板重发（运营复核挂账仍在）；`usage_count` 只读不写；不做批量操作／分页；客户侧零入口（内部角色闸隔离）。
 - **⑥ 合龙**＝docs/02 本条 C1.301、CHANGELOG [Unreleased] 补条、handoff 顶部 Q359 banner（Q358 转「其前」、**Q354 按「最近 5 条」上限逐字滚入归档「三十七、」节**，11 行零差异）、AGENTS 权威行前移（Q357 转快照链并注记 Q358 未前移缺口）、docs/08 §2.2 就地单行前移、docs/README 地图 docs/02 行 Q359/C1.301、docs/16 §4 Q359 基线行（纯前端、覆盖率不复测）、docs/23 §0.1/§2 读数（侧栏 18／ts·tsx 116）、docs/24 §5.2＋docs/25 Q8 补「前端界面 Q359 已落」、docs/25 实现侧基线行刷 Q359。
 - **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项仍 0**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）。
+
+## 四十三、Q360 banner 原文（2026-10-16 Q365 批按「最近 5 条」上限滚出）
+
+> 逐字搬入，剥离行首 `> ` 后与原行零差异；滚档注记：该条「1409 passed＋11 skipped」「GATED 46→48」等读数为 **Q360 时点**读数，其后 Q361→1419／Q362→1427／Q363→1437／Q364 纯前端／Q365 纯文档（抽跑 67 passed）。
+
+**其前（2026-10-14）：Q360 段4 原子缺口批一次收口＝Q16 排序参数／Q18 AI 补证一轮＋运营待办／Q19 keeper 自动推荐／Q20 废弃恢复重走审核（**后端代码＋测试＋文档，零迁移零前端**；测试 **1409 passed＋11 skipped**〔全量单跑 117.29s〕、ruff 涉改九文件净、写口矩阵 GATED **46→48**〔＋2 均 OPS〕；02 C1.302）**——负责人点工「从 B 类工程缺口点工一批（Q16/Q18/Q20 等）」，docs/25 §3.3 四行销账。
+- **① Q16＝三列表查询加可选排序参数**＝`atom/service.py` 新增 `_apply_sort`（affinity 降序 nulls_last、次键 created_at；默认 created_at 保原契约），`list_batch_candidates`／`list_ps_candidates`／`list_atoms` 均加 `sort`；两 GET 读口 `sort: Literal["created_at","affinity"]`（非法值 422）。
+- **② Q18＝AI 补证＋运营待办**＝新 `ATOM-EVIDENCE` 场景（seeds 提示词 v0.1，标注「Q18 v0.1 工程口径，原文未给」）＋operations 显式端点 `/atom-candidates/{id}/evidence/ai-supplement`（`_ops_gate` 凭证闸、进 GATED；Q354 花钱纪律：真模型调用逐单过人不自动、失败不重试保持 pending_evidence、上游不可用 409／配置错 422／输出非法 502）；新 `todo_type="evidence"` 运营待办（`atom_rules.TODO_TYPE_EVIDENCE`，落 pending_evidence 即幂等开、人工/AI/超时分别以 `evidence_supplied`／`evidence_ai_supplied`／`evidence_timeout` 关闭）；synthetic 替身 `build_atom_evidence` 注册 BUILDERS。
+- **③ Q19＝keeper 自动推荐接线**＝读口 `GET /api/atom-clusters/{id}/members` 返 `recommended_keeper_id`（簇内亲和度最高者，供界面预填）＋成员视图；`ClusterResolveRequest.keeper_candidate_id` 可省略，省略时 service 用 `pick_cluster_keeper` 兜底。**界面预填半边未做**＝前端无 atom 管理页面，读口+可选入参即后端闭环。
+- **④ Q20＝废弃恢复重走审核**＝新增 `POST /api/atoms/{id}/restore`（operations 凭证闸、进 GATED）：**不做原地复活**——旧实例保持 deprecated 留痕，新建 manual 批次候选（batch_size=1 审计载体）重走 Gate/冲突/证据流程，事实原子值先排除自身（atom_id+candidate_id 双排除）再查重（line 11189）。
+- **⑤ 自查修掉两处真缺陷（集成用例先红后绿）**＝① `_resolve_evidence_todo` 首版只写 resolved_at 不置 status ⇒ 复活后误判旧待办仍 open 不再开新待办；② 事实原子恢复首版只排除 atom_id、未排除已批准候选行（status=approved 恒 live）⇒ 永远无法恢复。
+- **⑥ 合龙**＝docs/25 §3.3 四行销账＋§8.1 划线已销、docs/02 本条 C1.302＋文末续编索引补登（C1.300/C1.301 一并补）、CHANGELOG [Unreleased] 补条、handoff 顶部 Q360 banner（Q359 转「其前」、**Q355 按「最近 5 条」上限逐字滚入归档「三十八、」节**，6 行零差异）、AGENTS 权威行前移 Q360、docs/08 §2.2 就地单行前移（不增行）、docs/README 地图 docs/02 行前移 Q360/C1.302、docs/16 §4 补 Q360 基线行、docs/23 §0.1 测试/受闸读数刷新（GATED 46→48）、docs/24 头部基线注记订正（C1.301→C1.302）。
+- **⑦ 刻意不做（守边界）**＝AI 补证不自动串链（须 operations 显式触发）；不改 ATOM-EVIDENCE 场景预算默认（Q193 预置已含）；不建前端（无 atom 页面）；不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）。
+- **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项仍 0**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）。
