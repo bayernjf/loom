@@ -203,6 +203,8 @@ async def transition_intake(
         raise HTTPException(status_code=404, detail="intake not found")
     except service.MissingRequiredFields as exc:
         raise HTTPException(status_code=422, detail={"missing_fids": exc.missing})
+    except service.InvalidContentUsage as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RoleRequired as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except IllegalTransition as exc:

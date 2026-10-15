@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
 from app.core.tenants.service import assert_intake_admitted
+from app.product.condition.models import ContentGoal
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import (
     G2Field,
@@ -21,6 +22,16 @@ class MissingRequiredFields(Exception):
     def __init__(self, missing: list[str]):
         self.missing = missing
         super().__init__(f"missing required G2 common fields: {missing}")
+
+
+class InvalidContentUsage(Exception):
+    """Q25：内容用途取值不在 contentGoals 目的字典 active 枚举内。"""
+
+    def __init__(self, usage: str):
+        self.usage = usage
+        super().__init__(
+            f"content usage {usage!r} is not an active contentGoals code (Q25)"
+        )
 
 
 async def _required_common_fids(session: AsyncSession) -> list[str]:
@@ -189,6 +200,21 @@ async def apply_event(
         missing = sm.missing_required_fields(intake.profile, required)
         if missing:
             raise MissingRequiredFields(missing)
+        # Q25：内容用途（录入必填）取值绑定 contentGoals 目的字典——录入页与
+        # PWC 打标读同一张表；提交闸拒收自由文本（含已归档码），草稿期可暂存。
+        usage = intake.profile.get("f_content_usage")
+        if usage is not None and str(usage).strip():
+            code = str(usage).strip()
+            active = {
+                row.code
+                for row in (
+                    await session.scalars(
+                        select(ContentGoal).where(ContentGoal.status == "active")
+                    )
+                ).all()
+            }
+            if code not in active:
+                raise InvalidContentUsage(code)
 
     old_status = intake.status
     new_status = sm.transition(old_status, event, actor_roles)

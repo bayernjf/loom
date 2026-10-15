@@ -196,16 +196,43 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
         raise PoolNotApproved("PWC funnel requires an approved FieldPool")
 
     batch_size = body.batch_size or pwc_rules.single_run_max()
-    if len(body.combos) > batch_size:
-        raise InvalidFunnel(
-            f"funnel run has {len(body.combos)} combos, exceeding single-run cap {batch_size} (Q21)"
-        )
+
+    # Q21 预筛（廉价规则先砍 ~95%）：规则开关在配置中心 pwc.prefilter_rules。
+    # 三规则的数据源（维度互斥对表/市场字段/客户排除配置）【原文未给出，待补】——
+    # 启用未实现规则即诚实报错，不静默跳过（开了像没开＝造假）。
+    # Q26：手拼（manual）跳过预筛，校验+检测+评分+Gate 照走，合规不豁免。
+    if body.source != "manual":
+        try:
+            prefilter = pwc_rules.prefilter_rules()
+        except ValueError as exc:
+            raise InvalidFunnel(f"invalid prefilter config: {exc}") from exc
+        for name, enabled in prefilter:
+            if enabled:
+                raise InvalidFunnel(
+                    f"prefilter rule {name!r} enabled but not implemented "
+                    "(Q21 rule data sources 原文未给出，待补)"
+                )
+
+    # Q21 检测项开关与顺序（可插拔清单，配置中心 pwc.detectors）：第一期三种
+    # 里已实现的只有合规词表；logic_ai/fit_ai 的 AI 通道随 M10，启用即诚实报错。
+    try:
+        detectors = pwc_rules.detectors()
+    except ValueError as exc:
+        raise InvalidFunnel(f"invalid detector config: {exc}") from exc
+    enabled_detectors = [name for name, enabled in detectors if enabled]
+    for name in enabled_detectors:
+        if name != pwc_rules.DETECTOR_COMPLIANCE_WORDLIST:
+            raise InvalidFunnel(
+                f"detector {name!r} enabled but not implemented "
+                "(AI channel ships with M10)"
+            )
+    compliance_on = pwc_rules.DETECTOR_COMPLIANCE_WORDLIST in enabled_detectors
 
     active_goals = {
         g.code for g in await list_goals(session)
     }
 
-    # 结构校验 + 原子装载（Q21 预筛的确定性部分；AI 预筛随 M10）。
+    # 结构校验 + 原子装载（校验非预筛：Q26 手拼照走不豁免）。
     atom_ids = sorted({aid for c in body.combos for aid in c.atom_ids})
     atoms = {
         a.atom_id: a
@@ -252,8 +279,10 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
             )
         loaded.append((combo, combo_atoms))
 
-    entries = await wl_service.active_entries(
-        session, industry=ps.industry_tag, now=_now()
+    entries = (
+        await wl_service.active_entries(session, industry=ps.industry_tag, now=_now())
+        if compliance_on
+        else []
     )
 
     # 待用池现状（Q22b 多样性/Q23 去重都对"待用池中各已存在组合"计算）。
@@ -276,12 +305,17 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
         for p in ready_pwcs
     }
 
-    created: list[ConditionPackage] = []
+    # 检测 + 评分（Q21 漏斗中段；合规是硬前置：词表 ban 命中直接 blocked，
+    # 不进评分语义，Q22a）。
+    evaluated: list[dict] = []
     for combo, combo_atoms in loaded:
-        text_blob = " ".join(a.content for a in combo_atoms)
-        hits = wl_service.match_words(text_blob, entries)
-        ban_hits = [h for h in hits if h.action == "ban"]
-        downgrade_hits = [h for h in hits if h.action == "downgrade"]
+        if compliance_on:
+            text_blob = " ".join(a.content for a in combo_atoms)
+            hits = wl_service.match_words(text_blob, entries)
+            ban_hits = [h for h in hits if h.action == "ban"]
+            downgrade_hits = [h for h in hits if h.action == "downgrade"]
+        else:
+            ban_hits, downgrade_hits = [], []
 
         id_set = frozenset(a.atom_id for a in combo_atoms)
         overlaps = {
@@ -302,7 +336,37 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
             keeper = next(p for p in ready_pwcs if p.pwc_id == max_pid)
             is_backup = keeper.score is not None and outcome.score < keeper.score
 
-        blocked = bool(ban_hits)  # Q22a：词表命中 block 直接阻断，不进评分语义
+        evaluated.append(
+            {
+                "combo": combo,
+                "combo_atoms": combo_atoms,
+                "ban_hits": ban_hits,
+                "downgrade_hits": downgrade_hits,
+                "outcome": outcome,
+                "dup_of": max_pid if dup else None,
+                "is_backup": is_backup,
+                "blocked": bool(ban_hits),
+            }
+        )
+
+    # Q21 限量截断（评分排序之后）：blocked 是合规硬阻断，全量落库留痕、不占
+    # 截断口径；pending 才是送 Gate 的「产出」，按 score 降序（AI 分缺失垫底、
+    # 同分保输入序）截 batch_size 条落库，溢出不落库、审计计数（原「超限报错」
+    # 口径随本批改截断）。
+    blocked_recs = [rec for rec in evaluated if rec["blocked"]]
+    scored = [rec for rec in evaluated if not rec["blocked"] and rec["outcome"].scored]
+    unscored = [
+        rec for rec in evaluated if not rec["blocked"] and not rec["outcome"].scored
+    ]
+    scored.sort(key=lambda rec: rec["outcome"].score, reverse=True)
+    kept = (scored + unscored)[:batch_size]
+    truncated = len(scored) + len(unscored) - len(kept)
+
+    created: list[ConditionPackage] = []
+    for rec in [*blocked_recs, *kept]:
+        combo = rec["combo"]
+        outcome = rec["outcome"]
+        blocked = rec["blocked"]
         pwc = ConditionPackage(
             tenant_id=ps.tenant_id,
             product_space_id=product_space_id,
@@ -312,17 +376,17 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
             structure_refs=list(combo.structure_refs),
             expression_refs=list(combo.expression_refs),
             compliance_result={
-                "ban": [{"word": h.word, "level": h.level} for h in ban_hits],
+                "ban": [{"word": h.word, "level": h.level} for h in rec["ban_hits"]],
                 "downgrade": [
-                    {"word": h.word, "level": h.level} for h in downgrade_hits
+                    {"word": h.word, "level": h.level} for h in rec["downgrade_hits"]
                 ],
             },
             score=outcome.score,
             score_detail=outcome.detail,
             score_incomplete=outcome.needs_manual_gate,
             source=body.source,
-            dup_of=max_pid if dup else None,
-            is_backup=is_backup,
+            dup_of=rec["dup_of"],
+            is_backup=rec["is_backup"],
             gate_status=(
                 pwc_rules.GATE_BLOCKED if blocked else pwc_rules.GATE_PENDING
             ),
@@ -333,7 +397,7 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
         )
         session.add(pwc)
         await session.flush()
-        for a in combo_atoms:
+        for a in rec["combo_atoms"]:
             session.add(
                 PwcComboItem(
                     pwc_id=pwc.pwc_id,
@@ -357,6 +421,7 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
             "source": body.source,
             "blocked": sum(1 for p in created if p.gate_status == pwc_rules.GATE_BLOCKED),
             "batch_size": batch_size,
+            "truncated": truncated,
         },
     )
     return created

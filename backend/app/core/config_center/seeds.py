@@ -42,6 +42,37 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("pwc.cooldown_window_days", "pwc", "int", 7, "Q24", {"min": 1}),
     ("pwc.cooldown_hits", "pwc", "int", 3, "Q24", {"min": 1}),
     ("pwc.cooldown_duration_days", "pwc", "int", 14, "Q24", {"min": 1}),
+    # Q21「整个漏斗全链配置化：预筛规则开关、检测项开关与顺序……均为运营可配」。
+    # 两个 json 键整体透传（coerce 不做深层校验）；名单合法性由 pwc_rules 消费侧防御。
+    # 检测项可插拔清单（Q21 第一期三种）：compliance_wordlist 已实现、默认开；
+    # logic_ai/fit_ai 的 AI 通道随 M10，默认关——启用未实现项会被服务侧诚实拒绝。
+    (
+        "pwc.detectors",
+        "pwc",
+        "json",
+        [
+            {"name": "compliance_wordlist", "enabled": True},
+            {"name": "logic_ai", "enabled": False},
+            {"name": "fit_ai", "enabled": False},
+        ],
+        "Q21",
+        {},
+    ),
+    # 预筛三廉价规则（Q21 原文：维度互斥对/市场过滤/客户配置排除）的数据源
+    # （互斥对表/市场字段/客户排除配置）【原文未给出，待补】，故只落开关骨架、
+    # 默认全关；启用任一条即被服务侧诚实报错，不静默跳过（开了像没开＝造假）。
+    (
+        "pwc.prefilter_rules",
+        "pwc",
+        "json",
+        [
+            {"name": "dimension_mutex", "enabled": False},
+            {"name": "market_filter", "enabled": False},
+            {"name": "customer_exclusion", "enabled": False},
+        ],
+        "Q21",
+        {},
+    ),
     # ---- 段6 PWS（Q28，line 2634 就绪门）----
     ("pws.min_approved_atoms", "pws", "int", 3, "line2634", {"min": 0}),
     ("pws.min_active_pwcs", "pws", "int", 1, "line2634", {"min": 0}),

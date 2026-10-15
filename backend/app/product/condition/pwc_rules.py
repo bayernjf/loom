@@ -67,6 +67,56 @@ def cooldown_hits() -> int:
 def cooldown_duration_days() -> int:
     return knob("pwc.cooldown_duration_days")
 
+
+# Q21 漏斗全链配置化（docs/02 C1.4）：「预筛规则开关、检测项开关与顺序……均为
+# 运营可配」。两份名单都是封闭集——配置里出现未知名/坏结构即 ValueError
+# （消费侧防御，不静默跳过；同 pws_rules.refreeze_tier 范式）。json 键缺省值
+# 在 seeds（单一事实源），缓存未引导时 knob() 回落种子默认。
+DETECTOR_COMPLIANCE_WORDLIST = "compliance_wordlist"  # 合规：复用 Q17 词表（已实现）
+DETECTOR_LOGIC_AI = "logic_ai"                        # 逻辑合理性：AI 通道随 M10
+DETECTOR_FIT_AI = "fit_ai"                            # 场景情绪搭配：AI 通道随 M10
+DETECTOR_NAMES = frozenset(
+    {DETECTOR_COMPLIANCE_WORDLIST, DETECTOR_LOGIC_AI, DETECTOR_FIT_AI}
+)
+
+PREFILTER_DIMENSION_MUTEX = "dimension_mutex"      # 维度互斥对
+PREFILTER_MARKET_FILTER = "market_filter"          # 市场过滤
+PREFILTER_CUSTOMER_EXCLUSION = "customer_exclusion"  # 客户配置排除
+PREFILTER_RULE_NAMES = frozenset(
+    {PREFILTER_DIMENSION_MUTEX, PREFILTER_MARKET_FILTER, PREFILTER_CUSTOMER_EXCLUSION}
+)
+
+
+def _ordered_switches(key: str, known: frozenset) -> list[tuple[str, bool]]:
+    """json 开关名单 → [(name, enabled)]，保序；未知名/坏结构防御性报错。"""
+    raw = knob(key)
+    if not isinstance(raw, list):
+        # 配置面防御统一 ValueError（同 pws_rules.refreeze_tier 族），调用侧据
+        # ValueError 转 InvalidFunnel 422；故不按 TRY004 改 TypeError。
+        raise ValueError(  # noqa: TRY004
+            f"config {key} must be a list of switch objects"
+        )
+    switches: list[tuple[str, bool]] = []
+    for item in raw:
+        if not isinstance(item, dict) or "name" not in item or "enabled" not in item:
+            raise ValueError(f"config {key} entries must carry name/enabled: {item!r}")
+        name = item["name"]
+        if name not in known:
+            raise ValueError(f"config {key} has unknown entry name: {name!r}")
+        switches.append((name, bool(item["enabled"])))
+    return switches
+
+
+def detectors() -> list[tuple[str, bool]]:
+    """Q21 检测项开关与顺序（按配置顺序逐个执行；新增检测类型仍需开发）。"""
+    return _ordered_switches("pwc.detectors", DETECTOR_NAMES)
+
+
+def prefilter_rules() -> list[tuple[str, bool]]:
+    """Q21 预筛规则开关（三规则数据源【原文未给出，待补】，仅骨架）。"""
+    return _ordered_switches("pwc.prefilter_rules", PREFILTER_RULE_NAMES)
+
+
 # Q25：contentGoals 五类标准枚举（line 1090）；名称/颜色/配比上下限运营可维护。
 GOAL_ENGAGEMENT = "ENGAGEMENT"
 GOAL_CONVERSION = "CONVERSION"
