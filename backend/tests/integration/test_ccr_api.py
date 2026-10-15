@@ -11,6 +11,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.content.models import ContentProduct
 from app.core.db import Base, get_session
 from app.core.staff_auth.deps import get_auth_session
 from app.main import app
@@ -485,3 +486,90 @@ async def test_q51_rescan_todo_idempotent(client, session_factory):
         json={"actor": OPS, "reason_code": "wordlist_hit"},
     )
     assert refreeze.json()["pws"]["refreeze_tier"] == "forced"
+
+
+async def test_q51_rescan_scans_unpublished_content_products(client, session_factory):
+    """Q51（Q362）：词条生效同扫段12 未发布成品——排除已发布/discarded/范围外。"""
+    from sqlalchemy import select as _select
+
+    ps_id = await _make_ps(session_factory)
+    pws = await _freeze(client, ps_id, contents=("保证有效", "水润肤感", "清爽质地"))
+    other_ps = await _make_ps(session_factory)  # 无命中快照 → 扫描范围外
+
+    async with session_factory() as session:
+        rows = [
+            # 未发布 + body 含词 → 建待办
+            ContentProduct(
+                tenant_id="t1", product_space_id=ps_id, final_id="final-hit",
+                goal="ENGAGEMENT", platform="douyin", status="review",
+                body="这款精华保证有效",
+            ),
+            # 已发布（三发布列非空组合）→ 不追溯不建
+            ContentProduct(
+                tenant_id="t1", product_space_id=ps_id, final_id="final-pub",
+                goal="ENGAGEMENT", platform="douyin", status="ready_for_publish",
+                body="保证有效的发布稿",
+                published_url="https://example.com/p1",
+                platform_post_id="post-1",
+                published_at=datetime.now(UTC),
+            ),
+            # discarded（作废回池）→ 不建
+            ContentProduct(
+                tenant_id="t1", product_space_id=ps_id, final_id="final-dis",
+                goal="ENGAGEMENT", platform="douyin", status="discarded",
+                body="保证有效的作废稿",
+            ),
+            # body 不含词 → 不建
+            ContentProduct(
+                tenant_id="t1", product_space_id=ps_id, final_id="final-miss",
+                goal="ENGAGEMENT", platform="douyin", status="review",
+                body="水润肤感清爽质地",
+            ),
+            # 产品空间快照未命中 → 范围外不建
+            ContentProduct(
+                tenant_id="t1", product_space_id=other_ps, final_id="final-out",
+                goal="ENGAGEMENT", platform="douyin", status="review",
+                body="保证有效的别家稿",
+            ),
+        ]
+        session.add_all(rows)
+        await session.commit()
+        hit_content_id = rows[0].content_id
+
+    wl = await client.post(
+        "/api/admin/compliance-wordlist",
+        json={"item": {"word": "保证", "level": "critical", "action": "ban"}, "actor": OPS},
+    )
+    # 快照段返回契约不变（仍只列命中快照行）
+    impacted = wl.json()["q51_impacted"]
+    assert len(impacted) == 1 and impacted[0]["pws_id"] == pws["pws_id"]
+
+    async with session_factory() as session:
+        todos = (
+            await session.scalars(
+                _select(OpsTodo).where(OpsTodo.entity_type == "content_product")
+            )
+        ).all()
+        assert len(todos) == 1
+        todo = todos[0]
+        assert todo.entity_id == hit_content_id
+        assert todo.todo_type == "wordlist_rescan"
+        assert todo.assignee_role == "internal_compliance"
+        assert todo.detail["reason_code"] == "wordlist_hit"
+        assert todo.detail["product_space_id"] == ps_id
+        assert todo.detail["final_id"] == "final-hit"
+
+    # 幂等：再次保存同词命中 → 复用开放待办，不重开
+    entry_id = wl.json()["entry_id"]
+    upd = await client.put(
+        f"/api/admin/compliance-wordlist/{entry_id}",
+        json={"item": {"word": "保证", "level": "critical", "action": "ban"}, "actor": OPS},
+    )
+    assert upd.status_code == 200
+    async with session_factory() as session:
+        again = (
+            await session.scalars(
+                _select(OpsTodo).where(OpsTodo.entity_type == "content_product")
+            )
+        ).all()
+        assert len(again) == 1 and again[0].todo_id == todos[0].todo_id

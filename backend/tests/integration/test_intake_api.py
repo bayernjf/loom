@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.db import Base, get_session
 from app.core.tenants.models import Tenant
 from app.main import app
+from app.product.condition.models import ContentGoal
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import G2Field
 
@@ -75,6 +76,45 @@ async def test_submit_blocked_when_common_fields_missing(client, seeded_common_f
     r = await _fire(client, intake_id, "submit", actor=CUSTOMER)
     assert r.status_code == 422
     assert r.json()["detail"]["missing_fids"] == ["f_brief"]
+
+
+async def test_submit_content_usage_bound_to_goals_dictionary(client, session_factory):
+    # Q25（Q362）：内容用途取值绑定 contentGoals 目的字典——录入页与 PWC 打标
+    # 读同一张表；提交闸拒收自由文本与已归档码，active 枚举码放行。
+    async with session_factory() as session:
+        session.add_all(
+            [
+                G2Field(fid="f_content_usage", cat="common", field_name="内容用途"),
+                ContentGoal(code="ENGAGEMENT"),
+                ContentGoal(code="TRUST", status="archived"),
+            ]
+        )
+        await session.commit()
+
+    r = await client.post(
+        "/api/intakes",
+        json={"tenant_id": "t1", "profile": {"f_content_usage": "种草"}},
+    )
+    assert r.status_code == 201
+    intake_id = r.json()["intake_id"]
+
+    bad = await _fire(client, intake_id, "submit", actor=CUSTOMER)
+    assert bad.status_code == 422
+    assert "contentGoals" in bad.text
+
+    await client.patch(
+        f"/api/intakes/{intake_id}/profile",
+        json={"profile": {"f_content_usage": "TRUST"}, "actor": CUSTOMER},
+    )
+    archived = await _fire(client, intake_id, "submit", actor=CUSTOMER)
+    assert archived.status_code == 422
+
+    await client.patch(
+        f"/api/intakes/{intake_id}/profile",
+        json={"profile": {"f_content_usage": "ENGAGEMENT"}, "actor": CUSTOMER},
+    )
+    ok = await _fire(client, intake_id, "submit", actor=CUSTOMER)
+    assert ok.status_code == 200, ok.text
 
 
 async def test_full_flow_creates_ps_snapshot(client, seeded_common_fields):
