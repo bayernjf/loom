@@ -53,7 +53,8 @@ ALLOWLIST: dict[str, set[float]] = {
     "app/product/whitelist_center/pws_rules.py": {1.0},
     # Σ≤1.0 等校验的浮点容差：不是业务数值，是数值比较的 epsilon。
     "app/platform/platform_adaptation/pa_rules.py": {1e-09, 1.0},
-    "app/platform/platform_adaptation/service.py": {1e-09},
+    # 0.0＝Q368 硬闸 #12 的 AI 候选强制零分（AI 无源不得编造主观分，四维恒 0 待人工评估）。
+    "app/platform/platform_adaptation/service.py": {1e-09, 0.0},
     # 指标库：Prometheus histogram 桶边界 + 时序窗口秒数（埋点口径，非业务规则）。
     "app/core/metrics/business.py": {0.0, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0},
     "app/core/metrics/registry.py": {
