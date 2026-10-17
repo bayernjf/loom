@@ -7,17 +7,18 @@ M3 只接收结构化候选并做确定性校验与 Gate 流转。
 """
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
-from app.core.rbac import OPERATIONS, require_any_role
+from app.core.config_center.knobs import knob
+from app.core.rbac import DICTIONARY_ADMIN, OPERATIONS, require_any_role
 from app.product.fieldpool import planning
 from app.product.fieldpool.models import FieldPool, FPDimension, FPSourceRoute
 from app.product.fieldpool.planning import DimInput
-from app.product.modeling.models import G2FieldCandidate
+from app.product.modeling.models import G2FieldCandidate, OpsTodo
 from app.product.product_intake.models import G2Field, ProductSpace
 
 
@@ -219,6 +220,26 @@ async def submit_plan(session, product_space_id: str, body, actor) -> FieldPool:
                     )
                     session.add(candidate)
                     await session.flush()
+                    # Q68：新建候选即开字典管理员 Gate 待办（与 c7 Layer4 同口径，
+                    # 复用既有候选不重复开——同一候选只挂一条待办）。
+                    session.add(
+                        OpsTodo(
+                            tenant_id=ps.tenant_id,
+                            todo_type="field_candidate_gate",
+                            entity_type="g2_field_candidate",
+                            entity_id=candidate.candidate_id,
+                            assignee_role=DICTIONARY_ADMIN,
+                            detail={
+                                "field_name": d.field_name,
+                                "source_layer": "wf02_dim_source",
+                                "source_route": d.source_route,
+                                "confidence": d.confidence,
+                                "product_space_id": product_space_id,
+                            },
+                            due_at=datetime.now(UTC)
+                            + timedelta(days=knob("fieldpool.candidate_gate_sla_days")),
+                        )
+                    )
                     candidate_id = candidate.candidate_id
             session.add(
                 FPDimension(

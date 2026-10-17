@@ -20,6 +20,8 @@ CONFIG_SEEDS: list[tuple[str, str, str, object, str, dict | None]] = [
     ("fieldpool.dim_max", "fieldpool", "int", 8, "PT-FP-PLAN", {"min": 1}),
     ("fieldpool.target_atom_min", "fieldpool", "int", 15, "Q15", {"min": 1}),
     ("fieldpool.target_atom_max", "fieldpool", "int", 30, "Q15", {"min": 1}),
+    # Q68（2026-10-17）：G2 字段候选 Gate 待办 SLA（默认 7 天＝工程默认，业务定值热更）。
+    ("fieldpool.candidate_gate_sla_days", "fieldpool", "int", 7, "Q368", {"min": 1}),
     # ---- 段4 原子（Q14/Q16/Q18）----
     ("atom.batch_size_sensitive", "atom", "int", 20, "Q14", {"min": 1}),
     ("atom.batch_size_default", "atom", "int", 50, "Q14", {"min": 1}),

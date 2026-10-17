@@ -62,6 +62,33 @@ class CategoryNotFound(Exception):
     pass
 
 
+# ---------- Q68：G2 字段候选 → 字典管理员 Gate 待办 ----------
+# 候选（c7 Layer4 / wf02_dim_source）落库即开待办，让 Gate 责任可见、可追；
+# SLA 到期经既有 sweep 置 escalated。due 默认值＝配置中心热更（工程默认 7 天，
+# 业务定值改 `fieldpool.candidate_gate_sla_days`）。
+TODO_TYPE_FIELD_CANDIDATE_GATE = "field_candidate_gate"
+ENTITY_TYPE_FIELD_CANDIDATE = "g2_field_candidate"
+FIELD_CANDIDATE_SLA_KEY = "fieldpool.candidate_gate_sla_days"
+
+
+async def _open_field_candidate_todo(session, *, tenant_id, candidate, detail: dict | None) -> None:
+    """Q68：为一条新建的 G2 字段候选开运营/字典管理员待办（只对新落候选调用）。"""
+    session.add(
+        OpsTodo(
+            tenant_id=tenant_id,
+            todo_type=TODO_TYPE_FIELD_CANDIDATE_GATE,
+            entity_type=ENTITY_TYPE_FIELD_CANDIDATE,
+            entity_id=candidate.candidate_id,
+            assignee_role=DICTIONARY_ADMIN,
+            detail=detail or {
+                "field_name": candidate.field_name,
+                "source_layer": candidate.source_layer,
+            },
+            due_at=datetime.now(UTC) + timedelta(days=knob(FIELD_CANDIDATE_SLA_KEY)),
+        )
+    )
+
+
 # ---------- Q2 信号权重 ----------
 
 async def list_signal_weights(session: AsyncSession) -> Sequence[C1SignalWeight]:
@@ -516,6 +543,19 @@ async def resolve_c7(session, intake_id, body, actor) -> C7Run:
                     )
                     session.add(candidate)
                     await session.flush()
+                    # Q68：新建候选即开字典管理员 Gate 待办（Gate 责任可见）。
+                    await _open_field_candidate_todo(
+                        session,
+                        tenant_id=intake.tenant_id,
+                        candidate=candidate,
+                        detail={
+                            "field_name": candidate.field_name,
+                            "source_layer": candidate.source_layer,
+                            "source_route": candidate.source_route,
+                            "confidence": candidate.confidence,
+                            "intake_id": intake_id,
+                        },
+                    )
                     candidate_ids.append(candidate.candidate_id)
                 run.layer = 4
                 run.field_list = matched + [
