@@ -763,6 +763,182 @@ export interface TenantOnboarding {
   first_modeling_started: boolean;
 }
 
+// ---- 段4 原子管理（Q368：Q360 留的 atom 管理前端切片）----
+// 读口走 /api 业务面端点（query 带 actor）；写口 POST body.actor 自报 + staff
+// 令牌（Q242：写口只认已验真内部令牌，门控关着也自行验真）；AI 补证为花钱口
+// （Q354 纪律：真模型调用逐单过人、失败不自动重试）。
+export type AtomRiskLevel = "critical" | "high" | "medium" | "low";
+
+export interface AtomConflictView {
+  conflict_id: string;
+  candidate_id: string;
+  type: string;
+  status: string;
+  resolved_at: string | null;
+}
+
+export interface AtomCandidateView {
+  candidate_id: string;
+  batch_id: string;
+  product_space_id: string;
+  pool_id: string;
+  dimension_id: string;
+  fid: string;
+  content: string;
+  fact_type: string | null;
+  risk_level: AtomRiskLevel;
+  risk_source: string | null;
+  matched_words: string[] | null;
+  affinity: number | null;
+  low_affinity: boolean;
+  evidence: string | null;
+  evidence_due_at: string | null;
+  cluster_id: string | null;
+  aliases: string[] | null;
+  alias_of: string | null;
+  status: string;
+  reject_reason: string | null;
+  approved_atom_id: string | null;
+  conflicts: AtomConflictView[];
+}
+
+export interface AtomClusterMembers {
+  cluster_id: string;
+  recommended_keeper_id: string | null;
+  members: AtomCandidateView[];
+}
+
+export interface AtomView {
+  atom_id: string;
+  candidate_id: string;
+  product_space_id: string;
+  pool_id: string;
+  dimension_id: string;
+  fid: string;
+  content: string;
+  fact_type: string | null;
+  aliases: string[] | null;
+  risk_level: AtomRiskLevel;
+  risk_source: string | null;
+  status: string;
+  reference_count: number;
+}
+
+function atomActor(): { id: string; roles: string[] } {
+  return { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST };
+}
+
+function atomActorParams(): URLSearchParams {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  return params;
+}
+
+// Q16：候选列表支持 sort=affinity 降序（NULL 最后），默认保持 created_at 原序。
+export async function listAtomCandidates(
+  productSpaceId: string,
+  opts: { status?: string; sort?: "created_at" | "affinity" } = {},
+): Promise<AtomCandidateView[]> {
+  const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts.status) params.set("status", opts.status);
+  if (opts.sort) params.set("sort", opts.sort);
+  return request<AtomCandidateView[]>(
+    `/api/product-spaces/${encodeURIComponent(productSpaceId)}/atom-candidates?${params}`,
+  );
+}
+
+export async function listProductAtoms(
+  productSpaceId: string,
+): Promise<AtomView[]> {
+  const params = atomActorParams();
+  return request<AtomView[]>(
+    `/api/product-spaces/${encodeURIComponent(productSpaceId)}/atoms?${params}`,
+  );
+}
+
+// Q19：簇成员 + recommended_keeper_id 自动推荐（界面预填 keeper）。
+export async function getAtomClusterMembers(
+  clusterId: string,
+): Promise<AtomClusterMembers> {
+  const params = atomActorParams();
+  return request<AtomClusterMembers>(
+    `/api/atom-clusters/${encodeURIComponent(clusterId)}/members?${params}`,
+  );
+}
+
+export async function approveAtomCandidate(
+  candidateId: string,
+): Promise<AtomCandidateView> {
+  return request<AtomCandidateView>(
+    `/api/atom-candidates/${encodeURIComponent(candidateId)}/approve`,
+    { method: "POST", body: JSON.stringify({ actor: atomActor() }) },
+  );
+}
+
+export async function rejectAtomCandidate(
+  candidateId: string,
+  reason: string,
+): Promise<AtomCandidateView> {
+  return request<AtomCandidateView>(
+    `/api/atom-candidates/${encodeURIComponent(candidateId)}/reject`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason, actor: atomActor() }),
+    },
+  );
+}
+
+export async function reviveAtomCandidate(
+  candidateId: string,
+): Promise<AtomCandidateView> {
+  return request<AtomCandidateView>(
+    `/api/atom-candidates/${encodeURIComponent(candidateId)}/revive`,
+    { method: "POST", body: JSON.stringify({ actor: atomActor() }) },
+  );
+}
+
+export async function overrideAtomRisk(
+  candidateId: string,
+  level: AtomRiskLevel,
+  reason: string,
+): Promise<AtomCandidateView> {
+  return request<AtomCandidateView>(
+    `/api/atom-candidates/${encodeURIComponent(candidateId)}/risk-override`,
+    {
+      method: "POST",
+      body: JSON.stringify({ level, reason, actor: atomActor() }),
+    },
+  );
+}
+
+// Q18：operations 显式触发 AI 补证据一轮（花钱口，真模型调用逐单过人）。
+export async function aiSupplementAtomEvidence(
+  candidateId: string,
+): Promise<AtomCandidateView> {
+  return request<AtomCandidateView>(
+    `/api/atom-candidates/${encodeURIComponent(candidateId)}/evidence/ai-supplement`,
+    { method: "POST", body: JSON.stringify({ actor: atomActor() }) },
+  );
+}
+
+// Q19：resolve 时省略 keeper 由后端 pick_cluster_keeper 兜底；界面预填推荐值。
+export async function resolveAtomCluster(
+  clusterId: string,
+  keeperCandidateId: string | null,
+): Promise<{ cluster_id: string; merged: string[] }> {
+  return request<{ cluster_id: string; merged: string[] }>(
+    `/api/atom-clusters/${encodeURIComponent(clusterId)}/resolve`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        keeper_candidate_id: keeperCandidateId,
+        actor: atomActor(),
+      }),
+    },
+  );
+}
+
 export interface TenantDetailView extends TenantView {
   onboarding: TenantOnboarding;
 }
