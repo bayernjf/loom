@@ -413,3 +413,22 @@ async def sync_video_generation_task(
         raise _video_task_error(exc) from exc
     await session.commit()
     return service.video_task_view(task)
+
+
+@router.post("/api/admin/video-generation-tasks/{task_id}/attach-to-content")
+async def attach_video_to_content(
+    task_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_internal_actor(OPERATIONS)),
+) -> dict:
+    """Q368：completed 真视频成片**入库**——运营逐单把成片 url 回填 content.body。
+
+    人工动作（operations 凭证闸）；仅 completed＋url 非空可入（否则 409）。
+    """
+    try:
+        task = await service.attach_video_to_content(session, task_id, actor)
+    except service.VIDEO_TASK_ERRORS as exc:
+        await session.rollback()
+        raise _video_task_error(exc) from exc
+    await session.commit()
+    return service.video_task_view(task)
