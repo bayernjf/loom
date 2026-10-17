@@ -21,6 +21,8 @@ from app.platform.platform_adaptation.schemas import (
     PlatformAdapterPreviewRequest,
     RecalcCandidateCreate,
     RuleCreate,
+    SlotAiCandidate,
+    SlotGateApprove,
     SlotTypeDefaultPut,
     SlotUpsert,
 )
@@ -142,10 +144,54 @@ def _candidate_view(c) -> dict:
 async def list_slots(
     platform: str | None = None,
     status: str | None = "active",
+    gate: str | None = None,
     session: AsyncSession = Depends(get_session),
     _: Actor = Depends(require_ops_admin_view),
 ) -> list[dict]:
-    return [_slot_view(s) for s in await service.list_slots(session, platform=platform, status=status)]
+    # Q368：gate 可选过滤（pending_gate 看 AI 候选队列；默认仍只回 active 正式位）。
+    return [
+        _slot_view(s)
+        for s in await service.list_slots(
+            session, platform=platform, status=status, gate=gate
+        )
+    ]
+
+
+@router.post("/api/admin/publish-slots/ai-candidate", status_code=201)
+async def create_ai_slot_candidate(
+    body: SlotAiCandidate,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    """Q368（硬闸 #12）：AI 识别新发布位 → pending_gate 候选（四维强制全 0）。"""
+    try:
+        slot = await service.create_ai_slot_candidate(session, body, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.SlotCodeTaken as exc:
+        raise HTTPException(409, f"slot code taken: {exc}") from exc
+    await session.commit()
+    return _slot_view(slot)
+
+
+@router.post("/api/admin/publish-slots/{slot_id}/approve")
+async def approve_slot_candidate(
+    slot_id: str,
+    body: SlotGateApprove,
+    session: AsyncSession = Depends(get_session),
+    verified: Actor = Depends(_ops_gate),
+) -> dict:
+    """Q368（硬闸 #12）：运营人工评估 pending_gate 候选（写四维、转正式位）。"""
+    try:
+        slot = await service.approve_slot_candidate(session, slot_id, body, verified)
+    except service.RoleNotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except service.SlotNotFound as exc:
+        raise HTTPException(404, f"slot not found: {exc}") from exc
+    except service.SlotGateNotPending as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await session.commit()
+    return _slot_view(slot)
 
 
 @router.post("/api/admin/publish-slots", status_code=201)
