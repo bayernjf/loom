@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.content.models import ContentProduct
 from app.content.video_studio.models import (
     OBJECT_SOURCES,
     SEGMENT_TYPES,
@@ -736,6 +737,51 @@ async def get_video_task(session: AsyncSession, task_id: str) -> VideoGeneration
     task = await session.get(VideoGenerationTask, task_id)
     if task is None:
         raise VideoTaskNotFound(task_id)
+    return task
+
+
+async def attach_video_to_content(
+    session: AsyncSession, task_id: str, actor: Actor
+) -> VideoGenerationTask:
+    """Q368：completed 的真视频成片**入库**（Q354 裁决留的"下一片"）。
+
+    把供应商返回的成片 url 回填到 `content_products.body`——body 是成片引用载体
+    （synthetic VIDEO-GEN 写的是 video_ref 占位字符串，见 `generation.py:226`），
+    入库＝占位引用替换为真实成片 url。人工逐单动作（router 挂 operations 凭证闸）；
+    仅 completed 且 url 非空可入（否则 409）；幂等——body 已是同一 url 直接返回。
+    改的是成片引用、不改变正文语义，不触发重生成（段12 视频复检规格未给【待补】，
+    V1 不跑文本复检，同 `generation.py` docstring 口径）。
+    """
+    task = await session.get(VideoGenerationTask, task_id)
+    if task is None:
+        raise VideoTaskNotFound(task_id)
+    if task.status != VIDEO_TASK_COMPLETED or not task.url:
+        raise VideoTaskState(
+            "only a completed task with a url can be attached to content, "
+            f"current status={task.status}"
+        )
+    content = await session.get(ContentProduct, task.content_id)
+    if content is None:
+        raise VideoTaskState(f"content {task.content_id} not found for attach")
+    if content.body != task.url:
+        before = content.body
+        content.body = task.url
+        content.updated_at = _now()
+        await append_audit(
+            session,
+            tenant_id=task.tenant_id,
+            actor_id=actor.id,
+            actor_roles=actor.roles,
+            action="video_task.attached_to_content",
+            entity_type=ENTITY_TYPE_VIDEO_TASK,
+            entity_id=task.task_id,
+            detail={
+                "content_id": task.content_id,
+                "final_id": task.final_id,
+                "before_body": before,
+                "url": task.url,
+            },
+        )
     return task
 
 

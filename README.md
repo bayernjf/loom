@@ -236,6 +236,7 @@ loom/
 | [docs/04-06_契约层](docs/04_契约层_数据模型.md) | 数据模型 / API 与状态机 / WF 与 Skill 协议（AI 落代码用） |
 | [docs/08_迭代计划与任务包.md](docs/08_迭代计划与任务包.md) | 路线图（Q73 合并后）+ M0–M12 任务包 + V2/V3 路线 |
 | [docs/22_外部系统接入手册_AgentKey_A2A_MCP.md](docs/22_外部系统接入手册_AgentKey_A2A_MCP.md) | **要给 Loom 接外部系统／Agent**：Agent Key 签发与验签、A2A 任务面、MCP 工具面 |
+| [docs/26_新用户E2E验证清单.md](docs/26_新用户E2E验证清单.md) | **做浏览器 E2E 功能验证**：新用户视角逐项验证核心功能（13 段链/人工 Gate/final_id 唯一出口），含入口 URL、操作路径、预期判据 |
 
 完整文档清单与一句话描述见 [handoff.md 的「项目文档」节](handoff.md#项目文档完整清单单一事实源)（单一事实源，含 docs/19 四份衍生件与归档件，故不在这里报份数）。
 
