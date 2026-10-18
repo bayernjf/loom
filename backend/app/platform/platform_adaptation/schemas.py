@@ -95,6 +95,47 @@ class ActorOnly(BaseModel):
     actor: Actor
 
 
+class SlotAiCandidateItem(BaseModel):
+    """Q368（硬闸 #12）：AI 识别新发布位的候选入参。
+
+    客观字段（平台/code/名称/slotType/时长/来源链接）可给；**四维分不在契约内**
+    ——AI 无数据源不得编造主观分，extra=forbid 使调用方尝试传四维即 422
+    （诚实报错，同 Q18/Q354 纪律）。创建时后端强制四维全 0 + pending_gate。
+    """
+
+    model_config = {"extra": "forbid"}
+
+    platform: str
+    code: str
+    name: str
+    slot_type: str
+    chars_max: int | None = Field(default=None, ge=0)
+    dur_min: int | None = Field(default=None, ge=0)
+    dur_max: int | None = Field(default=None, ge=0)
+    risk: str | None = None
+    source_url: str | None = None
+
+
+class SlotAiCandidate(BaseModel):
+    item: SlotAiCandidateItem
+    actor: Actor
+
+
+class SlotGateApprove(BaseModel):
+    """Q368（硬闸 #12）：pending_gate 发布位的人工评估——四维必填（0-100），
+    审批通过后 gate→approved、score_source→manual_eval。
+    """
+
+    traffic: float = Field(ge=0, le=100)
+    safe: float = Field(ge=0, le=100)
+    conv: float = Field(ge=0, le=100)
+    load: float = Field(ge=0, le=100)
+    actor: Actor
+
+
+
+
+
 class EventItem(BaseModel):
     """Q37 动态信号事件（平台/发布位/事件类型/严重度/生效期）。
 

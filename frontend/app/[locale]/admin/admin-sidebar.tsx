@@ -16,6 +16,7 @@ const ADMIN_NAV_GROUPS = [
       { href: "/admin/review-queue", labelKey: "admin.reviewQueueNav" },
       { href: "/admin/sla-todos", labelKey: "admin.slaTodosNav" },
       { href: "/admin/content", labelKey: "admin.contentOpsNav" },
+      { href: "/admin/atoms", labelKey: "admin.atomsNav" },
       { href: "/admin/fcw", labelKey: "admin.fcwNav" },
       { href: "/admin/fcw/assemble", labelKey: "admin.fcwAssembleNav" },
       { href: "/admin/fcw/review", labelKey: "admin.fcwReviewNav" },

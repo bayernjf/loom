@@ -42,6 +42,9 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/packages/{package_id}", "DELETE"): OPS,
     # 段7/8 平台底表（Q242）
     ("/api/admin/publish-slots", "POST"): OPS,
+    # Q368（硬闸 #12）：AI 新位候选入口 + 人工评估审批，均 operations。
+    ("/api/admin/publish-slots/ai-candidate", "POST"): OPS,
+    ("/api/admin/publish-slots/{slot_id}/approve", "POST"): OPS,
     ("/api/admin/publish-slots/{slot_id}", "PUT"): OPS,
     ("/api/admin/publish-slots/{slot_id}", "DELETE"): OPS,
     ("/api/admin/fit-weights", "PUT"): OPS,
@@ -100,6 +103,8 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/admin/video-generation-tasks/{task_id}/approve", "POST"): OPS,
     ("/api/admin/video-generation-tasks/{task_id}/reject", "POST"): OPS,
     ("/api/admin/video-generation-tasks/{task_id}/sync", "POST"): OPS,
+    # Q368：成片入库（completed 的 url 回填 content.body）＝人工逐单动作，operations 硬闸。
+    ("/api/admin/video-generation-tasks/{task_id}/attach-to-content", "POST"): OPS,
 }
 
 # 必须一个标记都没有：只读口，以及有意不加闸的写口。

@@ -505,3 +505,73 @@ async def test_list_and_get_reads_return_task_views(gate_on, client, vendor):
     assert one.status_code == 200 and one.json()["status"] == VIDEO_TASK_PENDING
     missing = await client.get(_task_path("nope"), params=READ)
     assert missing.status_code == 404
+
+
+# ---------- Q368 成片入库（attach-to-content） ----------
+
+
+async def _completed_task(client, vendor, task_id: str):
+    await _approved(client, task_id)
+    vendor.poll_result = video_drivers.VideoPollResult(
+        done=True, succeeded=True, url="https://cdn.test/v.mp4",
+        vendor_status="completed", error=None, raw={},
+    )
+    r = await client.post(_task_path(task_id, "/sync"))
+    assert r.status_code == 200 and r.json()["status"] == VIDEO_TASK_COMPLETED
+
+
+async def test_attach_requires_completed_task(gate_on, client, vendor, session_factory):
+    """未到 completed（pending / submitted / failed）一律 409：没成片不许入库。"""
+    task_id = await _task_id(client)
+    pending = await client.post(_task_path(task_id, "/attach-to-content"))
+    assert pending.status_code == 409, pending.text
+    # 提交后仍 processing（poll 默认 done=False）——也不是 completed。
+    await _approved(client, task_id)
+    processing = await client.post(_task_path(task_id, "/attach-to-content"))
+    assert processing.status_code == 409
+    # failed 终态同样拒绝（换一条成品 c-vid-b 建任务，submit 即炸）。
+    fail_task = await _task_id(client, content_id="c-vid-b", prompt="second")
+    vendor.submit_error = video_drivers.VideoDriverError("vendor boom")
+    await _approved(client, fail_task)
+    failed = await client.post(_task_path(fail_task, "/attach-to-content"))
+    assert failed.status_code == 409
+    contents = await _rows(
+        session_factory, ContentProduct, where=ContentProduct.content_id == "c-vid"
+    )
+    assert contents[0].body == "旧正文"
+
+
+async def test_attach_writes_url_into_content_body(gate_on, client, vendor, session_factory):
+    task_id = await _task_id(client)
+    await _completed_task(client, vendor, task_id)
+    r = await client.post(_task_path(task_id, "/attach-to-content"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == VIDEO_TASK_COMPLETED
+    contents = await _rows(
+        session_factory, ContentProduct, where=ContentProduct.content_id == "c-vid"
+    )
+    assert contents[0].body == "https://cdn.test/v.mp4"
+    assert "video_task.attached_to_content" in await _video_audits(session_factory)
+
+
+async def test_attach_is_idempotent(gate_on, client, vendor, session_factory):
+    """body 已是同一 url 再入：不重复写、不重复审计（审计动作只出现一次）。"""
+    task_id = await _task_id(client)
+    await _completed_task(client, vendor, task_id)
+    first = await client.post(_task_path(task_id, "/attach-to-content"))
+    assert first.status_code == 200
+    second = await client.post(_task_path(task_id, "/attach-to-content"))
+    assert second.status_code == 200
+    audits = await _video_audits(session_factory)
+    assert audits.count("video_task.attached_to_content") == 1
+
+
+async def test_attach_missing_task_404(client):
+    r = await client.post(_task_path("nope", "/attach-to-content"))
+    assert r.status_code == 404
+
+
+async def test_attach_requires_operations(client):
+    async with acting_as(client, ["product_reviewer"], staff_id="s-rev"):
+        r = await client.post(_task_path("whatever", "/attach-to-content"))
+    assert r.status_code == 403

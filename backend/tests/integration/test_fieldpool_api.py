@@ -382,3 +382,45 @@ async def test_submit_for_unknown_product_space_404(client):
     resp = await _submit(client, "nonexistent", [_dim(1), _dim(2), _dim(3)])
     assert resp.status_code == 404
 
+
+
+async def test_new_candidate_opens_field_candidate_todo(client, session_factory):
+    """Q68：wf02_dim_source 新字段候选落库即开字典管理员 Gate 待办；同名复用不重复开。"""
+    from sqlalchemy import select
+
+    from app.product.modeling.models import OpsTodo
+
+    ps_id = await _make_ps(session_factory)
+    resp = await _submit(client, ps_id, [_dim(1, fid="f_a"), _dim(2), _dim(3)])
+    assert resp.status_code == 200
+    candidate_id = next(
+        d["candidate_id"] for d in resp.json()["dimensions"] if d["field_name"] == "维度2"
+    )
+
+    async def _todos():
+        async with session_factory() as session:
+            return list(
+                (
+                    await session.scalars(
+                        select(OpsTodo).where(OpsTodo.todo_type == "field_candidate_gate")
+                    )
+                ).all()
+            )
+
+    todos = await _todos()
+    assert len(todos) == 2  # 维度2 + 维度3 两条新候选
+    assert {t.entity_id for t in todos} == {
+        d["candidate_id"] for d in resp.json()["dimensions"] if d["fid"] is None
+    }
+    assert all(t.entity_type == "g2_field_candidate" for t in todos)
+    assert all(t.assignee_role == "dictionary_admin" for t in todos)
+
+    # 另一池子同名新字段 → 候选复用，不重复开待办。
+    ps2 = await _make_ps(session_factory)
+    resp2 = await _submit(client, ps2, [_dim(1, fid="f_a"), _dim(2)])
+    assert resp2.status_code == 200
+    reused = next(
+        d for d in resp2.json()["dimensions"] if d["field_name"] == "维度2"
+    )
+    assert reused["candidate_id"] == candidate_id
+    assert len(await _todos()) == 2, "同名候选复用不得重复开待办"

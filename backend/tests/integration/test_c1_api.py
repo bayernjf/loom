@@ -315,3 +315,62 @@ async def test_c7_layers_and_fid_guard(client):
         json={"field_list": ["f_name", "ghost_fid"], "status": "draft", "actor": DICT_ADMIN},
     )
     assert r.status_code == 422
+
+
+async def test_c7_layer4_opens_field_candidate_todo(client, session_factory):
+    """Q68：Layer4 新字段候选落库即开字典管理员 Gate 待办；复用同名候选不重复开。"""
+    from sqlalchemy import select
+
+    from app.product.modeling.models import OpsTodo
+
+    intake_id = await _submitted_intake(client)
+    r = await client.post("/api/categories", json={"name": "独立类目B", "actor": DICT_ADMIN})
+    solo = r.json()["category_id"]
+
+    async def _run(proposals, required):
+        return await client.post(
+            f"/api/intakes/{intake_id}/c7-runs",
+            json={
+                "category_id": solo,
+                "required_fids": required,
+                "l4_proposals": proposals,
+                "actor": OPS,
+            },
+        )
+
+    r = await _run(
+        [
+            {"field_name": "待审字段X", "definition": "Layer4 生成"},
+            {"field_name": "待审字段Y", "definition": "Layer4 生成"},
+        ],
+        ["f_name", "missing1", "missing2", "missing3", "missing4", "missing5"],
+    )
+    assert r.status_code == 200 and r.json()["layer"] == 4
+    cids = r.json()["candidate_ids"]
+    assert len(cids) == 2
+
+    async with session_factory() as session:
+        todos = list(
+            (
+                await session.scalars(
+                    select(OpsTodo).where(OpsTodo.todo_type == "field_candidate_gate")
+                )
+            ).all()
+        )
+    assert len(todos) == 2
+    assert {t.entity_id for t in todos} == set(cids)
+    assert all(t.entity_type == "g2_field_candidate" for t in todos)
+    assert all(t.assignee_role == "dictionary_admin" for t in todos)
+
+    # 同名提案再次提交 → 复用候选，不重复开待办（同一候选只挂一条）。
+    r2 = await _run([{"field_name": "待审字段X", "definition": "再来"}], ["missing6"])
+    assert r2.status_code == 200 and r2.json()["layer"] == 4
+    async with session_factory() as session:
+        todos = list(
+            (
+                await session.scalars(
+                    select(OpsTodo).where(OpsTodo.todo_type == "field_candidate_gate")
+                )
+            ).all()
+        )
+    assert len(todos) == 2, "复用候选不得重复开待办"

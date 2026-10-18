@@ -88,6 +88,10 @@ class RuleConflict(Exception):
         self.conflicts = conflicts
 
 
+class SlotGateNotPending(Exception):
+    """Q368：审批只对 pending_gate 的 AI 候选生效（正式位/已归档位不可再走审批）。"""
+
+
 class GoalNotFound(Exception):
     pass
 
@@ -148,13 +152,19 @@ def _require_ops(actor) -> None:
 # ---------- 发布位档案（Q35） ----------
 
 async def list_slots(
-    session, *, platform: str | None = None, status: str | None = "active"
+    session,
+    *,
+    platform: str | None = None,
+    status: str | None = "active",
+    gate: str | None = None,
 ) -> list[PublishSlot]:
     stmt = select(PublishSlot)
     if platform:
         stmt = stmt.where(PublishSlot.platform == platform)
     if status:
         stmt = stmt.where(PublishSlot.status == status)
+    if gate:
+        stmt = stmt.where(PublishSlot.gate == gate)
     return list((await session.scalars(stmt.order_by(PublishSlot.code))).all())
 
 
@@ -167,12 +177,13 @@ async def create_slot(session, body, actor) -> PublishSlot:
     ).first()
     if taken is not None:
         raise SlotCodeTaken(body.item.code)
-    slot = PublishSlot(
-        **body.item.model_dump(),
-        # Q35：四维分为主观字段，明示"人工评估"。
-        score_source="manual_eval",
-        created_by=actor.id,
-    )
+    # Q368：gate 是状态机字段，不由普通 upsert 携带（人工录入恒 approved；
+    # AI 新位候选走专用口 ai-candidate，见硬闸 #12 闭环）。
+    data = body.item.model_dump(exclude={"gate"})
+    data["score_source"] = "manual_eval"  # Q35：四维分为主观字段，明示"人工评估"。
+    data["gate"] = "approved"
+    data["created_by"] = actor.id
+    slot = PublishSlot(**data)
     session.add(slot)
     await session.flush()
     await append_audit(
@@ -184,6 +195,88 @@ async def create_slot(session, body, actor) -> PublishSlot:
         entity_type="publish_slot",
         entity_id=slot.slot_id,
         detail={"code": slot.code},
+    )
+    return slot
+
+
+async def create_ai_slot_candidate(session, body, actor) -> PublishSlot:
+    """Q368（硬闸 #12）：AI 识别新发布位 → 候选入口。
+
+    客观字段（platform/code/name/slot_type/时长/来源）由调用方给出；四维分
+    **强制全 0**（AI 无数据源不得编造主观分），gate=pending_gate、
+    score_source=ai，人工评估（approve）后才转正式位。schema extra=forbid
+    保证调用方尝试传四维即 422（诚实报错，同 Q18 纪律）。
+    """
+    _require_ops(actor)
+    taken = (
+        await session.scalars(
+            select(PublishSlot).where(PublishSlot.code == body.item.code)
+        )
+    ).first()
+    if taken is not None:
+        raise SlotCodeTaken(body.item.code)
+    data = body.item.model_dump()
+    data["traffic"] = 0.0
+    data["safe"] = 0.0
+    data["conv"] = 0.0
+    data["load"] = 0.0
+    data["score_source"] = "ai"
+    data["gate"] = pa_rules.GATE_PENDING
+    data["created_by"] = actor.id
+    slot = PublishSlot(**data)
+    session.add(slot)
+    await session.flush()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="slot.ai_candidate_create",
+        entity_type="publish_slot",
+        entity_id=slot.slot_id,
+        detail={"code": slot.code},
+    )
+    return slot
+
+
+async def approve_slot_candidate(session, slot_id: str, body, actor) -> PublishSlot:
+    """Q368（硬闸 #12）：运营对 pending_gate 的 AI 候选做人工评估。
+
+    审批即"人工评估"：写入四维分（0-100）、gate→approved、score_source→
+    manual_eval（此后该位四维的权威来源是人工，不再是 AI 占位 0）。
+    """
+    _require_ops(actor)
+    slot = await session.get(PublishSlot, slot_id)
+    if slot is None:
+        raise SlotNotFound(slot_id)
+    if slot.gate != pa_rules.GATE_PENDING:
+        raise SlotGateNotPending(
+            f"slot {slot.code} is in gate {slot.gate}, only pending_gate can be approved"
+        )
+    slot.traffic = body.traffic
+    slot.safe = body.safe
+    slot.conv = body.conv
+    slot.load = body.load
+    slot.score_source = "manual_eval"
+    slot.gate = "approved"
+    slot.updated_at = _now()
+    await append_audit(
+        session,
+        tenant_id=PLATFORM_TENANT,
+        actor_id=actor.id,
+        actor_roles=actor.roles,
+        action="slot.ai_candidate_approve",
+        entity_type="publish_slot",
+        entity_id=slot.slot_id,
+        detail={
+            "code": slot.code,
+            "dims": {
+                "traffic": slot.traffic,
+                "safe": slot.safe,
+                "conv": slot.conv,
+                "load": slot.load,
+            },
+        },
     )
     return slot
 
@@ -207,7 +300,9 @@ async def update_slot(session, slot_id: str, body, actor) -> PublishSlot:
     # slot.update 审计，使运营对 fit_score 输入的每次校准可追溯（不新增端点、
     # 不改变 fit_score 派生时现算的口径；本切片是「人工校准」不是「自学习」）。
     dims_before = {dim: getattr(slot, dim) for dim in pa_rules.FIT_DIMS}
-    for key, value in body.item.model_dump().items():
+    # Q368：gate 是状态机字段，普通 upsert 不得改写（approved↔pending 只能经
+    # ai-candidate 创建 / approve 审批流转）。
+    for key, value in body.item.model_dump(exclude={"gate"}).items():
         setattr(slot, key, value)
     slot.updated_at = _now()
     dims_after = {dim: getattr(slot, dim) for dim in pa_rules.FIT_DIMS}

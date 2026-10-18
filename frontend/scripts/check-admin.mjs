@@ -42,6 +42,7 @@ const requiredKeys = [
   "admin.platformAdaptationNav",
   "admin.inspirationEntriesNav",
   "admin.systemConfigNav",
+  "admin.atomsNav",
   "admin.unconfigured",
   "admin.window",
   "admin.empty",
@@ -423,6 +424,56 @@ const requiredKeys = [
   ...[
     "title",
     "intro",
+    "productSpaceLabel",
+    "productSpacePlaceholder",
+    "needProductSpace",
+    "statusLabel",
+    "statusAll",
+    "sortLabel",
+    "sortCreatedAt",
+    "sortAffinity",
+    "querySubmit",
+    "candidatesTitle",
+    "empty",
+    "loadFailed",
+    "colContent",
+    "colFactType",
+    "colRisk",
+    "colAffinity",
+    "colEvidence",
+    "colConflicts",
+    "colStatus",
+    "colAction",
+    "clusterTag",
+    "evidenceDue",
+    "opApprove",
+    "opReject",
+    "opRevive",
+    "opOverride",
+    "opAiEvidence",
+    "opCluster",
+    "opResolve",
+    "opConfirm",
+    "opCancel",
+    "rejectPlaceholder",
+    "overridePlaceholder",
+    "aiConfirm",
+    "clusterTitle",
+    "recommendedKeeper",
+    "keeperLabel",
+    "errAuth",
+    "errForbidden",
+    "errNotFound",
+    "errConflict",
+    "errInvalid",
+    "errUpstream",
+    "errUnknown",
+    "errUnconfigured",
+    "errMissingRole",
+  ].map((k) => `admin.atoms.${k}`),
+  ...[
+    "title",
+    "intro",
     "contentSectionTitle",
     "metaLine",
     "loadFailed",
@@ -751,11 +802,13 @@ if (!sidebarText.includes("/admin/inspiration-entries"))
   problems.push("admin sidebar must link the inspiration library console (Q359)");
 if (!sidebarText.includes("/admin/config"))
   problems.push("admin sidebar must link the runtime config console (Q364/Q56)");
+if (!sidebarText.includes("/admin/atoms"))
+  problems.push("admin sidebar must link the atom management console (Q368)");
 {
   const navCount = [...sidebarText.matchAll(/href:\s*"\/admin\/[^"]+"/g)].length;
-  // 19＝Q364 加入运行配置台（此前 18＝Q359 加入灵感库，17＝Q345 加入平台适配台，16＝Q344 加入回滚中心，15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
-  if (navCount !== 19)
-    problems.push(`admin sidebar must keep exactly 19 admin entries, got ${navCount}`);
+  // 20＝Q368 加入原子管理台（此前 19＝Q364 加入运行配置台，18＝Q359 加入灵感库，17＝Q345 加入平台适配台，16＝Q344 加入回滚中心，15＝Q306 加入字典管理）。改这个数字必须对应一次真实的入口增删。
+  if (navCount !== 20)
+    problems.push(`admin sidebar must keep exactly 20 admin entries, got ${navCount}`);
 }
 if (!sidebarText.includes('"/workbench"'))
   problems.push("admin sidebar must provide back link to /workbench");
@@ -1451,8 +1504,10 @@ for (const banned of ["setInterval", "setTimeout"]) {
     // 只看装饰器首行：块体会一直延伸到下一个装饰器，用整块匹配会把相邻路由
     // （如 Q351 的 video-objects 上传口）误算进来（实测 5≠4）。
     .filter((block) => block.split("\n")[0].includes("video-generation-tasks"));
-  if (taskPosts.length !== 4)
-    problems.push(`video task write routes must be 4 (create/approve/reject/sync), found ${taskPosts.length}`);
+  // 5 个 video-generation-tasks 写口：create/approve/reject/sync + Q368 新增
+  // attach-to-content（段12 成片入库）。Q368 前端验证漏更此断言＝CI 门抓到（Q370 修）。
+  if (taskPosts.length !== 5)
+    problems.push(`video task write routes must be 5 (create/approve/reject/sync/attach-to-content), found ${taskPosts.length}`);
   for (const block of taskPosts) {
     if (!block.includes("require_internal_actor(OPERATIONS)"))
       problems.push(
@@ -2201,6 +2256,90 @@ const cfgRouter = readFileSync(
 for (const token of ['prefix="/api/admin/config"', "PLATFORM_ADMIN"]) {
   if (!cfgRouter.includes(token))
     problems.push(`backend config_center router must contain ${token}`);
+}
+
+
+// Q368：段4 原子管理台（/admin/atoms）＝Q360 留的前端切片（后端 Q16/18/19/20 已就绪）。
+// 口径：候选列表只读 RSC（product_space_id 必填查询，读函数带 actor+ADMIN_ROLE_LIST）；
+// 裁决/复活/风险覆盖/AI 补证/簇合并走 Server Action（Q242 写口只认已验真内部令牌，
+// 本地 guard 预检缺身份/缺角色零请求），island 禁直连 lib/api/裸 fetch，成功 refresh。
+const atPage = readAdmin(join("atoms", "page.tsx"));
+const atActions = readAdmin(join("atoms", "actions.ts"));
+const atIsland = readAdmin(join("atoms", "atoms-island.tsx"));
+
+if (!/export const dynamic = "force-dynamic"/.test(atPage))
+  problems.push("atoms/page.tsx must be force-dynamic (server-only env)");
+if (/NEXT_PUBLIC/.test(atPage) || /https?:\/\//.test(atPage))
+  problems.push("atoms/page.tsx must not read NEXT_PUBLIC_* or hardcode URLs");
+for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
+  if (atPage.includes(forbidden))
+    problems.push(`atoms/page.tsx is read-only RSC; must not contain ${forbidden}`);
+}
+for (const token of [
+  "listAtomCandidates(",
+  "AtomRowActions",
+  'name="product_space_id"',
+  'data-testid="atoms-admin"',
+]) {
+  if (!atPage.includes(token))
+    problems.push(`atoms page must use ${token}`);
+}
+if (!/^"use server"/m.test(atActions))
+  problems.push("atoms/actions.ts must be a Server Action module");
+for (const token of [
+  "approveAtomCandidateAction",
+  "rejectAtomCandidateAction",
+  "reviveAtomCandidateAction",
+  "overrideAtomRiskAction",
+  "aiSupplementAtomEvidenceAction",
+  "resolveAtomClusterAction",
+  "getAtomClusterMembersAction",
+  "CURRENT_ADMIN_ACTOR_ID",
+  "unconfigured",
+  "missing_role",
+]) {
+  if (!atActions.includes(token))
+    problems.push(`atoms actions must contain ${token}`);
+}
+for (const status of [401, 403, 404, 409, 422, 502]) {
+  if (!atActions.includes(String(status)))
+    problems.push(`atoms actions must map failure status ${status}`);
+}
+if (!/^"use client"/m.test(atIsland))
+  problems.push("atoms/atoms-island.tsx must be a client island");
+for (const token of [
+  "approveAtomCandidateAction",
+  "rejectAtomCandidateAction",
+  "overrideAtomRiskAction",
+  "aiSupplementAtomEvidenceAction",
+  "resolveAtomClusterAction",
+  "router.refresh",
+  "window.confirm",
+]) {
+  if (!atIsland.includes(token))
+    problems.push(`atoms island must use ${token}`);
+}
+if (atIsland.includes("@/lib/api") || /\bfetch\s*\(/.test(atIsland) || /https?:\/\//.test(atIsland))
+  problems.push("atoms island must call only the Server Action, never the API directly");
+{
+  // 读契约：候选列表函数块内必须带 ADMIN_ROLE_LIST（同 Q307 判据）。
+  const block = apiText.split("\nexport async function ").find((chunk) =>
+    chunk.startsWith("listAtomCandidates("),
+  );
+  if (!block) problems.push("lib/api.ts must define listAtomCandidates");
+  else if (!block.includes("ADMIN_ROLE_LIST"))
+    problems.push("listAtomCandidates must append ADMIN_ROLE_LIST (else the Q307 read contract can't see it)");
+}
+{
+  // 文案键回查：页面＋岛/actions 的 t("...") 必须真实存在于 admin.atoms。
+  const atMessages = messages.admin?.atoms ?? {};
+  for (const [name, text] of [["page", atPage], ["actions", atActions], ["island", atIsland]]) {
+    for (const key of [...text.matchAll(/\bt\("([A-Za-z0-9]+)"/g)].map((m) => m[1])) {
+      const value = atMessages[key];
+      if (typeof value !== "string" || !value)
+        problems.push(`atoms message key missing: admin.atoms.${key} (${name})`);
+    }
+  }
 }
 
 if (problems.length > 0) {
