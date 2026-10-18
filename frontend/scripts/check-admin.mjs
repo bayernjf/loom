@@ -1504,8 +1504,10 @@ for (const banned of ["setInterval", "setTimeout"]) {
     // 只看装饰器首行：块体会一直延伸到下一个装饰器，用整块匹配会把相邻路由
     // （如 Q351 的 video-objects 上传口）误算进来（实测 5≠4）。
     .filter((block) => block.split("\n")[0].includes("video-generation-tasks"));
-  if (taskPosts.length !== 4)
-    problems.push(`video task write routes must be 4 (create/approve/reject/sync), found ${taskPosts.length}`);
+  // 5 个 video-generation-tasks 写口：create/approve/reject/sync + Q368 新增
+  // attach-to-content（段12 成片入库）。Q368 前端验证漏更此断言＝CI 门抓到（Q370 修）。
+  if (taskPosts.length !== 5)
+    problems.push(`video task write routes must be 5 (create/approve/reject/sync/attach-to-content), found ${taskPosts.length}`);
   for (const block of taskPosts) {
     if (!block.includes("require_internal_actor(OPERATIONS)"))
       problems.push(
