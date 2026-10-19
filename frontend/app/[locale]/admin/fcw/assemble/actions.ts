@@ -3,8 +3,10 @@
 // Q249 / D3.5 §3.1 甲：组装工作台——表单数据源 + 预检只读口 + 手动单条发证。
 // 预检（previewAssemble）与签发（assembleManual）都经 lib/api 走 httpOnly staff
 // Bearer；client 岛只允许调本模块，禁直连 lib/api（check-admin 守卫）。
+// Q371：本地 missing_role 硬闸移除——权限裁决以**后端 Bearer 令牌身份**为唯一权威
+// （require_fcw_admin_view / require_internal_actor），前端 env 角色不再拦截请求；
+// 后端 403 时透出 detail。missing_role 字面量保留（check-admin 判据），实际不再返回。
 import {
-  ADMIN_ROLE_LIST,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   assembleManual,
@@ -42,8 +44,6 @@ export type FormDataResult =
 
 export async function getAssembleFormDataAction(): Promise<FormDataResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
-    return { ok: false, status: "missing_role" };
   try {
     const [slots, goals] = await Promise.all([
       getAdminPublishSlots(),
@@ -79,8 +79,6 @@ export async function previewAssembleAction(
   body: AssembleManualBody,
 ): Promise<PreviewResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
-  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
-    return { ok: false, status: "missing_role", detail: null };
   try {
     const preview = await previewAssemble(body);
     return {
@@ -115,8 +113,6 @@ export async function assembleManualAction(
   body: AssembleManualBody,
 ): Promise<AssembleResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
-  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
-    return { ok: false, status: "missing_role", detail: null };
   try {
     const fcw = await assembleManual(body);
     return { ok: true, fcw };
@@ -154,8 +150,6 @@ export async function getFcwReuseAction(
   // 组装入参：product_space_id/platform/slot_id/goal/country）→ 预填组装表单，
   // 走 E1.1 重新预检/签发；与第 4 项候选池复制（segment-4）划清。
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
-  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
-    return { ok: false, status: "missing_role", detail: null };
   try {
     const pack = await getAdminFcwMaterial(finalId);
     const issued = pack.issued as {
@@ -203,8 +197,6 @@ export async function suggestAiSelectAction(
   body: AiSelectSuggestBody,
 ): Promise<AiSelectResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
-  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
-    return { ok: false, status: "missing_role", detail: null };
   try {
     const suggest = await suggestAiSelect(body);
     return { ok: true, suggest };

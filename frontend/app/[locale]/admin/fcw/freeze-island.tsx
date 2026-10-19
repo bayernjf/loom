@@ -7,7 +7,7 @@
 // 提示「重冻新版走组装台『复用』预填」（Q250 裁决 c＝E1.1 再发证，本岛不跳转、
 // 不刷新列表、不做任何其它写操作）。
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import { Link } from "@/i18n/navigation";
 import styles from "../admin.module.css";
@@ -30,7 +30,7 @@ export function FreezeIsland({
   const tError = useTranslations("error");
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [result, setResult] = useState<RevokeFcwResult | null>(null);
   const [revoked, setRevoked] = useState(false);
 
@@ -46,9 +46,13 @@ export function FreezeIsland({
     );
   }
 
-  function confirmRevoke() {
+  // Q371：作废按钮同 decision-cell 口径——本地 pending + try/catch/finally，
+  // 异常必走错误回显；missing_role 由后端令牌身份裁决（见 actions 注释）。
+  async function confirmRevoke() {
     if (!frozen || !reason.trim() || pending) return;
-    startTransition(async () => {
+    setResult(null);
+    setPending(true);
+    try {
       const r = await revokeFcwAction(finalId, reason);
       if (r.ok) {
         setRevoked(true);
@@ -56,7 +60,11 @@ export function FreezeIsland({
       } else {
         setResult(r);
       }
-    });
+    } catch {
+      setResult({ ok: false, status: "unknown", detail: null });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

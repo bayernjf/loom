@@ -2,7 +2,7 @@
 
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import { opsTransitionIntakeAction, type OpsIntakeActionResult } from "./actions";
 import { OPS_INTAKE_EVENTS, isOpsIntakeEvent } from "./ops-intake-codes";
@@ -20,7 +20,7 @@ export function OpsIntakeActions({
   const t = useTranslations("admin.opsIntakes");
   const tError = useTranslations("error");
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [activeEvent, setActiveEvent] = useState<string | null>(null);
   const [result, setResult] = useState<OpsIntakeActionResult | null>(null);
 
@@ -36,15 +36,22 @@ export function OpsIntakeActions({
     );
   }
 
-  function run(event: string) {
+  // Q371：状态机按钮同 decision-cell 口径——本地 pending + try/catch/finally，
+  // 异常必走错误回显（Q369 §6.2 静默失败同类根因一并消除）。
+  async function run(event: string) {
     setResult(null);
     setActiveEvent(event);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const actionResult = await opsTransitionIntakeAction(intakeId, event);
       setResult(actionResult);
       if (actionResult.ok) router.refresh();
+    } catch {
+      setResult({ ok: false, status: "unknown" });
+    } finally {
       setActiveEvent(null);
-    });
+      setPending(false);
+    }
   }
 
   if (opsEvents.length === 0) {
