@@ -37,11 +37,11 @@ jobs:
         if: always()
         working-directory: backend
         run: python scripts/coverage_report.py coverage.json
-      - name: Coverage diff gate (Q372: 新增行覆盖率 < 80% 判红；全局阈值仍【建议】)
+      - name: 'Coverage diff gate (Q372: 新增行覆盖率 < 80% 判红；全局阈值仍【建议】)'
         if: always()
         working-directory: backend
         run: python scripts/check_coverage_diff.py coverage.json --base origin/dev
-      - name: openapi drift (Q372: lib/api.ts 悬空引用判红，前端调 404 即失败)
+      - name: 'openapi drift (Q372: lib/api.ts 悬空引用判红，前端调 404 即失败)'
         working-directory: backend
         run: python scripts/check_openapi_drift.py
       - name: Evaluation Dataset / Golden Cases regression (Q77 staging gate)
