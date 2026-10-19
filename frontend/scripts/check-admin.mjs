@@ -1276,7 +1276,7 @@ for (const status of [403, 404, 409, 422]) {
   if (!opsActions.includes(String(status)))
     problems.push(`opsTransitionIntakeAction must map failure status ${status}`);
 }
-for (const token of ["unconfigured", "missing_role", "CURRENT_ADMIN_ACTOR_ID", "ADMIN_ROLE_LIST", "isOpsIntakeEvent"]) {
+for (const token of ["unconfigured", "missing_role", "CURRENT_ADMIN_ACTOR_ID", "isOpsIntakeEvent"]) {
   if (!opsActions.includes(token))
     problems.push(`ops intake actions must contain ${token}`);
 }
@@ -1412,7 +1412,6 @@ for (const token of [
   "CURRENT_ADMIN_ACTOR_ID",
   "missing_role",
   "unconfigured",
-  "ADMIN_ROLE_LIST",
   "setPublishInfo",
   "adminDiscardContent",
   "getContentDetailAction",
@@ -1586,7 +1585,6 @@ for (const token of [
   "CURRENT_ADMIN_ACTOR_ID",
   "missing_role",
   "unconfigured",
-  "ADMIN_ROLE_LIST",
   "claimEffect",
   "batchClaimEffects",
   "unclaimEffect",
@@ -2339,6 +2337,31 @@ if (atIsland.includes("@/lib/api") || /\bfetch\s*\(/.test(atIsland) || /https?:\
       if (typeof value !== "string" || !value)
         problems.push(`atoms message key missing: admin.atoms.${key} (${name})`);
     }
+  }
+}
+
+{
+  // Q372：前端本地角色闸存量清理——8 个 actions 文件一律不得再引用 ADMIN_ROLE_LIST。
+  // 口径：角色以后端 Bearer 令牌身份为唯一权威（后端 403 透出 detail），本地仅保留
+  // 缺身份零请求；lib/api.ts 读口 roles 过滤属 Q307/Q113 读契约，由上方读函数判据
+  // 单独守护（在 api.ts 中合法保留），不在此列。
+  const q372ActionFiles = [
+    "staff-keys/actions.ts",
+    "atoms/actions.ts",
+    "intakes/actions.ts",
+    "agent-keys/actions.ts",
+    "config/actions.ts",
+    "inspiration-entries/actions.ts",
+    "content/actions.ts",
+    "effects/actions.ts",
+  ];
+  for (const rel of q372ActionFiles) {
+    const full = join(adminDir, rel);
+    const text = readFileSync(full, "utf8");
+    if (text.includes("ADMIN_ROLE_LIST"))
+      problems.push(
+        `${full} must not reference ADMIN_ROLE_LIST (Q372: roles are Bearer-token authoritative; read-gate roles live only in api.ts)`,
+      );
   }
 }
 

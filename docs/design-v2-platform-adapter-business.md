@@ -25,9 +25,9 @@
 
 ### 2.1 已落（Q246／迁移 0046：引擎侧预备件齐了）
 
-- **场景注册**：`SCENE_PLATFORM_ADAPTER = "PLATFORM-ADAPTER"`（`core/model_registry/seeds.py:264`），`ai_scene_routes` 路由到 **synthetic**（迁移 0046 纯种子，无 schema 变更）。
+- **场景注册**：`SCENE_PLATFORM_ADAPTER = "PLATFORM-ADAPTER"`（`core/model_registry/seeds.py:293`），`ai_scene_routes` 路由到 **synthetic**（迁移 0046 纯种子，无 schema 变更）。
 - **Prompt v0.1 已入库**：`PLATFORM_ADAPTER_PROMPT_TEMPLATE`（`seeds.py:268-286`），正文即 docs/06 七条约束的运行时化，并声明**三个变量**：`PLATFORM_ADAPTER_PROMPT_VARIABLES = ["pws", "platform_rules", "dynamic_events"]`（`seeds.py:288`）。
-- **synthetic 构造器**：`build_platform_adapter()`（`synthetic.py:296-334`）——四态机械映射已实现：
+- **synthetic 构造器**：`build_platform_adapter()`（`synthetic.py:298-335`）——四态机械映射已实现：
   - 无 frozen PWS → `{"missing": True, "reason": "no_frozen_pws"}`
   - 命中 `effect=blocked` → `block`；`effect=partial` → `downgrade`
   - 有 active 动态信号 → `pending_review`
@@ -139,8 +139,8 @@ Prompt v0.1 要求的返回契约（`seeds.py:281`）是五键：`{"missing", "d
 | **docs 口径漂移**（原四项动作名对不上） | docs/02:141 vs docs/10:379（**Q295 已按 docs/02 C1.6 订正销账**；原 `REMOVE_HOOK`/`REWRITE` 举例系漂移） |
 | 段7 四态状态机两行迁移表 | docs/13:125-128（§1.8） |
 | docs/13:123 旧读数已被 Q246/Q259 超越（陈述精确化） | docs/13:123 vs 02 C1.203/C1.204 |
-| 场景注册与 Prompt v0.1、三个变量 | `backend/app/core/model_registry/seeds.py:264-288` |
-| synthetic 四态机械映射 | `backend/app/core/model_registry/synthetic.py:296-334` |
+| 场景注册与 Prompt v0.1、三个变量 | `backend/app/core/model_registry/seeds.py:293-317` |
+| synthetic 四态机械映射 | `backend/app/core/model_registry/synthetic.py:298-335` |
 | **五键 vs 两键形状缺口** | `seeds.py:281` vs `synthetic.py:311` |
 | 迁移 0046（纯种子、无 schema 变更） | `backend/alembic/versions/0046_platform_adapter_seed.py`、docs/17 §迁移头 |
 | `match_rules` 四层选择器 | `backend/app/platform/platform_adaptation/service.py`、`router.py:308` |

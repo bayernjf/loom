@@ -1,7 +1,6 @@
 "use server";
 
 import {
-  ADMIN_ROLE_LIST,
   adminDiscardContent,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
@@ -52,9 +51,7 @@ export async function setPublishInfoAction(
   const id = contentId.trim();
   const trimmedUrl = url.trim();
   if (!id || !trimmedUrl) return { ok: false, status: 422, detail: null };
-  if (!ADMIN_ROLE_LIST.includes("operations")) {
-    return { ok: false, status: "missing_role" };
-  }
+  // 角色由后端令牌身份唯一权威（Q372 对齐）：operations 不符时后端 403 透出 detail。
   const trimmedPostId = platformPostId?.trim();
   try {
     await setPublishInfo(id, trimmedUrl, trimmedPostId || undefined);
@@ -73,9 +70,7 @@ export async function discardContentAction(
   const id = contentId.trim();
   const trimmedReason = reason.trim();
   if (!id || !trimmedReason) return { ok: false, status: 422, detail: null };
-  if (!ADMIN_ROLE_LIST.includes("operations")) {
-    return { ok: false, status: "missing_role" };
-  }
+  // 角色由后端令牌身份唯一权威（Q372 对齐）：operations 不符时后端 403 透出 detail。
   try {
     await adminDiscardContent(id, trimmedReason);
     return { ok: true };
@@ -184,9 +179,7 @@ export async function createVideoSegmentAction(
   text: string,
 ): Promise<VideoSegmentSaveResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.includes("operations")) {
-    return { ok: false, status: "missing_role" };
-  }
+  // 角色由后端令牌身份唯一权威（Q372 对齐）：operations 不符时后端 403 透出 detail。
   if (!text.trim()) return { ok: false, status: 422 };
   try {
     const { createVideoSegment } = await import("@/lib/api");
@@ -205,9 +198,7 @@ export async function updateVideoSegmentTextAction(
   text: string,
 ): Promise<VideoSegmentSaveResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.includes("operations")) {
-    return { ok: false, status: "missing_role" };
-  }
+  // 角色由后端令牌身份唯一权威（Q372 对齐）：operations 不符时后端 403 透出 detail。
   if (!text.trim()) return { ok: false, status: 422 };
   try {
     const { updateVideoSegment } = await import("@/lib/api");
@@ -251,9 +242,7 @@ export async function uploadVideoObjectAction(
   contentType: string,
 ): Promise<VideoObjectUploadResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.includes("operations")) {
-    return { ok: false, status: "missing_role" };
-  }
+  // 角色由后端令牌身份唯一权威（Q372 对齐）：operations 不符时后端 403 透出 detail。
   if (!filename.trim() || !base64) return { ok: false, status: 422 };
   try {
     const { uploadVideoObject } = await import("@/lib/api");
@@ -304,9 +293,7 @@ async function runVideoTaskCall(
   call: () => Promise<import("@/lib/api").VideoGenerationTaskView>,
 ): Promise<VideoTaskResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.includes("operations")) {
-    return { ok: false, status: "missing_role" };
-  }
+  // 角色由后端令牌身份唯一权威（Q372 对齐）：operations 不符时后端 403 透出 detail。
   try {
     return { ok: true, task: await call() };
   } catch (err) {

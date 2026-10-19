@@ -23,7 +23,7 @@
 - **目的权重矩阵**：`goal_fit_weights` 表（`models.py:80`，Q34 挂 Q25 contentGoals，Σ=1 强校验、不归一化）；端点 `GET/PUT /api/admin/fit-weights`（`router.py:202/213`），**纯人工录入**。
   - Q34 已给真实样例（docs/02:133）＝四维中文名与权重矩阵配置化口径：**种草 = 流量 0.4／安全 0.2／转化 0.2／承载 0.2；转化 = 转化 0.4／安全 0.3／流量 0.2／承载 0.1**。⇒ `safe`＝**安全**（合规向）、`load`＝**承载**（承接向），两个维度的业务含义据此明确（见 2.3 为什么它们无回流数据源）。
 - **四维分载体**：`publish_slots.traffic/safe/conv/load`（0-100），经 Q35 后台 CRUD 录入（`router.py:129-187`），**同样纯人工**。
-- **只读出口**：`GET /api/admin/publish-slots/{slot_id}/fit-score`（`router.py:212`）→ `service.fit_score()`（`service.py:244-276`）。目的未配矩阵时返回 `fit_score=None` + `incomplete=true`，**不凑分**（对齐 Q22b 精神）。
+- **只读出口**：`GET /api/admin/publish-slots/{slot_id}/fit-score`（`router.py:248`）→ `service.fit_score()`（`service.py:377-416`）。目的未配矩阵时返回 `fit_score=None` + `incomplete=true`，**不凑分**（对齐 Q22b 精神）。
 - **唯一真实消费方＝段11 FCW 评分**：`final/final_whitelist/service.py:288-294` 取 `GoalFitWeight` 与 `PublishSlot`，算 `slot_fit` 传入 `fcw_rules.score_fcw(slot_fit_score=...)`，属 Q54 四项评分之一（0.4/0.3/0.3 量纲统一 ×100，**仅排序、永不做门槛**）。
 - **代码自述边界**：`pa_rules.py:8` 原文写着「动态信号 / **fit_score 学习** / 每周重算均不在 V1（08 M11）」。
 
@@ -115,8 +115,8 @@ docs/08:150 明写「fit_score 学习**需回流数据**」。全仓唯一的回
 | 「fit_score 学习需回流数据」 | docs/08:150（Q260 落地行） |
 | Q34 公式与 Σ=1 强校验 | `backend/app/platform/platform_adaptation/pa_rules.py:31,71-96` |
 | Q34 权重样例（四维中文名：流量/安全/转化/承载） | docs/02 C1.6 Q34（:133）、docs/02:1369（配置化清单行） |
-| fit_score 派生 service（不凑分） | `backend/app/platform/platform_adaptation/service.py:244-276` |
-| 只读出口 | `backend/app/platform/platform_adaptation/router.py:212-221` |
+| fit_score 派生 service（不凑分） | `backend/app/platform/platform_adaptation/service.py:377-416` |
+| 只读出口 | `backend/app/platform/platform_adaptation/router.py:248-221` |
 | 唯一真实消费方（FCW 评分） | `backend/app/final/final_whitelist/service.py:288-294` |
 | 代码自述「fit_score 学习不在 V1」 | `backend/app/platform/platform_adaptation/pa_rules.py:8` |
 | 平台适配 8 张表全量枚举 | `backend/app/platform/platform_adaptation/models.py`（`__tablename__` 全量 grep） |

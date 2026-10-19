@@ -1,10 +1,10 @@
 "use server";
 
 // Q129/Q130：管理端效果运营台 Server Action——孤儿单条认领、批量认领（整批
-// all-or-nothing）、取消认领/解绑、成品时序查询。写口 operations 硬闸（角色
-// 缺失本地零请求，同 Q124/Q125）；client 岛只允许调用本模块，禁直连 lib/api。
+// all-or-nothing）、取消认领/解绑、成品时序查询。写口 operations 硬闸（本地仅
+// 缺身份零请求，角色以后端令牌身份为唯一权威，Q372 对齐）；client 岛只允许
+// 调用本模块，禁直连 lib/api。
 import {
-  ADMIN_ROLE_LIST,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   batchClaimEffects,
@@ -56,8 +56,6 @@ function failure(err: unknown): EffectActionResult {
 
 function guardWrite(): EffectActionResult | null {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.includes("operations"))
-    return { ok: false, status: "missing_role" };
   return null;
 }
 

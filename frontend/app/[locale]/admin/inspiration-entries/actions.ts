@@ -1,10 +1,10 @@
 "use server";
 
 // Q359：灵感库写口 Server Action——新建/编辑（含启停）/删除，三写均落审计（Q358）。
-// 后端在 service 层硬闸 operations/platform_admin；本地缺身份/缺角色零请求，同 Q167。
+// 后端在 service 层硬闸 operations/platform_admin；本地仅缺身份零请求，角色以
+// 后端令牌身份为唯一权威（Q372 对齐，403 透出 detail）。
 // client 岛只允许调用本模块，禁直连 lib/api。
 import {
-  ADMIN_ROLE_LIST,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   createInspirationEntry,
@@ -45,12 +45,6 @@ function failure(err: unknown): InspirationActionResult {
 
 function guardOps(): InspirationActionResult | null {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (
-    !ADMIN_ROLE_LIST.some(
-      (role) => role === "operations" || role === "platform_admin",
-    )
-  )
-    return { ok: false, status: "missing_role" };
   return null;
 }
 

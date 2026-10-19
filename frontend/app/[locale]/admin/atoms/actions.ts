@@ -3,9 +3,9 @@
 // Q368：段4 原子管理台写口 Server Action——批准/驳回/复活/风险覆盖/AI 补证/簇合并。
 // 后端写口 Q242 只认已验真 staff 令牌（门控关着也自行验真，无令牌 401）；角色按口
 // 分流（approve/reject/risk-override/resolve 需 reviewer、ai-supplement 需
-// operations）；AI 补证是花钱口（Q354 纪律）。本地缺身份/缺角色零请求，同 Q167。
+// operations）；AI 补证是花钱口（Q354 纪律）。本地仅缺身份零请求，角色以
+// 后端令牌身份为唯一权威（Q372 对齐，403 透出 detail）。
 import {
-  ADMIN_ROLE_LIST,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   aiSupplementAtomEvidence,
@@ -65,12 +65,6 @@ function failure(err: unknown): AtomActionResult {
 
 function guardOps(): AtomActionResult | null {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (
-    !ADMIN_ROLE_LIST.some(
-      (role) => role === "operations" || role === "platform_admin",
-    )
-  )
-    return { ok: false, status: "missing_role" };
   return null;
 }
 
