@@ -4,6 +4,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ## [Unreleased]
 
+- **Q370 批＝E2E 环境副作用拍板批（2026-10-19；**纯文档批：零代码零迁移零测试变化**；基线照 Q369 时点引用〔目标 **1453 passed＋11 skipped／收集 1464**、ruff 全仓净、头 `0064_field_candidate_gate_sla_seed`／75 表·821 列·迁移文件 **64**、`GATED` **63**、侧栏 **20**、ts/tsx **122**〕本批未复跑；02 C1.312）**——负责人「那你搞」对 Q369 ⑥ 三项环境副作用拍板（2026-10-19）。
+  - **拍板结果（三项全留）**：`infra/.env` 门控 `LOOM_STAFF_AUTH_ENABLED=true` **保留**（后续 E2E 复用、门控开启写口只认真令牌更安全、本地 gitignore 文件）；FCW 快照 `537a2f28` 作废 **接受**（测试数据 t-e2e、审计留痕、原行不变，Q251 语义已确认）；两条 E2E 令牌（e2e-verifier/e2e-ops）**保留**（后续 E2E 复用，可随时 staff-keys 吊销）；镜像重建至 Q368 形态＝正向接受。
+  - **合龙**：docs/26 §6.4 三条「待拍板」改拍板结果；docs/02 C1.312＋续编索引；handoff Q370 banner（Q369 转「其前」、Q365 滚入归档「四十八、」节）；AGENTS/docs/08/docs/README/docs/16/docs/24/docs/25 基线前移。
+
 - **Q369 批＝浏览器 E2E 验证批（2026-10-17；**纯文档批＋环境验证：零代码零迁移零测试变化**；docs/26《新用户E2E验证清单》落盘＋§6 首轮实测结果；本机 compose 重建到 Q368 形态后门控＋双令牌登录，20+ 管理页与核心写口实测；基线照 Q368 时点引用〔目标 **1453 passed＋11 skipped／收集 1464**、ruff 全仓净、头 `0064_field_candidate_gate_sla_seed`／75 表·821 列·迁移文件 **64**、`GATED` **63**、侧栏 **20**、ts/tsx **122**〕，提交前全量复跑确认；02 C1.311）**——负责人「开搞」按 docs/26 执行首轮浏览器 E2E（2026-10-17）。
   - **环境修复**：宿主 8000 被无关项目占用（勿动）；重建 backend/frontend 镜像至 Q368 形态（openapi 205→**219 paths**、迁移头 `0064_field_candidate_gate_sla_seed` 就位、侧栏补原子管理）。
   - **身份引导（§0.4，Q178 鸡生蛋完整走通）**：门控关态自报 platform_admin 签首令牌 `e2e-verifier` → `infra/.env` 追加 `LOOM_STAFF_AUTH_ENABLED=true` 重启 → 浏览器令牌登录成功；再签 `e2e-ops`（platform_admin+operations）验证 RBAC 分层；`staff_api_key.issue` 审计两条落库（declared/staff_token）。
