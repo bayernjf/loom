@@ -159,7 +159,7 @@
 |---|---|
 | 无 session／无握手／`server/discover` 在位 | ✅ 按官方规范事实实现 |
 | `resultType`、`tools/list` 的 `ttlMs`＋`cacheScope`、`-32022`、`input_required` | ✅ 已实现并有单测钉字段 |
-| `server/discover` 响应结构 | ✅ **已按官方结构对齐**（Q235，2026-09-29；4 处出入见下）。`discover_result()`（`app/core/mcp/server.py:95-112`）字段集＝`resultType`／`supportedVersions`／`capabilities`／`instructions`／`_meta.serverInfo`／`ttlMs`／`cacheScope` |
+| `server/discover` 响应结构 | ✅ **已按官方结构对齐**（Q235，2026-09-29；4 处出入见下）。`discover_result()`（`app/core/mcp/server.py:96-112`）字段集＝`resultType`／`supportedVersions`／`capabilities`／`instructions`／`_meta.serverInfo`／`ttlMs`／`cacheScope` |
 | 工具 id 字符约束 | ✅ **符合**：官方为 **SHOULD** 级——长度 1–128、大小写敏感、仅允许 `A-Z a-z 0-9 _ - .`、不含空格/逗号/其他特殊字符、服务端内唯一（`server/tools#tool-names`）。本仓三个工具名 `loom_plan_*` 全为小写字母＋下划线，落在其允许集内、长度合规、服务端内唯一 |
 | Streamable HTTP 之外的传输 | ⬜ 不做（旧 HTTP+SSE 传输已被该修订废弃；本面只有一条 `POST /mcp`） |
 | prompts / resources / sampling | ⬜ 不做（无对应能力、capabilities 也不声明，Q236；§6） |
