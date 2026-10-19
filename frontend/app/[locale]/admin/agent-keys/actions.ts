@@ -1,10 +1,10 @@
 "use server";
 
 // Q167：入站 Agent Key 治理 Server Action——签发（secret 仅一次返回）与吊销。
-// 后端 Q88 在 service 层硬闸 platform_admin；本地缺身份/缺角色零请求，同 Q105。
+// 后端 Q88 在 service 层硬闸 platform_admin；本地仅缺身份零请求，角色以
+// 后端令牌身份为唯一权威（Q372 对齐，403 透出 detail）。
 // client 岛只允许调用本模块，禁直连 lib/api。
 import {
-  ADMIN_ROLE_LIST,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   issueAgentKey,
@@ -44,8 +44,6 @@ function failure(err: unknown): AgentKeyActionResult {
 
 function guardPlatform(): AgentKeyActionResult | null {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.includes("platform_admin"))
-    return { ok: false, status: "missing_role" };
   return null;
 }
 

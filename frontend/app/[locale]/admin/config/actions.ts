@@ -2,10 +2,10 @@
 
 // Q364（Q56 配置功能页）：运行配置写口 Server Action。当前仅 content.regen_limit
 // 一项（重生成上限，Q56 要求有配置页面）。配置中心读写均仅 platform_admin
-// （Q113，未随 Q345 放宽 operations），本地缺身份/缺角色零请求，同 Q167。
+// （Q113，未随 Q345 放宽 operations），本地仅缺身份零请求，角色以
+// 后端令牌身份为唯一权威（Q372 对齐，403 透出 detail）。
 // client 岛只允许调用本模块，禁直连 lib/api。
 import {
-  ADMIN_ROLE_LIST,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   updateConfigItem,
@@ -43,8 +43,6 @@ function failure(err: unknown): ConfigActionResult {
 
 function guardPlatformAdmin(): ConfigActionResult | null {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.some((role) => role === "platform_admin"))
-    return { ok: false, status: "missing_role" };
   return null;
 }
 

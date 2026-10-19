@@ -1,7 +1,6 @@
 "use server";
 
 import {
-  ADMIN_ROLE_LIST,
   adminTransitionIntake,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
@@ -32,10 +31,7 @@ export async function opsTransitionIntakeAction(
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
   const id = intakeId.trim();
   if (!id || !isOpsIntakeEvent(event)) return { ok: false, status: 422, detail: null };
-  // 状态机对全部 ops 白名单事件硬要求 operations 角色；角色不符不发请求。
-  if (!ADMIN_ROLE_LIST.includes("operations")) {
-    return { ok: false, status: "missing_role" };
-  }
+  // 角色由后端令牌身份唯一权威（Q372 对齐）：operations 不符时后端 403 透出 detail。
   try {
     await adminTransitionIntake(id, event);
     return { ok: true };
