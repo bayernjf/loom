@@ -303,7 +303,9 @@ def _lock_map(path: Path) -> dict[str, str]:
         if line.startswith("#") or "==" not in line:
             continue
         name, _, version = line.partition("==")
-        out[re.split(r"[\[<>=!~;]", name)[0].strip().lower().replace("_", "-")] = version.split("#")[0].strip()
+        out[re.split(r"[\[<>=!~;]", name)[0].strip().lower().replace("_", "-")] = (
+            version.split("#")[0].strip().rstrip("\\").rstrip()  # Q373: uv --generate-hashes 多行续行符
+        )
     return out
 
 
@@ -325,7 +327,7 @@ def test_every_python_job_installs_from_the_dev_lock() -> None:
 def test_image_installs_the_runtime_lock_and_nothing_else() -> None:
     """镜像走 runtime lock：既不能绕锁裸装，也不能把测试工装打进生产（Q222 曾踩）。"""
     docker = (REPO_ROOT / "backend" / "Dockerfile").read_text()
-    assert "pip install -r requirements.lock" in docker
+    assert "-r requirements.lock" in docker  # Q373: 增加 --index-url（tuna 镜像）后仍走 lock
     assert "pip install . --no-deps" in docker
     assert "RUN pip install .\n" not in docker, "裸 `pip install .` 会绕过 lock 重新解析依赖"
     runtime = _lock_map(REPO_ROOT / "backend" / "requirements.lock")
