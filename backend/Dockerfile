@@ -13,7 +13,11 @@ COPY runtime/ /runtime/
 # Runtime lock only (43 pins, zero dev tooling) + the package with --no-deps, so the
 # image carries exactly the dependency set CI tested (Q222: open bounds had drifted
 # 12 of 58 packages between the runner, the image and every rehearsal environment).
-RUN pip install -r requirements.lock && pip install . --no-deps
+# Q373 (2026-10-19): files.pythonhosted.org large wheels (botocore 15.8MB) get
+# corrupted through the Docker Desktop proxy on this machine (hash mismatch, content
+# differs per attempt; curl direct is fine). Lock now carries explicit hashes and pip
+# installs via the Tsinghua mirror whose wheels hash-identically to PyPI.
+RUN pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.lock && pip install . --no-deps
 
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
