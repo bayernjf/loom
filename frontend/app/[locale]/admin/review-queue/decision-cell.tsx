@@ -2,7 +2,7 @@
 
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { decideCandidateAction, type CandidateDecision, type DecideActionResult } from "./actions";
 import styles from "../admin.module.css";
 
@@ -23,7 +23,7 @@ export function DecisionCell({
   const tAdmin = useTranslations("admin");
   const tError = useTranslations("error");
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
   const [payloadText, setPayloadText] = useState(initialPayload);
   const [reason, setReason] = useState("");
@@ -37,9 +37,12 @@ export function DecisionCell({
     return tError(String(result.status));
   }
 
-  function run(decision: CandidateDecision, parsed?: unknown) {
+  // Q371：行内裁决改本地 pending + try/catch/finally，任何异常（含 Server Action
+  // 抛错/网络失败）都走错误回显，杜绝 startTransition(async) 下的静默失败（Q369 §6.2）。
+  async function run(decision: CandidateDecision, parsed?: unknown) {
     setMessage(null);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await decideCandidateAction(candidateId, decision, parsed, reason);
       if (result.ok) {
         setMessage({ kind: "ok", text: t("decideSuccess") });
@@ -48,7 +51,11 @@ export function DecisionCell({
       } else {
         setMessage({ kind: "err", text: failureText(result) });
       }
-    });
+    } catch {
+      setMessage({ kind: "err", text: tError("unknown") });
+    } finally {
+      setPending(false);
+    }
   }
 
   function confirmDirect() {

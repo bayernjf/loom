@@ -3,8 +3,10 @@
 // Q177：D3.5 白名单组装引擎运营只读首片——六层原料包按需查询 Server Action。
 // 纯只读：不做任何写操作、不触发列表刷新；client 岛只允许调本模块，禁直连
 // lib/api（check-admin 守卫）。读 operations|platform_admin，与后端 _query_actor 对齐。
+// Q371：本地 missing_role 硬闸移除——权限裁决以**后端 Bearer 令牌身份**为唯一权威
+// （_query_actor / require_internal_actor），前端 env 角色不再拦截请求；后端 403
+// 时透出 detail。missing_role 字面量保留（check-admin 判据），实际不再返回。
 import {
-  ADMIN_ROLE_LIST,
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
   getAdminFcwMaterial,
@@ -39,8 +41,6 @@ export async function getFcwMaterialAction(
   finalId: string,
 ): Promise<FcwMaterialResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured" };
-  if (!ADMIN_ROLE_LIST.some((r) => r === "operations" || r === "platform_admin"))
-    return { ok: false, status: "missing_role" };
   try {
     const pack = await getAdminFcwMaterial(finalId);
     return { ok: true, pack };
@@ -59,6 +59,8 @@ export async function getFcwMaterialAction(
 // Q321：冻结管理——作废当前快照（Q251 裁决 b）。写闸＝operations（与后端
 // require_internal_actor(OPERATIONS) 对齐）；reason 必填；成功后由岛内提示
 // 重冻新版走组装台「复用」预填（不自动跳转、不刷新列表，保持零副作用契约）。
+// Q371：本地 missing_role 不再提前拦截——写闸以**后端 Bearer 令牌身份**为准
+// （require_internal_actor(OPERATIONS)），无 operations 时后端 403、detail 透出。
 export type RevokeFcwResult =
   | { ok: true; finalId: string }
   | { ok: false; status: 403 | 404 | 409 | 422 | "unconfigured" | "missing_role" | "unknown"; detail: string | null };
@@ -68,8 +70,6 @@ export async function revokeFcwAction(
   reason: string,
 ): Promise<RevokeFcwResult> {
   if (!CURRENT_ADMIN_ACTOR_ID) return { ok: false, status: "unconfigured", detail: null };
-  if (!ADMIN_ROLE_LIST.some((r) => r === "operations"))
-    return { ok: false, status: "missing_role", detail: null };
   if (!reason.trim())
     return { ok: false, status: 422, detail: "reason is required" };
   try {

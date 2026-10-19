@@ -2,7 +2,7 @@
 
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type { BatchApproveActionResult } from "./actions";
 import { batchApproveAction } from "./actions";
 import styles from "../admin.module.css";
@@ -14,11 +14,13 @@ export function BatchBar() {
   const tAdmin = useTranslations("admin");
   const tError = useTranslations("error");
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  // Q371：批量审批同 decision-cell 口径——本地 pending + try/catch/finally，
+  // 异常必走错误回显（Q369 §6.2 静默失败同类根因一并消除）。
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const ids = Array.from(
       document.querySelectorAll<HTMLInputElement>("input[data-batch-candidate]:checked"),
@@ -28,7 +30,8 @@ export function BatchBar() {
       return;
     }
     setMessage(null);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result: BatchApproveActionResult = await batchApproveAction(ids, reason);
       if (result.ok) {
         setMessage({ kind: "ok", text: t("batchSuccess", { count: result.count }) });
@@ -47,7 +50,11 @@ export function BatchBar() {
             : tError("unknown"),
         });
       }
-    });
+    } catch {
+      setMessage({ kind: "err", text: tError("unknown") });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
