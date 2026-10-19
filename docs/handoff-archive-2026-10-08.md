@@ -888,4 +888,14 @@
 - **⑤ 刻意不做（守边界）**＝不动任何代码/迁移/测试/前端文件；**不 commit（等用户指示）**；历史台账一律不回改（Q343 先例）；覆盖率不复测（照 Q354 最近现测值引用）；不接 Q7 阈值 0.90（业务事实待权威确认，不臆造）；不接 §8.2 外部输入项与 §8.3 V2 项；不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）。
 - **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项 0**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）＋**Q7 阈值 0.90 待业务权威确认（不臆造）**。
 
+## 五十一、Q368 banner 原文（2026-10-19 Q373 批按「最近 5 条」上限滚出）
+
+**其前（2026-10-17）：Q368 批＝工程四片批：atom 管理前端＋Q35/硬闸#12 AI 新位入口＋段12 成片入库＋Q68 候选 Gate 待办（**代码＋测试＋迁移＋前端＋文档**；后端全量复跑以最终复验为准〔目标 **1453 passed＋11 skipped／收集 1464**，对照 Q367 基线 1437＋11；本批净 +16＝test_publish_slot_gate 9＋video attach 5＋c1/fieldpool 待办 2〕、ruff 全仓净、Alembic 头 `0064_field_candidate_gate_sla_seed`／迁移文件 **64**〔+1 纯数据种子〕、`GATED` 实测 **63**（+3，均 OPS）；前端 tsc＋七检查器＋`next build` exit 0、侧栏 **20**、ts/tsx **122**；02 C1.310）**——负责人「那你搞」点工四片（前两轮清单已获拍板），按顺序全部落地。
+- **① 任务1＝atom 管理前端（Q360 留切片）**＝`lib/api.ts` 8 函数＋`admin/atoms/` 三件套（RSC page＋"use server" actions＋"use client" island：行内 approve/reject/revive/override/AI 补证/簇入口）＋侧栏 19→**20**＋zh-CN 48 键＋check-admin Q368 判据块；验证＝typecheck＋七检查器＋`next build` exit 0。
+- **② 任务2＝Q35+硬闸#12：AI 新位入口**＝`SlotAiCandidateItem`（**extra=forbid** 防 AI 编分）＋`create_ai_slot_candidate`（四维强制 0.0、gate=pending_gate、score_source=ai）＋`approve_slot_candidate`（仅 pending 可批否则 409、转 approved/manual_eval）；普通 upsert `exclude={"gate"}`；`list_slots` 增 gate 过滤；GATED +2（平台系）；测试 9 例全绿。
+- **③ 任务3＝段12 真视频成片入库（Q354 下一片）**＝`attach_video_to_content`（completed＋url 非空才可入否则 409、幂等、成片 url 回填 `content_products.body` 替换 synthetic video_ref 占位、审计 `video_task.attached_to_content`）；`POST .../attach-to-content` 挂 operations 硬闸；GATED +1；测试 5 例全绿。
+- **④ 任务4＝Q68：字段候选 Gate 待办**＝c7 Layer4 与 wf02_dim_source 新建候选即开 `OpsTodo(field_candidate_gate, g2_field_candidate, dictionary_admin)`，同名复用不重复开；SLA 键 `fieldpool.candidate_gate_sla_days`（seeds＋迁移 0064 播种）；测试 2 例全绿。
+- **⑤ 合龙**＝docs/25 Q35/Q68/#12 三行 🟡→✅＋§8.1 两条销账＋§0 计数 ✅77→80／🟡14→11（⬜5 不变、V1 主链 40/1 不变）＋§2 表四行刷正＋头部基线刷 Q368；docs/02 本条 C1.310＋续编索引补登；CHANGELOG [Unreleased] 补条；docs/16 §4 Q368 基线行；docs/23 §0.1/§2 读数（侧栏 20、ts/tsx 122、GATED 63）；docs/24 头部 C1.309→C1.310；AGENTS 权威行前移 Q368；docs/08 §2.2 就地单行前移；docs/README 地图 docs/02 行前移 Q368/C1.310。
+- **⑥ 刻意不做（守边界）**＝**不 commit 不 push（等用户指示）**；不动 Q7 条目状态（阈值 0.90 待业务权威确认，不臆造）；不接 §8.2 外部输入族与 §8.3 V2 族；不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）；前端平台适配台不加 AI 候选入口（后端批聚焦，前端留后续切片）；段12 成片复检规格未给【待补】，attach 不改正文语义不触发复检。
+- **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项 0**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）＋**Q7 阈值 0.90 待业务权威确认（不臆造）**。
 
