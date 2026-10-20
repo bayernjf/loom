@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q375（2026-10-20）Q7 阈值拍板销账批**：负责人「按你推荐来」拍板采纳 Q372 建议档——medical 0.90（PRD 原文唯一硬标）保持、food/maternal 维持 0.85（原文未单独标 0.90、不算错）、运营经 Q7 CRUD 按需调（改即审计、默认档不可删）；docs/25 §3.1 Q7 行 🟡→✅、§0 计数 ✅80→81／🟡11→10（⬜5 不变）、**V1 主链 40/1→41/0 全绿**。纯文档批，零代码零迁移零测试变化；02 C1.317（另补齐 Q372–Q374 三笔信息保全续编索引欠账）。
+
 - **Q374（2026-10-20）第三轮完整 E2E 回归批**：运行栈（Q373 重建形态）全量回归——20 管理路由全遍历渲染正常（含 exports）、Q371 两处修复点复验（审核台行内裁决/批量通过 409 → 错误回显「操作冲突，请刷新后重试」持续生效）、核心页抽查（staff-keys/config/effects/intakes）内容正确；**未发现新缺陷**。纯文档批＋环境验证，零代码零迁移零测试变化；docs/26 §6.7 记录，02 C1.316。
 
 - **Q373（2026-10-19）构建环境修复批**：`requirements.lock` 加显式 hash（uv `--generate-hashes`，43 包版本逐字不变）＋`backend/Dockerfile` pip 改走清华镜像源（Docker Desktop 代理对 files.pythonhosted.org 大文件传输损坏的绕行，hash 校验由 lock 兜底）；契约测试 `test_ci_workflow_contract.py` 两处同步；backend/frontend 镜像重建成功、栈 Healthy、真镜像 API 复验（healthz 200、openapi 219 paths、关键端点 422 非 404）；全量 1453 passed＋11 skipped。同时修复 `ci.yml` 两个 Q372 step 的 YAML 解析失败（`5eda4c0`）。
