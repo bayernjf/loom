@@ -899,3 +899,16 @@
 - **⑥ 刻意不做（守边界）**＝**不 commit 不 push（等用户指示）**；不动 Q7 条目状态（阈值 0.90 待业务权威确认，不臆造）；不接 §8.2 外部输入族与 §8.3 V2 族；不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）；前端平台适配台不加 AI 候选入口（后端批聚焦，前端留后续切片）；段12 成片复检规格未给【待补】，attach 不改正文语义不触发复检。
 - **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项 0**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）＋**Q7 阈值 0.90 待业务权威确认（不臆造）**。
 
+## 五十二、Q369 banner 原文（2026-10-20 Q374 批按「最近 5 条」上限滚出）
+
+**其前（2026-10-17）：Q369 批＝浏览器 E2E 验证批（**纯文档批＋环境验证，零代码零迁移零测试变化**；docs/26《新用户E2E验证清单》落盘＋§6 首轮实测结果；本机 compose 重建到 Q368 形态后门控＋双令牌登录，20+ 管理页与核心写口实测；基线照 Q368 时点引用〔目标 **1453 passed＋11 skipped／收集 1464**、ruff 全仓净、头 `0064_field_candidate_gate_sla_seed`／75 表·821 列·迁移文件 **64**、`GATED` **63**、侧栏 **20**、ts/tsx **122**〕，本批提交前全量复跑确认；02 C1.311）**——负责人「开搞」按 docs/26 执行首轮浏览器 E2E。
+- **① 环境修复**＝宿主 8000 被无关项目占用（勿动）；重建 backend/frontend 镜像至 Q368 形态（openapi 205→**219 paths**、迁移头 `0064_field_candidate_gate_sla_seed` 就位、侧栏补原子管理）——E2E 前必修。
+- **② 身份引导（§0.4，Q178 鸡生蛋完整走通）**＝门控关态自报 platform_admin 签首令牌 `e2e-verifier` → `infra/.env` 追加 `LOOM_STAFF_AUTH_ENABLED=true` 重启 → 浏览器令牌登录成功；再签 `e2e-ops`（platform_admin+operations）验证 RBAC 分层；`staff_api_key.issue` 审计两条落库（declared/staff_token）。
+- **③ 实测通过（✅ 20+ 管理页全过）**＝intakes 14/15 态／review-queue 五型统一审核台／atoms 四操作＋AI 补证＋簇／fcw 白名单卡片／assemble（预检七项全过＋签发解锁）／dictionaries／content／platform-adaptation／effects／change-ledger（无回滚按钮）／config／inspiration-entries／sla-todos／review-workload／tenants／staff-keys／agent-keys／token-cost／exports＋workbench 客户读口（无登录）均 200 级。
+- **④ 核心闭环（§1.11）实测**＝预填六路入参自动回填→预检七项（g1–g7）全过（临时评分 76.6）→签发解锁；**E1.1 幂等唯一出口**＝同六层组合（pws+pwc+platform+slot+country）已有行一律 409 `FCW already issued`（复用 537/同组合 43d 均命中）；**Guard 材料拦截**＝无 active 三包组合 409 `materials missing`；**作废写口**＝API `revoke`（Bearer e2e-ops）200＋快照 revoked＋审计；**审核状态机保护**＝c1_recognition 候选 409（intake 须 ai_recognizing）；**配置热更**＝`content.regen_limit` 3→4→3（版本 1→3、updated_by 留痕）。
+- **⑤ 发现的边界（如实记录）**＝前端本地角色闸用自报 env（`LOOM_ADMIN_ROLES` 未含 operations）拦截作废/预检按钮、后端 Bearer 令牌身份实际可写（UI 本地闸与 API 令牌身份两套口径）；审核台行内"通过"点击前端静默失败（后端 409 未展示）＝UI 改进点；Q251 语义确认＝作废只作废**快照**、原行不可变（exit_guard）、同组合重发须组合变化（裁决 b/c）。
+- **⑥ 环境副作用（待负责人拍板）**＝`infra/.env` 已追加 `LOOM_STAFF_AUTH_ENABLED=true`（保留则管理端须真令牌登录，回滚则删行重启 backend）；FCW 快照 `537a2f28` 已作废（reason「E2E 闭环：作废后重冻再发证」，测试数据 t-e2e，审计留痕）；backend/frontend 镜像已重建至 Q368 形态（建议保留）；两条 E2E 令牌（e2e-verifier/e2e-ops）已签发（可吊销）。
+- **⑦ 合龙**＝docs/26 落盘（§0–§5 清单＋附录 A 侧栏 20 路由）＋登记 docs/README 文档地图/handoff 项目文档节/README 文档入口表三处＋§6 首轮实测结果（✅/⛔/⬜ 三档）；docs/02 本条 C1.311＋续编索引补登；CHANGELOG [Unreleased] 补条；handoff 顶部 Q369 banner（Q368 转「其前」、**Q364 按「最近 5 条」上限逐字滚入归档「四十七、」节**）；AGENTS 权威行前移 Q369；docs/08 §2.2 就地单行前移（不增行）；docs/README 地图 docs/02 行前移 Q369/C1.311；docs/16 §4 Q369 基线行；docs/23 规模行 Q369 复测块；docs/24 头部 C1.310→C1.311；docs/25 头部基线加 Q369 句（验收计数不动）。
+- **⑧ 刻意不做（守边界）**＝不接 §8.2 外部输入族与 §8.3 V2 族／不动 Q7 条目状态（阈值 0.90 待业务权威确认，不臆造）／不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）／门控是否保留待负责人拍板。
+- **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项 0**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）＋Q7 阈值 0.90 待业务权威确认＋**门控 `LOOM_STAFF_AUTH_ENABLED` 保留/回滚拍板（Q369 ⑥）**。
+
