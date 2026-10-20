@@ -1,6 +1,16 @@
 # Handoff — Loom
 
-> **最新（2026-10-19）：Q373 批＝构建环境修复批（**代码＋测试＋文档，零后端逻辑零迁移零前端**；基线全量复跑实测〔**1453 passed＋11 skipped／收集 1464**（与 Q372 基线逐位一致）、ruff 全仓净、Alembic 头 `0064_field_candidate_gate_sla_seed`／75 表·821 列·迁移文件 64、`GATED` 63、侧栏 20、ts/tsx 122〕；02 C1.315）**——「那你继续」收尾推进中修复（2026-10-19）。
+> **最新（2026-10-20）：Q374 批＝第三轮完整 E2E 回归批（**纯文档批＋环境验证，零代码零迁移零测试变化**；运行栈＝Q373 重建形态；基线照 Q373 时点引用〔**1453 passed＋11 skipped／收集 1464**、ruff 全仓净、Alembic 头 `0064_field_candidate_gate_sla_seed`／75 表·821 列·迁移文件 64、`GATED` 63、侧栏 20、ts/tsx 122〕；02 C1.316）**——负责人「那你搞」授权推进，第三轮完整 E2E 回归（2026-10-20）。
+> - **① 环境自检**＝Docker Desktop 重启后 daemon 就绪（`open -a Docker` 约 10s）；compose 全容器 Up、backend/frontend **healthy**；容器内 API 探测＝healthz **200**／openapi **219 paths**／**100 条 admin paths 全在场**（参数化路径形态确认：`config/{key}`、`content/{content_id}` 等）；验证身份＝e2e-ops 浏览器会话（httpOnly cookie 仍有效，staff-keys 页显示最近使用 2026-10-20 21:25＝本轮操作身份）。
+> - **② 20 路由全遍历**＝intakes／review-workload／review-queue／sla-todos／content／atoms／fcw／fcw/assemble／fcw/review／tenants／agent-keys／staff-keys／dictionaries／inspiration-entries／config／platform-adaptation／change-ledger／token-cost／effects／**exports**——**全部渲染正常**（无 ErrorState、无跳登录）；附录 A 20 href 与 `admin-sidebar.tsx` 实测逐字一致。
+> - **③ Q371 修复点复验（两处全过）**＝审核台 c1_recognition 候选（4223086a，WF-01，95%）行内「通过」→ 错误回显「操作冲突，请刷新后重试」（409 映射）；勾选＋「批量通过」→ 同样错误回显——decision-cell 与 batch-bar 两处修复持续生效，候选仍 pending_review 未误改。
+> - **④ 核心页抽查（内容全部正确）**＝staff-keys（令牌列表 7 枚＋「显示已吊销」toggle＋五角色签发表单）、config（`content.regen_limit`=3／版本 3／更新人 e2e-ops 只读展示）、effects（孤儿队列空态＋「指标缺席显 —，绝不补 0」＋时序查询表单）、intakes（15 态筛选＋录入单 2 条）。
+> - **⑤ 结论**＝Q373 重建形态下前端全量可访问、Q371 修复点持续生效、核心运营页内容正确；**未发现新缺陷**。已知限制不变＝smoke 脚本完整五核对需 PAT 明文（未落盘）。
+> - **⑥ 合龙**＝docs/26 新增 §6.7；docs/02 C1.316＋续编索引补登；CHANGELOG 补条；handoff Q374 banner（Q373 转「其前」、**Q369 按「最近 5 条」上限逐字滚入归档「五十二、」节**）；AGENTS 权威行前移 Q374；docs/08 §2.2 就地单行前移；docs/README 地图 docs/02 行前移 Q374/C1.316；docs/16 §4 Q374 基线行；docs/24 头部 C1.315→C1.316；docs/25 头部基线加 Q374 句（验收计数不动：✅80／🟡11／⬜5）。
+> - **⑦ 刻意不做（守边界）**＝不动任何代码/迁移/测试/前端文件；全量基线不复跑（纯文档批）；不接 Q7 阈值 0.90（待业务权威确认，不臆造）；不接 §8.2 外部输入族与 §8.3 V2 族；不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）。
+> - **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项 1＝Q7 阈值 0.90 建议档（待负责人拍板）＋E2E 三枚令牌吊销时机（上线前执行）**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）。
+>
+> **其前（2026-10-19）：Q373 批＝构建环境修复批（**代码＋测试＋文档，零后端逻辑零迁移零前端**；基线全量复跑实测〔**1453 passed＋11 skipped／收集 1464**（与 Q372 基线逐位一致）、ruff 全仓净、Alembic 头 `0064_field_candidate_gate_sla_seed`／75 表·821 列·迁移文件 64、`GATED` 63、侧栏 20、ts/tsx 122〕；02 C1.315）**——「那你继续」收尾推进中修复（2026-10-19）。
 > - **① CI YAML 修复**＝Q372 push 后 CI 首跑 workflow file issue（两个 Q372 step 的 `name:` 含 `Q372: ` 被 YAML 解析为嵌套 mapping）→ `5eda4c0` 加引号 → CI 六 job 全绿。
 > - **② 镜像重建受阻→环境根因**＝docs/26 §6.6 运行栈滞后（旧镜像 openapi 136 paths）要求重建；`pip install` 连续三次 hash 失配（botocore 1.43.93，Got 每次不同）——Docker Desktop 代理（`http.docker.internal:3128`）对大文件传输损坏；curl 直连 hash 与官方/lock 一致；`--proxy ""` 无效（代理注入在 Docker 网络层）。
 > - **③ 修复**＝`requirements.lock` 用 uv `--generate-hashes` 重新生成（43 包版本逐字不变、附全 `--hash` 行）＋`backend/Dockerfile` 改 `pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple`（镜像 wheel 与 PyPI 官方 hash 逐字节一致，hash 校验由 lock 兜底）。
@@ -36,16 +46,7 @@
 > - **③ 刻意不做（守边界）**＝不动任何代码/迁移/测试/前端文件；全量基线不复跑（纯文档批）；不接 Q7 阈值 0.90（待业务权威确认，不臆造）；不接 §8.2 外部输入族与 §8.3 V2 族；不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）。
 > - **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项 0（Q369 ⑥ 三项副作用均已拍板销账）**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）＋Q7 阈值 0.90 待业务权威确认。
 >
-> **其前（2026-10-17）：Q369 批＝浏览器 E2E 验证批（**纯文档批＋环境验证，零代码零迁移零测试变化**；docs/26《新用户E2E验证清单》落盘＋§6 首轮实测结果；本机 compose 重建到 Q368 形态后门控＋双令牌登录，20+ 管理页与核心写口实测；基线照 Q368 时点引用〔目标 **1453 passed＋11 skipped／收集 1464**、ruff 全仓净、头 `0064_field_candidate_gate_sla_seed`／75 表·821 列·迁移文件 **64**、`GATED` **63**、侧栏 **20**、ts/tsx **122**〕，本批提交前全量复跑确认；02 C1.311）**——负责人「开搞」按 docs/26 执行首轮浏览器 E2E。
-> - **① 环境修复**＝宿主 8000 被无关项目占用（勿动）；重建 backend/frontend 镜像至 Q368 形态（openapi 205→**219 paths**、迁移头 `0064_field_candidate_gate_sla_seed` 就位、侧栏补原子管理）——E2E 前必修。
-> - **② 身份引导（§0.4，Q178 鸡生蛋完整走通）**＝门控关态自报 platform_admin 签首令牌 `e2e-verifier` → `infra/.env` 追加 `LOOM_STAFF_AUTH_ENABLED=true` 重启 → 浏览器令牌登录成功；再签 `e2e-ops`（platform_admin+operations）验证 RBAC 分层；`staff_api_key.issue` 审计两条落库（declared/staff_token）。
-> - **③ 实测通过（✅ 20+ 管理页全过）**＝intakes 14/15 态／review-queue 五型统一审核台／atoms 四操作＋AI 补证＋簇／fcw 白名单卡片／assemble（预检七项全过＋签发解锁）／dictionaries／content／platform-adaptation／effects／change-ledger（无回滚按钮）／config／inspiration-entries／sla-todos／review-workload／tenants／staff-keys／agent-keys／token-cost／exports＋workbench 客户读口（无登录）均 200 级。
-> - **④ 核心闭环（§1.11）实测**＝预填六路入参自动回填→预检七项（g1–g7）全过（临时评分 76.6）→签发解锁；**E1.1 幂等唯一出口**＝同六层组合（pws+pwc+platform+slot+country）已有行一律 409 `FCW already issued`（复用 537/同组合 43d 均命中）；**Guard 材料拦截**＝无 active 三包组合 409 `materials missing`；**作废写口**＝API `revoke`（Bearer e2e-ops）200＋快照 revoked＋审计；**审核状态机保护**＝c1_recognition 候选 409（intake 须 ai_recognizing）；**配置热更**＝`content.regen_limit` 3→4→3（版本 1→3、updated_by 留痕）。
-> - **⑤ 发现的边界（如实记录）**＝前端本地角色闸用自报 env（`LOOM_ADMIN_ROLES` 未含 operations）拦截作废/预检按钮、后端 Bearer 令牌身份实际可写（UI 本地闸与 API 令牌身份两套口径）；审核台行内"通过"点击前端静默失败（后端 409 未展示）＝UI 改进点；Q251 语义确认＝作废只作废**快照**、原行不可变（exit_guard）、同组合重发须组合变化（裁决 b/c）。
-> - **⑥ 环境副作用（待负责人拍板）**＝`infra/.env` 已追加 `LOOM_STAFF_AUTH_ENABLED=true`（保留则管理端须真令牌登录，回滚则删行重启 backend）；FCW 快照 `537a2f28` 已作废（reason「E2E 闭环：作废后重冻再发证」，测试数据 t-e2e，审计留痕）；backend/frontend 镜像已重建至 Q368 形态（建议保留）；两条 E2E 令牌（e2e-verifier/e2e-ops）已签发（可吊销）。
-> - **⑦ 合龙**＝docs/26 落盘（§0–§5 清单＋附录 A 侧栏 20 路由）＋登记 docs/README 文档地图/handoff 项目文档节/README 文档入口表三处＋§6 首轮实测结果（✅/⛔/⬜ 三档）；docs/02 本条 C1.311＋续编索引补登；CHANGELOG [Unreleased] 补条；handoff 顶部 Q369 banner（Q368 转「其前」、**Q364 按「最近 5 条」上限逐字滚入归档「四十七、」节**）；AGENTS 权威行前移 Q369；docs/08 §2.2 就地单行前移（不增行）；docs/README 地图 docs/02 行前移 Q369/C1.311；docs/16 §4 Q369 基线行；docs/23 规模行 Q369 复测块；docs/24 头部 C1.310→C1.311；docs/25 头部基线加 Q369 句（验收计数不动）。
-> - **⑧ 刻意不做（守边界）**＝不接 §8.2 外部输入族与 §8.3 V2 族／不动 Q7 条目状态（阈值 0.90 待业务权威确认，不臆造）／不动存量 DIM-MERGE 模板（Q358 ⑤ 挂账仍在）／门控是否保留待负责人拍板。
-> - **【复判】**① 达标／② 达标（Q295 后保持）／③ **未达标**（现网部署＋真 ACME 未证）。**活跃待裁项 0**；仍等外部输入＝供应商侧视频队列容量与首次成功样本＋段12 转写／成片复检规格＋复检名单＋agency 价格＋支付通道＋现网部署＋V2 三管辖规则文本＋fit_score 真自学习余下三份业务规则与门控生产默认值（docs/19 清单二第 16 项）＋存量库 DIM-MERGE 提示词重发（运营复核，Q358 ⑤）＋Q7 阈值 0.90 待业务权威确认＋**门控 `LOOM_STAFF_AUTH_ENABLED` 保留/回滚拍板（Q369 ⑥）**。
+> （Q369 已按「最近 5 条」上限于 2026-10-20 **Q374 批**逐字滚入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)「五十二、」节；搬入后剥离行首 `> ` 逐行比对，**10 行零差异**，删除前已验归档内有该节。）
 >
 
 > （Q368 已按「最近 5 条」上限于 2026-10-19 **Q373 批**逐字滚入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)「五十一、」节；搬入后剥离行首 `> ` 逐行比对，**8 行零差异**，删除前已验归档内有该节。）
