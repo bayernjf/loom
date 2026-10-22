@@ -29,6 +29,7 @@ from app.core.pool_options.router import router as pool_options_router
 from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
+from app.core.content_base.router import router as content_base_router
 from app.core.skill7.router import router as skill7_router
 from app.core.sla.router import router as sla_router
 from app.core.sla.runner import run_jobs
@@ -185,6 +186,7 @@ app.include_router(dashboards_router)
 app.include_router(change_ledger_router)
 app.include_router(model_registry_router)
 app.include_router(skill7_router)
+app.include_router(content_base_router)
 app.include_router(workbench_router)
 app.include_router(sla_router)
 app.include_router(restock_router)
