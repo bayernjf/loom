@@ -7,6 +7,7 @@ confirmed/modified/rejected。所有写操作 append_audit；不本地兜底产�
 
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any, cast
 
@@ -14,7 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
-from app.core.content_base import assembly
+from app.core.content_base import assembly, producers
+from app.core.content_base.producers import ContentProducer
 from app.core.content_base.errors import (
     ContentCandidateNotFound,
     ContentCandidateNotReviewable,
@@ -41,11 +43,19 @@ class CandidateNotReviewable(ContentCandidateNotReviewable):
     """候选非 pending_review（路由映射 409）。"""
 
 
+def _default_producer() -> ContentProducer:
+    """显式开关 LOOM_CONTENT_REAL_LLM=1 才走真实模型，否则确定性产出。"""
+    if os.environ.get("LOOM_CONTENT_REAL_LLM") == "1":
+        return producers.LLMContentProducer()
+    return producers.DeterministicProducer()
+
+
 async def submit_candidate(
     session: AsyncSession,
     request: ContentRequest,
     *,
     actor_id: str | None = None,
+    producer: ContentProducer | None = None,
 ) -> ContentCandidateRecord:
     if request.idempotency_key is not None:
         existing = await session.scalar(
@@ -58,13 +68,15 @@ async def submit_candidate(
 
     assembly.check_banned(request)
 
+    produced = await (producer or _default_producer()).produce(request)
+
     record = ContentCandidateRecord(
         candidate_id=str(uuid.uuid4()),
         product_id=request.product_id,
         channel=request.channel,
         content_type=request.content_type,
-        body=assembly.assemble_body(request),
-        evidence_refs=["content-base:deterministic-assembly"],
+        body=produced.body,
+        evidence_refs=produced.evidence_refs,
         status="pending_review",
         idempotency_key=request.idempotency_key,
     )

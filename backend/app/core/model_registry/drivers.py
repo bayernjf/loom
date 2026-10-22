@@ -187,6 +187,8 @@ class OpenAICompatibleDriver:
 _DRIVERS: dict = {
     "synthetic": SyntheticDriver(),
     "openai": OpenAICompatibleDriver(),
+    # agnes 为 OpenAI 兼容供应商（base_url 走 LOOM_LLM_BASE_URL_AGNES）。
+    "agnes": OpenAICompatibleDriver(),
 }
 
 
