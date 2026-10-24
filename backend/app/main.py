@@ -13,6 +13,7 @@ from app.core.compliance_wordlist.router import router as wordlist_router
 from app.core.config_center.broadcast import ConfigBroadcastSubscriber
 from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
+from app.core.content_base.router import router as content_base_router
 from app.core.dashboards.router import router as dashboards_router
 from app.core.db import SessionLocal, settings
 from app.core.downgrade_actions.router import router as downgrade_actions_router
@@ -185,6 +186,7 @@ app.include_router(dashboards_router)
 app.include_router(change_ledger_router)
 app.include_router(model_registry_router)
 app.include_router(skill7_router)
+app.include_router(content_base_router)
 app.include_router(workbench_router)
 app.include_router(sla_router)
 app.include_router(restock_router)

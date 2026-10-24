@@ -20,6 +20,9 @@ from app.core import models as _core_models  # noqa: F401  (register audit_logs)
 from app.core.api_keys import models as _api_key_models  # noqa: F401  (Q88 agent_api_keys)
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
 from app.core.config_center import models as _config_models  # noqa: F401
+from app.core.content_base import (
+    models as _content_base_models,  # noqa: F401  (M4 content_candidates)
+)
 from app.core.db import Base
 from app.core.downgrade_actions import models as _downgrade_models  # noqa: F401  (Q306)
 from app.core.effects import models as _effects_models  # noqa: F401  (Q126/Q127 时序与认领)

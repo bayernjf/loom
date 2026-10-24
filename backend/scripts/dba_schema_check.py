@@ -33,11 +33,11 @@ Exit 0 = no drift, 1 = drift (each difference printed), 2 = bad invocation.
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import importlib
 import os
 import pkgutil
-import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -72,12 +72,27 @@ def import_model_modules() -> list[str]:
 
 
 def env_py_registered() -> set[str]:
-    """Model modules that alembic/env.py imports - i.e. what migrations can see."""
+    """Model modules that alembic/env.py imports - i.e. what migrations can see.
+
+    Parsed with ast so the check is indifferent to whether the formatter wraps a
+    long ``from ... import models as ...`` statement across parenthesised lines.
+    """
     src = (BACKEND / "alembic" / "env.py").read_text(encoding="utf-8")
-    pkgs = re.findall(r"^from\s+(app\.[\w.]+)\s+import\s+models\b", src, re.MULTILINE)
-    mods = re.findall(r"^import\s+(app\.[\w.]*\.models)\b", src, re.MULTILINE)
-    # env.py imports the *package*; the walk yields module names - normalise first.
-    return {f"{m}.models" for m in pkgs} | set(mods)
+    tree = ast.parse(src)
+    registered: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if (
+                node.module
+                and node.module.startswith("app.")
+                and any(alias.name == "models" for alias in node.names)
+            ):
+                registered.add(f"{node.module}.models")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("app.") and alias.name.endswith(".models"):
+                    registered.add(alias.name)
+    return registered
 
 
 def classify(sql_type: str) -> str:
