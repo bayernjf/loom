@@ -13,6 +13,7 @@ from app.core.compliance_wordlist.router import router as wordlist_router
 from app.core.config_center.broadcast import ConfigBroadcastSubscriber
 from app.core.config_center.cache import config_cache
 from app.core.config_center.router import router as config_router
+from app.core.content_base.router import router as content_base_router
 from app.core.dashboards.router import router as dashboards_router
 from app.core.db import SessionLocal, settings
 from app.core.downgrade_actions.router import router as downgrade_actions_router
@@ -29,7 +30,6 @@ from app.core.pool_options.router import router as pool_options_router
 from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
-from app.core.content_base.router import router as content_base_router
 from app.core.skill7.router import router as skill7_router
 from app.core.sla.router import router as sla_router
 from app.core.sla.runner import run_jobs

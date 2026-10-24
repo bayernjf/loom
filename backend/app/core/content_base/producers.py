@@ -40,11 +40,8 @@ class DeterministicProducer:
 
 def _build_prompt(request: ContentRequest) -> str:
     c = request.constraints
-    lines = [
-        f"你是电商内容创作助手，为发布渠道 {request.channel} 生成 "
-        f"content_type={request.content_type} 的电商内容。",
-        f"产品信息（JSON）：{json.dumps(request.inputs, ensure_ascii=False)}",
-    ]
+    intro = f"你是电商内容创作助手，为发布渠道 {request.channel} 生成 content_type={request.content_type} 的电商内容。"
+    lines = [intro, f"产品信息（JSON）：{json.dumps(request.inputs, ensure_ascii=False)}"]
     if c.brand:
         lines.append(f"品牌词（保持口径）：{', '.join(c.brand)}")
     if c.wordlist:

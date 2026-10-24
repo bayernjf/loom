@@ -16,13 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import append_audit
 from app.core.content_base import assembly, producers
-from app.core.content_base.producers import ContentProducer
 from app.core.content_base.errors import (
     ContentCandidateNotFound,
     ContentCandidateNotReviewable,
     ContentRequestInvalid,
 )
 from app.core.content_base.models import ContentCandidateRecord
+from app.core.content_base.producers import ContentProducer
 from app.core.content_base.types import (
     CandidateStatus,
     ContentCandidate,
