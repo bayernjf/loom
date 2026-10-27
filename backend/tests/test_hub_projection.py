@@ -14,7 +14,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_session
-from app.core.model_registry import hub
+from app.core.model_registry import gateway, hub
+from app.core.model_registry.drivers import GenerationResult
 
 ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -202,6 +203,9 @@ def test_start_stop_refresh(_env_hub):
 
 @pytest_asyncio.fixture
 async def session_factory():
+    # Import the full app first so every model is registered on Base.metadata.
+    from app.main import app
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -210,8 +214,6 @@ async def session_factory():
     async def get_test_session() -> AsyncGenerator[AsyncSession, None]:
         async with factory() as session:
             yield session
-
-    from app.main import app
 
     app.dependency_overrides[get_session] = get_test_session
     yield factory
@@ -292,3 +294,84 @@ async def test_write_endpoints_kept_when_unconfigured(session_factory):
         }
         r = await ac.post("/api/admin/ai-models", json=payload)
         assert r.status_code == 422
+
+
+# ---------------- 双读对比：hub 路径真正消费投影（W6-2） ----------------
+
+
+async def _fake_render(*_a, **_k):
+    return "prompt"
+
+
+class _CapturingDriver:
+    def __init__(self):
+        self.captured: dict = {}
+
+    async def generate(self, **kwargs):
+        self.captured.update(kwargs)
+        return GenerationResult(text='{"ok": 1}', input_tokens=5, output_tokens=3)
+
+
+async def test_gateway_invoke_uses_hub(_env_hub, session_factory, monkeypatch):
+    hub.sync_hub_projection(_fake_client())
+    capturing = _CapturingDriver()
+    monkeypatch.setattr(gateway.drivers, "driver_for", lambda _p: capturing)
+    monkeypatch.setattr(
+        gateway, "_render_current_prompt", _fake_render
+    )
+    async with session_factory() as session:
+        invocation = await gateway.invoke(session, "CAT-RECOG", {})
+    # 双读对比：hub 投影的 model/api_key/base_url 被真正使用。
+    assert capturing.captured["model_code"] == "ark-code-latest"
+    assert capturing.captured["api_key"] == "PLACEHOLDER_KEY_NOT_REAL_0001"
+    assert (
+        capturing.captured["base_url"]
+        == "https://ark.cn-beijing.volces.com/api/plan/v3"
+    )
+    assert invocation.model_code == "ark-code-latest"
+
+
+async def test_gateway_invoke_falls_back_without_hub(session_factory, monkeypatch):
+    """未配置 hub：走旧 ai_scene_routes（这里用 monkeypatch 验证 driver 选择）。"""
+    # 旧路径需要 route+model+key；用 _resolve_model 缺路由直接报 ModelConfigError。
+    async with session_factory() as session:
+        with pytest.raises(gateway.ModelConfigError):
+            await gateway.invoke(session, "CAT-RECOG", {})
+
+
+async def test_scene_alias_override(_env_hub, session_factory, monkeypatch):
+    hub.sync_hub_projection(_fake_client())
+    # 把 CAT-RECOG 显式映射到 score alias。
+    monkeypatch.setitem(hub.SCENE_ALIAS, "CAT-RECOG", "score")
+    capturing = _CapturingDriver()
+    monkeypatch.setattr(gateway.drivers, "driver_for", lambda _p: capturing)
+    monkeypatch.setattr(
+        gateway, "_render_current_prompt", _fake_render
+    )
+    async with session_factory() as session:
+        await gateway.invoke(session, "CAT-RECOG", {})
+    assert capturing.captured["model_code"] == "doubao-seed-1-6-250615"
+
+
+async def test_producer_uses_hub(_env_hub, monkeypatch):
+    from app.core.content_base.producers import LLMContentProducer
+    from app.core.content_base.types import ContentConstraints, ContentRequest
+
+    hub.sync_hub_projection(_fake_client())
+    capturing = _CapturingDriver()
+    monkeypatch.setattr(
+        "app.core.content_base.producers.drivers.OpenAICompatibleDriver",
+        lambda: capturing,
+    )
+    request = ContentRequest(
+        channel="web",
+        content_type="article",
+        product_id="p1",
+        inputs={},
+        constraints=ContentConstraints(),
+    )
+    producer = LLMContentProducer()
+    produced = await producer.produce(request)
+    assert capturing.captured["model_code"] == "ark-code-latest"
+    assert capturing.captured["api_key"] == "PLACEHOLDER_KEY_NOT_REAL_0001"
+    assert produced.evidence_refs == ["llm:ark-code-latest"]
