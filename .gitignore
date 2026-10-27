@@ -33,6 +33,7 @@ coverage.json
 .env
 .env.*
 !.env.example
+!.env.shell.example
 
 # Tooling
 .codegraph/
