@@ -73,6 +73,21 @@ async def lifespan(app: FastAPI):
             await config_cache.reload(session)
     except Exception:
         logger.warning("config cache bootstrap failed; falling back to seed defaults", exc_info=True)
+    # W6-1：启动时同步一次 hub 投影（失败不阻断；client 0600 缓存兜底）。
+    try:
+        from app.core.model_registry import hub as model_hub
+
+        if model_hub.is_hub_configured():
+            result = model_hub.sync_hub_projection()
+            if result is not None:
+                logger.info(
+                    "model-hub projection synced: revision=%s models=%s",
+                    result["revision"],
+                    result["pulled"],
+                )
+            model_hub.start_hub_refresh()
+    except Exception:
+        logger.warning("model-hub projection bootstrap failed", exc_info=True)
     if settings.scheduler_enabled:
         _scheduler = SweepScheduler(SessionLocal, run_jobs, settings.sweep_interval_seconds)
         await _scheduler.start()
@@ -128,6 +143,12 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        try:
+            from app.core.model_registry import hub as model_hub
+
+            model_hub.stop_hub_refresh()
+        except Exception:
+            logger.warning("model-hub refresh stop failed on shutdown", exc_info=True)
         if _config_subscriber is not None:
             await _config_subscriber.stop()
             _config_subscriber = None
