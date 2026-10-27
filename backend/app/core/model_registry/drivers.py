@@ -129,15 +129,19 @@ class OpenAICompatibleDriver:
         user_message: str,
         api_key: str,
         provider: str,
+        base_url: str | None = None,
         **_,
     ) -> GenerationResult:
-        base_url = os.environ.get(f"LOOM_LLM_BASE_URL_{provider.upper()}")
+        base_url = base_url or os.environ.get(
+            f"LOOM_LLM_BASE_URL_{provider.upper()}"
+        )
         if not base_url:
             raise ModelEndpointNotConfigured(
                 f"remote LLM base_url missing: set LOOM_LLM_BASE_URL_{provider.upper()}"
             )
+        endpoint = "chat/completions"
         data = await _post_json(
-            url=f"{base_url.rstrip('/')}/chat/completions",
+            url=f"{base_url.rstrip('/')}/{endpoint}",
             api_key=api_key,
             payload={
                 "model": model_code,
@@ -162,9 +166,12 @@ class OpenAICompatibleDriver:
         texts: list[str],
         api_key: str,
         provider: str,
+        base_url: str | None = None,
         **_,
     ) -> EmbeddingResult:
-        base_url = os.environ.get(f"LOOM_LLM_BASE_URL_{provider.upper()}")
+        base_url = base_url or os.environ.get(
+            f"LOOM_LLM_BASE_URL_{provider.upper()}"
+        )
         if not base_url:
             raise ModelEndpointNotConfigured(
                 f"remote LLM base_url missing: set LOOM_LLM_BASE_URL_{provider.upper()}"
@@ -194,7 +201,10 @@ _DRIVERS: dict = {
 
 def driver_for(provider: str):
     driver = _DRIVERS.get(provider)
-    if driver is None:
-        # 未登记的供应商不静默落到替身（避免把真调用当假数据）。
-        raise DriverError(f"no LLM driver registered for provider {provider!r}")
-    return driver
+    if driver is not None:
+        return driver
+    # 未登记的供应商不静默落到替身（避免把真调用当假数据）；但 hub 投影
+    # 的 openai-compatible 厂商（如 ark）统一用真实 OpenAICompatibleDriver。
+    if provider == "synthetic":
+        return SyntheticDriver()
+    return OpenAICompatibleDriver()

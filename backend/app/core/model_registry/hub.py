@@ -51,6 +51,7 @@ class HubModelRecord:
     pricing: dict[str, Any] | None
     is_default: bool
     provider: str = ""
+    daily_budget_micros: int | None = None
 
 
 @dataclass
@@ -73,6 +74,11 @@ class ResolvedHubModel:
     provider: str
     endpoints: dict[str, Any]
     modalities: list[str]
+    # 文本单价（per 1M）与日预算（None=不限），供 gateway 计费/预算硬停。
+    input_price_per_1m: float = 0.0
+    output_price_per_1m: float = 0.0
+    daily_budget: float | None = None
+    currency_code: str | None = None
 
 
 # ---------------- 配置 ----------------
@@ -262,6 +268,11 @@ def sync_hub_projection(client: Any = None) -> dict[str, int] | None:
                 ),
                 is_default=is_default,
                 provider=provider_from_base_url(base_url),
+                daily_budget_micros=(
+                    int(m["daily_budget_micros"])
+                    if m.get("daily_budget_micros") is not None
+                    else None
+                ),
             )
         )
 
@@ -301,9 +312,17 @@ def resolve_hub_model(
         return None
     try:
         api_key = crypto.decrypt(record.api_key_enc.encode("ascii"))
-    except Exception as exc:  # noqa: BLE001
+    except (crypto.DecryptionFailed, ValueError) as exc:
         logger.warning("hub model key decrypt failed: %s", exc)
         return None
+    pricing = record.pricing or {}
+    input_price = float(pricing.get("input_usd_per_million", 0) or 0)
+    output_price = float(pricing.get("output_usd_per_million", 0) or 0)
+    daily_budget = (
+        record.daily_budget_micros / 1_000_000
+        if record.daily_budget_micros is not None
+        else None
+    )
     return ResolvedHubModel(
         model=record.model,
         api_key=api_key,
@@ -313,4 +332,38 @@ def resolve_hub_model(
         provider=record.provider,
         endpoints=record.endpoints,
         modalities=record.modalities,
+        input_price_per_1m=input_price,
+        output_price_per_1m=output_price,
+        daily_budget=daily_budget,
     )
+
+
+# ---------------- 场景 → alias 统一解析（W6-2） ----------------
+
+#: 场景显式 alias 覆盖；未列出的场景按其 modality 取该模态默认（primary）。
+#: 若某场景需要单独的模型，在 hub 分配该 alias 并在此登记。
+SCENE_ALIAS: dict[str, str] = {
+    # 例："ARTICLE-GEN": "article",
+}
+
+#: 场景 → modality 映射（chat 类场景统一为 text）。
+SCENE_MODALITY: dict[str, str] = {
+    "ATOM-AFFINITY": "embedding",
+    "VIDEO-GEN": "video",
+}
+
+
+def scene_modality(scene: str) -> str:
+    """推断场景的 modality；默认 text（绝大多数 chat 场景）。"""
+    return SCENE_MODALITY.get(scene, "text")
+
+
+def resolve_for_scene(scene: str, modality: str | None = None) -> ResolvedHubModel | None:
+    """统一解析层：按场景（scene 即 alias 语义）从 hub 投影解析明文模型。
+
+    解析顺序：该场景显式 alias（SCENE_ALIAS）→ 该 modality 默认（primary）。
+    hub 未配置 / 无投影 / 无匹配时返回 None（调用方回退旧路由/synthetic）。
+    """
+    mod = modality or scene_modality(scene)
+    alias = SCENE_ALIAS.get(scene)
+    return resolve_hub_model(mod, alias)
