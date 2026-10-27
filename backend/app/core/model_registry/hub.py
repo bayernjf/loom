@@ -23,6 +23,7 @@ import os
 import threading
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -367,3 +368,54 @@ def resolve_for_scene(scene: str, modality: str | None = None) -> ResolvedHubMod
     mod = modality or scene_modality(scene)
     alias = SCENE_ALIAS.get(scene)
     return resolve_hub_model(mod, alias)
+
+
+# ---------------- 用量上报（按张/秒/token，W6-3） ----------------
+
+
+def report_usage(
+    *,
+    feature: str,
+    provider: str,
+    model: str,
+    assignment_id: str | None = None,
+    billing_source: str = "builtin",
+    billing_type: str = "payg",
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    quantity: float | None = None,
+    http_status: int = 200,
+    cached: bool = False,
+) -> None:
+    """向 hub 上报一次用量（fire-and-forget，失败静默）。
+
+    - 文本：input_tokens/output_tokens；
+    - 图片：quantity＝张数；
+    - 视频：quantity＝秒数。
+    """
+    client = get_hub_client()
+    if client is None:
+        return
+    body: dict[str, Any] = {
+        "project": HUB_PROJECT_SLUG,
+        "feature": feature,
+        "billing_source": billing_source,
+        "billing_type": billing_type,
+        "provider": provider,
+        "model": model,
+        "http_status": http_status,
+        "cached": cached,
+        "ts": datetime.now(UTC).isoformat(),
+    }
+    if assignment_id:
+        body["assignment_id"] = assignment_id
+    if input_tokens is not None:
+        body["input_tokens"] = input_tokens
+    if output_tokens is not None:
+        body["output_tokens"] = output_tokens
+    if quantity is not None:
+        body["quantity"] = quantity
+    try:
+        client.report_usage(body)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("report usage failed: %s", exc)

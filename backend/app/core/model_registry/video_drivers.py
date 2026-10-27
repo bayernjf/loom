@@ -57,8 +57,12 @@ class VideoPollResult:
     raw: dict[str, Any]
 
 
-def _base_url(provider: str) -> str:
-    base = (os.environ.get(f"LOOM_LLM_BASE_URL_{provider.upper()}") or "").rstrip("/")
+def _base_url(provider: str, base_url: str | None = None) -> str:
+    base = (
+        base_url
+        or os.environ.get(f"LOOM_LLM_BASE_URL_{provider.upper()}")
+        or ""
+    ).rstrip("/")
     if not base:
         raise ModelEndpointNotConfigured(
             f"video provider base_url missing: set LOOM_LLM_BASE_URL_{provider.upper()}"
@@ -100,14 +104,16 @@ async def submit_video_task(
     seconds: int,
     size: str,
     aspect_ratio: str,
+    base_url: str | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> VideoSubmission:
     """创建一次供应商视频任务。单次请求，绝不重试（重复提交＝重复花钱）。
 
-    `transport` 只是测试缝（真调用一律 None）：单测因此能跑过**真实 httpx 请求/响应栈**
-    来验证本模块的解析与判定，而不是把本函数换成假实现。
+    `base_url` 优先由 hub 投影注入，否则回退 env；`transport` 只是测试缝
+    （真调用一律 None）：单测因此能跑过**真实 httpx 请求/响应栈**来验证
+    本模块的解析与判定，而不是把本函数换成假实现。
     """
-    base = _base_url(provider)
+    base = _base_url(provider, base_url)
     payload = {
         "model": model_code,
         "prompt": prompt,
@@ -143,10 +149,11 @@ async def poll_video_task(
     model_code: str,
     api_key: str,
     video_id: str,
+    base_url: str | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> VideoPollResult:
     """查一次任务状态。单次请求，不重试（轮询本身不花钱，但失败交给下一轮 tick）。"""
-    base = _base_url(provider)
+    base = _base_url(provider, base_url)
     url = f"{_origin(base)}{_POLL_PATH}"
     try:
         async with httpx.AsyncClient(timeout=_timeout(), transport=transport) as client:

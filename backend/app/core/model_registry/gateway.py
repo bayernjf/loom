@@ -510,19 +510,32 @@ async def embed(session: AsyncSession, scene: str, texts: list[str]) -> Embeddin
     )
 
 
-async def resolve_video_route(session: AsyncSession, scene: str) -> tuple[AIModel, str]:
-    """Q354：真视频任务提交前解析"该打给谁"＝路由模型 ＋ 其 active 密钥明文。
+async def resolve_video_route(session: AsyncSession, scene: str) -> RuntimeModel:
+    """Q354：真视频任务提交前解析"该打给谁"＝视频运行时模型（含明文 key/base_url）。
 
-    与 chat/embedding 同一道解析口（`_resolve_model` 的 capability 守卫 ⇒ 段12 场景若仍
-    路由在 chat 模型或 synthetic 替身上，这里直接 `ModelConfigError`，调用方映射 409，
-    绝不会把"注册表没配好"悄悄退化成假数据或错打远程端点）。预算硬停不适用于本路径：
-    视频按秒计价，日上限是配置中心 `content.video_real_daily_seconds_cap`（Q354），
-    由 `content/video_studio/service.py` 在 approve 时校验。
+    与 chat/embedding 同一道解析口（hub 配置走投影，否则旧 ai_scene_routes）。
+    若段12 场景仍路由在 chat 模型或 synthetic 替身上，这里直接 `ModelConfigError`，
+    调用方映射 409，绝不会把"注册表没配好"悄悄退化成假数据或错打远程端点。
+    预算硬停不适用于本路径：视频按秒计价，日上限是配置中心
+    `content.video_real_daily_seconds_cap`（Q354），由 video_studio 在 approve 时校验。
     """
-    model = await _resolve_model(session, scene, capability="video")
-    if model.provider == "synthetic":
+    runtime = await _resolve_runtime(session, scene, capability="video")
+    if runtime.provider == "synthetic":
         # 替身没有真外部调用；走到这里说明有人把 video 能力挂到了 synthetic 上。
         raise ModelConfigError(
             f"scene {scene!r} is routed to synthetic provider; real video needs a vendor model"
         )
-    return model, await _active_key_secret(session, model.model_id)
+    return runtime
+
+
+async def resolve_image_route(session: AsyncSession, scene: str) -> RuntimeModel:
+    """文生图任务提交前解析"该打给谁"＝图像运行时模型（含明文 key/base_url）。
+
+    hub 配置走 image 模态投影，否则旧 ai_scene_routes；synthetic 不允许。
+    """
+    runtime = await _resolve_runtime(session, scene, capability="image")
+    if runtime.provider == "synthetic":
+        raise ModelConfigError(
+            f"scene {scene!r} is routed to synthetic provider; real image needs a vendor model"
+        )
+    return runtime
