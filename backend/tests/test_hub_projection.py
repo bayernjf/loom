@@ -8,6 +8,7 @@ import os
 import tempfile
 from collections.abc import AsyncGenerator
 
+import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.db import Base, get_session
 from app.core.model_registry import gateway, hub
 from app.core.model_registry.drivers import GenerationResult
+from app.core.model_registry.image_drivers import ImageDriverError
 
 ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -375,3 +377,129 @@ async def test_producer_uses_hub(_env_hub, monkeypatch):
     assert capturing.captured["model_code"] == "ark-code-latest"
     assert capturing.captured["api_key"] == "PLACEHOLDER_KEY_NOT_REAL_0001"
     assert produced.evidence_refs == ["llm:ark-code-latest"]
+
+
+# ---------------- image driver 与用量上报（W6-3） ----------------
+
+
+def _image_transport(image_url="https://cdn/x.png"):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": [{"url": image_url}]},
+        )
+
+    return httpx.MockTransport(handler)
+
+
+async def test_image_driver_generates():
+    from app.core.model_registry import image_drivers
+
+    result = await image_drivers.generate_image(
+        provider="ark",
+        model_code="doubao-seedream-4-0-250828",
+        api_key="k",
+        base_url="https://ark.cn-beijing.volces.com/api/v3",
+        images_path="/images/generations",
+        prompt="a cat",
+        transport=_image_transport(),
+    )
+    assert result.images == ["https://cdn/x.png"]
+
+
+async def test_image_driver_no_retry_on_error():
+    from app.core.model_registry import image_drivers
+
+    transport = httpx.MockTransport(
+        lambda _r: httpx.Response(429, json={"error": "rate limited"})
+    )
+    with pytest.raises(ImageDriverError):
+        await image_drivers.generate_image(
+            provider="ark",
+            model_code="m",
+            api_key="k",
+            base_url="https://ark/x",
+            prompt="p",
+            transport=transport,
+        )
+
+
+async def test_image_driver_rejects_malformed():
+    from app.core.model_registry import image_drivers
+
+    transport = httpx.MockTransport(
+        lambda _r: httpx.Response(200, json={"data": []})
+    )
+    with pytest.raises(ImageDriverError):
+        await image_drivers.generate_image(
+            provider="ark",
+            model_code="m",
+            api_key="k",
+            base_url="https://ark/x",
+            prompt="p",
+            transport=transport,
+        )
+
+
+async def test_resolve_image_route_hub(_env_hub, session_factory):
+    hub.sync_hub_projection(_fake_client())
+    async with session_factory() as session:
+        route = await gateway.resolve_image_route(session, "IMAGE-GEN")
+    assert route.model_code == "doubao-seedream-4-0-250828"
+    assert route.base_url == "https://ark.cn-beijing.volces.com/api/v3"
+
+
+class _CapturingHubClient:
+    def __init__(self):
+        self.bodies: list[dict] = []
+
+    def report_usage(self, body):
+        self.bodies.append(body)
+        return 200
+
+
+async def test_report_usage_image_by_piece(_env_hub, monkeypatch):
+    capturing = _CapturingHubClient()
+    monkeypatch.setattr(hub, "get_hub_client", lambda: capturing)
+    hub.report_usage(
+        feature="IMAGE-GEN",
+        provider="ark",
+        model="seedream",
+        assignment_id="asn_1",
+        quantity=2,
+    )
+    body = capturing.bodies[0]
+    assert body["quantity"] == 2  # 按张
+    assert body["project"] == "loom"
+    assert body["assignment_id"] == "asn_1"
+
+
+async def test_report_usage_video_by_second(_env_hub, monkeypatch):
+    capturing = _CapturingHubClient()
+    monkeypatch.setattr(hub, "get_hub_client", lambda: capturing)
+    hub.report_usage(
+        feature="VIDEO-GEN",
+        provider="agnes",
+        model="agnes-video",
+        assignment_id="asn_2",
+        quantity=8,
+    )
+    body = capturing.bodies[0]
+    assert body["quantity"] == 8  # 按秒
+
+
+async def test_report_usage_text_tokens(_env_hub, monkeypatch):
+    capturing = _CapturingHubClient()
+    monkeypatch.setattr(hub, "get_hub_client", lambda: capturing)
+    hub.report_usage(
+        feature="ARTICLE-GEN",
+        provider="ark",
+        model="ark-code-latest",
+        assignment_id="asn_3",
+        input_tokens=100,
+        output_tokens=50,
+    )
+    body = capturing.bodies[0]
+    assert body["input_tokens"] == 100
+    assert body["output_tokens"] == 50
+    assert "quantity" not in body
