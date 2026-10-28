@@ -97,14 +97,6 @@ def test_settings_configured(_env_hub):
     assert cache_path == _env_hub
 
 
-def test_settings_disabled(monkeypatch):
-    monkeypatch.setenv("MODEL_HUB_URL", "http://localhost:8791")
-    monkeypatch.setenv("MODEL_HUB_TOKEN", "tok_test")
-    monkeypatch.setenv("MODEL_HUB_DISABLED", "1")
-    assert hub.is_hub_disabled() is True
-    assert hub.is_hub_configured() is False
-
-
 # ---------------- provider 推断 ----------------
 
 

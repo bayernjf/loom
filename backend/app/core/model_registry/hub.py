@@ -89,14 +89,12 @@ def _env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
-def is_hub_disabled() -> bool:
-    return _env("MODEL_HUB_DISABLED").lower() in ("1", "true", "yes")
-
-
 def hub_settings() -> tuple[str, str, str] | None:
-    """返回 (hub_url, token, cache_path)；未配置或 kill switch 时 None。"""
-    if is_hub_disabled():
-        return None
+    """返回 (hub_url, token, cache_path)；未配置时 None。
+
+    W7-3：MODEL_HUB_DISABLED kill switch 已随旧 env 一并下线——hub 是唯一
+    模型源，没有 env 退路可静默跳过。
+    """
     hub_url = _env("MODEL_HUB_URL")
     token = _env("MODEL_HUB_TOKEN")
     if not hub_url or not token:

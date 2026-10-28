@@ -166,9 +166,7 @@ async def list_models(
 async def hub_status(
     _: Actor = Depends(require_models_view),
 ):
-    """W6-1：hub 接入状态（是否配置/停用/修订号/模型数）。"""
-    if hub.is_hub_disabled():
-        return {"configured": False, "disabled": True, "revision": None, "model_count": 0}
+    """W6-1：hub 接入状态（是否配置/修订号/模型数）。"""
     if not hub.is_hub_configured():
         return {"configured": False, "disabled": False, "revision": None, "model_count": 0}
     projection = hub.load_projection()
