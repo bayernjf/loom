@@ -51,6 +51,7 @@ from app.core.model_registry.seeds import (
 from app.core.skill7.models import SkillRun
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
+from tests.integration.client_tokens import client_bearer, issue_client_token
 from tests.integration.fcw_rows import add_fcw
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
@@ -135,6 +136,9 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P0：客户决策端点（approve/revise）强制客户令牌，fixture 引导签发并设默认头。
+        secret = await issue_client_token(ac, "t1", client_name="cust-1")
+        ac.headers.update(client_bearer(secret))
         yield ac
 
 

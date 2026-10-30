@@ -49,6 +49,7 @@ from app.core.model_registry.seeds import (
 from app.core.models import AuditLog
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
+from tests.integration.client_tokens import client_bearer, issue_client_token
 from tests.integration.fcw_rows import add_fcw
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
@@ -145,6 +146,14 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P0：客户决策端点强制客户令牌。成品跨 t1/t2 两个租户，分别签发绑定令牌，
+        # 由 _approve 按 tenant 选用（令牌租户与 query 不符会 401）。
+        ac.token_t1 = client_bearer(
+            await issue_client_token(ac, "t1", client_name="cust-1")
+        )
+        ac.token_t2 = client_bearer(
+            await issue_client_token(ac, "t2", client_name="cust-2")
+        )
         yield ac
 
 
@@ -166,6 +175,7 @@ async def _approve(client, cid: str, tenant: str = "t1") -> None:
     r = await client.post(
         f"/api/content/{cid}/approve?tenant_id={tenant}",
         json={"actor": CUSTOMER},
+        headers=client.token_t2 if tenant == "t2" else client.token_t1,
     )
     assert r.status_code == 200, r.text
 
@@ -239,6 +249,7 @@ async def test_backfill_only_accepted_in_ready_state(client):
     r = await client.post(
         f"/api/content/{cid}/reject?tenant_id=t1",
         json={"reason": "客户不认可", "actor": CUSTOMER},
+        headers=client.token_t1,
     )
     assert r.status_code == 200
     r = await client.put(
