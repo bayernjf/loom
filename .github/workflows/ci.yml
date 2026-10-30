@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Clone sibling model-hub (contract fixtures for hub projection tests)
+        run: git clone --depth 1 https://github.com/${{ github.repository_owner }}/model-hub.git "$GITHUB_WORKSPACE/../model-hub"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
