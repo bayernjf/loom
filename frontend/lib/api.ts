@@ -47,13 +47,31 @@ export const CURRENT_TENANT_ID = process.env.LOOM_TENANT_ID ?? "";
 // roles 恒空——客户事件在状态机中 requires_role 均为 None；运营事件不在客户页外放。V2 改会话派生。
 export const CURRENT_ACTOR_ID = process.env.LOOM_ACTOR_ID ?? "";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// P0（2026-10-30）：后端客户内容口（列表/详情/裁决/正文编辑/语言目录）只认已验真
+// 客户访问令牌（loom_client_，运营经 /api/admin/client-keys 签发、绑定租户）。
+// 服务端 env 持有本租户令牌（同 LOOM_TENANT_ID 的配置口径），经 Bearer 下发；
+// 未配置时客户内容口一律 401（后端 fail-closed，不回落自报）。
+const CLIENT_TOKEN = process.env.LOOM_CLIENT_TOKEN ?? "";
+
+type AuthKind = "staff" | "client";
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  auth: AuthKind = "staff",
+): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has("content-type")) headers.set("content-type", "application/json");
-  // Q178：门控开启后，服务端请求统一带 httpOnly staff 令牌（无 cookie 即门控关 V1 自报）。
-  const staffToken = await getStaffToken();
-  if (staffToken && !headers.has("Authorization"))
-    headers.set("Authorization", `Bearer ${staffToken}`);
+  if (auth === "client") {
+    // 客户口只认客户令牌：staff 令牌不是客户身份，混发只会被统一 401。
+    if (CLIENT_TOKEN && !headers.has("Authorization"))
+      headers.set("Authorization", `Bearer ${CLIENT_TOKEN}`);
+  } else {
+    // Q178：门控开启后，服务端请求统一带 httpOnly staff 令牌（无 cookie 即门控关 V1 自报）。
+    const staffToken = await getStaffToken();
+    if (staffToken && !headers.has("Authorization"))
+      headers.set("Authorization", `Bearer ${staffToken}`);
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     cache: "no-store",
@@ -419,12 +437,13 @@ export interface ContentLanguageView {
 }
 
 export async function getContentLanguages(): Promise<ContentLanguageView[]> {
-  return request<ContentLanguageView[]>("/api/content/languages");
+  // P0：语言目录为仅身份口——任一 active 客户令牌即可（非租户作用域）。
+  return request<ContentLanguageView[]>("/api/content/languages", undefined, "client");
 }
 
 export async function listContent(tenantId: string): Promise<ContentProductListItem[]> {
   const params = new URLSearchParams({ tenant_id: tenantId });
-  return request<ContentProductListItem[]>(`/api/content?${params}`);
+  return request<ContentProductListItem[]>(`/api/content?${params}`, undefined, "client");
 }
 
 export async function getContent(contentId: string): Promise<ContentProductView> {
@@ -432,6 +451,8 @@ export async function getContent(contentId: string): Promise<ContentProductView>
   const params = new URLSearchParams({ tenant_id: CURRENT_TENANT_ID });
   return request<ContentProductView>(
     `/api/content/${encodeURIComponent(contentId)}?${params}`,
+    undefined,
+    "client",
   );
 }
 
@@ -471,14 +492,19 @@ function contentPost(
   payload: Record<string, unknown>,
 ): Promise<ContentProductView> {
   // Q200 #32：客户裁决口必填 tenant_id（服务端归属校验，跨租户 404）。
+  // P0：裁决口只认客户访问令牌（绑定租户），自报 actor 不再是身份。
   const params = new URLSearchParams({ tenant_id: CURRENT_TENANT_ID });
-  return request<ContentProductView>(`${path}?${params}`, {
-    method: "POST",
-    body: JSON.stringify({
-      actor: { id: CURRENT_ACTOR_ID, roles: [] },
-      ...payload,
-    }),
-  });
+  return request<ContentProductView>(
+    `${path}?${params}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        actor: { id: CURRENT_ACTOR_ID, roles: [] },
+        ...payload,
+      }),
+    },
+    "client",
+  );
 }
 
 export function approveContent(contentId: string): Promise<ContentProductView> {
@@ -501,6 +527,7 @@ export async function editContentBody(
   body: string,
 ): Promise<ContentProductView> {
   // Q200 #32：客户正文改写口必填 tenant_id（服务端归属校验，跨租户 404）。
+  // P0：正文改写口只认客户访问令牌，自报 actor 不再是身份。
   const params = new URLSearchParams({ tenant_id: CURRENT_TENANT_ID });
   return request<ContentProductView>(
     `/api/content/${encodeURIComponent(contentId)}/body?${params}`,
@@ -508,6 +535,7 @@ export async function editContentBody(
       method: "PATCH",
       body: JSON.stringify({ body, actor: { id: CURRENT_ACTOR_ID, roles: [] } }),
     },
+    "client",
   );
 }
 
