@@ -24,6 +24,7 @@ from app.core.db import Base, get_session
 from app.core.staff_auth.deps import get_auth_session
 from app.core.tenants.models import Tenant
 from app.main import app
+from tests.integration.client_tokens import client_bearer, issue_client_token
 from tests.integration.staff_tokens import bearer, issue_write_token
 
 PG_DSN = os.environ.get("LOOM_E2E_PG_DSN")
@@ -189,6 +190,10 @@ async def client(session_factory):
         # （引导口径同 Q178 上线流程；细节见 tests/integration/staff_tokens.py）。
         ac.headers.update(
             bearer(await issue_write_token(ac))
+        )
+        # P0：段12 客户 approve 只认 loom_client_ 令牌，另签发一枚绑定本租户的客户令牌。
+        ac.client_token_header = client_bearer(
+            await issue_client_token(ac, f"t-e2e-{RUN_ID}", client_name="cust-e2e")
         )
         yield ac
 
@@ -409,6 +414,7 @@ async def _drive(client: AsyncClient) -> dict:
     approved = await client.post(
         f"/api/content/{content_id}/approve?tenant_id={tenant_id}",
         json={"actor": CUSTOMER},
+        headers=client.client_token_header,
     )
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "ready_for_publish"

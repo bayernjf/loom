@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.actor import Actor
 from app.core.db import get_session
-from app.core.model_registry import c7_resolve, extraction, gateway
+from app.core.model_registry import c7_resolve, extraction, gateway, hub
 from app.core.model_registry.schemas import (
     AIModelCreate,
     AIModelPatch,
@@ -80,8 +80,45 @@ def _http409(message: str) -> HTTPException:
     return HTTPException(status_code=409, detail=message)
 
 
+def _hub_read_only() -> HTTPException:
+    """W6-1：hub 配置时内置模型/Key 由 hub 管理，本地写口停用。"""
+    return HTTPException(
+        status_code=410,
+        detail="built-in models are managed by model-hub; edit them in the hub",
+    )
+
+
+def _capability_from_modalities(modalities: list[str]) -> str:
+    if "video" in modalities:
+        return "video"
+    if "embedding" in modalities and "text" not in modalities:
+        return "embedding"
+    return "chat"
+
+
+def _hub_model_view(record: hub.HubModelRecord) -> AIModelView:
+    pricing = record.pricing or {}
+    input_price = float(pricing.get("input_usd_per_million", 0) or 0)
+    output_price = float(pricing.get("output_usd_per_million", 0) or 0)
+    return AIModelView(
+        model_id=record.assignment_id,
+        model_code=record.model,
+        provider=record.provider,
+        capability=_capability_from_modalities(record.modalities),
+        input_price_per_1m=input_price,
+        output_price_per_1m=output_price,
+        currency_code=None,
+        daily_budget=None,
+        status="active",
+        fallback_model_id=None,
+        has_active_key=bool(record.api_key_enc),
+    )
+
+
 @router.post("/api/admin/ai-models", response_model=AIModelView, status_code=201)
 async def create_model(body: AIModelCreate, session: AsyncSession = Depends(get_session)):
+    if hub.is_hub_configured():
+        raise _hub_read_only()
     try:
         model = await gateway.create_model(session, body)
     except PermissionDenied as exc:
@@ -105,6 +142,11 @@ async def list_models(
     session: AsyncSession = Depends(get_session),
     _: Actor = Depends(require_models_view),
 ):
+    if hub.is_hub_configured():
+        # W6-1：内置模型目录只读，数据源为 hub 投影。
+        projection = hub.load_projection()
+        if projection is not None:
+            return [_hub_model_view(m) for m in projection.models]
     rows = await gateway.list_models(session)
     return [
         AIModelView(
@@ -120,10 +162,44 @@ async def list_models(
     ]
 
 
+@router.get("/api/admin/ai-models/hub-status")
+async def hub_status(
+    _: Actor = Depends(require_models_view),
+):
+    """W6-1：hub 接入状态（是否配置/修订号/模型数）。"""
+    if not hub.is_hub_configured():
+        return {"configured": False, "disabled": False, "revision": None, "model_count": 0}
+    projection = hub.load_projection()
+    return {
+        "configured": True,
+        "disabled": False,
+        "revision": projection.revision if projection is not None else None,
+        "model_count": len(projection.models) if projection is not None else 0,
+    }
+
+
+@router.post("/api/admin/ai-models/hub-sync")
+async def hub_sync(
+    _: Actor = Depends(require_models_view),
+):
+    """W6-1：手动触发一次 hub 投影同步。"""
+    if not hub.is_hub_configured():
+        raise HTTPException(status_code=409, detail="model-hub is not configured")
+    try:
+        result = hub.sync_hub_projection()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"hub sync failed: {exc}") from exc
+    if result is None:
+        raise HTTPException(status_code=409, detail="model-hub is not configured")
+    return result
+
+
 @router.patch("/api/admin/ai-models/{model_id}", response_model=AIModelView)
 async def patch_model(
     model_id: str, body: AIModelPatch, session: AsyncSession = Depends(get_session)
 ):
+    if hub.is_hub_configured():
+        raise _hub_read_only()
     try:
         model = await gateway.patch_model(session, model_id, body)
     except PermissionDenied as exc:
@@ -152,6 +228,8 @@ async def patch_model(
 async def create_key(
     model_id: str, body: KeyCreate, session: AsyncSession = Depends(get_session)
 ):
+    if hub.is_hub_configured():
+        raise _hub_read_only()
     try:
         key = await gateway.create_key(session, model_id, body)
     except PermissionDenied as exc:
@@ -168,6 +246,8 @@ async def create_key(
 async def revoke_key_post(
     key_id: str, body: RecognizeInvokeRequest, session: AsyncSession = Depends(get_session)
 ):
+    if hub.is_hub_configured():
+        raise _hub_read_only()
     try:
         key = await gateway.revoke_key(session, key_id, body.actor)
     except PermissionDenied as exc:

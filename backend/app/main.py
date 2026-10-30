@@ -9,6 +9,7 @@ from app.content.video_studio.router import router as video_studio_router
 from app.core.a2a.router import router as a2a_router
 from app.core.api_keys.router import router as agent_keys_router
 from app.core.change_ledger.router import router as change_ledger_router
+from app.core.client_auth.router import router as client_auth_router
 from app.core.compliance_wordlist.router import router as wordlist_router
 from app.core.config_center.broadcast import ConfigBroadcastSubscriber
 from app.core.config_center.cache import config_cache
@@ -73,6 +74,21 @@ async def lifespan(app: FastAPI):
             await config_cache.reload(session)
     except Exception:
         logger.warning("config cache bootstrap failed; falling back to seed defaults", exc_info=True)
+    # W6-1：启动时同步一次 hub 投影（失败不阻断；client 0600 缓存兜底）。
+    try:
+        from app.core.model_registry import hub as model_hub
+
+        if model_hub.is_hub_configured():
+            result = model_hub.sync_hub_projection()
+            if result is not None:
+                logger.info(
+                    "model-hub projection synced: revision=%s models=%s",
+                    result["revision"],
+                    result["pulled"],
+                )
+            model_hub.start_hub_refresh()
+    except Exception:
+        logger.warning("model-hub projection bootstrap failed", exc_info=True)
     if settings.scheduler_enabled:
         _scheduler = SweepScheduler(SessionLocal, run_jobs, settings.sweep_interval_seconds)
         await _scheduler.start()
@@ -128,6 +144,12 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        try:
+            from app.core.model_registry import hub as model_hub
+
+            model_hub.stop_hub_refresh()
+        except Exception:
+            logger.warning("model-hub refresh stop failed on shutdown", exc_info=True)
         if _config_subscriber is not None:
             await _config_subscriber.stop()
             _config_subscriber = None
@@ -192,6 +214,7 @@ app.include_router(sla_router)
 app.include_router(restock_router)
 app.include_router(agent_keys_router)
 app.include_router(staff_auth_router)
+app.include_router(client_auth_router)
 app.include_router(tenants_router)
 app.include_router(customer_router)
 app.include_router(atom_router)

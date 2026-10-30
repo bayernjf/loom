@@ -20,6 +20,7 @@ from app.content.schemas import (
     TargetLanguagesRequest,
 )
 from app.core.actor import Actor
+from app.core.client_auth.deps import require_client_actor
 from app.core.db import get_session
 from app.core.rbac import (
     DICTIONARY_ADMIN,
@@ -59,6 +60,10 @@ require_dict_view = _query_actor(DICTIONARY_ADMIN)
 require_ops_view = _query_actor(OPERATIONS)
 # Q125/Q107：运营队列读口对 operations 与 platform_admin 同时开放。
 require_ops_admin_view = _query_actor(OPERATIONS, PLATFORM_ADMIN)
+
+# P0（2026-10-30）：客户决策写口强制客户访问令牌（loom_client_），认证身份携带
+# whitelist_owner 角色；请求体自报 actor 不再作为身份，由该依赖返回值覆盖。
+require_client = require_client_actor()
 
 
 def _language_view(lang: ContentLanguage) -> ContentLanguageView:
@@ -112,11 +117,12 @@ async def approve_content(
     tenant_id: str = Query(min_length=1),
     body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_client),
 ) -> ContentProductView:
-    """Q59 客户审阅通过（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
+    """Q59 客户审阅通过（P0：客户令牌验真；tenant_id 归属不符统一 404）。"""
     try:
         content = await service.approve_content(
-            session, content_id, tenant_id, body.actor
+            session, content_id, tenant_id, actor
         )
     except service.ContentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -132,11 +138,12 @@ async def reject_content(
     tenant_id: str = Query(min_length=1),
     body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_client),
 ) -> ContentProductView:
-    """Q59 客户驳回（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
+    """Q59 客户驳回（P0：客户令牌验真；tenant_id 归属不符统一 404）。"""
     try:
         content = await service.reject_content(
-            session, content_id, tenant_id, body.reason, body.actor
+            session, content_id, tenant_id, body.reason, actor
         )
     except service.ContentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -154,11 +161,12 @@ async def revise_content(
     tenant_id: str = Query(min_length=1),
     body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_client),
 ) -> ContentProductView:
-    """Q59 客户改稿（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
+    """Q59 客户改稿（P0：客户令牌验真；tenant_id 归属不符统一 404）。"""
     try:
         content = await service.revise_content(
-            session, content_id, tenant_id, body.actor
+            session, content_id, tenant_id, actor
         )
     except service.ContentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -475,12 +483,13 @@ async def edit_content_body(
     tenant_id: str = Query(min_length=1),
     body: ContentBodyPatch = ...,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_client),
 ) -> ContentProductView:
     """Q56-a/Q122：客户在 revising 态人工编辑正文，提交后重过复检回 review
-    （Q200 #32：必填 tenant_id，归属不符统一 404）。"""
+    （P0：客户令牌验真；tenant_id 归属不符统一 404）。"""
     try:
         content = await service.edit_content_body(
-            session, content_id, tenant_id, body.body, body.actor
+            session, content_id, tenant_id, body.body, actor
         )
     except service.ContentNotFound as exc:
         await session.rollback()

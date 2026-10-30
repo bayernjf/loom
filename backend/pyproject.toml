@@ -29,7 +29,11 @@ dependencies = [
     "cryptography>=44.0",
     "httpx>=0.28",
     "openpyxl>=3.1.5",
+    "model-hub-client",
 ]
+
+[tool.uv.sources]
+model-hub-client = { path = "../../model-hub/clients/python", editable = true }
 
 [project.optional-dependencies]
 dev = [

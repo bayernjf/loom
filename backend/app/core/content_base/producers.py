@@ -14,10 +14,11 @@ from typing import Any, Protocol
 
 from app.core.content_base import assembly
 from app.core.content_base.types import ContentRequest
-from app.core.model_registry import drivers
+from app.core.model_registry import drivers, hub
 
 DEFAULT_PROVIDER = "agnes"
 DEFAULT_MODEL_CODE = "agnes-3.0-flash"
+CONTENT_SCENE = "CONTENT-BASE"
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,12 @@ def _normalize_body(request: ContentRequest, parsed: Any) -> dict[str, Any]:
 
 
 class LLMContentProducer:
-    """真实模型产出。provider/model 可由环境变量覆盖。"""
+    """真实模型产出。
+
+    hub 配置时：model/api_key/base_url 从 hub 投影解析（CONTENT-BASE 场景，
+    scene 即 alias）；否则回退环境变量（LOOM_CONTENT_PROVIDER/MODEL/
+    LOOM_LLM_KEY_AGNES），迁移期保留。
+    """
 
     def __init__(
         self,
@@ -79,14 +85,17 @@ class LLMContentProducer:
         provider: str | None = None,
         model_code: str | None = None,
     ) -> None:
-        self._provider = provider or os.environ.get(
+        self._provider_override = provider
+        self._model_override = model_code
+
+    def _env_fallback(self) -> tuple[str, str, str | None, str | None]:
+        """回退路径：provider/model/api_key/base_url 从 env。"""
+        provider = self._provider_override or os.environ.get(
             "LOOM_CONTENT_PROVIDER", DEFAULT_PROVIDER
         )
-        self._model_code = model_code or os.environ.get(
+        model_code = self._model_override or os.environ.get(
             "LOOM_CONTENT_MODEL", DEFAULT_MODEL_CODE
         )
-
-    def _api_key(self) -> str:
         key = (
             os.environ.get("LOOM_LLM_KEY_AGNES")
             or os.environ.get("LOOM_E2E_AGNES_KEY")
@@ -95,16 +104,33 @@ class LLMContentProducer:
             raise drivers.ModelEndpointNotConfigured(
                 "content LLM key missing: set LOOM_LLM_KEY_AGNES"
             )
-        return key
+        return provider, model_code, key, None
 
     async def produce(self, request: ContentRequest) -> ProducedContent:
-        result = await drivers.driver_for(self._provider).generate(
-            scene="CONTENT-BASE",
+        # 优先 hub 投影。
+        provider = model_code = api_key = base_url = None
+        if hub.is_hub_configured():
+            resolved = hub.resolve_for_scene(CONTENT_SCENE, "text")
+            if resolved is not None:
+                provider = resolved.provider
+                model_code = resolved.model
+                api_key = resolved.api_key
+                base_url = resolved.base_url
+        if provider is None or model_code is None or api_key is None:
+            provider, model_code, api_key, base_url = self._env_fallback()
+
+        kwargs: dict[str, Any] = {
+            "model_code": model_code,
+            "api_key": api_key,
+            "provider": provider,
+        }
+        if base_url is not None:
+            kwargs["base_url"] = base_url
+        result = await drivers.driver_for(provider).generate(
+            scene=CONTENT_SCENE,
             user_message=_build_prompt(request),
             variables={},
-            model_code=self._model_code,
-            api_key=self._api_key(),
-            provider=self._provider,
+            **kwargs,
         )
         try:
             parsed = json.loads(result.text)
@@ -112,5 +138,5 @@ class LLMContentProducer:
             parsed = {"text": result.text}
         return ProducedContent(
             body=_normalize_body(request, parsed),
-            evidence_refs=[f"llm:{self._model_code}"],
+            evidence_refs=[f"llm:{model_code}"],
         )

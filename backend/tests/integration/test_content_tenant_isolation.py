@@ -16,6 +16,7 @@ from app.content.models import CONTENT_REVIEW, ContentLanguage, ContentProduct
 from app.core.db import Base, get_session
 from app.main import app
 from app.product.product_intake.models import ProductSpace
+from tests.integration.client_tokens import client_bearer, issue_client_token
 
 CUSTOMER_B = {"id": "cust-B", "roles": []}
 CUSTOMER_A = {"id": "cust-A", "roles": []}
@@ -67,6 +68,14 @@ async def client():
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P0：分别为两个租户引导签发客户令牌，测试按归属选用——跨租户用自己的
+        # 有效令牌仍应 404，同租户用自己的令牌 200。
+        ac.token_b = client_bearer(
+            await issue_client_token(ac, "tenant-B", client_name="cust-B")
+        )
+        ac.token_a = client_bearer(
+            await issue_client_token(ac, "tenant-A", client_name="cust-A")
+        )
         yield ac
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -91,6 +100,7 @@ async def test_cross_tenant_approve_is_404(client):
         "/api/content/victim-1/approve",
         params={"tenant_id": "tenant-B"},
         json={"actor": CUSTOMER_B},
+        headers=client.token_b,
     )
     assert r.status_code == 404, r.text
 
@@ -111,6 +121,7 @@ async def test_cross_tenant_reject_and_revise_are_404(client):
             f"/api/content/victim-1/{suffix}",
             params={"tenant_id": "tenant-B"},
             json=payload,
+            headers=client.token_b,
         )
         assert r.status_code == 404, f"{suffix}: {r.text}"
 
@@ -120,6 +131,7 @@ async def test_cross_tenant_body_edit_is_404(client):
         "/api/content/victim-1/body",
         params={"tenant_id": "tenant-B"},
         json={"body": "越权改写", "actor": CUSTOMER_B},
+        headers=client.token_b,
     )
     assert r.status_code == 404, r.text
 
@@ -143,6 +155,7 @@ async def test_same_tenant_read_and_adjudicate_unchanged(client):
         "/api/content/victim-1/approve",
         params={"tenant_id": "tenant-A"},
         json={"actor": CUSTOMER_A},
+        headers=client.token_a,
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "ready_for_publish"

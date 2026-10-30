@@ -7,7 +7,6 @@ confirmed/modified/rejected。所有写操作 append_audit；不本地兜底产�
 
 from __future__ import annotations
 
-import os
 import uuid
 from typing import Any, cast
 
@@ -30,6 +29,7 @@ from app.core.content_base.types import (
     ContentTypeId,
     ReviewDecisionId,
 )
+from app.core.model_registry import hub
 
 # 内部自用单租户口径，审计仍需 tenant_id 槽位。
 DEFAULT_TENANT = "default"
@@ -44,8 +44,12 @@ class CandidateNotReviewable(ContentCandidateNotReviewable):
 
 
 def _default_producer() -> ContentProducer:
-    """显式开关 LOOM_CONTENT_REAL_LLM=1 才走真实模型，否则确定性产出。"""
-    if os.environ.get("LOOM_CONTENT_REAL_LLM") == "1":
+    """hub 已配置即走真实模型投影；否则确定性产出。
+
+    W7-3：LOOM_CONTENT_REAL_LLM 门控随旧 env 下线——hub 配置本身就是开关，
+    未配置时回退确定性产出，与历史默认一致。
+    """
+    if hub.is_hub_configured():
         return producers.LLMContentProducer()
     return producers.DeterministicProducer()
 

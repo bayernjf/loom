@@ -18,6 +18,9 @@ from app.content import models as _content_models  # noqa: F401  (段12 content_
 from app.content.video_studio import models as _video_studio_models  # noqa: F401  (Q336 分段/原片)
 from app.core import models as _core_models  # noqa: F401  (register audit_logs)
 from app.core.api_keys import models as _api_key_models  # noqa: F401  (Q88 agent_api_keys)
+from app.core.client_auth import (
+    models as _client_auth_models,  # noqa: F401  (P0 client_access_tokens)
+)
 from app.core.compliance_wordlist import models as _wordlist_models  # noqa: F401
 from app.core.config_center import models as _config_models  # noqa: F401
 from app.core.content_base import (

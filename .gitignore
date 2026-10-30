@@ -33,9 +33,13 @@ coverage.json
 .env
 .env.*
 !.env.example
+!.env.shell.example
 
 # Tooling
 .codegraph/
+
+# Runtime data (model-hub projection cache, W6-1; regenerated from the hub)
+backend/data/
 
 # Temp
 *.tmp

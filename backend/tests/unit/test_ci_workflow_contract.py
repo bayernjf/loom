@@ -347,10 +347,28 @@ def test_runtime_and_dev_locks_agree_and_cover_every_declared_dependency() -> No
     def norm(spec: str) -> str:
         return re.split(r"[\[<>=!~;]", spec)[0].strip().lower().replace("_", "-")
 
+    # 本地路径依赖（tool.uv.sources 声明为 path）：开发期由 uv 解析，生产将
+    # 改为 git tag 安装（见 model-hub 落码任务 W6/W7），暂不进 pip lock。
+    sources = py.get("tool", {}).get("uv", {}).get("sources", {})
+    local_path_deps = {
+        norm(k) for k, v in sources.items() if isinstance(v, dict) and "path" in v
+    }
+    assert local_path_deps == {"model-hub-client"}, (
+        f"unexpected local path deps, update the lock policy: {local_path_deps}"
+    )
+
     base = [norm(d) for d in py["project"]["dependencies"]]
     extras = [norm(d) for extra in py["project"].get("optional-dependencies", {}).values() for d in extra]
-    assert not [k for k in base if k not in runtime], f"runtime lock 缺声明依赖：{[k for k in base if k not in runtime]}"
-    assert not [k for k in base + extras if k not in dev], "dev lock 缺 runtime＋dev 全量"
+    missing_runtime = [
+        k for k in base if k not in runtime and k not in local_path_deps
+    ]
+    assert not missing_runtime, f"runtime lock 缺声明依赖：{missing_runtime}"
+    missing_dev = [
+        k
+        for k in base + extras
+        if k not in dev and k not in local_path_deps
+    ]
+    assert not missing_dev, f"dev lock 缺 runtime＋dev 全量：{missing_dev}"
     # CI 装的 dev lock 与镜像装的 runtime lock 必须在同名同版本上重合，否则"门测的＝发出去的"是假话
     clash = sorted(f"{k}: runtime={v} dev={dev[k]}" for k, v in runtime.items() if k in dev and dev[k] != v)
     assert not clash, f"两份 lock 版本冲突：{clash}"

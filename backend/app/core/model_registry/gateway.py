@@ -18,7 +18,7 @@ from app.core.metrics.business import (
     prime_budget_blocked,
     record_budget_blocked,
 )
-from app.core.model_registry import crypto, drivers, seeds
+from app.core.model_registry import crypto, drivers, hub, seeds
 from app.core.model_registry.models import (
     AIModel,
     AIModelKey,
@@ -331,6 +331,76 @@ async def spend_today(session: AsyncSession, model_id: str) -> Decimal:
     return Decimal(total or 0)
 
 
+# ---------- 统一运行时模型（hub 投影 / 旧注册表两源归一，W6-2） ---------------
+
+_CAPABILITY_TO_MODALITY = {
+    "chat": "text",
+    "embedding": "embedding",
+    "video": "video",
+    "image": "image",
+}
+
+
+@dataclass(frozen=True)
+class RuntimeModel:
+    """调用点统一模型：hub 投影与旧 ai_models 都归一到这里。"""
+
+    model_id: str
+    model_code: str
+    provider: str
+    api_key: str | None
+    base_url: str | None
+    input_price: Decimal
+    output_price: Decimal
+    currency_code: str | None
+    daily_budget: Decimal | None
+    assignment_id: str | None = None
+
+
+async def _resolve_runtime(
+    session: AsyncSession, scene: str, *, capability: str = "chat"
+) -> RuntimeModel:
+    # hub 配置时优先投影（scene 即 alias 语义）。
+    if hub.is_hub_configured():
+        modality = _CAPABILITY_TO_MODALITY.get(capability, "text")
+        resolved = hub.resolve_for_scene(scene, modality)
+        if resolved is not None:
+            return RuntimeModel(
+                model_id=resolved.assignment_id,
+                model_code=resolved.model,
+                provider=resolved.provider,
+                api_key=resolved.api_key,
+                base_url=resolved.base_url,
+                input_price=Decimal(str(resolved.input_price_per_1m)),
+                output_price=Decimal(str(resolved.output_price_per_1m)),
+                currency_code=resolved.currency_code,
+                daily_budget=(
+                    Decimal(str(resolved.daily_budget))
+                    if resolved.daily_budget is not None
+                    else None
+                ),
+                assignment_id=resolved.assignment_id,
+            )
+    # 回退：旧 ai_scene_routes → ai_models（迁移期/未配置 hub）。
+    model = await _resolve_model(session, scene, capability=capability)
+    api_key = None
+    if model.provider != "synthetic":
+        api_key = await _active_key_secret(session, model.model_id)
+    return RuntimeModel(
+        model_id=model.model_id,
+        model_code=model.model_code,
+        provider=model.provider,
+        api_key=api_key,
+        base_url=None,
+        input_price=Decimal(model.input_price_per_1m),
+        output_price=Decimal(model.output_price_per_1m),
+        currency_code=model.currency_code,
+        daily_budget=(
+            Decimal(str(model.daily_budget)) if model.daily_budget is not None else None
+        ),
+    )
+
+
 async def _resolve_model(session: AsyncSession, scene: str, *, capability: str = "chat") -> AIModel:
     route = await session.get(AISceneRoute, scene)
     if route is None:
@@ -358,23 +428,28 @@ async def _resolve_model(session: AsyncSession, scene: str, *, capability: str =
 
 
 async def invoke(session: AsyncSession, scene: str, variables: dict) -> Invocation:
-    model = await _resolve_model(session, scene)
-    budget = model.daily_budget
-    if budget is not None and await spend_today(session, model.model_id) >= Decimal(str(budget)):
+    runtime = await _resolve_runtime(session, scene)
+    budget = runtime.daily_budget
+    if budget is not None and await spend_today(session, runtime.model_id) >= budget:
         # Q188：预算硬停＝内容生产被停摆，必须可告警；只计数，异常语义一字不改
         # （worker 侧仍按 Q87 把 BudgetExhausted 判为瞬态）。
         record_budget_blocked(scene)
-        raise BudgetExhausted(f"daily budget exhausted for model {model.model_code!r}")
+        raise BudgetExhausted(f"daily budget exhausted for model {runtime.model_code!r}")
 
     user_message = await _render_current_prompt(session, scene, variables)
-    kwargs: dict = {"model_code": model.model_code, "provider": model.provider}
-    if model.provider != "synthetic":
-        kwargs["api_key"] = await _active_key_secret(session, model.model_id)
+    kwargs: dict = {
+        "model_code": runtime.model_code,
+        "provider": runtime.provider,
+    }
+    if runtime.api_key is not None:
+        kwargs["api_key"] = runtime.api_key
+    if runtime.base_url is not None:
+        kwargs["base_url"] = runtime.base_url
     try:
         result = await observe_llm_call(
             scene,
-            model.provider,
-            drivers.driver_for(model.provider).generate(
+            runtime.provider,
+            drivers.driver_for(runtime.provider).generate(
                 scene=scene, user_message=user_message, variables=variables, **kwargs
             ),
         )
@@ -382,15 +457,15 @@ async def invoke(session: AsyncSession, scene: str, variables: dict) -> Invocati
         raise GenerationUpstreamError(str(exc)) from exc
 
     return Invocation(
-        model_id=model.model_id,
-        model_code=model.model_code,
-        provider=model.provider,
+        model_id=runtime.model_id,
+        model_code=runtime.model_code,
+        provider=runtime.provider,
         text=result.text,
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
-        input_cost=_cost(Decimal(model.input_price_per_1m), result.input_tokens),
-        output_cost=_cost(Decimal(model.output_price_per_1m), result.output_tokens),
-        currency_code=model.currency_code,
+        input_cost=_cost(runtime.input_price, result.input_tokens),
+        output_cost=_cost(runtime.output_price, result.output_tokens),
+        currency_code=runtime.currency_code,
     )
 
 
@@ -398,21 +473,26 @@ async def embed(session: AsyncSession, scene: str, texts: list[str]) -> Embeddin
     """embedding 场景调用（Q86 ATOM-AFFINITY）：无 Prompt 渲染，仅按输入计费。"""
     if not texts or any(not isinstance(t, str) or not t.strip() for t in texts):
         raise ModelConfigError("embed requires a non-empty list of non-empty texts")
-    model = await _resolve_model(session, scene, capability="embedding")
-    budget = model.daily_budget
-    if budget is not None and await spend_today(session, model.model_id) >= Decimal(str(budget)):
+    runtime = await _resolve_runtime(session, scene, capability="embedding")
+    budget = runtime.daily_budget
+    if budget is not None and await spend_today(session, runtime.model_id) >= budget:
         # Q188：与 chat 侧同一计数口径（按场景），embedding 预算停摆同样可告警。
         record_budget_blocked(scene)
-        raise BudgetExhausted(f"daily budget exhausted for model {model.model_code!r}")
+        raise BudgetExhausted(f"daily budget exhausted for model {runtime.model_code!r}")
 
-    kwargs: dict = {"model_code": model.model_code, "provider": model.provider}
-    if model.provider != "synthetic":
-        kwargs["api_key"] = await _active_key_secret(session, model.model_id)
+    kwargs: dict = {
+        "model_code": runtime.model_code,
+        "provider": runtime.provider,
+    }
+    if runtime.api_key is not None:
+        kwargs["api_key"] = runtime.api_key
+    if runtime.base_url is not None:
+        kwargs["base_url"] = runtime.base_url
     try:
         result = await observe_llm_call(
             scene,
-            model.provider,
-            drivers.driver_for(model.provider).embed(
+            runtime.provider,
+            drivers.driver_for(runtime.provider).embed(
                 scene=scene, texts=texts, **kwargs
             ),
         )
@@ -420,29 +500,42 @@ async def embed(session: AsyncSession, scene: str, texts: list[str]) -> Embeddin
         raise GenerationUpstreamError(str(exc)) from exc
 
     return EmbeddingInvocation(
-        model_id=model.model_id,
-        model_code=model.model_code,
-        provider=model.provider,
+        model_id=runtime.model_id,
+        model_code=runtime.model_code,
+        provider=runtime.provider,
         vectors=result.vectors,
         input_tokens=result.input_tokens,
-        input_cost=_cost(Decimal(model.input_price_per_1m), result.input_tokens),
-        currency_code=model.currency_code,
+        input_cost=_cost(runtime.input_price, result.input_tokens),
+        currency_code=runtime.currency_code,
     )
 
 
-async def resolve_video_route(session: AsyncSession, scene: str) -> tuple[AIModel, str]:
-    """Q354：真视频任务提交前解析"该打给谁"＝路由模型 ＋ 其 active 密钥明文。
+async def resolve_video_route(session: AsyncSession, scene: str) -> RuntimeModel:
+    """Q354：真视频任务提交前解析"该打给谁"＝视频运行时模型（含明文 key/base_url）。
 
-    与 chat/embedding 同一道解析口（`_resolve_model` 的 capability 守卫 ⇒ 段12 场景若仍
-    路由在 chat 模型或 synthetic 替身上，这里直接 `ModelConfigError`，调用方映射 409，
-    绝不会把"注册表没配好"悄悄退化成假数据或错打远程端点）。预算硬停不适用于本路径：
-    视频按秒计价，日上限是配置中心 `content.video_real_daily_seconds_cap`（Q354），
-    由 `content/video_studio/service.py` 在 approve 时校验。
+    与 chat/embedding 同一道解析口（hub 配置走投影，否则旧 ai_scene_routes）。
+    若段12 场景仍路由在 chat 模型或 synthetic 替身上，这里直接 `ModelConfigError`，
+    调用方映射 409，绝不会把"注册表没配好"悄悄退化成假数据或错打远程端点。
+    预算硬停不适用于本路径：视频按秒计价，日上限是配置中心
+    `content.video_real_daily_seconds_cap`（Q354），由 video_studio 在 approve 时校验。
     """
-    model = await _resolve_model(session, scene, capability="video")
-    if model.provider == "synthetic":
+    runtime = await _resolve_runtime(session, scene, capability="video")
+    if runtime.provider == "synthetic":
         # 替身没有真外部调用；走到这里说明有人把 video 能力挂到了 synthetic 上。
         raise ModelConfigError(
             f"scene {scene!r} is routed to synthetic provider; real video needs a vendor model"
         )
-    return model, await _active_key_secret(session, model.model_id)
+    return runtime
+
+
+async def resolve_image_route(session: AsyncSession, scene: str) -> RuntimeModel:
+    """文生图任务提交前解析"该打给谁"＝图像运行时模型（含明文 key/base_url）。
+
+    hub 配置走 image 模态投影，否则旧 ai_scene_routes；synthetic 不允许。
+    """
+    runtime = await _resolve_runtime(session, scene, capability="image")
+    if runtime.provider == "synthetic":
+        raise ModelConfigError(
+            f"scene {scene!r} is routed to synthetic provider; real image needs a vendor model"
+        )
+    return runtime

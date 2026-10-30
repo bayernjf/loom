@@ -45,6 +45,8 @@ ALLOWLIST: dict[str, set[float]] = {
     "app/content/quality.py": {0.0, 1.0},
     "app/core/effects/service.py": {0.0},
     "app/core/model_registry/extraction.py": {0.0, 1.0},
+    # 0.0＝无定价时的默认单价；300.0＝5min 后台刷新间隔；2.0＝停止线程等待秒数。
+    "app/core/model_registry/hub.py": {0.0, 2.0, 300.0},
     "app/product/atom/atom_rules.py": {0.0, 1.0},
     "app/product/condition/pwc_rules.py": {0.0},
     "app/product/condition/service.py": {0.0},

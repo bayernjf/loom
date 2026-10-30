@@ -352,13 +352,13 @@ async def create_video_task(
     _validate_task_params(mode=mode, seconds=seconds, size=size, aspect_ratio=aspect_ratio, prompt=prompt)
     if not getattr(content, "final_id", ""):
         raise VideoTaskValidation("content has no final_id; issue the FCW before generating video")
-    model, _ = await _resolve_route(session)
+    route = await _resolve_route(session)
     task = VideoGenerationTask(
         content_id=content.content_id,
         final_id=content.final_id,
         tenant_id=content.tenant_id,
-        provider=model.provider,
-        model_code=model.model_code,
+        provider=route.provider,
+        model_code=route.model_code,
         mode=mode,
         prompt=prompt.strip(),
         seconds=seconds,
@@ -539,19 +539,20 @@ async def _submit(session: AsyncSession, task: VideoGenerationTask, actor: Actor
 
     now = _now()
     try:
-        model, api_key = await _resolve_route(session)
+        route = await _resolve_route(session)
     except VideoRouteNotReady as exc:
         await _finalize_failed(
             session, task, error=f"route unresolved: {exc}", vendor_status="route_error",
             actor_roles=actor.roles, by=actor.id, now=now,
         )
         return
-    task.provider, task.model_code = model.provider, model.model_code
+    task.provider, task.model_code = route.provider, route.model_code
     try:
         submission = await video_drivers.submit_video_task(
-            provider=model.provider,
-            model_code=model.model_code,
-            api_key=api_key,
+            provider=route.provider,
+            model_code=route.model_code,
+            api_key=route.api_key,
+            base_url=route.base_url,
             prompt=task.prompt,
             mode=task.mode,
             seconds=task.seconds,
@@ -604,7 +605,7 @@ async def _sync_one(
 
     now = now or _now()
     try:
-        model, api_key = await _resolve_route(session)
+        route = await _resolve_route(session)
     except VideoRouteNotReady as exc:
         await _finalize_failed(
             session, task, error=f"route unresolved: {exc}", vendor_status="route_error",
@@ -613,9 +614,10 @@ async def _sync_one(
         return task
     try:
         result = await video_drivers.poll_video_task(
-            provider=model.provider,
-            model_code=model.model_code,
-            api_key=api_key,
+            provider=route.provider,
+            model_code=route.model_code,
+            api_key=route.api_key,
+            base_url=route.base_url,
             video_id=task.vendor_video_id or "",
         )
     except (video_drivers.VideoDriverError, httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
@@ -638,6 +640,16 @@ async def _sync_one(
         task.finished_at = now
         task.updated_at = now
         await session.flush()
+        # 用量按秒上报 hub（fire-and-forget）。
+        from app.core.model_registry import hub
+
+        hub.report_usage(
+            feature=VIDEO_GEN_SCENE,
+            provider=route.provider,
+            model=route.model_code,
+            assignment_id=route.assignment_id,
+            quantity=task.seconds,
+        )
         await append_audit(
             session,
             tenant_id=task.tenant_id,
