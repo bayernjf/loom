@@ -17,12 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Clone sibling model-hub (contract fixtures for hub projection tests)
-        run: git clone --depth 1 https://github.com/${{ github.repository_owner }}/model-hub.git "$GITHUB_WORKSPACE/../model-hub"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+      - name: Clone sibling model-hub (hub projection fixtures + client)
+        run: |
+          git clone --depth 1 https://github.com/${{ github.repository_owner }}/model-hub.git "$GITHUB_WORKSPACE/../model-hub"
+          pip install -e "$GITHUB_WORKSPACE/../model-hub/clients/python"
       - name: Install backend from requirements-dev.lock
         run: |
           pip install -r backend/requirements-dev.lock
