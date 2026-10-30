@@ -324,7 +324,8 @@ async def test_revoked_fcw_blocks_content_generation(client, session_factory):
         json={"final_id": fcw["final_id"], "kind": "article", "language": "zh-CN", "actor": OPS},
     )
     assert resp.status_code == 409, resp.text
-    assert "not consumable" in resp.text
+    # P0 H2 收口：异常原文只进日志，客户端收固定泛化 detail。
+    assert "final content whitelist revoked" in resp.text
 
 
 # ---------- Q321 管理端列表带冻结状态（fcw_view 加法扩展） ----------

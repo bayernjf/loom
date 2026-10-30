@@ -84,14 +84,33 @@ async def client():
 async def test_cross_tenant_read_is_404(client):
     # tenant-B 声明自己的租户读 tenant-A 的成品 → 404（此前 200 + 返回体 tenant_id=tenant-A）。
     r = await client.get(
-        "/api/content/victim-1", params={"tenant_id": "tenant-B"}
+        "/api/content/victim-1", params={"tenant_id": "tenant-B"},
+        headers=client.token_b,
     )
     assert r.status_code == 404, r.text
 
     # 对照：tenant-B 读自己的成品 → 200 不变。
-    r = await client.get("/api/content/own-1", params={"tenant_id": "tenant-B"})
+    r = await client.get(
+        "/api/content/own-1", params={"tenant_id": "tenant-B"},
+        headers=client.token_b,
+    )
     assert r.status_code == 200, r.text
     assert r.json()["tenant_id"] == "tenant-B"
+
+
+async def test_token_tenant_mismatch_is_401(client):
+    # P0 补强：令牌↔query 租户不一致 → 401（归属锚点是令牌；404 只用于
+    # 「令牌租户内确无此成品」，两者都不提供跨租户存在性探针）。
+    r = await client.get(
+        "/api/content/victim-1", params={"tenant_id": "tenant-A"},
+        headers=client.token_b,
+    )
+    assert r.status_code == 401, r.text
+    r = await client.get(
+        "/api/content/own-1", params={"tenant_id": "tenant-A"},
+        headers=client.token_b,
+    )
+    assert r.status_code == 401, r.text
 
 
 async def test_cross_tenant_approve_is_404(client):
@@ -106,7 +125,8 @@ async def test_cross_tenant_approve_is_404(client):
 
     # 后果：tenant-A 侧状态仍是 review，未被改动（此前变成 ready_for_publish）。
     r = await client.get(
-        "/api/content/victim-1", params={"tenant_id": "tenant-A"}
+        "/api/content/victim-1", params={"tenant_id": "tenant-A"},
+        headers=client.token_a,
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_REVIEW
@@ -148,7 +168,8 @@ async def test_missing_tenant_id_is_422(client):
 
 async def test_same_tenant_read_and_adjudicate_unchanged(client):
     r = await client.get(
-        "/api/content/victim-1", params={"tenant_id": "tenant-A"}
+        "/api/content/victim-1", params={"tenant_id": "tenant-A"},
+        headers=client.token_a,
     )
     assert r.status_code == 200, r.text
     r = await client.post(

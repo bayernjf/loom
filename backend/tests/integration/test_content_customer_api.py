@@ -50,10 +50,12 @@ from app.core.model_registry.seeds import (
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillRun
+from app.core.staff_auth.deps import get_auth_session
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
 from tests.integration.client_tokens import client_bearer, issue_client_token
 from tests.integration.fcw_rows import add_fcw
+from tests.integration.staff_tokens import bearer, issue_staff_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 # Q106/Q122：客户前端身份 roles 恒空（server env 自报），客户端点必须可调。
@@ -105,6 +107,8 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # P0：staff 令牌验真走认证短事务（get_auth_session），同样覆写到测试库。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -144,24 +148,28 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        # P0：客户决策端点强制客户令牌，fixture 内引导签发并设为默认头。
+        # P0：客户内容口强制客户令牌，默认头挂客户令牌；generate 为 staff 硬闸，
+        # 由 _generate 逐调用携带 staff Bearer。
         secret = await issue_client_token(ac, "t1", client_name="cust-1")
         ac.headers.update(client_bearer(secret))
-        yield ac
+        _staff = await issue_staff_token(ac, ["operations"], staff_id="s-ops")
+        yield ac, bearer(_staff)
 
 
-async def _generate(client, language: str = "zh-CN") -> str:
+async def _generate(client, staff_bearer, language: str = "zh-CN") -> str:
     r = await client.post(
         "/api/content/generate",
         json={"final_id": "fcw-1", "language": language, "actor": OPS},
+        headers=staff_bearer,
     )
     assert r.status_code == 201, r.text
     return r.json()["content_id"]
 
 
 async def test_list_by_tenant_excludes_body_and_unknown_tenant_empty(client):
-    await _generate(client, "zh-CN")
-    await _generate(client, "en-US")
+    client, staff_bearer = client
+    await _generate(client, staff_bearer, "zh-CN")
+    await _generate(client, staff_bearer, "en-US")
 
     r = await client.get("/api/content", params={"tenant_id": "t1"})
     assert r.status_code == 200, r.text
@@ -174,16 +182,18 @@ async def test_list_by_tenant_excludes_body_and_unknown_tenant_empty(client):
     # 列表项仍带 AI 分与复检提示所需字段。
     assert all("quality_score" in it and "review_hits" in it for it in items)
 
+    # P0：令牌↔tenant 绑定不一致统一 401（归属锚点是令牌，不再存在
+    # 「声明任意租户得空列表」的口子）；缺 tenant_id 仍 422。
     r = await client.get("/api/content", params={"tenant_id": "ghost"})
-    assert r.status_code == 200
-    assert r.json() == []
+    assert r.status_code == 401
 
     r = await client.get("/api/content")
     assert r.status_code == 422
 
 
 async def test_detail_returns_body_404(client):
-    cid = await _generate(client)
+    client, staff_bearer = client
+    cid = await _generate(client, staff_bearer)
     r = await client.get(f"/api/content/{cid}?tenant_id=t1")
     assert r.status_code == 200, r.text
     detail = r.json()
@@ -197,7 +207,8 @@ async def test_detail_returns_body_404(client):
 async def test_manual_edit_happy_path_reruns_reviews_without_regen_count(
     client, session_factory
 ):
-    cid = await _generate(client)
+    client, staff_bearer = client
+    cid = await _generate(client, staff_bearer)
     r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_REVISING
@@ -225,7 +236,8 @@ async def test_manual_edit_happy_path_reruns_reviews_without_regen_count(
 
 
 async def test_manual_edit_guards(client):
-    cid = await _generate(client)
+    client, staff_bearer = client
+    cid = await _generate(client, staff_bearer)
     # review 态直接编辑 → 409（必须先 revise）。
     r = await client.patch(
         f"/api/content/{cid}/body?tenant_id=t1", json={"body": "x", "actor": CUSTOMER}
@@ -247,7 +259,8 @@ async def test_manual_edit_guards(client):
 async def test_manual_edit_reruns_wordlist_and_semantic(
     client, session_factory
 ):
-    cid = await _generate(client)
+    client, staff_bearer = client
+    cid = await _generate(client, staff_bearer)
     await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
 
     # 人工正文同时含词库 ban 词与语义哨兵：词库硬阻断标记抬升、语义发现落段，
