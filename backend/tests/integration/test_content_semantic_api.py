@@ -47,10 +47,12 @@ from app.core.model_registry.seeds import (
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillRun
+from app.core.staff_auth.deps import get_auth_session
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
 from tests.integration.client_tokens import client_bearer, issue_client_token
 from tests.integration.fcw_rows import add_fcw
+from tests.integration.staff_tokens import bearer, issue_staff_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 CUSTOMER = {"id": "cust-1", "roles": ["customer"]}
@@ -101,6 +103,8 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # P0：staff 令牌验真走认证短事务（get_auth_session），同样覆写到测试库。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -136,9 +140,12 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        # P0：客户决策端点（approve/revise）强制客户令牌，fixture 引导签发并设默认头。
-        secret = await issue_client_token(ac, "t1", client_name="cust-1")
-        ac.headers.update(client_bearer(secret))
+        # P0：generate 为 staff 硬闸，默认头挂 operations 令牌；客户裁决口
+        # 强制客户令牌，逐调用显式携带（ac.customer）。
+        ac.customer = client_bearer(
+            await issue_client_token(ac, "t1", client_name="cust-1")
+        )
+        ac.headers.update(bearer(await issue_staff_token(ac, ["operations"], staff_id="s-ops")))
         yield ac
 
 
@@ -187,7 +194,7 @@ async def test_semantic_findings_do_not_block_approve(client, session_factory):
         # advisory：语义命中不抬 block_required（词库 ban 的硬阻断不受影响）。
         assert review_hits["block_required"] is False
 
-    r = await client.post("/api/content/cp-risk/approve?tenant_id=t1", json={"actor": CUSTOMER})
+    r = await client.post("/api/content/cp-risk/approve?tenant_id=t1", json={"actor": CUSTOMER}, headers=client.customer)
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_READY
 
@@ -228,7 +235,7 @@ async def test_semantic_unavailable_does_not_block_generation(
 
     # 检测不可用同样不阻断客户通过。
     r = await client.post(
-        f"/api/content/{data['content_id']}/approve?tenant_id=t1", json={"actor": CUSTOMER}
+        f"/api/content/{data['content_id']}/approve?tenant_id=t1", json={"actor": CUSTOMER}, headers=client.customer
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == CONTENT_READY
@@ -241,7 +248,7 @@ async def test_regenerate_reruns_semantic_check(client, session_factory):
     assert r.status_code == 201, r.text
     cid = r.json()["content_id"]
 
-    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": OPS})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER}, headers=client.customer)
     assert r.status_code == 200 and r.json()["status"] == "revising"
     r = await client.post(f"/api/content/{cid}/regenerate", json={"actor": OPS})
     assert r.status_code == 200, r.text

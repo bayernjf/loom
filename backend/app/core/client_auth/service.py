@@ -116,20 +116,22 @@ async def revoke_client_key(
 
 
 async def verify_client_key(
-    session: AsyncSession, plaintext: str | None, tenant_id: str
+    session: AsyncSession, plaintext: str | None, tenant_id: str | None = None
 ) -> ClientAccessToken | None:
     """命中 active 且租户一致的令牌则回填 last_used_at 并返回行；否则 None。
 
     前缀不符/哈希未命中/已吊销/租户归属不一致统一返回 None，不区分原因，
-    避免凭证探测与跨租户存在性探针。
+    避免凭证探测与跨租户存在性探针。``tenant_id=None`` 为仅身份口径
+    （非租户作用域只读目录）：任一 active 客户令牌即命中，不按租户过滤。
     """
     if plaintext is None or not is_client_token(plaintext):
         return None
     stmt = select(ClientAccessToken).where(
         ClientAccessToken.key_hash == hash_key(plaintext),
         ClientAccessToken.status == "active",
-        ClientAccessToken.tenant_id == tenant_id,
     )
+    if tenant_id is not None:
+        stmt = stmt.where(ClientAccessToken.tenant_id == tenant_id)
     row = (await session.scalars(stmt)).first()
     if row is None:
         return None

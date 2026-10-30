@@ -29,10 +29,12 @@ from app.core.model_registry.seeds import (
     SCENE_ARTICLE_SEMANTIC,
     SYNTHETIC_MODEL_ID,
 )
+from app.core.staff_auth.deps import get_auth_session
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
 from app.product.product_intake.models import ProductSpace
 from tests.integration.fcw_rows import add_fcw
+from tests.integration.staff_tokens import acting_as, bearer, issue_staff_token
 
 DICT = {"id": "u-dict", "roles": ["dictionary_admin"]}
 OPS = {"id": "u-ops", "roles": ["operations"]}
@@ -108,8 +110,15 @@ async def client() -> AsyncIterator[AsyncClient]:
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # P0：staff 令牌验真走认证短事务（get_auth_session），同样覆写到测试库。
+    app.dependency_overrides[get_auth_session] = get_test_session
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
+        # P0：语言/目标语言写口与 generate 为 staff 硬闸，默认头挂双角色令牌；
+        # 缺角色负向用例经 acting_as 换令牌。
+        c.headers.update(bearer(await issue_staff_token(
+            c, ["operations", "dictionary_admin"], staff_id="s-l10n"
+        )))
         yield c
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -156,12 +165,24 @@ async def test_language_crud_dict_admin(client):
     assert r.status_code == 200
     assert [row["code"] for row in r.json()] == ["zh-CN"]
 
-    # operations 不能写（字典维护归 dictionary_admin）
+    # P0：无令牌 401（自报 actor 不再是身份）。
+    saved = client.headers.get("Authorization")
+    client.headers.pop("Authorization", None)
     r = await client.put(
         "/api/admin/content-languages",
         json={"actor": OPS, "code": "en-US", "name": "English", "markets": ["US"]},
     )
-    assert r.status_code == 403
+    assert r.status_code == 401, r.text
+    if saved is not None:
+        client.headers.update({"Authorization": saved})
+
+    # 缺 dictionary_admin 角色的 staff 令牌 → 403（字典维护归 dictionary_admin）
+    async with acting_as(client, ["operations"]):
+        r = await client.put(
+            "/api/admin/content-languages",
+            json={"actor": OPS, "code": "en-US", "name": "English", "markets": ["US"]},
+        )
+        assert r.status_code == 403, r.text
 
     # 空 name → 422
     r = await client.put(
@@ -242,8 +263,14 @@ async def test_product_target_languages_narrows_and_rbac(client):
         json={"actor": DICT, "code": "en-US", "name": "English (US)", "markets": ["US"]},
     )
     url = "/api/product-spaces/ps-1/target-languages"
-    # customer 403
-    assert (await client.put(url, json={"actor": CUSTOMER, "languages": ["en-US"]})).status_code == 403
+    # P0：无令牌 401；缺 operations 角色的 staff 令牌 403。
+    saved = client.headers.get("Authorization")
+    client.headers.pop("Authorization", None)
+    assert (await client.put(url, json={"actor": CUSTOMER, "languages": ["en-US"]})).status_code == 401
+    if saved is not None:
+        client.headers.update({"Authorization": saved})
+    async with acting_as(client, ["dictionary_admin"]):
+        assert (await client.put(url, json={"actor": CUSTOMER, "languages": ["en-US"]})).status_code == 403
     # 重复语言 422
     assert (await client.put(url, json={"actor": OPS, "languages": ["en-US", "en-US"]})).status_code == 422
     # ghost ps 404

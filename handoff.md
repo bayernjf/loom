@@ -1,5 +1,12 @@
 # Handoff — Loom
 
+> **最新（2026-10-31）：Tier0 评审 P0 收尾批＝content 路由其余 10 个无凭证端点补齐身份鉴权（接 2026-10-30 客户决策批，PR 已合并后再补）。**
+> - **缺口**：评审口径 content 路由 20 端点中 14 个无凭证——2026-10-30 批只覆盖了 approve/reject/revise/edit_body 四口；其余 10 口仍裸奔：运营写口 generate/regenerate/discard/publish-info/语言 upsert·archive/产品目标语言（服务层 `require_any_role(body.actor…)` 在门控关＝自报即过），客户读口 `GET /api/content`、`GET /api/content/{id}`、`GET /api/content/languages`（声明任意租户即可读）。
+> - **方案**：运营 7 口接 `require_internal_actor`（Q242 同族硬闸：与 `LOOM_STAFF_AUTH_ENABLED` 无关、无令牌一律 401、认证身份覆盖 body.actor——generate 花钱、discard/publish-info 改数据，不再吃自报）；客户 3 口接 `require_client_actor`（租户作用域列表/详情令牌↔tenant 绑定一致）与新增 `require_client_identity`（仅身份口，语言目录任一 active 客户令牌即可）。`verify_client_key` 支持无租户过滤的仅身份验签。前端 `lib/api.ts` 增 `LOOM_CLIENT_TOKEN`（server-only env）经 `request(…, "client")` 注入五个客户内容调用。顺手：这 14 端点异常原文只进日志（`_http_error` 固定泛化 detail，评审 H2）。
+> - **验证**：全量 **1536 passed＋11 skipped／0 failed**（较上批 +7）；`test_client_auth_api.py` 增 4 例（列表/详情/语言目录 401、仅身份口跨租户令牌可用、令牌↔tenant 不一致 401、**空令牌表 fail-closed**）；`test_write_gate_wiring.py` GATED 清单 +7 口（机器枚举防漏网）；新增 `tests/unit/test_content_route_auth_wiring.py` 遍历路由表断言 content 面 20 端点全部登记闸型、14 口带凭证标记；eval 仍 101/101；ruff 全仓净；前端 typecheck＋八 checker＋next build 全绿；openapi drift OK。
+> - **运维含义**：generate/regenerate/discard/publish-info/语言写口/目标语言从「自报可调」变为「必须 `loom_staff_` 令牌」（Q242 同类破坏性契约变更，受闸写口 27→**34**）；客户内容读口从「声明租户可读」变为「必须 `loom_client_` 令牌」，部署须给前端配 `LOOM_CLIENT_TOKEN`（`frontend/.env.example` 已加），未配置＝客户内容页 401。
+> - **待办（本批 P0 余下）**：job-agent 首屏水合竞态（#10）、禁用按钮低饱和+禁用文案（#11）、loom 主 CTA 提升＋Request access 站内表单（#12，保留 mailto）、两仓匹配验证与 handoff（#13）；P1/P2 待 P0 闭环后再定。
+
 > **最新（2026-10-30）：Tier0 代码/UIUX 评审 P0 修复批＝客户决策端点身份鉴权（只改本地、未提交未推送；P1/P2 待 P0 闭环后再定）。**
 > - **缺口**：content 客户决策写口（approve/reject/revise/edit_body）原仅靠 query `tenant_id`＋body 自报 `actor`，无客户侧凭证、actor 从不校验（service 基本不读取）。
 > - **方案**：仿 staff_auth 新建 `app/core/client_auth/`（新表 `client_access_tokens`、明文前缀 `loom_client_`、库内只存 SHA-256、Bearer 验签），令牌绑 tenant_id；`require_client_actor` 依赖返回 `Actor(client_name,[whitelist_owner])`，四端点加 `Depends` 并以认证 actor 覆盖 body.actor；治理 router `/api/admin/client-keys`（签发/列表/吊销，platform_admin|operations）；迁移 `0066_client_access_tokens`（down_revision 0065）。

@@ -1,4 +1,16 @@
-"""段12 内容生成端点（P4）。"""
+"""段12 内容生成端点（P4）。
+
+P0（2026-10-30）鉴权收口：本路由全部端点都必须携带已验真凭证——
+
+- 客户口（approve/reject/revise/edit_body/list/detail/languages）：客户访问令牌
+  （``loom_client_``，见 ``client_auth``），租户作用域端点令牌↔tenant 绑定一致；
+- 运营口（generate/regenerate/discard/publish-info/语言写口/目标语言）：staff
+  个人令牌硬闸 ``require_internal_actor``（不看全局门控、无令牌一律 401）。
+
+端点正文里的异常原文只进日志，客户端一律收固定泛化 detail（Tier0 评审 H2 收口）。
+"""
+
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +32,7 @@ from app.content.schemas import (
     TargetLanguagesRequest,
 )
 from app.core.actor import Actor
-from app.core.client_auth.deps import require_client_actor
+from app.core.client_auth.deps import require_client_actor, require_client_identity
 from app.core.db import get_session
 from app.core.rbac import (
     DICTIONARY_ADMIN,
@@ -29,9 +41,12 @@ from app.core.rbac import (
     PermissionDenied,
     require_any_role,
 )
+from app.core.staff_auth.deps import require_internal_actor
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.final.final_whitelist.service import FcwRevoked
 from app.product.product_intake.models import ProductSpace
+
+logger = logging.getLogger("loom.content")
 
 router = APIRouter(tags=["content"])
 
@@ -61,9 +76,25 @@ require_ops_view = _query_actor(OPERATIONS)
 # Q125/Q107：运营队列读口对 operations 与 platform_admin 同时开放。
 require_ops_admin_view = _query_actor(OPERATIONS, PLATFORM_ADMIN)
 
-# P0（2026-10-30）：客户决策写口强制客户访问令牌（loom_client_），认证身份携带
+# P0（2026-10-30）：客户内容口强制客户访问令牌（loom_client_），认证身份携带
 # whitelist_owner 角色；请求体自报 actor 不再作为身份，由该依赖返回值覆盖。
 require_client = require_client_actor()
+# 非租户作用域客户只读目录（语言清单）：任一 active 客户令牌即可，不绑租户。
+require_client_any = require_client_identity()
+
+# P0（2026-10-30）：运营口一律 staff 令牌硬闸（require_internal_actor 不看全局门控、
+# 无令牌一律 401），认证身份覆盖请求体自报 actor——「门控关闭时自报 operations」
+# 从此不再能触发会花真钱/改数据的运营动作。
+require_ops_action = require_internal_actor(OPERATIONS)
+require_dict_action = require_internal_actor(DICTIONARY_ADMIN)
+
+
+def _http_error(status_code: int, detail: str, exc: Exception) -> HTTPException:
+    """异常原文只进日志，客户端收固定泛化 detail（Tier0 评审 H2 收口，仅本路由）。"""
+    logger.warning(
+        "content endpoint rejected: %s: %s", type(exc).__name__, exc
+    )
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 def _language_view(lang: ContentLanguage) -> ContentLanguageView:
@@ -78,33 +109,42 @@ def _language_view(lang: ContentLanguage) -> ContentLanguageView:
 async def generate_content(
     body: ContentGenerateRequest,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_action),
 ) -> ContentProductView:
+    """operations 触发生成（P0：staff 令牌硬闸，认证身份覆盖自报 actor）。"""
+    body.actor = actor
     try:
         content = await service.generate_content(session, body)
     except PermissionDenied as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _http_error(403, "operations role required", exc) from exc
     except service.ContentFcwNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "final content whitelist not found", exc) from exc
     except FcwRevoked as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(409, "final content whitelist revoked", exc) from exc
     except service.ContentKindNotImplemented as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "content kind not implemented", exc) from exc
     except service.ContentLanguageNotEligible as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "language not eligible for this final", exc) from exc
     except service.ContentDuplicateLanguage as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(
+            409, "content already exists for this final, language and kind", exc
+        ) from exc
     except generation.ArticleGenFcwNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "final content whitelist not found", exc) from exc
     except generation.ArticleGenState as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(409, "content state does not allow generation", exc) from exc
     except generation.ArticleGenOutputInvalid as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise _http_error(
+            502, "content generation returned invalid output", exc
+        ) from exc
     except generation.VideoGenFcwNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "final content whitelist not found", exc) from exc
     except generation.VideoGenState as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(409, "content state does not allow generation", exc) from exc
     except generation.VideoGenOutputInvalid as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise _http_error(
+            502, "content generation returned invalid output", exc
+        ) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -125,9 +165,11 @@ async def approve_content(
             session, content_id, tenant_id, actor
         )
     except service.ContentNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(
+            409, "content state does not allow this operation", exc
+        ) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -146,11 +188,13 @@ async def reject_content(
             session, content_id, tenant_id, body.reason, actor
         )
     except service.ContentNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     except service.ContentRejectReasonRequired as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "reject requires a non-empty reason", exc) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(
+            409, "content state does not allow this operation", exc
+        ) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -169,11 +213,15 @@ async def revise_content(
             session, content_id, tenant_id, actor
         )
     except service.ContentNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     except service.ContentReviseCap as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(
+            422, "regenerate cap reached; reject or escalate to manual", exc
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(
+            409, "content state does not allow this operation", exc
+        ) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -185,23 +233,31 @@ async def regenerate_content(
     content_id: str,
     body: ContentDecisionRequest,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_action),
 ) -> ContentProductView:
+    """operations 改稿重生成（P0：staff 令牌硬闸，认证身份覆盖自报 actor）。"""
     try:
-        content = await service.regenerate_content(session, content_id, body.actor)
+        content = await service.regenerate_content(session, content_id, actor)
     except PermissionDenied as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _http_error(403, "operations role required", exc) from exc
     except service.ContentNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     except service.ContentReviseCap as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(
+            422, "regeneration only allowed in revising state", exc
+        ) from exc
     except generation.ArticleGenOutputInvalid as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise _http_error(
+            502, "content generation returned invalid output", exc
+        ) from exc
     except generation.VideoGenFcwNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "final content whitelist not found", exc) from exc
     except generation.VideoGenState as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(409, "content state does not allow generation", exc) from exc
     except generation.VideoGenOutputInvalid as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise _http_error(
+            502, "content generation returned invalid output", exc
+        ) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -213,24 +269,25 @@ async def discard_content(
     content_id: str,
     body: ContentDiscardRequest,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_action),
 ) -> ContentProductView:
-    """Q56-b/Q124：运营作废骨架回池（operations 闸，难产原因必填）。"""
+    """Q56-b/Q124：运营作废骨架回池（P0：staff 令牌硬闸，难产原因必填）。"""
     try:
         content = await service.discard_content(
-            session, content_id, body.reason, body.actor
+            session, content_id, body.reason, actor
         )
     except PermissionDenied as exc:
         await session.rollback()
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _http_error(403, "operations role required", exc) from exc
     except service.ContentNotFound as exc:
         await session.rollback()
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     except service.ContentNotDiscardable as exc:
         await session.rollback()
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(409, "content state does not allow discard", exc) from exc
     except service.ContentDiscardReasonRequired as exc:
         await session.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "discard requires a non-empty reason", exc) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -314,24 +371,27 @@ async def set_publish_info(
     content_id: str,
     body: ContentPublishInfoRequest,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_action),
 ) -> ContentProductView:
-    """Q60c/Q125：运营用托管账号发布后回填平台链接/ID（operations 闸）。"""
+    """Q60c/Q125：运营用托管账号发布后回填平台链接/ID（P0：staff 令牌硬闸）。"""
     try:
         content = await service.set_publish_info(
-            session, content_id, body.url, body.platform_post_id, body.actor
+            session, content_id, body.url, body.platform_post_id, actor
         )
     except PermissionDenied as exc:
         await session.rollback()
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _http_error(403, "operations role required", exc) from exc
     except service.ContentNotFound as exc:
         await session.rollback()
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     except service.ContentNotPublishable as exc:
         await session.rollback()
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(
+            409, "publish info only accepted for ready-to-publish content", exc
+        ) from exc
     except service.ContentPublishUrlRequired as exc:
         await session.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "publish url must not be empty", exc) from exc
     await session.commit()
     return service.content_view(content)
 
@@ -353,16 +413,18 @@ async def list_languages(
 async def upsert_language(
     body: LanguageUpsertRequest,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_dict_action),
 ) -> ContentLanguageView:
+    """语言条目写口（P0：staff 令牌硬闸，dictionary_admin）。"""
     try:
-        lang = await l10n.upsert_language(session, body, body.actor)
+        lang = await l10n.upsert_language(session, body, actor)
         await session.commit()
     except PermissionDenied as exc:
         await session.rollback()
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _http_error(403, "dictionary admin role required", exc) from exc
     except l10n.LanguageInvalid as exc:
         await session.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "invalid content language", exc) from exc
     return _language_view(lang)
 
 
@@ -371,13 +433,15 @@ async def archive_language(
     code: str,
     body: LanguageArchiveRequest,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_dict_action),
 ) -> dict:
+    """语言归档写口（P0：staff 令牌硬闸，dictionary_admin）。"""
     try:
-        await l10n.archive_language(session, code, body.actor)
+        await l10n.archive_language(session, code, actor)
         await session.commit()
     except PermissionDenied as exc:
         await session.rollback()
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _http_error(403, "dictionary admin role required", exc) from exc
     except l10n.LanguageNotFound as exc:
         await session.rollback()
         raise HTTPException(status_code=404, detail="content language not found") from exc
@@ -409,21 +473,23 @@ async def set_target_languages(
     product_space_id: str,
     body: TargetLanguagesRequest,
     session: AsyncSession = Depends(get_session),
+    actor: Actor = Depends(require_ops_action),
 ) -> dict:
+    """产品目标语言写口（P0：staff 令牌硬闸，operations）。"""
     try:
         ps = await l10n.set_ps_target_languages(
-            session, product_space_id, body.languages, body.actor
+            session, product_space_id, body.languages, actor
         )
         await session.commit()
     except PermissionDenied as exc:
         await session.rollback()
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _http_error(403, "operations role required", exc) from exc
     except l10n.ProductSpaceNotFound as exc:
         await session.rollback()
         raise HTTPException(status_code=404, detail="product space not found") from exc
     except l10n.LanguageInvalid as exc:
         await session.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "invalid content language", exc) from exc
     return {
         "product_space_id": product_space_id,
         "target_languages": ps.target_languages,
@@ -439,9 +505,9 @@ async def set_target_languages(
 async def list_content(
     tenant_id: str = Query(min_length=1),
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_client),
 ) -> list[ContentProductListItem]:
-    # Q122：客户内容页租户只读列表（口径同 Q101 compliance/overview：
-    # 无 query actor 闸，未知租户 200 返回空列表，不写审计）。
+    """Q122 客户内容页租户只读列表（P0：客户令牌验真，令牌↔tenant 绑定一致）。"""
     rows = await service.list_content(session, tenant_id)
     return [service.content_list_item(row) for row in rows]
 
@@ -451,9 +517,11 @@ async def list_content(
 )
 async def list_active_languages(
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_client_any),
 ) -> list[ContentLanguageView]:
-    """B3/Q122：客户录入页目标语言控件的只读清单（仅 active，无闸；
-    管理面含归档清单走 /api/admin/content-languages + dictionary_admin 闸）。
+    """B3/Q122：客户录入页目标语言控件的只读清单（仅 active；P0：客户令牌验真，
+    非租户作用域故任一 active 客户令牌即可；管理面含归档清单走
+    /api/admin/content-languages + dictionary_admin 闸）。
 
     必须注册在 ``/api/content/{content_id}`` 之前，否则被路径参数吞掉。
     """
@@ -466,12 +534,13 @@ async def get_content(
     content_id: str,
     tenant_id: str = Query(min_length=1),
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_client),
 ) -> ContentProductView:
-    """Q122 客户内容详情（Q200 #32：必填 tenant_id，归属不符统一 404）。"""
+    """Q122 客户内容详情（P0：客户令牌验真；归属不符统一 404）。"""
     try:
         content = await service.get_content(session, content_id, tenant_id)
     except service.ContentNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     return service.content_view(content)
 
 
@@ -486,19 +555,19 @@ async def edit_content_body(
     actor: Actor = Depends(require_client),
 ) -> ContentProductView:
     """Q56-a/Q122：客户在 revising 态人工编辑正文，提交后重过复检回 review
-    （P0：客户令牌验真；tenant_id 归属不符统一 404）。"""
+    （P0：客户令牌验真；归属不符统一 404）。"""
     try:
         content = await service.edit_content_body(
             session, content_id, tenant_id, body.body, actor
         )
     except service.ContentNotFound as exc:
         await session.rollback()
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _http_error(404, "content not found", exc) from exc
     except service.ContentNotEditable as exc:
         await session.rollback()
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _http_error(409, "content is not in an editable state", exc) from exc
     except service.ContentBodyRequired as exc:
         await session.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _http_error(422, "edited body must not be empty", exc) from exc
     await session.commit()
     return service.content_view(content)

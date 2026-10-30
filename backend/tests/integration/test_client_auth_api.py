@@ -15,6 +15,7 @@ from collections.abc import AsyncGenerator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.content.models import CONTENT_READY, CONTENT_REVIEW, ContentProduct
@@ -281,4 +282,76 @@ async def test_body_edit_endpoint_requires_token(client):
         "/api/content/cp-t1/body?tenant_id=t1",
         json={"body": "x", "actor": CUSTOMER},
     )
+    assert r.status_code == 401, r.text
+
+
+# ---------- P0 收口批（2026-10-30）：客户只读口 + 仅身份目录 ----------
+
+
+async def test_content_read_endpoints_require_client_token(client):
+    # 列表/详情此前只吃 query tenant_id（声明任意租户即可读）；现在无令牌一律 401。
+    for path in ("/api/content?tenant_id=t1", "/api/content/cp-t1?tenant_id=t1"):
+        r = await client.get(path)
+        assert r.status_code == 401, f"{path}: {r.text}"
+
+
+async def test_content_read_endpoints_valid_token_200_and_tenant_bound(client):
+    _, secret = await _bootstrap(client, tenant_id="t1", client_name="cust-1")
+    r = await client.get(
+        "/api/content", params={"tenant_id": "t1"},
+        headers={"Authorization": f"Bearer {secret}"},
+    )
+    assert r.status_code == 200, r.text
+    assert [row["content_id"] for row in r.json()] == ["cp-t1"]
+
+    r = await client.get(
+        "/api/content/cp-t1", params={"tenant_id": "t1"},
+        headers={"Authorization": f"Bearer {secret}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # t1 令牌声明 t2 列表 → 401（令牌↔tenant 绑定，声明不再产生读权限）。
+    r = await client.get(
+        "/api/content", params={"tenant_id": "t2"},
+        headers={"Authorization": f"Bearer {secret}"},
+    )
+    assert r.status_code == 401, r.text
+
+
+async def test_language_catalog_requires_any_active_client_token(client):
+    # 非租户作用域只读目录：仅身份口——任一租户的 active 客户令牌即可；
+    # 无令牌 401、伪造令牌 401。
+    r = await client.get("/api/content/languages")
+    assert r.status_code == 401, r.text
+    r = await client.get(
+        "/api/content/languages",
+        headers={"Authorization": "Bearer loom_client_deadbeef"},
+    )
+    assert r.status_code == 401, r.text
+
+    _, secret_t2 = await _bootstrap(client, tenant_id="t2", client_name="cust-2")
+    r = await client.get(
+        "/api/content/languages",
+        headers={"Authorization": f"Bearer {secret_t2}"},
+    )
+    assert r.status_code == 200, r.text
+
+
+async def test_fail_closed_with_no_client_tokens_issued(client, session_factory):
+    """fail-closed：令牌表为空（未签发/全部吊销）时，客户口无任何可行路径。
+
+    客户凭证不依赖共享密钥配置——库内只存 SHA-256 摘要，没有「缺配置即放行」
+    的分支；一条令牌都不存在时，自报 actor / 伪造令牌 / 他前缀令牌全部 401。
+    """
+    async with session_factory() as session:
+        rows = (await session.scalars(select(ClientAccessToken))).all()
+        assert rows == []
+    r = await client.post(
+        "/api/content/cp-t1/approve?tenant_id=t1",
+        json={"actor": {"id": "x", "roles": ["platform_admin"]}},
+    )
+    assert r.status_code == 401, r.text
+    r = await client.get("/api/content", params={"tenant_id": "t1"})
+    assert r.status_code == 401, r.text
+    r = await client.get("/api/content/languages")
     assert r.status_code == 401, r.text

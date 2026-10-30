@@ -105,6 +105,15 @@ GATED: dict[tuple[str, str], tuple[str, ...]] = {
     ("/api/admin/video-generation-tasks/{task_id}/sync", "POST"): OPS,
     # Q368：成片入库（completed 的 url 回填 content.body）＝人工逐单动作，operations 硬闸。
     ("/api/admin/video-generation-tasks/{task_id}/attach-to-content", "POST"): OPS,
+    # P0（2026-10-30）：段12 content 运营写口收进凭证硬闸——generate 会花真 token，
+    # regenerate/discard/publish-info/target-languages 改数据；语言字典写口归 dictionary_admin。
+    ("/api/content/generate", "POST"): OPS,
+    ("/api/content/{content_id}/regenerate", "POST"): OPS,
+    ("/api/content/{content_id}/discard", "POST"): OPS,
+    ("/api/admin/content/{content_id}/publish-info", "PUT"): OPS,
+    ("/api/product-spaces/{product_space_id}/target-languages", "PUT"): OPS,
+    ("/api/admin/content-languages", "PUT"): ("dictionary_admin",),
+    ("/api/admin/content-languages/{code}/archive", "POST"): ("dictionary_admin",),
 }
 
 # 必须一个标记都没有：只读口，以及有意不加闸的写口。

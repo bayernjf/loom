@@ -53,10 +53,12 @@ from app.core.model_registry.seeds import (
     SYNTHETIC_MODEL_ID,
 )
 from app.core.models import AuditLog
+from app.core.staff_auth.deps import get_auth_session
 from app.final.final_whitelist.models import FinalContentWhitelist
 from app.main import app
 from tests.integration.client_tokens import client_bearer, issue_client_token
 from tests.integration.fcw_rows import add_fcw
+from tests.integration.staff_tokens import bearer, issue_staff_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 OPS_Q = {"actor_id": "ops-1", "roles": ["operations"]}
@@ -111,6 +113,8 @@ async def session_factory():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    # P0：staff 令牌验真走认证短事务（get_auth_session），同样覆写到测试库。
+    app.dependency_overrides[get_auth_session] = get_test_session
     yield factory
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -150,11 +154,16 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        # P0：客户决策端点（revise/reject/approve）强制客户令牌，fixture 引导签发
-        # 并设为默认头；运营 discard 端点不受影响（仍走 operations 自报闸）。
-        secret = await issue_client_token(ac, "t1", client_name="cust-1")
-        ac.headers.update(client_bearer(secret))
+        # P0：generate/discard 为 staff 硬闸，默认头挂 operations 令牌；客户决策口
+        # 强制客户令牌，由 customer_bearer 夹具逐调用携带。
+        ac.headers.update(bearer(await issue_staff_token(ac, ["operations"], staff_id="s-ops")))
         yield ac
+
+
+@pytest_asyncio.fixture
+async def customer_bearer(client):
+    """客户令牌（tenant t1）：客户决策口逐调用显式携带（默认头是 staff）。"""
+    return client_bearer(await issue_client_token(client, "t1", client_name="cust-1"))
 
 
 async def _generate(client, language: str = "zh-CN") -> str:
@@ -166,14 +175,14 @@ async def _generate(client, language: str = "zh-CN") -> str:
     return r.json()["content_id"]
 
 
-async def _discard(client, cid: str, reason=REASON, actor=OPS):
+async def _discard(client, cid: str, reason=REASON, actor=OPS, **kw):
     return await client.post(
-        f"/api/content/{cid}/discard", json={"reason": reason, "actor": actor}
+        f"/api/content/{cid}/discard", json={"reason": reason, "actor": actor}, **kw
     )
 
 
 async def test_discard_from_review_sets_status_reason_and_audit(
-    client, session_factory
+    client, customer_bearer, session_factory
 ):
     cid = await _generate(client)
     r = await _discard(client, cid)
@@ -195,11 +204,13 @@ async def test_discard_from_review_sets_status_reason_and_audit(
         )
         assert len(logs) == 1
         assert logs[0].entity_id == cid
+        # P0：身份来自 staff 令牌（staff_id=s-ops），不是 body.actor 自报。
+        assert logs[0].actor_id == "s-ops"
         assert logs[0].actor_roles == ["operations"]
         assert logs[0].detail["reason"] == REASON
 
     # 列表仍可见作废行（终态只读，客户列表按租户全量），列表项带回原因。
-    r = await client.get("/api/content", params={"tenant_id": "t1"})
+    r = await client.get("/api/content", params={"tenant_id": "t1"}, headers=customer_bearer)
     items = r.json()
     assert len(items) == 1
     assert items[0]["status"] == CONTENT_DISCARDED
@@ -208,8 +219,13 @@ async def test_discard_from_review_sets_status_reason_and_audit(
 
 async def test_discard_requires_operations_role(client):
     cid = await _generate(client)
+    # P0：无令牌 401（自报 actor 不再是身份）。
+    saved = client.headers.get("Authorization")
+    client.headers.pop("Authorization", None)
     r = await _discard(client, cid, actor=CUSTOMER)
-    assert r.status_code == 403, r.text
+    assert r.status_code == 401, r.text
+    if saved is not None:
+        client.headers.update({"Authorization": saved}), r.text
 
 
 async def test_discard_unknown_404(client):
@@ -217,10 +233,10 @@ async def test_discard_unknown_404(client):
     assert r.status_code == 404, r.text
 
 
-async def test_discard_from_revising_and_rejected(client):
+async def test_discard_from_revising_and_rejected(client, customer_bearer):
     # revising → discarded
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER}, headers=customer_bearer)
     assert r.status_code == 200
     r = await _discard(client, cid)
     assert r.status_code == 200, r.text
@@ -232,6 +248,7 @@ async def test_discard_from_revising_and_rejected(client):
     r = await client.post(
         f"/api/content/{cid2}/reject?tenant_id=t1",
         json={"reason": "客户不认可方向", "actor": CUSTOMER},
+        headers=customer_bearer,
     )
     assert r.status_code == 200
     assert r.json()["status"] == CONTENT_REJECTED
@@ -240,10 +257,10 @@ async def test_discard_from_revising_and_rejected(client):
     assert r.json()["status"] == CONTENT_DISCARDED
 
 
-async def test_discard_not_allowed_from_ready_and_draft(client, session_factory):
+async def test_discard_not_allowed_from_ready_and_draft(client, customer_bearer, session_factory):
     # ready_for_publish 已进发布，不可作废。
     cid = await _generate(client)
-    r = await client.post(f"/api/content/{cid}/approve?tenant_id=t1", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/approve?tenant_id=t1", json={"actor": CUSTOMER}, headers=customer_bearer)
     assert r.status_code == 200
     assert r.json()["status"] == CONTENT_READY
     r = await _discard(client, cid)
@@ -264,7 +281,7 @@ async def test_discard_not_allowed_from_ready_and_draft(client, session_factory)
             )
         )
         await session.commit()
-    r = await client.get("/api/content", params={"tenant_id": "t1"})
+    r = await client.get("/api/content", params={"tenant_id": "t1"}, headers=customer_bearer)
     draft_id = next(
         it["content_id"] for it in r.json() if it["status"] == CONTENT_DRAFT
     )
@@ -283,7 +300,7 @@ async def test_discard_blank_reason_422(client):
     assert r.status_code == 422
 
 
-async def test_discarded_slot_released_for_regeneration(client, session_factory):
+async def test_discarded_slot_released_for_regeneration(client, customer_bearer, session_factory):
     cid = await _generate(client)
     r = await _discard(client, cid)
     assert r.status_code == 200
@@ -332,12 +349,12 @@ def _raw_product(final_id: str, tenant_id: str, status: str, **kw) -> ContentPro
 
 
 async def test_needs_attention_queue_filters_order_and_role_gate(
-    client, session_factory
+    client, customer_bearer, session_factory
 ):
     # c1 生成后停 review（t1）；c2 approve 后 ready，不进待处置。
     c1 = await _generate(client)
     c2 = await _generate(client, "en-US")
-    r = await client.post(f"/api/content/{c2}/approve?tenant_id=t1", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{c2}/approve?tenant_id=t1", json={"actor": CUSTOMER}, headers=customer_bearer)
     assert r.status_code == 200
 
     async with session_factory() as session:
@@ -371,18 +388,20 @@ async def test_needs_attention_queue_filters_order_and_role_gate(
     assert items[0]["content_id"] == c1
 
 
-async def test_discarded_is_terminal(client):
+async def test_discarded_is_terminal(client, customer_bearer):
     # 作废后客户审阅动作全部失效（终态只读）：approve/reject 状态迁移拒绝 409；
     # revise 先过重生成上限闸（ContentReviseCap）返回 422，同为拒绝语义。
     cid = await _generate(client)
     await _discard(client, cid)
-    r = await client.post(f"/api/content/{cid}/approve?tenant_id=t1", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/approve?tenant_id=t1", json={"actor": CUSTOMER}, headers=customer_bearer)
     assert r.status_code == 409, r.text
     r = await client.post(
-        f"/api/content/{cid}/reject?tenant_id=t1", json={"reason": "x", "actor": CUSTOMER}
+        f"/api/content/{cid}/reject?tenant_id=t1",
+        json={"reason": "x", "actor": CUSTOMER},
+        headers=customer_bearer,
     )
     assert r.status_code == 409, r.text
-    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER})
+    r = await client.post(f"/api/content/{cid}/revise?tenant_id=t1", json={"actor": CUSTOMER}, headers=customer_bearer)
     assert r.status_code == 422, r.text
     # 重复作废同样 409。
     r = await _discard(client, cid)
