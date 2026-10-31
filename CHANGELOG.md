@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **M3-W3-5（2026-10-31）知识库首个消费试点批**：loom 经 project token 接入 model-hub knowledge query（Tier0 PRD F3 FR3-5「API-first 消费」、D-8 定案试点）——`app/core/knowledge.py` 薄客户端（配置面 fail-closed：`LOOM_KNOWLEDGE_URL`/`LOOM_KNOWLEDGE_TOKEN` 任一缺失即停用不发请求；运行面 fail-soft：超时/HTTP 4xx-5xx/非法响应/无命中一律跳过不阻断）＋ARTICLE-GEN 生成前上下文注入（FCW 原料拼检索词，命中带出处 `[n]《标题》` 追加进 `$materials`，零 prompt 版本变更；VIDEO-GEN 不接）；测试 +33（client 22＋消费点 9＋集成 2），全量 **1569 passed＋11 skipped**、eval 101/101、ruff 净。
+
 - **Q375（2026-10-20）Q7 阈值拍板销账批**：负责人「按你推荐来」拍板采纳 Q372 建议档——medical 0.90（PRD 原文唯一硬标）保持、food/maternal 维持 0.85（原文未单独标 0.90、不算错）、运营经 Q7 CRUD 按需调（改即审计、默认档不可删）；docs/25 §3.1 Q7 行 🟡→✅、§0 计数 ✅80→81／🟡11→10（⬜5 不变）、**V1 主链 40/1→41/0 全绿**。纯文档批，零代码零迁移零测试变化；02 C1.317（另补齐 Q372–Q374 三笔信息保全续编索引欠账）。
 
 - **Q374（2026-10-20）第三轮完整 E2E 回归批**：运行栈（Q373 重建形态）全量回归——20 管理路由全遍历渲染正常（含 exports）、Q371 两处修复点复验（审核台行内裁决/批量通过 409 → 错误回显「操作冲突，请刷新后重试」持续生效）、核心页抽查（staff-keys/config/effects/intakes）内容正确；**未发现新缺陷**。纯文档批＋环境验证，零代码零迁移零测试变化；docs/26 §6.7 记录，02 C1.316。
