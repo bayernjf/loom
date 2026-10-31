@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, "**"]
   pull_request:
 
 # Q301：同一 ref 连推时取消旧 run——PR #150 曾堆出一串 cancelled 重复 run，
