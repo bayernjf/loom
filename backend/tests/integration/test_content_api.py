@@ -21,6 +21,7 @@ from app.content.models import (
     ContentLanguage,
     ContentProduct,
 )
+from app.core import knowledge
 from app.core.compliance_wordlist.models import ComplianceWordlistEntry
 from app.core.db import Base, get_session
 from app.core.model_registry import drivers, synthetic
@@ -207,6 +208,54 @@ async def test_generate_malformed_output_is_502(client, monkeypatch):
         "/api/content/generate", json={"final_id": "fcw-1", "actor": OPS}
     )
     assert r.status_code == 502
+
+
+async def test_generate_injects_knowledge_context(client, monkeypatch):
+    """M3-W3-5 消费试点：知识库命中 ⇒ ARTICLE-GEN 原料追加「业务文档参考」段（带出处）。"""
+    captured: dict = {}
+
+    async def _capture(self, **kwargs):
+        captured[kwargs.get("scene")] = kwargs.get("user_message", "")
+        return GenerationResult(text='{"body": "kb 占位正文"}', input_tokens=3, output_tokens=4)
+
+    async def _fake_query(query, **kwargs):
+        return knowledge.KnowledgeAnswer(
+            query=query,
+            answer=None,
+            citations=[
+                knowledge.KnowledgeCitation(
+                    "chk_1", "doc_1", "退款政策", 0, 0.9, "购买后 30 天可退款。"
+                )
+            ],
+        )
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _capture)
+    monkeypatch.setattr(knowledge, "query_knowledge", _fake_query)
+    r = await client.post(
+        "/api/content/generate", json={"final_id": "fcw-1", "actor": OPS}
+    )
+    assert r.status_code == 201, r.text
+    gen_message = captured[SCENE_ARTICLE_GEN]
+    assert "业务文档参考" in gen_message
+    assert "[1]《退款政策》购买后 30 天可退款。" in gen_message
+
+
+async def test_generate_without_knowledge_keeps_materials_clean(client, monkeypatch):
+    """停用（env 缺失）⇒ 消费点 fail-closed 跳过，ARTICLE-GEN 原料与既有形态一致。"""
+    captured: dict = {}
+
+    async def _capture(self, **kwargs):
+        captured[kwargs.get("scene")] = kwargs.get("user_message", "")
+        return GenerationResult(text='{"body": "占位"}', input_tokens=3, output_tokens=4)
+
+    monkeypatch.delenv("LOOM_KNOWLEDGE_URL", raising=False)
+    monkeypatch.delenv("LOOM_KNOWLEDGE_TOKEN", raising=False)
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _capture)
+    r = await client.post(
+        "/api/content/generate", json={"final_id": "fcw-1", "actor": OPS}
+    )
+    assert r.status_code == 201, r.text
+    assert "业务文档参考" not in captured[SCENE_ARTICLE_GEN]
 
 
 async def _generate(client) -> str:
