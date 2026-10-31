@@ -26,6 +26,7 @@ from app.core.model_registry.schemas import (
     SceneRouteUpsert,
     SceneRouteView,
 )
+from app.core.problem_details import logged_http_error
 from app.core.rbac import (
     OPERATIONS,
     PLATFORM_ADMIN,
@@ -188,7 +189,7 @@ async def hub_sync(
     try:
         result = hub.sync_hub_projection()
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"hub sync failed: {exc}") from exc
+        raise logged_http_error(502, "hub sync failed", exc) from exc
     if result is None:
         raise HTTPException(status_code=409, detail="model-hub is not configured")
     return result
@@ -396,10 +397,8 @@ async def invoke_c1_recognition(
         raise _http409(str(exc))
     except gateway.ModelConfigError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except gateway.GenerationUpstreamError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except extraction.ExtractionOutputInvalid as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except (gateway.GenerationUpstreamError, extraction.ExtractionOutputInvalid) as exc:
+        raise logged_http_error(502, "upstream model pipeline failed", exc) from exc
     await session.commit()
     return {
         "run_id": run.run_id,
@@ -440,10 +439,8 @@ async def invoke_c7_resolve(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except c7_rules.IllegalFid as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except gateway.GenerationUpstreamError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except c7_resolve.C7ResolveOutputInvalid as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except (gateway.GenerationUpstreamError, c7_resolve.C7ResolveOutputInvalid) as exc:
+        raise logged_http_error(502, "upstream model pipeline failed", exc) from exc
     await session.commit()
     return {
         "run_id": run.run_id,

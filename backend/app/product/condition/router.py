@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import gateway, pwc_build
+from app.core.problem_details import logged_http_error
 from app.core.rbac import (
     DICTIONARY_ADMIN,
     OPERATIONS,
@@ -193,12 +194,9 @@ async def llm_build(
     except gateway.ModelConfigError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except gateway.GenerationUpstreamError as exc:
+    except (gateway.GenerationUpstreamError, pwc_build.PwcBuildOutputInvalid) as exc:
         await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except pwc_build.PwcBuildOutputInvalid as exc:
-        await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise logged_http_error(502, "upstream model pipeline failed", exc) from exc
     await session.commit()
     return {
         "run_id": run.run_id,

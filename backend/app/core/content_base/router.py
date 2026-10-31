@@ -28,6 +28,7 @@ from app.core.content_base.schemas import (
 )
 from app.core.content_base.types import ContentConstraints, ContentRequest
 from app.core.db import get_session
+from app.core.problem_details import logged_http_error
 
 router = APIRouter(prefix="/api/v1/content", tags=["content-base"])
 
@@ -77,10 +78,10 @@ async def create_request(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ContentBackendUnavailable as exc:
         await session.rollback()
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise logged_http_error(503, "content backend unavailable", exc) from exc
     except ContentBaseError as exc:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise logged_http_error(500, "internal error", exc) from exc
     return _view(record)
 
 
@@ -111,7 +112,7 @@ async def review(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ContentBaseError as exc:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise logged_http_error(500, "internal error", exc) from exc
     return _view(record)
 
 
