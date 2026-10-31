@@ -108,6 +108,7 @@ npm run dev
 
 - `.env` 载体纪律（Q239）：`backend/.env` **只能放 `Settings` 字段**——pydantic-settings 是 `extra="forbid"`，放一个它不认识的名字（如 `LOOM_LLM_BASE_URL_AGNES`）会让进程直接起不来。直读 `os.environ` 的变量走可 source 的 `backend/.env.shell`（`set -a; source backend/.env.shell; set +a`）；本仓没有 `load_dotenv`。
 - 出站供应商 Key **不进任何 env 或文件**：它经 Fernet 加密存 `ai_model_keys`，主密钥是 `LOOM_MASTER_KEY`（Q82／Q148）。
+- model-hub 知识库消费（M3-W3-5 试点）：ARTICLE-GEN 生成前经 `backend/app/core/knowledge.py` 检索 hub 知识库，命中作为「业务文档参考」段（带出处）追加进生成原料。env 直读 `os.environ`、走 `.env.shell` 载体：`LOOM_KNOWLEDGE_URL`（hub 基址，如 `http://localhost:8791`）与 `LOOM_KNOWLEDGE_TOKEN`（hub project token `mh_…`）**任一缺失即功能整体停用**（fail-closed，不报错不影响生成）；`LOOM_KNOWLEDGE_TIMEOUT_SECONDS` 可选超时旋钮（默认 15s）。运行期超时／HTTP 错误／无命中一律 fail-soft 跳过注入；检索与重排的限流/计费在 hub 侧（30 ingest/h、120 query/h，见 model-hub `docs/knowledge-api.md`）。
 
 ### 3. 起真栈部署（docker compose，private beta 官方形态）
 

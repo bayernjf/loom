@@ -4,13 +4,20 @@
 进程内同步调模型网关 → 严格校验输出契约 → 直接写 content_products.body。
 段12 的 Gate 是客户审阅（Q59），非运营审核，故不走 skill7 候选通道（Q66 的人工
 Gate 在段12 即客户）；成本经 SkillRun 记录（Q67），writeAudit 留痕。
+
+M3-W3-5 知识库消费试点（PRD F3 FR3-5）：ARTICLE-GEN 生成前用 FCW 原料查
+model-hub 知识库，命中作为「业务文档参考」段（带出处）追加进 $materials；
+停用/无命中/失败一律 fail-soft 不注入。VIDEO-GEN 不接（试点只锁一处，
+video_ref 载体不消费文本上下文）。
 """
 
 import json
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.content.models import CONTENT_GENERATING, ContentProduct
+from app.core import knowledge
 from app.core.actor import Actor
 from app.core.audit import append_audit
 from app.core.model_registry import gateway
@@ -26,6 +33,8 @@ from app.product.whitelist_center.models import PwsSnapshot
 
 SYSTEM_ACTOR = Actor(id="system:llm-gateway", roles=[])
 WF_10 = "WF-10"
+
+logger = logging.getLogger(__name__)
 
 
 class ArticleGenFcwNotFound(Exception):
@@ -91,10 +100,41 @@ async def _assemble_materials(session: AsyncSession, fcw: FinalContentWhitelist)
     }
 
 
-def _materials_text(materials: dict) -> str:
+def _knowledge_query_text(materials: dict) -> str:
+    """从 FCW 原料拼知识库检索词：goal + platform + 原子内容前若干字。"""
+    goal = str(materials.get("goal") or "").strip()
+    platform = str(materials.get("platform") or "").strip()
+    atoms = materials.get("atoms") or []
+    atom_text = " ".join(
+        str(a.get("content", "")) for a in atoms if isinstance(a, dict)
+    ).strip()
+    parts = [p for p in (goal, platform, atom_text[: knowledge.QUERY_ATOM_CHARS]) if p]
+    return " ".join(parts)
+
+
+async def _knowledge_section(materials: dict) -> str | None:
+    """M3-W3-5 消费试点（PRD F3 FR3-5）：查 hub 知识库 → 带出处参考段。
+
+    None ＝ 停用 / 无查询词 / 失败 / 无命中，任何情况下不阻断生成（fail-soft）：
+    知识库注入是原料增强项，本函数内任何异常同样降级为 None。
+    """
+    try:
+        query = _knowledge_query_text(materials)
+        if not query:
+            return None
+        answer = await knowledge.query_knowledge(query)
+        if answer is None:
+            return None
+        return knowledge.context_section(answer)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("knowledge context injection skipped: %s", exc)
+        return None
+
+
+def _materials_text(materials: dict, knowledge_section: str | None = None) -> str:
     atoms = materials["atoms"] or []
     atom_text = " ".join(str(a.get("content", "")) for a in atoms) or "（无原子）"
-    return (
+    text = (
         f"final_id={materials['final_id']}\n"
         f"goal={materials['goal']} platform={materials['platform']} "
         f"country={materials['country'] or '通用'}\n"
@@ -103,6 +143,9 @@ def _materials_text(materials: dict) -> str:
         f"平台权重：{json.dumps(materials['weights'], ensure_ascii=False)}\n"
         f"合规命中：{json.dumps(materials['ccr_hits'], ensure_ascii=False)}"
     )
+    if knowledge_section:
+        text = f"{text}\n{knowledge_section}"
+    return text
 
 
 async def invoke_article_gen(
@@ -126,8 +169,9 @@ async def invoke_article_gen(
     await ensure_fcw_consumable(session, content.final_id)
 
     materials = await _assemble_materials(session, fcw)
+    knowledge_section = await _knowledge_section(materials)
     variables = {
-        "materials": _materials_text(materials),
+        "materials": _materials_text(materials, knowledge_section),
         "language": content.language,
         "_final_id": content.final_id,
         "_goal": content.goal,
