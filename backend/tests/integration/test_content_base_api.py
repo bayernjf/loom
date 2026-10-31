@@ -76,6 +76,15 @@ async def test_banned_word_returns_422(client) -> None:
     assert resp.status_code == 422
 
 
+async def test_submit_with_locale_succeeds(client) -> None:
+    # T-M9-02：请求可指定 locale，契约接受新字段且不影响既有产出路径。
+    resp = await client.post("/api/v1/content/requests", json=_request(locale="en-US"))
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["status"] == "pending_review"
+    assert data["evidence_refs"]
+
+
 async def _submit(client) -> str:
     resp = await client.post("/api/v1/content/requests", json=_request())
     return resp.json()["candidate_id"]
