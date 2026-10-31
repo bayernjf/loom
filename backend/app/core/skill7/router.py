@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
+from app.core.problem_details import logged_http_error
 from app.core.rbac import PermissionDenied
 from app.core.skill7 import registry, service
 from app.core.skill7.models import SkillCandidate, SkillRun
@@ -249,7 +250,7 @@ async def suggest_ai_select(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except gw.GenerationUpstreamError as exc:
         await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise logged_http_error(502, "upstream model pipeline failed", exc) from exc
     return {
         "run": _run_view(run),
         "candidate_ids": [c.candidate_id for c in candidates],

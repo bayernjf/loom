@@ -19,6 +19,7 @@ from app.content.video_studio import service
 from app.core.actor import Actor
 from app.core.config import get_settings
 from app.core.db import get_session
+from app.core.problem_details import logged_http_error
 from app.core.rbac import OPERATIONS, PLATFORM_ADMIN, PermissionDenied, require_any_role
 from app.core.staff_auth.deps import require_internal_actor
 
@@ -247,7 +248,7 @@ async def upload_video_object(
             ContentType=content_type,
         )
     except (BotoCoreError, ClientError) as exc:
-        raise HTTPException(status_code=502, detail=f"object storage error: {exc}") from exc
+        raise logged_http_error(502, "object storage error", exc) from exc
     obj = await service.register_object(
         session,
         content_id=content_id,
@@ -277,7 +278,7 @@ async def stream_video_object(
     try:
         resp = client.get_object(Bucket=obj.bucket, Key=obj.object_key)
     except (BotoCoreError, ClientError) as exc:
-        raise HTTPException(status_code=502, detail=f"object storage error: {exc}") from exc
+        raise logged_http_error(502, "object storage error", exc) from exc
     return StreamingResponse(
         resp["Body"].iter_chunks(),
         media_type=obj.content_type or "application/octet-stream",

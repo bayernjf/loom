@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.core.model_registry import field_plan, gateway
 from app.core.model_registry.schemas import FieldPlanInvokeRequest
+from app.core.problem_details import logged_http_error
 from app.core.rbac import DICTIONARY_ADMIN, OPERATIONS, PermissionDenied, require_any_role
 from app.product.fieldpool import service
 from app.product.fieldpool.models import FPDimension
@@ -184,12 +185,9 @@ async def llm_plan(
     except gateway.ModelConfigError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except gateway.GenerationUpstreamError as exc:
+    except (gateway.GenerationUpstreamError, field_plan.FieldPlanOutputInvalid) as exc:
         await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except field_plan.FieldPlanOutputInvalid as exc:
-        await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise logged_http_error(502, "upstream model pipeline failed", exc) from exc
     await session.commit()
     return {
         "run_id": run.run_id,

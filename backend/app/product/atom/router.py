@@ -7,6 +7,7 @@ from app.core.actor import Actor
 from app.core.db import get_session
 from app.core.model_registry import atom_expand, gateway
 from app.core.model_registry.schemas import AtomExpandInvokeRequest
+from app.core.problem_details import logged_http_error
 from app.core.rbac import (
     INTERNAL_COMPLIANCE,
     OPERATIONS,
@@ -175,12 +176,9 @@ async def llm_expand(
     except gateway.ModelConfigError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except gateway.GenerationUpstreamError as exc:
+    except (gateway.GenerationUpstreamError, atom_expand.AtomExpandOutputInvalid) as exc:
         await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except atom_expand.AtomExpandOutputInvalid as exc:
-        await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise logged_http_error(502, "upstream model pipeline failed", exc) from exc
     await session.commit()
     return {
         "run_id": run.run_id,
@@ -338,12 +336,9 @@ async def ai_supplement_evidence(
     except gateway.ModelConfigError as exc:
         await session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except gateway.GenerationUpstreamError as exc:
+    except (gateway.GenerationUpstreamError, service.AtomEvidenceOutputInvalid) as exc:
         await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except service.AtomEvidenceOutputInvalid as exc:
-        await session.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise logged_http_error(502, "upstream model pipeline failed", exc) from exc
     return await _candidate_with_conflicts(session, cand)
 
 

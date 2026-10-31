@@ -28,6 +28,7 @@ from app.core.metrics import MetricsMiddleware
 from app.core.metrics.router import router as metrics_router
 from app.core.model_registry.router import router as model_registry_router
 from app.core.pool_options.router import router as pool_options_router
+from app.core.problem_details import unhandled_exception_handler
 from app.core.rbac import NotAuthenticated, PermissionDenied
 from app.core.restock.router import router as restock_router
 from app.core.restock.worker import RestockWorker
@@ -180,7 +181,7 @@ app = FastAPI(
 
 # Q181：进程内指标采集中间件（纯 ASGI，记录请求计数/延迟；/metrics 暴露）。
 app.add_middleware(MetricsMiddleware)
-
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Q178：内部角色闸的统一 HTTP 映射（局部 try/except 已映射者优先，这里兜底，
 # 避免未局部捕获时退化为 500）。NotAuthenticated→401，PermissionDenied→403。
