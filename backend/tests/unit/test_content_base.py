@@ -124,3 +124,9 @@ def test_registry_unknown_backend_fails_closed() -> None:
         get_backend("ghost")
     with pytest.raises(BackendNotRegistered):
         get_default()
+
+
+def test_request_locale_defaults_to_none() -> None:
+    # T-M9-02：缺省 locale 向后兼容。
+    assert _request().locale is None
+    assert _request(locale="en-US").locale == "en-US"

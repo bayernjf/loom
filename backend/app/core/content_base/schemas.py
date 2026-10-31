@@ -28,6 +28,8 @@ class CreateContentRequest(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     constraints: ContentConstraintsModel = Field(default_factory=ContentConstraintsModel)
     idempotency_key: str | None = Field(default=None, min_length=1)
+    # 产出语言（T-M9-02，如 zh-CN/en-US）；缺省由调用方默认语言决定。
+    locale: str | None = Field(default=None, min_length=1)
     actor: Actor
 
 

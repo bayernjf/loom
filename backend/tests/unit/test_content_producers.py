@@ -84,3 +84,23 @@ async def test_llm_producer_passes_banned_into_prompt(monkeypatch) -> None:
     )
     await LLMContentProducer().produce(request)
     assert "最有效" in fake.calls[0]["user_message"]
+
+
+async def test_llm_producer_injects_locale_into_prompt(monkeypatch) -> None:
+    monkeypatch.setenv("LOOM_LLM_KEY_AGNES", "test-key")
+    fake = _FakeDriver('{"text":"ok"}')
+    monkeypatch.setitem(
+        drivers._DRIVERS, "agnes", fake  # type: ignore[attr-defined]
+    )
+    await LLMContentProducer().produce(_request(locale="en-US"))
+    assert "en-US" in fake.calls[0]["user_message"]
+
+
+async def test_llm_producer_locale_absent_backwards_compatible(monkeypatch) -> None:
+    monkeypatch.setenv("LOOM_LLM_KEY_AGNES", "test-key")
+    fake = _FakeDriver('{"text":"ok"}')
+    monkeypatch.setitem(
+        drivers._DRIVERS, "agnes", fake  # type: ignore[attr-defined]
+    )
+    await LLMContentProducer().produce(_request())
+    assert "输出语言" not in fake.calls[0]["user_message"]

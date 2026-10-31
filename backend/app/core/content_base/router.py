@@ -45,6 +45,7 @@ def _to_domain(body: CreateContentRequest) -> ContentRequest:
             brand=body.constraints.brand,
         ),
         idempotency_key=body.idempotency_key,
+        locale=body.locale,
     )
 
 
