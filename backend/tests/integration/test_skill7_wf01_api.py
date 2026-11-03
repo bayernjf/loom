@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.db import Base, get_session
 from app.core.tenants.models import Tenant
 from app.main import app
-from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.modeling.models import (
     C1IndustryThreshold,
     C1Record,
@@ -24,6 +23,7 @@ from app.product.modeling.models import (
     OpsTodo,
 )
 from app.product.product_intake import statemachine as sm
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}

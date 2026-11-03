@@ -16,11 +16,11 @@ from app.core.db import Base, get_session
 from app.core.models import AuditLog
 from app.core.tenants.models import TRIAL_MONTHLY_TOKEN_QUOTA, Tenant
 from app.main import app
-from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
 NOBODY = {"id": "nobody-1", "roles": []}

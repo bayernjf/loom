@@ -14,10 +14,11 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# 显式导入确保表注册进 Base.metadata。
-from app.core.content_base import models as _models  # noqa: F401
 from app.core.actor import Actor
 from app.core.api_keys.service import issue_key, revoke_key
+
+# 显式导入确保表注册进 Base.metadata。
+from app.core.content_base import models as _models  # noqa: F401
 from app.core.db import Base, get_session
 from app.core.rbac import PLATFORM_ADMIN
 from app.main import app

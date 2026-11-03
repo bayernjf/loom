@@ -35,7 +35,6 @@ from app.core.model_registry.seeds import (
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.core.tenants.models import Tenant
 from app.main import app
-from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.modeling.models import (
     C1IndustryThreshold,
     C1SignalWeight,
@@ -43,6 +42,7 @@ from app.product.modeling.models import (
 )
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import G2Field
+from tests.integration.staff_tokens import bearer, issue_write_token
 from tests.metric_reads import counter_value, histogram_count
 
 OPS = {"id": "ops-1", "roles": ["operations"]}

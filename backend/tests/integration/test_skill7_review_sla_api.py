@@ -18,7 +18,6 @@ from app.core.models import AuditLog
 from app.core.sla.engine import escalate_due_todos
 from app.core.tenants.models import Tenant
 from app.main import app
-from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.fieldpool.models import FPSourceRoute
 from app.product.modeling.models import (
     C1IndustryThreshold,
@@ -30,6 +29,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}

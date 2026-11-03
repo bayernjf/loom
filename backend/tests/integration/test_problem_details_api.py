@@ -27,10 +27,10 @@ from app.core.model_registry.seeds import (
 )
 from app.core.tenants.models import Tenant
 from app.main import app
-from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.modeling.models import C1IndustryThreshold, C1SignalWeight, G1Category
 from app.product.product_intake import service as intake_service
 from app.product.product_intake.models import G2Field
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 

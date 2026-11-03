@@ -33,9 +33,9 @@ from app.core.model_registry.seeds import (
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.core.tenants.models import Tenant
 from app.main import app
-from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.modeling.models import C7Run, G1Category, G2FieldCandidate
 from app.product.product_intake.models import G2Field
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 PLATFORM_ADMIN = {"id": "pa-1", "roles": ["platform_admin"]}
