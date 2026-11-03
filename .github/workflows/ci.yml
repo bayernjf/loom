@@ -32,6 +32,12 @@ jobs:
       - name: Ruff lint
         working-directory: backend
         run: ruff check .
+      # Q-type-gate：静态门放在 pytest 之前（廉价、fail-fast）。基线已清到 0 error，
+      # 故不引入 [[tool.mypy.overrides]] 豁免清单；--no-incremental 保证每次都是全量
+      # 检查，不让 .mypy_cache 把新增错误藏进增量跳过的文件。
+      - name: Mypy type check (zero-error gate)
+        working-directory: backend
+        run: mypy --no-incremental app
       - name: Pytest (sqlite, no services)
         working-directory: backend
         # --cov adds measurement only; docs/16 §4's coverage thresholds stay 【建议】
