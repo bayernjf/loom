@@ -36,6 +36,16 @@ services:
   frontend:
     ports: !reset []
 
+  backend:
+    environment:
+      # 评审 P1-2（2026-11-02）：网关形态 = 公网可达面，staff 身份门控默认必须开，
+      # 不继承 base 的 :-false。门控关时 154 个写口只校验 body/query 自报角色，
+      # 任何绕过网关直连 backend 的路径都会全盘失守。
+      # 保留 :-true 而非字面 true：全新部署的首枚 staff 令牌按 docs/17 §0.1 引导流程
+      # 只能在门控关时签发（POST /api/admin/staff-keys 无令牌时代）——显式置 false
+      # 是运维的刻意动作，未配置则 fail-closed。本机 dev 不起本 overlay，不受影响。
+      LOOM_STAFF_AUTH_ENABLED: ${LOOM_STAFF_AUTH_ENABLED:-true}
+
 volumes:
   caddy_data: {}
   caddy_config: {}

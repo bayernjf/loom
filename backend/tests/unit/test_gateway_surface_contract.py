@@ -235,6 +235,23 @@ def test_topology_free_bool_switches_actually_reach_the_backend_container() -> N
     assert not (topology_bound & set(env)), topology_bound & set(env)
 
 
+def test_gateway_overlay_forces_staff_auth_gate_on() -> None:
+    """评审 P1-2（2026-11-02）：公网网关形态必须默认开 staff 身份门控。
+
+    base 默认 `${LOOM_STAFF_AUTH_ENABLED:-false}` 是本机 dev 的 V1 兼容面；只要走了
+    gateway overlay（唯一公网暴露形态），门控默认值就必须翻成 true——门控关时 154 个
+    写口只校验 body/query 自报角色，绕过网关直连 backend 的路径即全盘失守。
+    保留 `:-true` 插值（而非字面 true）是为了全新部署的首令牌引导（docs/17 §0.1 的
+    鸡生蛋流程要求门控关时才能签发首枚 staff 令牌）：显式置 false 是刻意运维动作，
+    未配置必须 fail-closed。本测试钉住「overlay 默认开」这一事实。
+    """
+    overlay = yaml.safe_load(GATEWAY_OVERLAY.read_text())
+    env = overlay["services"]["backend"]["environment"]
+    assert env.get("LOOM_STAFF_AUTH_ENABLED") == "${LOOM_STAFF_AUTH_ENABLED:-true}", (
+        "gateway overlay 的 staff 门控默认不再是开——公网形态退回自报角色"
+    )
+
+
 def test_reverse_proxy_targets_are_real_services_on_real_ports() -> None:
     base = yaml.safe_load(BASE_COMPOSE.read_text())["services"]
     backend_port = re.search(r"--port (\d+)", ENTRYPOINT.read_text()).group(1)
