@@ -20,7 +20,16 @@ from fastapi.routing import APIRoute
 from app.main import app
 
 SKIP = {"get_session", "MetricsMiddleware"}
-CRED_MARKERS = ("require_agent_key", "verify_key", "get_current_staff", "require_internal_actor", "staff_auth_context")
+CRED_MARKERS = (
+    "require_agent_key",
+    "verify_key",
+    "verify_client_key",
+    "verify_staff_key",
+    "require_client_or_staff_actor",
+    "get_current_staff",
+    "require_internal_actor",
+    "staff_auth_context",
+)
 ROLE_MARKER = "require_any_role"
 
 

@@ -16,6 +16,7 @@ from app.core.db import Base, get_session
 from app.core.models import AuditLog
 from app.core.tenants.models import TRIAL_MONTHLY_TOKEN_QUOTA, Tenant
 from app.main import app
+from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
@@ -47,6 +48,8 @@ async def session_factory():
 async def client(session_factory):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
+        # P1-1：intakes 面全部要凭证；默认 staff 令牌（operations 等三写角色）。
+        c.headers.update(bearer(await issue_write_token(c)))
         yield c
 
 
@@ -245,7 +248,12 @@ async def test_unknown_tenant_writes_nothing(client, session_factory):
     async with session_factory() as session:
         rows = (await session.scalars(select(ProductIntakeApplication))).all()
         assert rows == []
-        audits = (await session.scalars(select(AuditLog))).all()
+        # P1-1：夹具默认 staff 令牌的签发本身留一行 staff_api_key.issue 审计，
+        # 与「未知租户不写入」的断言无关——排除凭证引导行后再断言业务面零审计。
+        audits = [
+            a for a in (await session.scalars(select(AuditLog))).all()
+            if a.action != "staff_api_key.issue"
+        ]
         assert audits == []
 
 

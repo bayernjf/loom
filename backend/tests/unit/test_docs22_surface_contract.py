@@ -66,10 +66,11 @@ def test_the_gate_and_its_default_are_documented_as_implemented() -> None:
     )
 
 
-def test_machine_credential_call_sites_stay_exactly_four() -> None:
-    """docs/22 §0 与 §1 写"全仓 `require_agent_key` 的调用方恰好四处"——把它钉成机器判据。
+def test_machine_credential_call_sites_stay_exactly_five() -> None:
+    """docs/22 §0 与 §1 写"全仓 `require_agent_key` 的调用方恰好五处"——把它钉成机器判据。
 
     第四处 = 2026-11-02 评审 P0-1：内容底座 `/api/v1/content/*` 挂 Agent Key。
+    第五处 = 同日评审 P1-1：中台导出面 `/api/exports/*` 六口挂 Agent Key。
     """
     call_sites = sorted(
         path.relative_to(BACKEND).as_posix()
@@ -80,5 +81,6 @@ def test_machine_credential_call_sites_stay_exactly_four() -> None:
         "app/core/a2a/router.py",
         "app/core/content_base/router.py",
         "app/core/effects/router.py",
+        "app/core/exports/router.py",
         "app/core/mcp/router.py",
     ], f"受机器凭证保护的面已变化：{call_sites}；docs/22 §0/§1 与 docs/11 §2.9 都要重扫"

@@ -1,9 +1,16 @@
-"""M12 中台导出端点（Q100 CSV / Q132 JSON + 导出任务 / Q137 真后台 worker）。"""
+"""M12 中台导出端点（Q100 CSV / Q132 JSON + 导出任务 / Q137 真后台 worker）。
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+P1-1（2026-11-02 评审）：六口全部由「零凭证 + 可猜测 tenant_id」收口为
+Agent Key 机器凭证（fcw.csv/json 本就是系统间分发的白名单面；jobs 族由前端
+服务端以 env 持有的 Key 调用）。缺失/错误/吊销统一 401。
+"""
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.api_keys.models import AgentApiKey
+from app.core.api_keys.service import require_agent_key
 from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.exports import service
@@ -12,6 +19,19 @@ from app.core.exports.schemas import ExportJobCreate, ExportJobView
 from app.core.queue import StreamBackendError
 
 router = APIRouter(prefix="/api/exports", tags=["middleground-export"])
+
+
+async def require_export_key(
+    session: AsyncSession = Depends(get_session),
+    authorization: str | None = Header(default=None),
+) -> AgentApiKey:
+    """导出面 Bearer Agent Key 验签（Q88 依赖需要位置参 session，与 Q150 同法包一层）。"""
+
+    return await require_agent_key(session, authorization)
+
+
+# 接线自检标记：路由上的 Depends 被删掉时，结构用例据此判红。
+require_export_key.loom_requires_agent_credential = True
 
 
 def _validate_page(limit: int | None, offset: int) -> None:
@@ -43,6 +63,7 @@ async def export_fcw_csv(
     limit: int | None = Query(default=None, ge=1),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_export_key),
 ) -> Response:
     # Q100：中台手动拉取白名单 final_id 单列。读路径不触发 Q95 准入门
     # （未知租户=仅表头空文件 200）；只导 published（draft 排除，Q32
@@ -71,6 +92,7 @@ async def export_fcw_json(
     limit: int | None = Query(default=None, ge=1),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_export_key),
 ) -> JSONResponse:
     # Q132：JSON 形态与 CSV 同口径（只 final_id、只 published、未知租户空 200）。
     # Q142：envelope 追加 total/limit/offset/has_more 分页元数据。
@@ -101,6 +123,7 @@ async def export_fcw_json(
 async def create_export_job(
     body: ExportJobCreate,
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_export_key),
 ) -> dict:
     """创建导出任务。
 
@@ -149,6 +172,7 @@ async def list_export_jobs(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_export_key),
 ) -> dict:
     """Q137 任务列表口：按租户倒序（中台轮询/核对），不含文件体。"""
 
@@ -168,6 +192,7 @@ async def get_export_job(
     job_id: str,
     tenant_id: str = Query(min_length=1),
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_export_key),
 ) -> dict:
     """导出任务状态查询（Q137 异步后供中台轮询 queued/running/completed）。
 
@@ -186,6 +211,7 @@ async def download_export_job(
     job_id: str,
     tenant_id: str = Query(min_length=1),
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_export_key),
 ) -> Response:
     """按任务参数重新查询渲染下载（幂等，反映当前 published 集合，不存 payload）。
 

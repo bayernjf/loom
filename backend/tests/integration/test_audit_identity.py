@@ -219,14 +219,13 @@ async def test_caller_supplied_provenance_cannot_override_the_server_label(
 async def test_customer_write_without_credential_is_labelled_declared(
     client, session_factory
 ):
+    # P1-1（2026-11-02 评审）：客户回填面不再有"无凭证 declared 写"路径——
+    # 零凭证一律 401 且不留审计行；declared 口径只活在仍有意的 V1 自报面上。
     r = await client.post("/api/effects/backfill", json=_backfill_body(PA))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 401
 
     rows = await _audit_rows(session_factory, "effect.customer_backfilled")
-    assert len(rows) == 1
-    assert rows[0].actor_id == "pa-self"
-    assert rows[0].detail["_actor_via"] == CREDENTIAL_NONE
-    assert "declared_actor" not in rows[0].detail
+    assert rows == []
 
 
 async def test_agent_channel_audits_the_key_that_was_verified(
@@ -293,12 +292,13 @@ async def test_credential_does_not_leak_into_the_next_unauthenticated_request(
     )
     assert first.status_code == 200, first.text
 
+    # P1-1：无凭证请求连闸都过不了（401、零审计行）——凭证泄漏的判据从
+    # 「身份被标成 declared」升级为「根本进不来」。
     second = await client.post("/api/effects/backfill", json=_backfill_body(PA))
-    assert second.status_code == 200, second.text
+    assert second.status_code == 401, second.text
 
     rows = await _audit_rows(session_factory, "effect.customer_backfilled")
-    assert [r.actor_id for r in rows] == ["pa-self"]
-    assert rows[-1].detail["_actor_via"] == CREDENTIAL_NONE
+    assert rows == []
 
 
 # ---------- 口径 A 甲：审计租户以对象为准，声明只作交叉校验 ----------

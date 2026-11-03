@@ -27,6 +27,7 @@ from app.core.model_registry.seeds import (
 )
 from app.core.tenants.models import Tenant
 from app.main import app
+from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.modeling.models import C1IndustryThreshold, C1SignalWeight, G1Category
 from app.product.product_intake import service as intake_service
 from app.product.product_intake.models import G2Field
@@ -89,6 +90,8 @@ async def client():
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P1-1：intakes 面全部要凭证；默认 staff 令牌（operations 等三写角色）。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
     app.dependency_overrides.clear()
     await engine.dispose()
@@ -146,18 +149,23 @@ async def test_malformed_model_output_502_is_generic(client, monkeypatch):
     assert "not json" not in repr(r.json())
 
 
-async def test_unhandled_exception_returns_problem_details(caplog, monkeypatch):
-    """逃逸出路由的未知异常：500 ProblemDetails 固定形状，原文只进日志。"""
+async def test_unhandled_exception_returns_problem_details(client, caplog, monkeypatch):
+    """逃逸出路由的未知异常：500 ProblemDetails 固定形状，原文只进日志。
+
+    P1-1：/api/intakes 已有凭证闸，本用例复用主夹具的 staff 令牌让请求穿过闸口
+    直达被 monkeypatch 的服务层（抛错点不变）。
+    """
     leak = "ECONNREFUSED 10.0.0.5:5432 — relation intakes missing"
 
     async def _boom(*args, **kwargs):
         raise RuntimeError(leak)
 
     monkeypatch.setattr(intake_service, "list_intakes", _boom)
+    auth = {"Authorization": client.headers["Authorization"]}
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         with caplog.at_level("ERROR", logger="loom.startup"):
-            r = await ac.get("/api/intakes", params={"tenant_id": "t1"})
+            r = await ac.get("/api/intakes", params={"tenant_id": "t1"}, headers=auth)
     assert r.status_code == 500
     assert r.json() == {
         "type": "about:blank",

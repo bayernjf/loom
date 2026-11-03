@@ -29,6 +29,7 @@ from app.core.effects.models import (
     EffectRecord,
 )
 from app.main import app
+from tests.integration.client_tokens import client_bearer, issue_client_token
 
 CUSTOMER = {"id": "cust-1", "roles": []}
 TS1 = "2026-09-01T10:00:00Z"
@@ -75,6 +76,8 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P1-1：客户回填面要客户令牌；默认绑定 t1（数据主租户），跨租户用例另发 t2 令牌。
+        ac.headers.update(client_bearer(await issue_client_token(ac, "t1")))
         yield ac
 
 
@@ -140,13 +143,36 @@ async def test_backfill_idempotent_overwrite_and_series_append(
 
 async def test_backfill_other_tenant_content_422(client, session_factory):
     ac = client
-    # c1 属 t1，用 t2 身份回填 → 拒，不落库。
+    # c1 属 t1；t2 令牌回填 t2 名义下的 c1 → 过凭证闸后服务层拒（绝不产生孤儿），不落库。
+    t2_auth = client_bearer(await issue_client_token(ac, "t2", client_name="cust-t2"))
     r = await ac.post("/api/effects/backfill", json=_body("t2", [
         {"content_id": "c1", "platform_post_id": "p", "captured_at": TS1},
-    ]))
+    ]), headers=t2_auth)
     assert r.status_code == 422
     assert r.json()["detail"]["field"] == "content_id"
     assert r.json()["detail"]["index"] == 0
+    assert await _count(session_factory) == 0
+
+
+async def test_backfill_t1_token_cannot_write_t2_batch(client, session_factory):
+    # P1-1：t1 令牌 + body tenant t2 → 401（令牌归属闸，先于服务层）。
+    r = await client.post("/api/effects/backfill", json=_body("t2", [
+        {"content_id": "c3", "platform_post_id": "p", "captured_at": TS1},
+    ]))
+    assert r.status_code == 401
+    assert await _count(session_factory) == 0
+
+
+async def test_backfill_missing_token_401(client, session_factory):
+    # P1-1：零凭证 → 401 且不落库（此前为零凭证 200 写入口）。
+    r = await client.post(
+        "/api/effects/backfill",
+        json=_body("t1", [
+            {"content_id": "c1", "platform_post_id": "p", "captured_at": TS1},
+        ]),
+        headers={"Authorization": ""},
+    )
+    assert r.status_code == 401
     assert await _count(session_factory) == 0
 
 

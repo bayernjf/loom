@@ -11,6 +11,8 @@ from app.main import app
 from app.product.condition.models import ContentGoal
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import G2Field
+from tests.integration.client_tokens import client_bearer, issue_client_token
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 
 @pytest_asyncio.fixture
@@ -38,6 +40,9 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P1-1：intakes 面全部要凭证。默认 staff 令牌（operations 等三写角色），
+        # 客户令牌路径由 test_p11_* 用例单独覆盖。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 
@@ -281,8 +286,14 @@ async def test_terminal_and_role_guards(client, seeded_common_fields):
     await _fire(client, intake_id, "submit", actor=CUSTOMER)
     await _fire(client, intake_id, "wf01_confirm", actor=OPS)
 
-    # 类目确认必须运营（Q3）。
-    r = await _fire(client, intake_id, "ops_confirm", actor=CUSTOMER)
+    # 类目确认必须运营（Q3）。P1-1 起身份以令牌为准：客户令牌（whitelist_owner）
+    # 触发同一角色闸；body 自报 CUSTOMER/OPS 均不作数。
+    client_secret = await issue_client_token(client, "t1")
+    r = await client.post(
+        f"/api/intakes/{intake_id}/transitions",
+        json={"event": "ops_confirm", "actor": CUSTOMER},
+        headers=client_bearer(client_secret),
+    )
     assert r.status_code == 403
 
     await _fire(client, intake_id, "ops_confirm", actor=OPS)
@@ -498,3 +509,157 @@ async def test_start_modeling_without_c1_record_keps_flags_neutral(
         ).one()
         assert ps.industry_tag is None
         assert ps.sensitive_industry is False
+
+
+# ---------- 评审 P1-1：录入单面凭证闸（零凭证 401 / 跨租户收口 / 自报身份作废） ----------
+
+
+async def test_p11_no_token_all_intake_endpoints_401(client):
+    """无令牌：列表/总览/创建/详情/迁移/改资料/事件/产品空间/目标语言一律 401。"""
+    noauth = {"Authorization": ""}
+    checks = [
+        await client.get("/api/intakes", params={"tenant_id": "t1"}, headers=noauth),
+        await client.get("/api/intakes/overview", params={"tenant_id": "t1"}, headers=noauth),
+        await client.post(
+            "/api/intakes",
+            json={"tenant_id": "t1", "profile": {}},
+            headers=noauth,
+        ),
+        await client.get("/api/intakes/any-id", headers=noauth),
+        await client.post(
+            "/api/intakes/any-id/transitions",
+            json={"event": "submit", "actor": OPS},
+            headers=noauth,
+        ),
+        await client.patch(
+            "/api/intakes/any-id/profile",
+            json={"profile": {}, "actor": CUSTOMER},
+            headers=noauth,
+        ),
+        await client.get("/api/intakes/any-id/allowed-events", headers=noauth),
+        await client.get("/api/intakes/any-id/product-space", headers=noauth),
+        await client.patch(
+            "/api/intakes/any-id/target-languages",
+            params={"tenant_id": "t1"},
+            json={"languages": [], "actor": CUSTOMER},
+            headers=noauth,
+        ),
+    ]
+    assert [r.status_code for r in checks] == [401] * len(checks)
+
+
+async def test_p11_client_token_happy_path(client, seeded_common_fields):
+    """客户令牌（绑定 t1）：建单→详情→迁移全通；身份取客户令牌而非 body 自报。"""
+    secret = await issue_client_token(client, "t1", client_name="buyer-A")
+    auth = client_bearer(secret)
+    r = await client.post(
+        "/api/intakes",
+        json={"tenant_id": "t1", "profile": {"f_name": "面霜"}},
+        headers=auth,
+    )
+    assert r.status_code == 201, r.text
+    intake_id = r.json()["intake_id"]
+    assert (await client.get(f"/api/intakes/{intake_id}", headers=auth)).status_code == 200
+    assert (
+        await client.get("/api/intakes", params={"tenant_id": "t1"}, headers=auth)
+    ).status_code == 200
+    # 缺 f_brief 时 submit 被状态门拒（422 缺字段），证明请求已过凭证闸进入业务层
+    missing = await client.post(
+        f"/api/intakes/{intake_id}/transitions",
+        json={"event": "submit", "actor": CUSTOMER},
+        headers=auth,
+    )
+    assert missing.status_code == 422
+    await client.patch(
+        f"/api/intakes/{intake_id}/profile",
+        json={"profile": {"f_brief": "保湿"}, "actor": CUSTOMER},
+        headers=auth,
+    )
+    ok = await client.post(
+        f"/api/intakes/{intake_id}/transitions",
+        json={"event": "submit", "actor": CUSTOMER},
+        headers=auth,
+    )
+    assert ok.status_code == 200, ok.text
+
+
+async def test_p11_client_token_cannot_cross_tenant(client, session_factory):
+    """t1 客户令牌：列 t2 → 401（依赖绑定）；读 t2 的单 → 404；替 t2 建单 → 401。"""
+    async with session_factory() as session:
+        session.add(Tenant(tenant_id="t2", name="隔壁", plan="basic", status="active"))
+        await session.commit()
+    # 用 staff 令牌替 t2 建一单（运营跨租户是设计内行为）
+    r = await client.post("/api/intakes", json={"tenant_id": "t2", "profile": {}})
+    t2_intake = r.json()["intake_id"]
+
+    secret = await issue_client_token(client, "t1")
+    auth = client_bearer(secret)
+    assert (
+        await client.get("/api/intakes", params={"tenant_id": "t2"}, headers=auth)
+    ).status_code == 401
+    assert (await client.get(f"/api/intakes/{t2_intake}", headers=auth)).status_code == 404
+    assert (
+        await client.post(
+            "/api/intakes",
+            json={"tenant_id": "t2", "profile": {}},
+            headers=auth,
+        )
+    ).status_code == 401
+    # 跨租户写：推 t2 单的状态机
+    assert (
+        await client.post(
+            f"/api/intakes/{t2_intake}/transitions",
+            json={"event": "submit", "actor": CUSTOMER},
+            headers=auth,
+        )
+    ).status_code == 404
+
+
+async def test_p11_client_token_cannot_self_declare_ops_role(client, seeded_common_fields):
+    """客户令牌 + body 自报 operations 不能触发运营事件（身份以令牌验真为准）。
+
+    ops_confirm 从 SUBMITTED 出发需要 operations（statemachine L66）；
+    客户令牌的角色恒为 whitelist_owner，自报 roles 被忽略 → RoleRequired 403。
+    """
+    secret = await issue_client_token(client, "t1")
+    auth = client_bearer(secret)
+    r = await client.post(
+        "/api/intakes",
+        json={"tenant_id": "t1", "profile": {"f_name": "面霜", "f_brief": "x"}},
+        headers=auth,
+    )
+    intake_id = r.json()["intake_id"]
+    submitted = await client.post(
+        f"/api/intakes/{intake_id}/transitions",
+        json={"event": "submit", "actor": CUSTOMER},
+        headers=auth,
+    )
+    assert submitted.status_code == 200, submitted.text
+    # submit → AI_RECOGNIZING；wf01_confirm（无角色门）→ PENDING_CONFIRM；
+    # 自报 operations 打 ops_confirm → 客户令牌角色不含 operations → 403。
+    confirmed = await client.post(
+        f"/api/intakes/{intake_id}/transitions",
+        json={"event": "wf01_confirm", "actor": CUSTOMER},
+        headers=auth,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    r = await client.post(
+        f"/api/intakes/{intake_id}/transitions",
+        json={"event": "ops_confirm", "actor": {"id": "cust", "roles": ["operations"]}},
+        headers=auth,
+    )
+    assert r.status_code == 403, f"自报 operations 竟生效：{r.status_code} {r.text}"
+
+
+async def test_p11_staff_token_without_ops_role_403(client):
+    """staff 令牌但无 operations/platform_admin 角色 → 403（角色是硬闸）。"""
+    weak = await issue_staff_token_limited(client)
+    r = await client.get("/api/intakes", params={"tenant_id": "t1"}, headers=bearer(weak))
+    assert r.status_code == 403
+
+
+async def issue_staff_token_limited(client):
+    """签一枚无运营角色的 staff 令牌（只在册人员，非 operations）。"""
+    from tests.integration.staff_tokens import issue_staff_token
+
+    return await issue_staff_token(client, ["product_reviewer"], staff_id="s-reviewer")

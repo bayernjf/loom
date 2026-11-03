@@ -33,6 +33,7 @@ from app.core.model_registry.seeds import (
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.core.tenants.models import Tenant
 from app.main import app
+from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.modeling.models import C7Run, G1Category, G2FieldCandidate
 from app.product.product_intake.models import G2Field
 
@@ -89,6 +90,8 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P1-1：intakes 面全部要凭证；默认 staff 令牌（operations 等三写角色）。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 

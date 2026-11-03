@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.db import Base, get_session
 from app.core.tenants.models import Tenant
 from app.main import app
+from tests.integration.staff_tokens import bearer, issue_write_token
 from app.product.modeling.models import (
     C1IndustryThreshold,
     C1Record,
@@ -67,6 +68,8 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
+        # P1-1：intakes 面全部要凭证；默认 staff 令牌（operations 等三写角色）。
+        c.headers.update(bearer(await issue_write_token(c)))
         yield c
 
 

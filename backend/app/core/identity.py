@@ -15,6 +15,8 @@ from app.core.actor import Actor
 # 凭证种类标签随审计 detail 落库，值班/对账时可分辨这条审计是"谁说了算"。
 CREDENTIAL_STAFF = "staff_token"
 CREDENTIAL_AGENT_KEY = "agent_key"
+# 评审 P1-1：客户访问令牌（loom_client_）同为已验真凭证，双闸依赖写入。
+CREDENTIAL_CLIENT = "client_key"
 CREDENTIAL_NONE = "declared"
 
 _verified: ContextVar[tuple[Actor, str] | None] = ContextVar(
