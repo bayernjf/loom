@@ -21,6 +21,7 @@ import base64
 import binascii
 import uuid
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -601,7 +602,7 @@ async def claim_orphan_batch(
             content_id=item.content_id,
             actor=actor,
         )
-        total_updated += int(result["updated_rows"])
+        total_updated += int(cast(Any, result["updated_rows"]))
     return {"claimed": len(items), "updated_rows": total_updated}
 
 

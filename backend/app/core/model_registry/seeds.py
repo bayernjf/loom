@@ -420,8 +420,8 @@ def all_scene_codes() -> tuple[str, ...]:
     走 vars() 扫描而非再抄一份清单，是为了让"新增场景忘了登记"只能以一种方式发生：
     常量名不以 SCENE_ 开头——而 tests/unit/test_business_metrics.py 有守卫比对两者。
     """
-    return sorted(
+    return tuple(sorted(
         value
         for name, value in globals().items()
         if name.startswith("SCENE_") and isinstance(value, str)
-    )
+    ))

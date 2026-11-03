@@ -294,8 +294,8 @@ async def get_product_space(
 @router.patch("/{intake_id}/target-languages", response_model=ProductSpaceView)
 async def patch_target_languages(
     intake_id: str,
+    body: IntakeTargetLanguagesPatch,
     tenant_id: str = Query(min_length=1),
-    body: IntakeTargetLanguagesPatch = ...,
     session: AsyncSession = Depends(get_session),
     caller: IntakeCaller = Depends(require_intake_caller),
 ) -> ProductSpaceView:

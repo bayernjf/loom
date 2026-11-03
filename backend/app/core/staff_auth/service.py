@@ -53,7 +53,7 @@ def generate_staff_key() -> tuple[str, str, str]:
 
 
 def is_staff_token(token: str | None) -> bool:
-    return bool(token) and token.startswith(_KEY_PREFIX)
+    return token is not None and token.startswith(_KEY_PREFIX)
 
 
 def normalize_roles(roles: list[str]) -> list[str]:
@@ -151,7 +151,7 @@ async def verify_staff_key(
     session: AsyncSession, plaintext: str | None
 ) -> StaffApiKey | None:
     """命中 active 令牌则回填 last_used_at 并返回行；否则 None（不区分失败原因）。"""
-    if not is_staff_token(plaintext):
+    if not plaintext or not is_staff_token(plaintext):
         return None
     stmt = select(StaffApiKey).where(
         StaffApiKey.key_hash == hash_key(plaintext),

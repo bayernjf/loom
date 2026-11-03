@@ -19,8 +19,10 @@ fence 为 None（锁关闭，V1 单副本）时不写表、不做门，行为与
 """
 
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.sla.models import SweepTickClaim
@@ -81,4 +83,4 @@ async def fence_current(
         )
         .values(updated_at=datetime.now(UTC))
     )
-    return result.rowcount == 1
+    return cast(CursorResult[Any], result).rowcount == 1

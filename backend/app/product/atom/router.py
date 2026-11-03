@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -46,7 +47,7 @@ def _conflict_view(c: AtomConflict) -> dict:
     }
 
 
-def _candidate_view(c: AtomCandidate, conflicts: list[AtomConflict] | None = None) -> dict:
+def _candidate_view(c: AtomCandidate, conflicts: Sequence[AtomConflict] | None = None) -> dict:
     return {
         "candidate_id": c.candidate_id,
         "batch_id": c.batch_id,

@@ -120,6 +120,7 @@ async def auth_me(
     token = service.parse_bearer(authorization)
     if not token or not service.is_staff_token(token):
         raise HTTPException(status_code=401, detail="staff access token required")
+    assert auth_session is not None  # token 存在时 get_auth_session 必给连接
     row = await service.verify_staff_key(auth_session, token)
     if row is None:
         raise HTTPException(status_code=401, detail="invalid or revoked staff token")

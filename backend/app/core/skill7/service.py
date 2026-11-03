@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.actor import Actor
 from app.core.audit import append_audit
 from app.core.rbac import OPERATIONS, require_any_role
 from app.core.skill7 import registry, review_sla
@@ -68,7 +69,7 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         data.pop("actor", None)  # payload 是去 actor 的 PlanSubmitRequest 形态
         try:
             PlanSubmitRequest(
-                **data, actor={"id": "_delivery_validation", "roles": []}
+                **data, actor=Actor(id="_delivery_validation", roles=[])
             )
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
@@ -81,7 +82,7 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         data.pop("actor", None)
         try:
             C1RecognitionRequest(
-                **data, actor={"id": "_delivery_validation", "roles": []}
+                **data, actor=Actor(id="_delivery_validation", roles=[])
             )
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
@@ -98,7 +99,7 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         data.pop("_embeddings", None)
         try:
             BatchSubmitRequest(
-                **data, source="ai", actor={"id": "_delivery_validation", "roles": []}
+                **data, source="ai", actor=Actor(id="_delivery_validation", roles=[])
             )
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
@@ -112,7 +113,7 @@ def _validate_payload(target_type: str, payload: dict) -> None:
         data.pop("actor", None)
         try:
             C7ResolveRequest(
-                **data, actor={"id": "_delivery_validation", "roles": []}
+                **data, actor=Actor(id="_delivery_validation", roles=[])
             )
         except ValidationError as exc:
             raise InvalidCandidatePayload(str(exc)) from exc
@@ -454,6 +455,7 @@ async def decide_candidate(
     cand = await session.get(SkillCandidate, candidate_id)
     if cand is None:
         raise CandidateMissing(candidate_id)
+    assert cand.tenant_id is not None  # 候选必带租户
 
     # 裁决角色沿用该 WF skill7 Gate 插槽配置（试点 WF-04 = product_reviewer）。
     require_any_role(body.actor, registry.review_role(cand.wf_id))

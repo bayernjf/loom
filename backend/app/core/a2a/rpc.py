@@ -166,20 +166,20 @@ def handle_jsonrpc(payload: dict, on_event: Callable[[dict], None] | None = None
 
     if method == "tasks/get":
         task_id = params.get("id")
-        task = _tasks.get(task_id) if isinstance(task_id, str) else None
-        if task is None:
+        found_task = _tasks.get(task_id) if isinstance(task_id, str) else None
+        if found_task is None:
             return {"jsonrpc": "2.0", "id": request_id, "error": _error("TASK_NOT_FOUND")}
-        return {"jsonrpc": "2.0", "id": request_id, "result": {k: v for k, v in task.items() if not k.startswith("_")}}
+        return {"jsonrpc": "2.0", "id": request_id, "result": {k: v for k, v in found_task.items() if not k.startswith("_")}}
 
     if method == "tasks/cancel":
         task_id = params.get("id")
-        task = _tasks.get(task_id) if isinstance(task_id, str) else None
-        if task is None:
+        found_task = _tasks.get(task_id) if isinstance(task_id, str) else None
+        if found_task is None:
             return {"jsonrpc": "2.0", "id": request_id, "error": _error("TASK_NOT_FOUND")}
-        if task["status"]["state"] in TERMINAL_STATES:
+        if found_task["status"]["state"] in TERMINAL_STATES:
             return {"jsonrpc": "2.0", "id": request_id, "error": _error("TASK_NOT_CANCELABLE")}
-        task["status"] = {"state": "canceled", "timestamp": _now_iso()}
-        return {"jsonrpc": "2.0", "id": request_id, "result": {k: v for k, v in task.items() if not k.startswith("_")}}
+        found_task["status"] = {"state": "canceled", "timestamp": _now_iso()}
+        return {"jsonrpc": "2.0", "id": request_id, "result": {k: v for k, v in found_task.items() if not k.startswith("_")}}
 
     return {"jsonrpc": "2.0", "id": request_id, "error": _error("METHOD_NOT_FOUND")}
 

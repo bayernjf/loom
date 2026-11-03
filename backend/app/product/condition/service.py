@@ -322,7 +322,7 @@ async def run_funnel(session, product_space_id: str, body, actor) -> list[Condit
             pid: pwc_rules.overlap_ratio(id_set, other)
             for pid, other in ready_sets.items()
         }
-        max_pid = max(overlaps, key=overlaps.get, default=None)
+        max_pid = max(overlaps, key=lambda pid: overlaps[pid], default=None)
         max_overlap = overlaps[max_pid] if max_pid else 0.0
 
         outcome = pwc_rules.score_combo(

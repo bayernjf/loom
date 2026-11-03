@@ -19,8 +19,10 @@ leader 的重复结果；失败/瞬态路径（deferred/failed、退避游标）
 """
 
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.restock.models import RestockClaim
@@ -83,4 +85,4 @@ async def fence_current(
         )
         .values(updated_at=datetime.now(UTC))
     )
-    return result.rowcount == 1
+    return cast(CursorResult[Any], result).rowcount == 1

@@ -137,6 +137,7 @@ class FcwWorker:
                 )
                 if delivery_exhausted(deliveries, self._max_deliveries):
                     async with self._factory() as fail_session:
+                        assert task_id is not None  # task 可见即来自有效 task_id
                         fresh = await service.get_task(fail_session, task_id)
                         if fresh is not None and not service.is_terminal(fresh):
                             await service.fail_fcw_task(

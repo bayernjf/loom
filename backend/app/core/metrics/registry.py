@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 # Prometheus 官方 client 默认直方图桶（秒）。
 DEFAULT_BUCKETS: tuple[float, ...] = (
@@ -66,7 +67,7 @@ class Metric:
         self.name = name
         self.documentation = documentation
         self.labelnames = tuple(labelnames)
-        self._samples: dict[tuple[tuple[str, str], ...], object] = {}
+        self._samples: dict[tuple[tuple[str, str], ...], Any] = {}
 
     def _key(
         self, labels: dict[str, object]

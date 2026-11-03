@@ -5,6 +5,8 @@ Agent Key 机器凭证（fcw.csv/json 本就是系统间分发的白名单面；
 服务端以 env 持有的 Key 调用）。缺失/错误/吊销统一 401。
 """
 
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +33,7 @@ async def require_export_key(
 
 
 # 接线自检标记：路由上的 Depends 被删掉时，结构用例据此判红。
-require_export_key.loom_requires_agent_credential = True
+cast(Any, require_export_key).loom_requires_agent_credential = True
 
 
 def _validate_page(limit: int | None, offset: int) -> None:

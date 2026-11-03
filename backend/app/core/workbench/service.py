@@ -119,13 +119,13 @@ async def _enrich(
     }
     sensitive: set[str] = set()
     if industries:
-        rows = await session.scalars(
+        industry_rows = await session.scalars(
             select(C1IndustryThreshold.industry).where(
                 C1IndustryThreshold.industry.in_(industries),
                 C1IndustryThreshold.sensitive.is_(True),
             )
         )
-        sensitive = set(rows)
+        sensitive = set(industry_rows)
 
     enriched: dict[str, dict] = {}
     for cand in candidates:
@@ -243,11 +243,13 @@ async def batch_approve(
     if missing:
         raise WorkbenchCandidateMissing(str(missing))
 
+    found = [cand for cand in candidates if cand is not None]
+
     # 预检阶段不产生任何写入：状态 → 角色 → 批量门槛。
-    for cand in candidates:
+    for cand in found:
         if cand.state != "pending_review":
             raise BatchCandidateNotPending(cand.candidate_id, cand.state)
-    for cand in candidates:
+    for cand in found:
         # 逐条按所属 WF Gate 角色校验；混角色批整批拒绝。
         try:
             require_any_role(actor, registry.review_role(cand.wf_id))
@@ -256,24 +258,25 @@ async def batch_approve(
                 f"candidate {cand.candidate_id} ({cand.wf_id}): {exc}"
             ) from exc
 
-    enriched = await _enrich(session, candidates)
+    enriched = await _enrich(session, found)
     threshold = knob(BATCH_CONFIDENCE_KEY)
-    for cand in candidates:
+    for cand in found:
         eligible, why = _is_batch_eligible(enriched[cand.candidate_id], threshold)
         if not eligible:
-            raise BatchGateRejected(cand.candidate_id, why)
+            raise BatchGateRejected(cand.candidate_id, why or "batch gate rejected")
 
     decision = CandidateDecisionRequest(
         decision="confirmed", reason=reason, actor=actor
     )
     applied: list[SkillCandidate] = []
-    for cand in candidates:
+    for cand in found:
         applied.append(
             await skill7_service.decide_candidate(
                 session, cand.candidate_id, decision
             )
         )
 
+    assert applied[0].tenant_id is not None  # 候选必带租户
     await append_audit(
         session,
         tenant_id=applied[0].tenant_id,

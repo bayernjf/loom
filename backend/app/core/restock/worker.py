@@ -135,6 +135,7 @@ async def _record_terminal_failure(
     *,
     attempts: int | None = None,
 ) -> None:
+    assert requested.tenant_id is not None  # restock 请求必带租户
     session.add(
         SkillRun(
             skill_id=PWC_BUILDER,
@@ -171,6 +172,8 @@ async def _process_one(
     owner: str | None = None,
 ) -> dict:
     request_id = str(requested.run_id)
+    assert requested.tenant_id is not None  # restock 请求必带租户
+    assert requested.product_space_id is not None  # restock 请求必带产品空间
     # Q143：花钱前以独立短事务认领（先提交，让易主后的新 leader 可见）。若已被
     # 更大 fence 的 leader 认领，本副本是旧持有者，直接放弃、不再调模型。
     if fence is not None:

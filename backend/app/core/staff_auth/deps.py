@@ -15,6 +15,7 @@
 """
 
 from collections.abc import AsyncGenerator
+from typing import Any, cast
 
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,6 +68,7 @@ async def staff_auth_context(
     if not token or not service.is_staff_token(token):
         # 无令牌（客户/公开/机器口）或非 staff 令牌（Agent Key 走各自鉴权）。
         return
+    assert auth_session is not None  # token 存在时 get_auth_session 必给连接
     row = await service.verify_staff_key(auth_session, token)
     if row is None:
         raise NotAuthenticated("invalid or revoked staff access token")
@@ -142,5 +144,5 @@ def require_internal_actor(*roles: str):
 
     # 接线自检标记：路由上的 Depends 被删掉时，test_fcw_api 的结构用例判红。
     # （行为用例当然也会红，但那条只会说"200 不是 401"，定位不到是接线掉了。）
-    dependency.loom_requires_internal_credential = roles
+    cast(Any, dependency).loom_requires_internal_credential = roles
     return dependency

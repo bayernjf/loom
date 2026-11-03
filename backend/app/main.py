@@ -109,8 +109,8 @@ async def lifespan(app: FastAPI):
             block_ms=int(settings.export_stream_block_seconds * 1000),
             count=settings.export_stream_count,
         )
-        for worker in _export_workers:
-            await worker.start()
+        for export_worker in _export_workers:
+            await export_worker.start()
     if settings.import_worker_enabled:
         # Q161：客户效果批量回填异步导入消费组 worker（payload 落库可重放，
         # 消费组内多 consumer 原生分片，可多副本水平并行）。
@@ -120,8 +120,8 @@ async def lifespan(app: FastAPI):
             block_ms=int(settings.import_stream_block_seconds * 1000),
             count=settings.import_stream_count,
         )
-        for worker in _import_workers:
-            await worker.start()
+        for import_worker in _import_workers:
+            await import_worker.start()
     if settings.fcw_worker_enabled:
         # Q165：段11 FCW 批量组装异步消费组 worker（七 Guard 逐条原子性不变，
         # per-slot 失败隔离；消费组内多 consumer 原生分片）。
@@ -131,8 +131,8 @@ async def lifespan(app: FastAPI):
             block_ms=int(settings.fcw_stream_block_seconds * 1000),
             count=settings.fcw_stream_count,
         )
-        for worker in _fcw_workers:
-            await worker.start()
+        for fcw_worker in _fcw_workers:
+            await fcw_worker.start()
     if settings.config_cache_broadcast_enabled:
         # Q135：多副本配置失效广播订阅者；启动失败不阻断应用（本进程 after_commit
         # 热更新仍生效，对端副本最坏重启后恢复一致）。
@@ -154,14 +154,14 @@ async def lifespan(app: FastAPI):
         if _config_subscriber is not None:
             await _config_subscriber.stop()
             _config_subscriber = None
-        for worker in reversed(_export_workers):
-            await worker.stop()
+        for export_worker in reversed(_export_workers):
+            await export_worker.stop()
         _export_workers = []
-        for worker in reversed(_import_workers):
-            await worker.stop()
+        for import_worker in reversed(_import_workers):
+            await import_worker.stop()
         _import_workers = []
-        for worker in reversed(_fcw_workers):
-            await worker.stop()
+        for fcw_worker in reversed(_fcw_workers):
+            await fcw_worker.stop()
         _fcw_workers = []
         if _restock_worker is not None:
             await _restock_worker.stop()

@@ -264,7 +264,7 @@ async def claim_orphan_effect(
         await session.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.commit()
-    return EffectClaimView(**result)
+    return EffectClaimView.model_validate(result)
 
 
 @router.post("/api/admin/effects/claims/batch", response_model=EffectClaimBatchView)
@@ -321,7 +321,7 @@ async def unclaim_orphan_effect(
         await session.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     await session.commit()
-    return EffectUnclaimView(**result)
+    return EffectUnclaimView.model_validate(result)
 
 
 @router.get(

@@ -18,6 +18,7 @@ from app.core.skill7.models import SkillCandidate
 async def apply_pwc_combo(
     session: AsyncSession, candidate: SkillCandidate, actor: Actor
 ) -> list[str]:
+    assert candidate.product_space_id is not None  # 定向候选必带产品空间
     # 延迟导入：condition 包在 service 层反向调用 skill7 的补货函数，避免环。
     from app.product.condition import service as pwc_service
     from app.product.condition.schemas import ComboItem, FunnelRequest
@@ -38,6 +39,7 @@ async def apply_pwc_combo(
 async def apply_field_plan(
     session: AsyncSession, candidate: SkillCandidate, actor: Actor
 ) -> list[str]:
+    assert candidate.product_space_id is not None  # 定向候选必带产品空间
     # Q78：DIM-MERGE 整方案候选 → 既有 fieldpool.submit_plan，
     # PT-FP-PLAN/Q8/Q9/Q10/Q12 全部在既有服务内执行，落 pending_gate 走 WF-02 Gate。
     from app.product.fieldpool import service as fp_service
@@ -75,6 +77,7 @@ async def apply_c1_recognition(
 async def apply_atom_batch(
     session: AsyncSession, candidate: SkillCandidate, actor: Actor
 ) -> list[str]:
+    assert candidate.product_space_id is not None  # 定向候选必带产品空间
     # Q80：CONFLICT-PRECHECK 整批单候选 → 既有 atom.submit_batch（强制 source=ai），
     # Q14/Q15/同批去重/维度归属/line 11189 事实唯一/Q17/line 840 全部在既有服务执行。
     from app.product.atom import service as atom_service

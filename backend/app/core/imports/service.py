@@ -77,7 +77,7 @@ async def enqueue_import_job(job_id: str) -> None:
 
 
 def _payload_of(body: BackfillImportJobIn) -> str:
-    return body.csv if body.format == "csv" else (body.content_base64 or "")
+    return (body.csv or "") if body.format == "csv" else (body.content_base64 or "")
 
 
 async def create_queued_import_job(
@@ -171,6 +171,7 @@ async def process_import_job(
         # 确定性载体/逐行校验失败：回滚未提交的写入，落 failed（不重试、不进死信）。
         await session.rollback()
         failed = await session.get(ImportJob, job_id)
+        assert failed is not None  # 刚回滚的作业由本事务创建，必存在
         failed.status = JOB_FAILED
         # Q188：确定性校验失败（不重试、不进死信）同样是作业失败。
         record_job_failed("import")
@@ -191,6 +192,7 @@ async def process_import_job(
     except EffectValidationError as exc:
         await session.rollback()
         failed = await session.get(ImportJob, job_id)
+        assert failed is not None  # 刚回滚的作业由本事务创建，必存在
         errors = [{"index": exc.index, "field": exc.field, "message": str(exc)}]
         failed.status = JOB_FAILED
         # Q188：效果校验的确定性失败同样是作业终态失败，与入流/死信路径同计数。
