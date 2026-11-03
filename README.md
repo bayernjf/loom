@@ -35,7 +35,7 @@ G1类目树 + G2通用字段池（跨类目共享字典）
 ### 3. 三条产品边界（决定它今天能给谁用）
 
 - **首发形态＝受控 private beta**（Q144）：后端在网关后、平台代运营；公网自助注册已裁 **NO-GO**。
-- **客户侧没有登录页**：客户内容口（列表/详情/裁决/正文编辑/语言目录）自 2026-10-30 起强制客户访问令牌（`loom_client_` Bearer，运营经 `/api/admin/client-keys` 签发、绑定租户；部署侧经前端 env `LOOM_CLIENT_TOKEN` 注入），query `tenant_id` 只作与令牌绑定的一致性交叉校验、声明不再产生权限；运营写口一律 `loom_staff_` 个人令牌硬闸。浏览器侧仍没有客户登录页，会话式登录与 `actor↔tenant` 自助绑定＝V2 第一项（见 docs/17 §1.3「这个清单解决不了的三条」）。
+- **客户侧没有登录页**：客户内容口（列表/详情/裁决/正文编辑/语言目录）自 2026-10-30 起强制客户访问令牌（`loom_client_` Bearer，运营经 `/api/admin/client-keys` 签发、绑定租户；部署侧经前端 env `LOOM_CLIENT_TOKEN` 注入），query `tenant_id` 只作与令牌绑定的一致性交叉校验、声明不再产生权限；**2026-11-02（评审 P1-1）起同一令牌面扩到 `/api/intakes/*`（ops-queue 除外）、`/api/effects/backfill*`、`/api/effects/analytics`——这些端点此前零凭证、凭可猜测 tenant_id 即可跨租户读写；`/api/exports/*` 六口同日收口为 Agent Key（机器凭证，前端经 env `LOOM_AGENT_KEY` 注入）**。运营写口一律 `loom_staff_` 个人令牌硬闸。浏览器侧仍没有客户登录页，会话式登录与 `actor↔tenant` 自助绑定＝V2 第一项（见 docs/17 §1.3「这个清单解决不了的三条」）。
 - **花钱与生效都要过人**：AI 产出只落候选、人工 Gate 裁决后才生效，`final_id` 只有一个出口；自动补足（restock）、真视频提交、Prompt 修改这类会花真 token／真钱的动作一律 **env 门控默认关＋逐单人工批准**（Q87／Q354）。
 
 ### 4. 路线图速览（2026-09-13 Q73 合并后：A7 为骨 + D9 厚度）

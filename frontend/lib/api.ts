@@ -51,9 +51,15 @@ export const CURRENT_ACTOR_ID = process.env.LOOM_ACTOR_ID ?? "";
 // 客户访问令牌（loom_client_，运营经 /api/admin/client-keys 签发、绑定租户）。
 // 服务端 env 持有本租户令牌（同 LOOM_TENANT_ID 的配置口径），经 Bearer 下发；
 // 未配置时客户内容口一律 401（后端 fail-closed，不回落自报）。
+// P1-1（2026-11-02 评审）：同一令牌面扩到 intakes / effects backfill / analytics——
+// 这些端点此前零凭证、只凭可猜测的 tenant_id 即可跨租户读写。
 const CLIENT_TOKEN = process.env.LOOM_CLIENT_TOKEN ?? "";
 
-type AuthKind = "staff" | "client";
+// P1-1：/api/exports/* 中台导出面收口为 Agent Key（机器凭证，运营经
+// /api/admin/agent-keys 签发）。服务端 env 持有；未配置时导出口一律 401。
+const AGENT_KEY = process.env.LOOM_AGENT_KEY ?? "";
+
+type AuthKind = "staff" | "client" | "agent";
 
 async function request<T>(
   path: string,
@@ -66,6 +72,10 @@ async function request<T>(
     // 客户口只认客户令牌：staff 令牌不是客户身份，混发只会被统一 401。
     if (CLIENT_TOKEN && !headers.has("Authorization"))
       headers.set("Authorization", `Bearer ${CLIENT_TOKEN}`);
+  } else if (auth === "agent") {
+    // 导出中台面只认 Agent Key：staff/client 令牌都不是机器身份。
+    if (AGENT_KEY && !headers.has("Authorization"))
+      headers.set("Authorization", `Bearer ${AGENT_KEY}`);
   } else {
     // Q178：门控开启后，服务端请求统一带 httpOnly staff 令牌（无 cookie 即门控关 V1 自报）。
     const staffToken = await getStaffToken();
@@ -101,7 +111,7 @@ export async function listIntakes(
   const params = new URLSearchParams({ tenant_id: tenantId });
   if (opts.limit !== undefined) params.set("limit", String(opts.limit));
   if (opts.offset !== undefined) params.set("offset", String(opts.offset));
-  return request<IntakeList>(`/api/intakes?${params}`);
+  return request<IntakeList>(`/api/intakes?${params}`, undefined, "client");
 }
 
 export async function createIntake(
@@ -111,16 +121,20 @@ export async function createIntake(
   return request<IntakeView>("/api/intakes", {
     method: "POST",
     body: JSON.stringify({ tenant_id: tenantId, profile }),
-  });
+  }, "client");
 }
 
-export async function getIntake(intakeId: string): Promise<IntakeView> {
-  return request<IntakeView>(`/api/intakes/${encodeURIComponent(intakeId)}`);
+// P1-1：客户页传 "client"（客户令牌，行级租户 404）；运营页默认 staff（跨租户队列）。
+export async function getIntake(
+  intakeId: string,
+  auth: AuthKind = "staff",
+): Promise<IntakeView> {
+  return request<IntakeView>(`/api/intakes/${encodeURIComponent(intakeId)}`, undefined, auth);
 }
 
 export async function getIntakeOverview(tenantId: string): Promise<IntakeOverview> {
   const params = new URLSearchParams({ tenant_id: tenantId });
-  return request<IntakeOverview>(`/api/intakes/overview?${params}`);
+  return request<IntakeOverview>(`/api/intakes/overview?${params}`, undefined, "client");
 }
 
 // Q106：录入单 15 态操作（客户页消费既有段1 端点，无新写口）。
@@ -139,9 +153,14 @@ export interface ProductSpaceView {
   target_languages: string[] | null;
 }
 
-export async function getAllowedEvents(intakeId: string): Promise<AllowedEvents> {
+export async function getAllowedEvents(
+  intakeId: string,
+  auth: AuthKind = "staff",
+): Promise<AllowedEvents> {
   return request<AllowedEvents>(
     `/api/intakes/${encodeURIComponent(intakeId)}/allowed-events`,
+    undefined,
+    auth,
   );
 }
 
@@ -149,31 +168,47 @@ export async function transitionIntake(
   intakeId: string,
   event: string,
   categoryPendingId?: string | null,
+  auth: AuthKind = "client",
 ): Promise<IntakeView> {
-  return request<IntakeView>(`/api/intakes/${encodeURIComponent(intakeId)}/transitions`, {
-    method: "POST",
-    body: JSON.stringify({
-      event,
-      category_pending_id: categoryPendingId ?? null,
-      actor: { id: CURRENT_ACTOR_ID, roles: [] },
-    }),
-  });
+  // P1-1：客户页默认 client 令牌；运营走 adminTransitionIntake（staff）。
+  return request<IntakeView>(
+    `/api/intakes/${encodeURIComponent(intakeId)}/transitions`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        event,
+        category_pending_id: categoryPendingId ?? null,
+        actor: { id: CURRENT_ACTOR_ID, roles: [] },
+      }),
+    },
+    auth,
+  );
 }
 
 export async function patchIntakeProfile(
   intakeId: string,
   profile: Record<string, string>,
+  auth: AuthKind = "client",
 ): Promise<IntakeView> {
-  return request<IntakeView>(`/api/intakes/${encodeURIComponent(intakeId)}/profile`, {
-    method: "PATCH",
-    body: JSON.stringify({ profile, actor: { id: CURRENT_ACTOR_ID, roles: [] } }),
-  });
+  return request<IntakeView>(
+    `/api/intakes/${encodeURIComponent(intakeId)}/profile`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ profile, actor: { id: CURRENT_ACTOR_ID, roles: [] } }),
+    },
+    auth,
+  );
 }
 
-export async function getProductSpace(intakeId: string): Promise<ProductSpaceView | null> {
+export async function getProductSpace(
+  intakeId: string,
+  auth: AuthKind = "staff",
+): Promise<ProductSpaceView | null> {
   try {
     return await request<ProductSpaceView>(
       `/api/intakes/${encodeURIComponent(intakeId)}/product-space`,
+      undefined,
+      auth,
     );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return null;
@@ -197,6 +232,7 @@ export async function setIntakeTargetLanguages(
         actor: { id: CURRENT_ACTOR_ID, roles: [] },
       }),
     },
+    "client",
   );
 }
 
@@ -1332,6 +1368,7 @@ export async function unclaimEffect(
 }
 
 // Q128/Q131：客户效果回填（source 服务端固定 customer-backfill，绝不产生孤儿）。
+// P1-1：客户令牌与 body tenant_id 绑定（不符 401）；不再零凭证。
 export async function customerBackfillEffects(
   tenantId: string,
   records: EffectRecordIn[],
@@ -1343,7 +1380,7 @@ export async function customerBackfillEffects(
       records,
       actor: { id: CURRENT_ACTOR_ID, roles: [] },
     }),
-  });
+  }, "client");
 }
 
 // Q156：批量回填服务端上传逐行回执中的一行（index＝数据行 0 基、line＝含表头物理行号）。
@@ -1376,7 +1413,7 @@ export async function uploadBackfillCsv(
       ...(filename ? { filename } : {}),
       actor: { id: CURRENT_ACTOR_ID, roles: [] },
     }),
-  });
+  }, "client");
 }
 
 // Q160：批量 Excel（.xlsx）回填，与 CSV 上传同契约。contentBase64 为 .xlsx 字节的
@@ -1397,10 +1434,11 @@ export async function uploadBackfillExcel(
       ...(filename ? { filename } : {}),
       actor: { id: CURRENT_ACTOR_ID, roles: [] },
     }),
-  });
+  }, "client");
 }
 
-// Q166：客户效果数据分析只读聚合（GET /api/effects/analytics，无闸客户读口径）。
+// Q166：客户效果数据分析只读聚合（GET /api/effects/analytics）。
+// P1-1 起挂客户令牌（租户绑定），不再是无闸读。
 export interface EffectAnalyticsContentRow {
   content_id: string | null;
   records: number;
@@ -1428,7 +1466,7 @@ export async function getEffectAnalytics(
   const params = new URLSearchParams({ tenant_id: tenantId });
   if (opts.dateFrom) params.set("date_from", opts.dateFrom);
   if (opts.dateTo) params.set("date_to", opts.dateTo);
-  return request<EffectAnalytics>(`/api/effects/analytics?${params}`);
+  return request<EffectAnalytics>(`/api/effects/analytics?${params}`, undefined, "client");
 }
 
 // Q167：入站 Agent Key 治理（消费 Q88 后端三端点；列表 GET 免闸不返 secret，
@@ -1647,7 +1685,7 @@ export async function listExportJobs(
     tenant_id: tenantId,
     limit: String(limit),
   });
-  return request<ExportJobsPage>(`/api/exports/jobs?${params}`);
+  return request<ExportJobsPage>(`/api/exports/jobs?${params}`, undefined, "agent");
 }
 
 export async function createExportJob(opts: {
@@ -1663,11 +1701,12 @@ export async function createExportJob(opts: {
       format: opts.format,
       actor: { id: CURRENT_ADMIN_ACTOR_ID, roles: ADMIN_ROLE_LIST },
     }),
-  });
+  }, "agent");
 }
 
 // 下载口返回 csv/json 文本（非 JSON）；文件名取 Content-Disposition，由 client 岛落盘。
 // Q196：状态口/下载口的 tenant_id 必填并按任务归属收口（此前只认 job_id）。
+// P1-1：导出面只认 Agent Key（requestText 走 agent 通道）。
 export async function downloadExportJob(
   jobId: string,
   tenantId: string,
@@ -1675,14 +1714,21 @@ export async function downloadExportJob(
   const params = new URLSearchParams({ tenant_id: tenantId });
   return requestText(
     `/api/exports/jobs/${encodeURIComponent(jobId)}/download?${params}`,
+    "agent",
   );
 }
 
 // 文本下载通道（与 request 同构，但解析文本体与 Content-Disposition；函数声明提升）。
-async function requestText(path: string): Promise<ExportDownload> {
+async function requestText(path: string, auth: AuthKind = "staff"): Promise<ExportDownload> {
   const headers = new Headers();
-  const staffToken = await getStaffToken();
-  if (staffToken) headers.set("Authorization", `Bearer ${staffToken}`);
+  if (auth === "agent") {
+    if (AGENT_KEY) headers.set("Authorization", `Bearer ${AGENT_KEY}`);
+  } else if (auth === "client") {
+    if (CLIENT_TOKEN) headers.set("Authorization", `Bearer ${CLIENT_TOKEN}`);
+  } else {
+    const staffToken = await getStaffToken();
+    if (staffToken) headers.set("Authorization", `Bearer ${staffToken}`);
+  }
   const res = await fetch(`${API_BASE}${path}`, { cache: "no-store", headers });
   if (res.status === 401 && path.startsWith("/api/admin/")) {
     redirect("/admin/login");

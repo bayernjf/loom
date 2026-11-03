@@ -42,6 +42,7 @@ from app.product.modeling.models import (
 )
 from app.product.product_intake import statemachine as sm
 from app.product.product_intake.models import G2Field
+from tests.integration.staff_tokens import bearer, issue_write_token
 from tests.metric_reads import counter_value, histogram_count
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
@@ -105,6 +106,8 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P1-1：intakes 面全部要凭证；默认 staff 令牌（operations 等三写角色）。
+        ac.headers.update(bearer(await issue_write_token(ac)))
         yield ac
 
 

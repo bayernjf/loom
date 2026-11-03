@@ -7,12 +7,15 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.actor import Actor
+from app.core.api_keys.service import issue_key
 from app.core.config import get_settings
 from app.core.db import Base, get_session
 from app.core.exports import service as export_service
 from app.core.exports.models import ExportJob
 from app.core.models import AuditLog
 from app.core.queue import override_stream_client
+from app.core.rbac import PLATFORM_ADMIN
 from app.core.tenants.models import Tenant
 from app.final.final_whitelist.models import (
     PUBLISH_DRAFT,
@@ -44,9 +47,17 @@ async def session_factory():
 async def client(session_factory):
     async with session_factory() as session:
         session.add(Tenant(tenant_id="t1", name="试点客户", plan="basic", status="active"))
+        # P1-1：导出面只认 Agent Key；夹具内直接签发（issue_key 只 flush，须提交）。
+        _row, secret = await issue_key(
+            session, "exports-agent", Actor(id="admin-1", roles=[PLATFORM_ADMIN])
+        )
         await session.commit()
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {secret}"},
+    ) as ac:
         yield ac
 
 
@@ -430,7 +441,11 @@ async def test_job_creation_writes_audit(client, session_factory):
         )
     assert len(logs) == 1
     assert logs[0].tenant_id == "t1"
-    assert logs[0].actor_id == "mg-7"
+    # P1-1：机器凭证是已验真身份——审计 actor 取验真 key 的 key_id，
+    # body 自报的 mg-7 降级为 detail.declared_actor 备查（Q196 口径 B 甲）。
+    assert logs[0].actor_id != "mg-7"
+    assert logs[0].detail["declared_actor"]["id"] == "mg-7"
+    assert logs[0].detail["_actor_via"] == "agent_key"
     assert logs[0].entity_type == "export_job"
     assert logs[0].entity_id == job_id
     assert logs[0].detail["format"] == "json"
@@ -638,3 +653,37 @@ async def test_async_enqueue_failure_marks_job_failed_503(
     assert len(jobs) == 1
     assert jobs[0].status == "failed"
     assert "stream backend unavailable" in (jobs[0].error or "")
+
+
+# ---------- 评审 P1-1：导出面 Agent Key 闸（此前零凭证，tenant_id 可猜） ----------
+
+
+async def test_p11_exports_missing_token_all_six_401(client):
+    """fcw.csv/fcw.json + jobs 四口的零凭证访问一律 401。"""
+    noauth = {"Authorization": ""}
+    checks = [
+        await client.get("/api/exports/fcw.csv", params={"tenant_id": "t1"}, headers=noauth),
+        await client.get("/api/exports/fcw.json", params={"tenant_id": "t1"}, headers=noauth),
+        await client.post(
+            "/api/exports/jobs",
+            json={"tenant_id": "t1", "format": "csv", "actor": {"id": "a", "roles": []}},
+            headers=noauth,
+        ),
+        await client.get("/api/exports/jobs", params={"tenant_id": "t1"}, headers=noauth),
+        await client.get(
+            "/api/exports/jobs/j-1", params={"tenant_id": "t1"}, headers=noauth
+        ),
+        await client.get(
+            "/api/exports/jobs/j-1/download", params={"tenant_id": "t1"}, headers=noauth
+        ),
+    ]
+    assert [r.status_code for r in checks] == [401] * 6
+
+
+async def test_p11_exports_bad_token_401(client):
+    r = await client.get(
+        "/api/exports/fcw.json",
+        params={"tenant_id": "t1"},
+        headers={"Authorization": "Bearer loom_nope"},
+    )
+    assert r.status_code == 401

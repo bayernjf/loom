@@ -184,10 +184,12 @@ async def test_same_tenant_read_and_adjudicate_unchanged(client):
 
 async def test_intake_target_languages_cross_tenant_404(client):
     # tenant-B 改 tenant-A 的产品空间语言 → 404（此前仅代码级确认无租户条件）。
+    # P1-1：两令牌均为真实客户令牌，404 来自归属收口而非缺凭证。
     r = await client.patch(
         "/api/intakes/int-A/target-languages",
         params={"tenant_id": "tenant-B"},
         json={"languages": ["zh-CN"], "actor": CUSTOMER_B},
+        headers=client.token_b,
     )
     assert r.status_code == 404, r.text
 
@@ -196,6 +198,7 @@ async def test_intake_target_languages_cross_tenant_404(client):
         "/api/intakes/int-A/target-languages",
         params={"tenant_id": "tenant-A"},
         json={"languages": ["zh-CN"], "actor": CUSTOMER_A},
+        headers=client.token_a,
     )
     assert r.status_code == 200, r.text
     assert r.json()["target_languages"] == ["zh-CN"]

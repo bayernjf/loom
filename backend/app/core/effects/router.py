@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.actor import Actor
 from app.core.api_keys.models import AgentApiKey
 from app.core.api_keys.service import require_agent_key
+from app.core.client_auth.deps import (
+    ClientOrStaffCaller,
+    require_client_actor,
+    require_client_or_staff_actor,
+)
 from app.core.db import get_session, settings
 from app.core.effects import service
 from app.core.effects.csv_io import CsvValidationError
@@ -29,6 +34,7 @@ from app.core.effects.schemas import (
 from app.core.rbac import (
     OPERATIONS,
     PLATFORM_ADMIN,
+    NotAuthenticated,
     PermissionDenied,
     require_any_role,
 )
@@ -64,6 +70,23 @@ def _query_actor(*roles: str):
 
 require_ops_admin_view = _query_actor(OPERATIONS, PLATFORM_ADMIN)
 
+# 评审 P1-1：客户回填/分析面由「零凭证 + 自报 tenant_id」收口为凭证闸。
+# tenant_id query 与令牌归属不一致统一 401（client_auth.deps 口径）。
+# 回填三 Write 口走客户/运营双闸（客户令牌租户绑定；staff 令牌 operations|
+# platform_admin，代客补数场景，审计以验真身份为准——test_audit_identity 钉住）。
+require_client = require_client_actor()
+require_backfill_caller = require_client_or_staff_actor(OPERATIONS, PLATFORM_ADMIN)
+
+
+def _enforce_caller_tenant(caller: ClientOrStaffCaller, body_tenant_id: str) -> None:
+    """客户令牌只许回填本租户（不符统一 401，不泄露租户存在性）；
+    staff 令牌（operations|platform_admin）跨租户代补是设计内场景。"""
+    if caller.tenant_id is not None and body_tenant_id != caller.tenant_id:
+        raise NotAuthenticated(
+            "valid client access token for this tenant required "
+            "(self-declared actor is not identity)"
+        )
+
 
 @router.post("/api/effect-callback", response_model=EffectBatchReceipt)
 async def receive_effects(
@@ -89,19 +112,22 @@ async def receive_effects(
     return EffectBatchReceipt(**receipt)
 
 
-# ---------- Q128：客户回填通道（无 Agent Key，body actor + tenant 行级隔离） ----------
+# ---------- Q128：客户回填通道（P1-1 起：客户令牌租户绑定 + tenant 行级隔离） ----------
 
 
 @router.post("/api/effects/backfill", response_model=EffectBatchReceipt)
 async def customer_backfill_effects(
     body: CustomerEffectBatchIn,
     session: AsyncSession = Depends(get_session),
+    caller: ClientOrStaffCaller = Depends(require_backfill_caller),
 ) -> EffectBatchReceipt:
     """Q128 客户专用效果回填（source 固定 customer-backfill）。
 
     只接受本租户非 discarded 成品，对不上即整批 422（客户通道绝不产生孤儿）；
     幂等/时序/metrics 纪律与 Agent 通道一致。
+    P1-1：客户令牌租户绑定（body tenant 与令牌归属不符 401）；staff 令牌跨租户代补。
     """
+    _enforce_caller_tenant(caller, body.tenant_id)
 
     try:
         receipt = await service.ingest_customer_backfill(session, batch=body)
@@ -126,6 +152,7 @@ async def customer_backfill_effects(
 async def customer_backfill_upload(
     body: CustomerBackfillUploadIn,
     session: AsyncSession = Depends(get_session),
+    caller: ClientOrStaffCaller = Depends(require_backfill_caller),
 ) -> CustomerBackfillUploadReceipt:
     """Q156 客户批量 CSV 服务端上传（销 Q136 服务端上传/逐行回执挂账）。
 
@@ -134,7 +161,9 @@ async def customer_backfill_upload(
     全合法才走 Q128 整批 all-or-nothing（只命中本租户非 discarded 成品、绝不孤儿）。
     时间戳必须带时区（服务端无客户时区，naive 逐行报错）。Excel（.xlsx）见 Q160
     upload-excel；异步导入随 V2。
+    P1-1：客户令牌租户绑定（body tenant 与令牌归属不符 401）；staff 令牌跨租户代补。
     """
+    _enforce_caller_tenant(caller, body.tenant_id)
 
     try:
         receipt = await service.ingest_customer_backfill_upload(
@@ -169,6 +198,7 @@ async def customer_backfill_upload(
 async def customer_backfill_upload_excel(
     body: CustomerBackfillExcelUploadIn,
     session: AsyncSession = Depends(get_session),
+    caller: ClientOrStaffCaller = Depends(require_backfill_caller),
 ) -> CustomerBackfillUploadReceipt:
     """Q160 客户批量 Excel（.xlsx）服务端上传（与 Q156 CSV 同契约、同回执）。
 
@@ -177,7 +207,9 @@ async def customer_backfill_upload_excel(
     工作簿无法解析或任一结构/行错误都整批 422（file/header/行级 errors），不入库；
     全合法才走 Q128 整批 all-or-nothing（只命中本租户非 discarded 成品、绝不孤儿）。
     captured_at 列须为带时区 ISO 文本——Excel 日期单元格不带时区，逐行报错不臆测。
+    P1-1：客户令牌租户绑定（body tenant 与令牌归属不符 401）；staff 令牌跨租户代补。
     """
+    _enforce_caller_tenant(caller, body.tenant_id)
 
     try:
         receipt = await service.ingest_customer_backfill_excel(
@@ -332,11 +364,13 @@ async def customer_effect_analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_client),
 ) -> dict:
     """Q166 客户数据分析页：租户 matched 效果只读聚合。
 
-    无闸客户读口径（同 Q101/Q162）：tenant_id query 收窄、未知租户 200 空、
-    不 writeAudit；只统计 matched（孤儿属运营面），不新建表/调度。
+    P1-1 起挂客户令牌（租户绑定）：此前"无闸客户读口径（Q101/Q162）"只凭可猜测的
+    tenant_id，任何能打到后端的人可拉任意租户聚合。令牌↔tenant 不符统一 401；
+    未知租户仍 200 空集，不 writeAudit。
     """
 
     if date_from is not None and date_to is not None and date_from > date_to:

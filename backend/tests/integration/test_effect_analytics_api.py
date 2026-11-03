@@ -25,6 +25,7 @@ from app.core.effects.models import (
     EffectRecord,
 )
 from app.main import app
+from tests.integration.client_tokens import client_bearer, issue_client_token
 
 
 def _dt(day: int) -> datetime:
@@ -113,11 +114,15 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P1-1：该面要客户令牌；默认绑定 t1（数据主租户）。
+        ac.headers.update(client_bearer(await issue_client_token(ac, "t1")))
         yield ac
 
 
 async def test_analytics_unknown_tenant_is_empty(client):
-    r = await client.get("/api/effects/analytics", params={"tenant_id": "nope"})
+    # P1-1：query tenant 必须与令牌绑定一致——为不存在租户另发一枚令牌后仍 200 空。
+    nope = client_bearer(await issue_client_token(client, "nope", client_name="ghost"))
+    r = await client.get("/api/effects/analytics", params={"tenant_id": "nope"}, headers=nope)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["tenant_id"] == "nope"
@@ -163,7 +168,12 @@ async def test_analytics_aggregates_matched_sparse_metrics(client):
 
 
 async def test_analytics_tenant_isolation_excludes_other_tenant(client):
-    r = await client.get("/api/effects/analytics", params={"tenant_id": "t2"})
+    # P1-1：t1 令牌问 t2 → 401（绑定闸）；t2 令牌问 t2 → 只见 t2 数据。
+    assert (
+        await client.get("/api/effects/analytics", params={"tenant_id": "t2"})
+    ).status_code == 401
+    t2_auth = client_bearer(await issue_client_token(client, "t2", client_name="cust-t2"))
+    r = await client.get("/api/effects/analytics", params={"tenant_id": "t2"}, headers=t2_auth)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["records_total"] == 1

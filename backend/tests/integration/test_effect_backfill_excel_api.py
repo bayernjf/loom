@@ -28,6 +28,7 @@ from app.content.models import CONTENT_DISCARDED, CONTENT_READY, ContentProduct
 from app.core.db import Base, get_session, settings
 from app.core.effects.models import EffectRecord
 from app.main import app
+from tests.integration.client_tokens import client_bearer, issue_client_token
 
 CUSTOMER = {"id": "cust-1", "roles": []}
 
@@ -98,6 +99,8 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # P1-1：该面要客户令牌；默认绑定 t1（数据主租户）。
+        ac.headers.update(client_bearer(await issue_client_token(ac, "t1")))
         yield ac
 
 

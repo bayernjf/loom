@@ -33,8 +33,8 @@ export default async function ProductDetailPage({
   let allowedEvents: string[] = [];
   try {
     [intake, { allowed_events: allowedEvents }] = await Promise.all([
-      getIntake(intakeId),
-      getAllowedEvents(intakeId),
+      getIntake(intakeId, "client"),
+      getAllowedEvents(intakeId, "client"),
     ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
@@ -42,7 +42,7 @@ export default async function ProductDetailPage({
   }
 
   // 已发起建模（approved→modeling）后产品空间可能已生成；未生成时端点 404，本段不渲染。
-  const space = await getProductSpace(intakeId);
+  const space = await getProductSpace(intakeId, "client");
   // B3：目标语言控件只在产品空间已生成时出现，选项为 active 语言清单。
   const languageOptions = space ? await getContentLanguages() : [];
 

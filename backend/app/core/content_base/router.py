@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.api_keys.models import AgentApiKey
+from app.core.api_keys.service import require_agent_key
 from app.core.content_base import service
 from app.core.content_base.errors import (
     ContentBackendUnavailable,
@@ -31,6 +33,19 @@ from app.core.db import get_session
 from app.core.problem_details import logged_http_error
 
 router = APIRouter(prefix="/api/v1/content", tags=["content-base"])
+
+
+async def require_content_machine_key(
+    session: AsyncSession = Depends(get_session),
+    authorization: str | None = Header(default=None),
+) -> AgentApiKey:
+    """内容底座是系统间消费面，全端点只认 Agent Key（缺失/错误/吊销统一 401）。
+
+    Q88 依赖需要位置参 session，故与 Q150 同法包一层（不能直接 Depends(require_agent_key)）。
+    评审 P0-1：此前四口零凭证，hub 配置下 POST /requests 可被公网匿名调用真 LLM 烧 token。
+    """
+
+    return await require_agent_key(session, authorization)
 
 
 def _to_domain(body: CreateContentRequest) -> ContentRequest:
@@ -70,6 +85,7 @@ def _view(record: ContentCandidateRecord) -> ContentCandidateView:
 async def create_request(
     body: CreateContentRequest,
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_content_machine_key),
 ) -> ContentCandidateView:
     try:
         record = await service.submit_candidate(session, _to_domain(body), actor_id=body.actor.id)
@@ -91,6 +107,7 @@ async def review(
     candidate_id: str,
     body: ReviewContentRequest,
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_content_machine_key),
 ) -> ContentCandidateView:
     try:
         record = await service.review_candidate(
@@ -123,6 +140,7 @@ async def list_candidates(
     product_id: str | None = None,
     channel: str | None = None,
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_content_machine_key),
 ) -> ContentCandidateList:
     records = await service.list_candidates(
         session,
@@ -137,6 +155,7 @@ async def list_candidates(
 async def get_candidate(
     candidate_id: str,
     session: AsyncSession = Depends(get_session),
+    _: AgentApiKey = Depends(require_content_machine_key),
 ) -> ContentCandidateView:
     try:
         record = await service.get_candidate(session, candidate_id)

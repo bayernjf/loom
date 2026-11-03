@@ -29,6 +29,7 @@ from app.product.product_intake.models import (
     ProductIntakeApplication,
     ProductSpace,
 )
+from tests.integration.staff_tokens import bearer, issue_write_token
 
 OPS = {"id": "ops-1", "roles": ["operations"]}
 REVIEWER = {"id": "rev-1", "roles": ["product_reviewer"]}
@@ -70,6 +71,8 @@ async def client(session_factory):
         await session.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
+        # P1-1：intakes 面全部要凭证；默认 staff 令牌（operations 等三写角色）。
+        c.headers.update(bearer(await issue_write_token(c)))
         yield c
 
 
