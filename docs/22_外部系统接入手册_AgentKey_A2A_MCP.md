@@ -22,7 +22,7 @@
 
 三条要点：
 
-1. **凭证只有两种，不能互换**：机器用 `loom_` 前缀（`app/core/api_keys/service.py:22`），内部人员用 `loom_staff_`（Q178）。全仓 `require_agent_key` 的调用方**恰好三处**（`app/core/a2a/router.py:30`、`app/core/mcp/router.py:32`、`app/core/effects/router.py:45`，2026-09-28 grep 实测）——没有第四处，也没有任何机器凭证能碰发证两口（`final_id` 两口只认 staff 令牌，docs/11 §2.8／Q203）。
+1. **凭证只有两种，不能互换**：机器用 `loom_` 前缀（`app/core/api_keys/service.py:22`），内部人员用 `loom_staff_`（Q178）。全仓 `require_agent_key` 的调用方**恰好四处**（`app/core/a2a/router.py:30`、`app/core/mcp/router.py:32`、`app/core/effects/router.py:45`、`app/core/content_base/router.py:48`，2026-11-02 grep 实测）——没有第五处，也没有任何机器凭证能碰发证两口（`final_id` 两口只认 staff 令牌，docs/11 §2.8／Q203）。第四处是 2026-11-02 评审 P0-1 的收口：内容底座 `/api/v1/content/*` 四口（提交请求/人审/列表/详情）此前零凭证、hub 配置下可匿名烧真 LLM token，现全口只认 Agent Key。
 2. **plan 面不发证、不花 token、不越 Gate**：A2A 卡片的自述与 MCP 的 `instructions` 都是代码常量（`app/core/a2a/card.py:37-43`、`app/core/mcp/server.py:102`），实测 `cost.llmTokens = 0`（§5）。
 3. **鉴权先于门控**：MCP 关闭时，无凭证回 **401** 而不是 404——外部连"这个面存不存在"都问不出来（`app/core/mcp/router.py:39` 的依赖在函数体之前求值，§5 真进程实测）。
 

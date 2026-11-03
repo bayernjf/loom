@@ -4,6 +4,7 @@
 - POST /api/v1/content/{id}/review → confirmed/modified/rejected
 - 重复裁决 409、未知候选 404
 - GET 列表（过滤）/ 单个
+- P0-1（2026-11-02 评审）：四口全部挂 Agent Key——无令牌/错误令牌/吊销令牌统一 401
 create_all 建 content_candidates（迁移 0065 与表模型同构）。
 """
 
@@ -15,14 +16,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 # 显式导入确保表注册进 Base.metadata。
 from app.core.content_base import models as _models  # noqa: F401
+from app.core.actor import Actor
+from app.core.api_keys.service import issue_key, revoke_key
 from app.core.db import Base, get_session
+from app.core.rbac import PLATFORM_ADMIN
 from app.main import app
 
 ACTOR = {"id": "owner-1", "roles": ["owner"]}
 
 
 @pytest_asyncio.fixture
-async def client():
+async def harness():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -33,11 +37,26 @@ async def client():
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    async with factory() as session:
+        issuer = Actor(id="admin-1", roles=[PLATFORM_ADMIN])
+        _row, secret = await issue_key(session, "content-agent", issuer)
+        dead_row, dead_secret = await issue_key(session, "content-agent-dead", issuer)
+        await revoke_key(session, dead_row.key_id, issuer)
+        await session.commit()  # issue_key 只 flush：不提交则钥匙不在库里，全成 401 假绿
+    yield {"secret": secret, "dead": dead_secret}
     app.dependency_overrides.clear()
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def client(harness):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {harness['secret']}"},
+    ) as ac:
+        yield ac
 
 
 def _request(**overrides) -> dict:
@@ -177,3 +196,46 @@ async def test_get_single_candidate(client) -> None:
 async def test_get_unknown_returns_404(client) -> None:
     resp = await client.get("/api/v1/content/nope")
     assert resp.status_code == 404
+
+
+# ---------- P0-1：无鉴权面收口（缺/错/吊销统一 401，不区分原因） ----------
+
+
+async def test_missing_token_all_four_endpoints_401(client) -> None:
+    payload = _request()
+    endpoints = [
+        ("POST", "/api/v1/content/requests", {"json": payload}),
+        ("POST", "/api/v1/content/some-id/review", {"json": {"decision": "confirmed", "actor": ACTOR}}),
+        ("GET", "/api/v1/content", {}),
+        ("GET", "/api/v1/content/some-id", {}),
+    ]
+    for method, path, kwargs in endpoints:
+        resp = await client.request(method, path, headers={"Authorization": ""}, **kwargs)
+        assert resp.status_code == 401, f"{method} {path} 无令牌应 401，实得 {resp.status_code}"
+
+
+async def test_bad_token_401(client) -> None:
+    resp = await client.post(
+        "/api/v1/content/requests",
+        json=_request(),
+        headers={"Authorization": "Bearer loom_nope"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_revoked_token_401(client, harness) -> None:
+    resp = await client.post(
+        "/api/v1/content/requests",
+        json=_request(),
+        headers={"Authorization": f"Bearer {harness['dead']}"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_valid_token_still_works(client) -> None:
+    # 合法令牌全流程不回归（防 fail-closed 修成 fail-for-everyone）
+    resp = await client.post("/api/v1/content/requests", json=_request())
+    assert resp.status_code == 201
+    candidate_id = resp.json()["candidate_id"]
+    assert (await client.get(f"/api/v1/content/{candidate_id}")).status_code == 200
+    assert (await client.get("/api/v1/content")).status_code == 200
