@@ -76,6 +76,12 @@ jobs:
           node scripts/check-compliance.mjs
           node scripts/check-admin.mjs
           node scripts/check-settings.mjs
+      # 评审 P1-3（2026-11-02）：生产依赖安全公告的信息门。continue-on-error
+      # 是有意的——postcss 经 next 钉版，修复只能随 next 大版本到，硬门会永久红；
+      # 新公告进来时在 job 日志里可见，由例行评审消化。
+      - name: Production dependency audit (informational)
+        continue-on-error: true
+        run: npm audit --omit=dev
 
   # Q207：真 PG16 上的迁移与 ORM 漂移门。此前这四件事只在本地一次性容器里手工做
   # （DBA 复核 Q153/Q171/Q179 各是一批），所以"模型⇄迁移零漂移"每隔几十片就要人工
