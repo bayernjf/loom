@@ -227,6 +227,7 @@ async def submit_batch(session, product_space_id: str, body, actor, *, embedding
                 )
             )
         if candidate.status == atom_rules.CAND_PENDING_EVIDENCE:
+            assert due is not None  # pending_evidence 必有截止时间
             await _ensure_evidence_todo(session, candidate, due)
 
     await append_audit(
@@ -812,13 +813,16 @@ async def override_risk(session, candidate_id: str, level: str, reason: str, act
             )
         ).all()
         has_evidence = bool((cand.evidence or "").strip())
-        wanted = {t for t, _ in atom_rules.conflicts_for(
+        wanted = dict(atom_rules.conflicts_for(
             atom_rules.RiskGrade(level=level, source="manual"), has_evidence=has_evidence
-        )}
+        ))
+        existing_types = {c.type for c in conflicts}
         for c in conflicts:
             if c.type not in wanted:
                 c.resolved_at = _now()
-        for ctype, cstatus in wanted - {c.type for c in conflicts}:
+        for ctype, cstatus in wanted.items():
+            if ctype in existing_types:
+                continue
             session.add(
                 AtomConflict(
                     candidate_id=candidate_id, type=ctype, status=cstatus,

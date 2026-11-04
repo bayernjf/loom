@@ -154,8 +154,8 @@ async def generate_content(
 )
 async def approve_content(
     content_id: str,
+    body: ContentDecisionRequest,
     tenant_id: str = Query(min_length=1),
-    body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
     actor: Actor = Depends(require_client),
 ) -> ContentProductView:
@@ -177,8 +177,8 @@ async def approve_content(
 @router.post("/api/content/{content_id}/reject", response_model=ContentProductView)
 async def reject_content(
     content_id: str,
+    body: ContentDecisionRequest,
     tenant_id: str = Query(min_length=1),
-    body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
     actor: Actor = Depends(require_client),
 ) -> ContentProductView:
@@ -202,8 +202,8 @@ async def reject_content(
 @router.post("/api/content/{content_id}/revise", response_model=ContentProductView)
 async def revise_content(
     content_id: str,
+    body: ContentDecisionRequest,
     tenant_id: str = Query(min_length=1),
-    body: ContentDecisionRequest = ...,
     session: AsyncSession = Depends(get_session),
     actor: Actor = Depends(require_client),
 ) -> ContentProductView:
@@ -549,8 +549,8 @@ async def get_content(
 )
 async def edit_content_body(
     content_id: str,
+    body: ContentBodyPatch,
     tenant_id: str = Query(min_length=1),
-    body: ContentBodyPatch = ...,
     session: AsyncSession = Depends(get_session),
     actor: Actor = Depends(require_client),
 ) -> ContentProductView:

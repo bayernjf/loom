@@ -21,6 +21,7 @@ def coerce(value, value_type: str, validation: dict | None = None):
     if value_type not in VALUE_TYPES:
         raise ConfigValidationError(f"unknown value_type {value_type!r}")
 
+    coerced: object
     if value_type == TYPE_BOOL:
         if not isinstance(value, bool):
             raise ConfigValidationError("expected boolean")

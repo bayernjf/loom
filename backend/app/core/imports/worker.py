@@ -147,6 +147,7 @@ class ImportWorker:
                 logger.exception("import job %s attempt %s failed", job_id, deliveries)
                 if delivery_exhausted(deliveries, self._max_deliveries):
                     async with self._factory() as fail_session:
+                        assert job_id is not None  # job 可见即来自有效 job_id
                         fresh = await service.get_job(fail_session, job_id)
                         if fresh is not None and not service.is_terminal(fresh):
                             await service.fail_import_job(

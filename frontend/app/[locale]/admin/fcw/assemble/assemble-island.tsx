@@ -3,6 +3,7 @@
 // Q249 / D3.5 §3.1 甲：组装工作台表单岛。先预检（只读口，零副作用），七 Guard
 // 全绿后才解锁签发；预检结果同时给出 3.3 甲的 8 项判断结果映射表。client 岛只
 // 调本目录 Server Actions，不直连 lib/api（check-admin 守卫）。
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
@@ -49,7 +50,7 @@ export function AssembleIsland() {
   const [reuseLoading, setReuseLoading] = useState(false);
   const [reuseError, setReuseError] = useState<string | null>(null);
 
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [previewing, setPreviewing] = useState(false);
   const [issuing, setIssuing] = useState(false);
   const [preview, setPreview] = useState<
@@ -448,12 +449,12 @@ export function AssembleIsland() {
           <p className={styles.notice}>
             {t("aiSelectReviewLinkText")}
             {": "}
-            <a
+            <Link
               className={styles.planChip}
               href="/zh-CN/admin/review-queue"
             >
               {t("aiSelectReviewLink")}
-            </a>
+            </Link>
           </p>
         </div>
       )}

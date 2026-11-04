@@ -533,6 +533,7 @@ async def purge_expired_discarded(
     for content in expired:
         tenant_id = content.tenant_id
         content_id = content.content_id
+        assert content.updated_at is not None  # 淘汰对象必已有更新时间
         detail = {
             "final_id": content.final_id,
             "language": content.language,

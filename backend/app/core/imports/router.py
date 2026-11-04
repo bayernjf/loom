@@ -38,6 +38,7 @@ async def create_backfill_import_job(
     if not get_settings().import_worker_enabled:
         # V1 默认：请求内同步执行到终态（completed/failed），再提交一次。
         running = await service.get_job(session, job.job_id)
+        assert running is not None  # 刚创建并提交，必存在
         running = await service.process_import_job(session, running)
         await session.commit()
         return service.job_view(running)
@@ -47,6 +48,7 @@ async def create_backfill_import_job(
     except StreamBackendError:
         # 入流失败 fail-closed：置 failed，绝不留无人消费的 queued 任务。
         stale = await service.get_job(session, job.job_id)
+        assert stale is not None  # 刚创建并提交，必存在
         await service.fail_import_job(
             session, stale, "enqueue failed: stream backend unavailable"
         )

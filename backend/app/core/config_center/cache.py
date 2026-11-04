@@ -7,6 +7,7 @@ V1 为模块化单体单进程：发布后在同事务 after_commit 钩子内原
 
 import time
 from collections.abc import Iterable
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +17,7 @@ from app.core.config_center.models import ConfigItem
 
 class ConfigCache:
     def __init__(self) -> None:
-        self._snapshot: dict[str, object] = {}
+        self._snapshot: dict[str, Any] = {}
         # Q141：每个 key 对应的 ConfigItem.version，增量失效时按版本单调接受，
         # 防止乱序/延迟到达的旧快照把新值回灌（版本号防陈旧）。
         self._versions: dict[str, int] = {}

@@ -184,6 +184,7 @@ async def post_recognition(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     intake = await session.get(ProductIntakeApplication, intake_id)
+    assert intake is not None  # record 由该 intake 产生，必存在
     return C1RecognitionView(
         record_id=record.record_id,
         conf=record.conf,

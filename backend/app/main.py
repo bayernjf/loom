@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
 
 from app.content.router import router as content_router
 from app.content.video_studio.router import router as video_studio_router
@@ -65,6 +66,26 @@ _import_workers: list[ImportWorker] = []
 _fcw_workers: list[FcwWorker] = []
 
 
+async def _assert_staff_credentials(session) -> None:
+    """P1-2：staff 门开着却没有可用令牌时启动即失败。
+
+    否则所有内部面只会 401，运维分不清是配置错、迁移没跑还是压根没 bootstrap。
+    首个令牌的引导路径要求临时关闸（见 infra/docker-compose.yml 与 docs/17），
+    所以这里只能拒绝启动并给出那条明确指令，不能静默放行。
+    """
+    from app.core.staff_auth.models import StaffApiKey
+
+    active = await session.scalar(
+        select(func.count()).select_from(StaffApiKey).where(StaffApiKey.status == "active")
+    )
+    if not active:
+        raise RuntimeError(
+            "LOOM_STAFF_AUTH_ENABLED=true but no active staff access token exists. "
+            "Bootstrap once with LOOM_STAFF_AUTH_ENABLED=false, issue the first key via "
+            "POST /api/admin/staff-keys, then restart with the gate on (docs/17)."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _scheduler, _restock_worker, _config_subscriber, _export_workers, _import_workers, _fcw_workers
@@ -75,6 +96,18 @@ async def lifespan(app: FastAPI):
             await config_cache.reload(session)
     except Exception:
         logger.warning("config cache bootstrap failed; falling back to seed defaults", exc_info=True)
+    # P1-2：门开着就必须有凭据；查不到凭据（含库不可达/迁移未跑）直接 fail-fast。
+    if settings.staff_auth_enabled:
+        try:
+            async with SessionLocal() as session:
+                await _assert_staff_credentials(session)
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                "LOOM_STAFF_AUTH_ENABLED=true but staff credentials could not be verified "
+                f"({exc.__class__.__name__}); ensure migrations ran and the database is reachable."
+            ) from exc
     # W6-1：启动时同步一次 hub 投影（失败不阻断；client 0600 缓存兜底）。
     try:
         from app.core.model_registry import hub as model_hub
@@ -109,8 +142,8 @@ async def lifespan(app: FastAPI):
             block_ms=int(settings.export_stream_block_seconds * 1000),
             count=settings.export_stream_count,
         )
-        for worker in _export_workers:
-            await worker.start()
+        for export_worker in _export_workers:
+            await export_worker.start()
     if settings.import_worker_enabled:
         # Q161：客户效果批量回填异步导入消费组 worker（payload 落库可重放，
         # 消费组内多 consumer 原生分片，可多副本水平并行）。
@@ -120,8 +153,8 @@ async def lifespan(app: FastAPI):
             block_ms=int(settings.import_stream_block_seconds * 1000),
             count=settings.import_stream_count,
         )
-        for worker in _import_workers:
-            await worker.start()
+        for import_worker in _import_workers:
+            await import_worker.start()
     if settings.fcw_worker_enabled:
         # Q165：段11 FCW 批量组装异步消费组 worker（七 Guard 逐条原子性不变，
         # per-slot 失败隔离；消费组内多 consumer 原生分片）。
@@ -131,8 +164,8 @@ async def lifespan(app: FastAPI):
             block_ms=int(settings.fcw_stream_block_seconds * 1000),
             count=settings.fcw_stream_count,
         )
-        for worker in _fcw_workers:
-            await worker.start()
+        for fcw_worker in _fcw_workers:
+            await fcw_worker.start()
     if settings.config_cache_broadcast_enabled:
         # Q135：多副本配置失效广播订阅者；启动失败不阻断应用（本进程 after_commit
         # 热更新仍生效，对端副本最坏重启后恢复一致）。
@@ -154,14 +187,14 @@ async def lifespan(app: FastAPI):
         if _config_subscriber is not None:
             await _config_subscriber.stop()
             _config_subscriber = None
-        for worker in reversed(_export_workers):
-            await worker.stop()
+        for export_worker in reversed(_export_workers):
+            await export_worker.stop()
         _export_workers = []
-        for worker in reversed(_import_workers):
-            await worker.stop()
+        for import_worker in reversed(_import_workers):
+            await import_worker.stop()
         _import_workers = []
-        for worker in reversed(_fcw_workers):
-            await worker.stop()
+        for fcw_worker in reversed(_fcw_workers):
+            await fcw_worker.stop()
         _fcw_workers = []
         if _restock_worker is not None:
             await _restock_worker.stop()

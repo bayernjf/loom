@@ -207,11 +207,11 @@ def parse_backfill_table(
             if parsed is not None:
                 metrics[column] = parsed
         for column in METRIC_RATE_KEYS:
-            parsed = _parse_rate(
+            rate = _parse_rate(
                 cell(raw_row, column), errors=errors, index=data_index, line=line
             )
-            if parsed is not None:
-                metrics[column] = parsed
+            if rate is not None:
+                metrics[column] = rate
 
         if post_id and captured_at is not None:
             records.append(

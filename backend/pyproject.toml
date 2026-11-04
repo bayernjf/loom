@@ -60,4 +60,7 @@ ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
+files = ["app"]
+# 第三方依赖大多未随包附带 stub（model-hub-client、boto3 等），缺失导入按 Any
+# 处理；这是本仓既有的口径，不是本次新增的豁免。
 ignore_missing_imports = true

@@ -17,6 +17,7 @@ Q86 起 AFFINITY 的 affinity/cluster 由 embedding 向量在本地确定性算�
 import math
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.core.config_center.knobs import knob
 
@@ -199,7 +200,7 @@ def approve_guard_checks(
     return violations
 
 
-def pick_cluster_keeper(items: list) -> tuple | None:
+def pick_cluster_keeper(items: list) -> Any | None:
     """Q19：同义簇推荐保留项=亲和度最高者；None 亲和度排最后，并列保持原序。"""
     if not items:
         return None

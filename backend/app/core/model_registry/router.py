@@ -5,6 +5,8 @@
 = operations（与 skill7 投递同档）。
 """
 
+from typing import Literal, cast
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -105,7 +107,7 @@ def _hub_model_view(record: hub.HubModelRecord) -> AIModelView:
         model_id=record.assignment_id,
         model_code=record.model,
         provider=record.provider,
-        capability=_capability_from_modalities(record.modalities),
+        capability=cast(Literal["chat", "embedding", "video"], _capability_from_modalities(record.modalities)),
         input_price_per_1m=input_price,
         output_price_per_1m=output_price,
         currency_code=None,
@@ -129,7 +131,7 @@ async def create_model(body: AIModelCreate, session: AsyncSession = Depends(get_
     await session.commit()
     return AIModelView(
         model_id=model.model_id, model_code=model.model_code, provider=model.provider,
-        capability=model.capability,
+        capability=cast(Literal["chat", "embedding", "video"], model.capability),
         input_price_per_1m=float(model.input_price_per_1m),
         output_price_per_1m=float(model.output_price_per_1m),
         currency_code=model.currency_code,
@@ -152,7 +154,7 @@ async def list_models(
     return [
         AIModelView(
             model_id=m.model_id, model_code=m.model_code, provider=m.provider,
-            capability=m.capability,
+            capability=cast(Literal["chat", "embedding", "video"], m.capability),
             input_price_per_1m=float(m.input_price_per_1m),
             output_price_per_1m=float(m.output_price_per_1m),
             currency_code=m.currency_code,
@@ -213,7 +215,7 @@ async def patch_model(
     await session.commit()
     return AIModelView(
         model_id=model.model_id, model_code=model.model_code, provider=model.provider,
-        capability=model.capability,
+        capability=cast(Literal["chat", "embedding", "video"], model.capability),
         input_price_per_1m=float(model.input_price_per_1m),
         output_price_per_1m=float(model.output_price_per_1m),
         currency_code=model.currency_code,

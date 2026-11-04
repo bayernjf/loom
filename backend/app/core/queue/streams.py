@@ -89,7 +89,7 @@ async def add_event(
 ) -> str:
     """XADD 一条消息，返回服务端生成的条目 id；approximate MAXLEN 裁剪防无限增长。"""
     try:
-        kwargs = {"id": "*"}
+        kwargs: dict[str, object] = {"id": "*"}
         if maxlen is not None:
             kwargs["maxlen"] = maxlen
             kwargs["approximate"] = True

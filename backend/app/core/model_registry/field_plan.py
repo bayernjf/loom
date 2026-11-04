@@ -14,6 +14,7 @@ product_reviewer confirm 后由既有适配器 apply_field_plan→submit_plan �
 """
 
 import json
+from typing import TypeGuard
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +46,7 @@ class FieldPlanOutputInvalid(Exception):
     pass
 
 
-def _is_number(value) -> bool:
+def _is_number(value) -> TypeGuard[int | float]:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
@@ -226,7 +227,7 @@ async def invoke_field_plan(
         "target_atom_max": target_max,
         "dimensions": dimensions,
     }
-    body = DeliverRunRequest(
+    run_body = DeliverRunRequest(
         skill_id=SCENE_DIM_MERGE,
         product_space_id=product_space_id,
         input={
@@ -244,7 +245,7 @@ async def invoke_field_plan(
     )
     return await deliver_generated_run(
         session,
-        body,
+        run_body,
         model_id=invocation.model_id,
         input_cost=invocation.input_cost,
         output_cost=invocation.output_cost,

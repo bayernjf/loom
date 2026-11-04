@@ -173,7 +173,7 @@ async def invoke_c7_resolve(
         "required_fids": required_fids,
         "l4_proposals": proposals,
     }
-    body = DeliverRunRequest(
+    run_body = DeliverRunRequest(
         skill_id=SCENE_TYPE_MATCH,
         intake_id=intake_id,
         input={
@@ -191,7 +191,7 @@ async def invoke_c7_resolve(
     )
     return await deliver_generated_run(
         session,
-        body,
+        run_body,
         model_id=invocation.model_id,
         input_cost=invocation.input_cost,
         output_cost=invocation.output_cost,

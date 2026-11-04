@@ -450,7 +450,11 @@ async def freeze(session, product_space_id: str, body, actor) -> dict:
         )
     ).all()
     dup_hints = [
-        {"pws_id": row.pws_id, "product_space_id": row.product_space_id, "version": row.version}
+        {
+            "pws_id": row["pws_id"],
+            "product_space_id": row["product_space_id"],
+            "version": row["version"],
+        }
         for row in pws_rules.same_tenant_duplicates(
             fingerprint,
             [

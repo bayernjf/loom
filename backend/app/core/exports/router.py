@@ -5,6 +5,10 @@ Agent Key 机器凭证（fcw.csv/json 本就是系统间分发的白名单面；
 服务端以 env 持有的 Key 调用）。缺失/错误/吊销统一 401。
 """
 
+import re
+from typing import Any, cast
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +35,7 @@ async def require_export_key(
 
 
 # 接线自检标记：路由上的 Depends 被删掉时，结构用例据此判红。
-require_export_key.loom_requires_agent_credential = True
+cast(Any, require_export_key).loom_requires_agent_credential = True
 
 
 def _validate_page(limit: int | None, offset: int) -> None:
@@ -44,10 +48,24 @@ def _validate_page(limit: int | None, offset: int) -> None:
         )
 
 
+def _content_disposition(filename: str) -> str:
+    """P2-4：文件名来自调用方可影响的值（fcw-<tenant_id>.* / job.file_name）。
+
+    tenant_id 能含 CR/LF、引号或分隔符，直接拼进 Content-Disposition 就是响应头
+    注入。ASCII fallback 只留 [A-Za-z0-9._-]，其余替换为 `_`；原始值走 RFC 5987
+    ``filename*``（percent-encoded UTF-8），中文租户名仍可辨识且头值无控制字符。
+    """
+
+    raw = filename.replace("\r", "").replace("\n", "")
+    fallback = re.sub(r"[^A-Za-z0-9._-]", "_", raw).strip("._") or "export"
+    encoded = quote(raw, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
+
+
 def _page_headers(page: dict, filename: str) -> dict:
     # Q142：CSV 正文严格单列，分页/截断信息走 X-* 响应头。
     return {
-        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Disposition": _content_disposition(filename),
         "X-Export-Total": str(page["total"]),
         "X-Export-Limit": str(page["limit"]),
         "X-Export-Offset": str(page["offset"]),

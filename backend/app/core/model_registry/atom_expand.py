@@ -213,7 +213,7 @@ async def invoke_atom_expand(
     basis_texts: list[str] = []
     basis_dim_of: list[str] = []
     for atom in approved_atoms:
-        if atom.embedding is not None:
+        if atom.embedding is not None and atom.dimension_id is not None:
             basis_atoms.setdefault(atom.dimension_id, []).append(atom)
             basis_texts.append(atom.content)
             basis_dim_of.append(atom.dimension_id)
@@ -257,7 +257,7 @@ async def invoke_atom_expand(
     # 编排层机读键：投递结构校验/适配器都会剥离，不进 BatchSubmitRequest。
     candidate_payload["_embeddings"] = embeddings_by_norm
 
-    body = DeliverRunRequest(
+    run_body = DeliverRunRequest(
         skill_id=SCENE_CONFLICT_PRECHECK,
         product_space_id=product_space_id,
         input={
@@ -281,7 +281,7 @@ async def invoke_atom_expand(
     )
     return await deliver_generated_run(
         session,
-        body,
+        run_body,
         model_id=invocation.model_id,
         input_cost=invocation.input_cost + embedding.input_cost,
         output_cost=invocation.output_cost,

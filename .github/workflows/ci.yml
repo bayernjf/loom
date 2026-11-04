@@ -32,6 +32,12 @@ jobs:
       - name: Ruff lint
         working-directory: backend
         run: ruff check .
+      # Q-type-gate：静态门放在 pytest 之前（廉价、fail-fast）。基线已清到 0 error，
+      # 故不引入 [[tool.mypy.overrides]] 豁免清单；--no-incremental 保证每次都是全量
+      # 检查，不让 .mypy_cache 把新增错误藏进增量跳过的文件。
+      - name: Mypy type check (zero-error gate)
+        working-directory: backend
+        run: mypy --no-incremental app
       - name: Pytest (sqlite, no services)
         working-directory: backend
         # --cov adds measurement only; docs/16 §4's coverage thresholds stay 【建议】
@@ -66,6 +72,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      # 评审 P3-4（2026-11-02）：lint 接入门禁。存量 6 条告警与 5 条
+      # next/no-html-link 错误已按规则修掉（未关规则、未留 suppressions 基线），
+      # 现以 --max-warnings 0 硬门，新增任何错误或告警都会红。
+      - run: npm run lint
       - name: Eight frontend contract checkers
         run: |
           node scripts/check-tokens.mjs

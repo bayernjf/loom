@@ -13,7 +13,7 @@
 统一 401），避免凭证探测与跨租户存在性探针。
 """
 
-from typing import NamedTuple
+from typing import Any, NamedTuple, cast
 
 from fastapi import Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,41 +33,41 @@ _NO_CREDENTIAL_TENANT = (
 
 
 def _client_dependency(*, tenant_bound: bool):
-    if tenant_bound:
-        async def dependency(
-            tenant_id: str = Query(min_length=1),
-            authorization: str | None = Header(default=None),
-            session: AsyncSession = Depends(get_session),
-        ) -> Actor:
-            token = service.parse_bearer(authorization)
-            row = (
-                await service.verify_client_key(session, token, tenant_id)
-                if token
-                else None
-            )
-            if row is None:
-                raise NotAuthenticated(_NO_CREDENTIAL_TENANT)
-            # 独立 session 内只有 last_used_at 回填，提交它不裹挟端点业务事务。
-            await session.commit()
-            return service.client_actor(row)
-    else:
-        async def dependency(
-            authorization: str | None = Header(default=None),
-            session: AsyncSession = Depends(get_session),
-        ) -> Actor:
-            token = service.parse_bearer(authorization)
-            row = (
-                await service.verify_client_key(session, token, None)
-                if token
-                else None
-            )
-            if row is None:
-                raise NotAuthenticated(_NO_CREDENTIAL)
-            await session.commit()
-            return service.client_actor(row)
+    async def tenant_scoped_dependency(
+        tenant_id: str = Query(min_length=1),
+        authorization: str | None = Header(default=None),
+        session: AsyncSession = Depends(get_session),
+    ) -> Actor:
+        token = service.parse_bearer(authorization)
+        row = (
+            await service.verify_client_key(session, token, tenant_id)
+            if token
+            else None
+        )
+        if row is None:
+            raise NotAuthenticated(_NO_CREDENTIAL_TENANT)
+        # 独立 session 内只有 last_used_at 回填，提交它不裹挟端点业务事务。
+        await session.commit()
+        return service.client_actor(row)
 
+    async def identity_dependency(
+        authorization: str | None = Header(default=None),
+        session: AsyncSession = Depends(get_session),
+    ) -> Actor:
+        token = service.parse_bearer(authorization)
+        row = (
+            await service.verify_client_key(session, token, None)
+            if token
+            else None
+        )
+        if row is None:
+            raise NotAuthenticated(_NO_CREDENTIAL)
+        await session.commit()
+        return service.client_actor(row)
+
+    dependency = tenant_scoped_dependency if tenant_bound else identity_dependency
     # 接线自检标记：路由上的 Depends 被删掉时，结构用例可据此判红。
-    dependency.loom_requires_client_credential = True
+    cast(Any, dependency).loom_requires_client_credential = True
     return dependency
 
 
@@ -127,11 +127,11 @@ def require_client_or_staff_actor(*staff_roles: str):
             set_verified_credential(actor, CREDENTIAL_CLIENT)
             return ClientOrStaffCaller(actor, row.tenant_id)
         if staff_service.is_staff_token(token):
-            row = await staff_service.verify_staff_key(session, token)
-            if row is None:
+            staff_row = await staff_service.verify_staff_key(session, token)
+            if staff_row is None:
                 raise NotAuthenticated(_NO_CREDENTIAL_DUAL)
             await session.commit()
-            actor = staff_service.staff_actor(row)
+            actor = staff_service.staff_actor(staff_row)
             if staff_roles:
                 require_any_role(actor, *staff_roles)
             set_verified_credential(actor, CREDENTIAL_STAFF)
@@ -139,5 +139,5 @@ def require_client_or_staff_actor(*staff_roles: str):
         raise NotAuthenticated(_NO_CREDENTIAL_DUAL)
 
     # 接线自检标记：路由上的 Depends 被删掉时，结构用例可据此判红。
-    dependency.loom_requires_client_credential = True
+    cast(Any, dependency).loom_requires_client_credential = True
     return dependency

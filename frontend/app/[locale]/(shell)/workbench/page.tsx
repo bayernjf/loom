@@ -212,7 +212,7 @@ export default async function WorkbenchPage() {
 
       <ul className={styles.metricGrid}>
         {FUTURE_METRICS.map((metric) => (
-          <li key={metric} className={styles.metricCard} aria-disabled="true">
+          <li key={metric} className={styles.metricCard}>
             <div className={styles.metricHeader}>
               <span className={styles.metricName}>{t(`metrics.${metric}`)}</span>
               <span className={styles.v2Badge}>V2</span>

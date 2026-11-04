@@ -232,10 +232,12 @@ def score_fcw(
         missing.append("pwc_score")
     if slot_fit_score is None:
         missing.append("slot_fit_score")
+    if not confs:
+        missing.append("package_conf")
     if len(confs) != len(package_confs):
         missing.append("package_conf")
 
-    detail = {
+    detail: dict[str, object] = {
         "formula": "pwc*0.4 + fit*0.3 + conf_avg*0.3",
         "weights": {"pwc": w_pwc, "fit": w_fit, "conf": w_conf},
         "raw": {
@@ -248,6 +250,7 @@ def score_fcw(
         detail["missing"] = missing
         return ScoreOutcome(None, True, detail)
 
+    assert pwc_score is not None and slot_fit_score is not None  # 已被 missing 拦截
     conf_avg = sum(confs) / len(confs)
     score = pwc_score * 100 * w_pwc + slot_fit_score * w_fit + conf_avg * 100 * w_conf
     detail["scaled"] = {
