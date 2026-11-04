@@ -1,3 +1,4 @@
+import re
 from collections.abc import AsyncGenerator
 from uuid import UUID
 
@@ -159,6 +160,28 @@ async def test_export_published_only_scoped(client, session_factory):
 async def test_export_rejects_empty_tenant(client):
     r = await client.get("/api/exports/fcw.csv", params={"tenant_id": ""})
     assert r.status_code == 422
+
+
+async def test_export_filename_blocks_header_injection(client):
+    # P2-4：tenant_id 直接拼进 Content-Disposition 会让 CR/LF 变成响应头注入。
+    evil = 'x"\r\nX-Injected: yes\r\n'
+    r = await client.get("/api/exports/fcw.csv", params={"tenant_id": evil})
+    assert r.status_code == 200
+    assert "x-injected" not in r.headers
+    disposition = r.headers["content-disposition"]
+    assert "\r" not in disposition and "\n" not in disposition
+    fallback = disposition.split("filename=", 1)[1].split(";", 1)[0]
+    assert re.fullmatch(r'"[A-Za-z0-9._-]+"', fallback)
+    assert "X-Injected" in fallback
+
+
+async def test_export_filename_keeps_utf8_tenant_readable(client):
+    # ASCII fallback 之外仍用 RFC 5987 保留可读的中文租户名。
+    r = await client.get("/api/exports/fcw.csv", params={"tenant_id": "客户甲"})
+    assert r.status_code == 200
+    disposition = r.headers["content-disposition"]
+    assert "filename*=UTF-8''fcw-" in disposition
+    assert "%E5%AE%A2%E6%88%B7%E7%94%B2" in disposition
 
 
 # ---------- Q132：JSON 形态与导出任务 ----------
