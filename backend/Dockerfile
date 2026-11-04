@@ -7,6 +7,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# P2-2: model-hub-client is a git-tagged sibling package (see its pyproject),
+# not a PyPI name, so requirements.lock cannot carry it. Install git for the VCS
+# fetch, then the client at the pinned tag, and prove the import resolves in the
+# image — otherwise the hub projection silently degrades to an empty cache.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY backend/ /app/
 # Skill/WF registry lives at repo root; the app resolves it at /runtime in the image.
 COPY runtime/ /runtime/
@@ -17,7 +25,11 @@ COPY runtime/ /runtime/
 # corrupted through the Docker Desktop proxy on this machine (hash mismatch, content
 # differs per attempt; curl direct is fine). Lock now carries explicit hashes and pip
 # installs via the Tsinghua mirror whose wheels hash-identically to PyPI.
-RUN pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.lock && pip install . --no-deps
+RUN pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.lock \
+ && pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+      "model-hub-client @ git+https://github.com/bayernjf/model-hub.git@v0.2.0#subdirectory=clients/python" \
+ && pip install . --no-deps \
+ && python -c "from model_hub_client import ModelHubClient"
 
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
