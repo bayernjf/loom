@@ -86,11 +86,15 @@ services:
       LOOM_PUBLIC_BASE_URL: ${LOOM_PUBLIC_BASE_URL:-}
       # Q291：四个与拓扑无关、文档已承诺部署期可拧的全局开关，此前 base/overlay 都不转发 ⇒
       # 运维照 docs/17 §1、docs/22 在 .env 里设了也进不了容器（Q280 同型的"旋钮没接到制品"）。
-      # SLA sweep 总闸默认开（Q49/Q87），余三者默认关：staff 身份门控（Q178/Q203）、
-      # discarded 物理清理（Q187）、MCP 对外面（Q232）。显式可覆盖插值（不像 worker 开关只由
-      # ha overlay 打开）；默认值原样保留，V1 行为一字不变。
+      # SLA sweep 总闸默认开（Q49/Q87），discarded 物理清理（Q187）与 MCP 对外面（Q232）
+      # 默认关。显式可覆盖插值（不像 worker 开关只由 ha overlay 打开）；除 staff 门控外
+      # 默认值原样保留，V1 行为一字不变。
       LOOM_SCHEDULER_ENABLED: ${LOOM_SCHEDULER_ENABLED:-true}
-      LOOM_STAFF_AUTH_ENABLED: ${LOOM_STAFF_AUTH_ENABLED:-false}
+      # 评审 P1-2（2026-11-02）：staff 身份门控在生产 compose 默认开。此前默认关，
+      # 154 个内部写口只认 body/query 自报角色，绕过网关直连 backend 即失守。
+      # 首次部署仍是鸡生蛋：无凭据时后端启动 fail-fast 并给出「先关闸签首令牌再开」的
+      # 指令（app/main.py::_assert_staff_credentials），不会静默 401。
+      LOOM_STAFF_AUTH_ENABLED: ${LOOM_STAFF_AUTH_ENABLED:-true}
       LOOM_DISCARD_PURGE_ENABLED: ${LOOM_DISCARD_PURGE_ENABLED:-false}
       LOOM_MCP_ENABLED: ${LOOM_MCP_ENABLED:-false}
       # Q294：段8 每周重算**提醒**（第六个 sweep 作业，只开 OpsTodo、不产权重），默认关。

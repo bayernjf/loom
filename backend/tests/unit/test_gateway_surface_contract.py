@@ -199,21 +199,26 @@ def test_topology_free_bool_switches_actually_reach_the_backend_container() -> N
     七个**与拓扑无关**、文档已承诺部署期可拧的布尔开关，此前 base/overlay 都不转发 ⇒
     运维照 docs/17 §1、docs/22 在 `.env` 里设了也进不了容器：
       - LOOM_SCHEDULER_ENABLED（SLA sweep 总闸，默认开，config.py:23）
-      - LOOM_STAFF_AUTH_ENABLED（Q178/Q203 身份总闸，默认关）
+      - LOOM_STAFF_AUTH_ENABLED（Q178/Q203 身份总闸，生产默认开；代码默认仍是 false，
+        供不经 compose 的本地 V1 兼容面）
       - LOOM_DISCARD_PURGE_ENABLED（Q187 discarded 物理清理，默认关）
       - LOOM_MCP_ENABLED（Q232 MCP 对外面，默认关）
       - LOOM_PCP_WEEKLY_SCAN_ENABLED（Q294 每周重算提醒第六作业，默认关）
       - LOOM_FIT_LEARNING_ENABLED（Q352 fit_score 自学习 advisory 门控，默认关）
       - LOOM_VIDEO_REAL_ENABLED（Q354 段12 真视频生成门控，默认关）
-    判据＝旋钮经 base compose backend.environment 转发，且 `${VAR:-默认}` 与代码默认一致。
+    判据＝旋钮经 base compose backend.environment 转发，且 `${VAR:-默认}` 与代码默认一致
+    （staff 门控例外，见下）。
     刻意**不**进 base 的是 worker/锁/广播族（restock/export/import/fcw worker、
     distributed_lock、config_cache_broadcast）——它们只在多副本/演练时由 ha overlay 打开，
     放进 base 会让单机形态多起消费循环，属另一类旋钮，这里钉住分界不被顺手挪进来。
+
+    staff 门控是刻意分叉的安全默认：生产 compose 默认 true，代码默认 false 只留给
+    不经 compose 的本地 V1 兼容面；无凭据时启动 fail-fast（评审 P1-2），不会静默退回自报。
     """
     env = yaml.safe_load(BASE_COMPOSE.read_text())["services"]["backend"]["environment"]
     expected = {
         "LOOM_SCHEDULER_ENABLED": "true",
-        "LOOM_STAFF_AUTH_ENABLED": "false",
+        "LOOM_STAFF_AUTH_ENABLED": "true",
         "LOOM_DISCARD_PURGE_ENABLED": "false",
         "LOOM_MCP_ENABLED": "false",
         "LOOM_PCP_WEEKLY_SCAN_ENABLED": "false",
