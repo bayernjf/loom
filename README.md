@@ -186,7 +186,7 @@ loom/
 ├── frontend/             # Next.js App Router：app/[locale]/(shell)＝客户侧，app/[locale]/admin＝管理端
 │   ├── lib/api.ts        #   唯一后端访问层（server-only env，浏览器经 RSC/Server Action 间接访问，无需 CORS）
 │   └── scripts/check-*.mjs  # 八道契约门（含"后端防漂移"守卫：文案键/枚举码/调用形态反查）
-├── middleplatform/       # 中台对接：API / Webhook / Python SDK / CSV-JSON 导出
+├── middleplatform/       # 中台对接（规划中：仅 export/·sdk/·webhook/ 占位目录与 .gitkeep，尚无实现）
 └── infra/                # docker-compose（base + 5 overlay）· Dockerfile · caddy · 备份与演练脚本
 ```
 
