@@ -13,7 +13,7 @@
 > - **运维含义**：generate/regenerate/discard/publish-info/语言写口/目标语言从「自报可调」变为「必须 `loom_staff_` 令牌」（Q242 同类破坏性契约变更，受闸写口 27→**34**）；客户内容读口从「声明租户可读」变为「必须 `loom_client_` 令牌」，部署须给前端配 `LOOM_CLIENT_TOKEN`（`frontend/.env.example` 已加），未配置＝客户内容页 401。
 > - **待办（本批 P0 余下）**：job-agent 首屏水合竞态（#10）、禁用按钮低饱和+禁用文案（#11）、loom 主 CTA 提升＋Request access 站内表单（#12，保留 mailto）、两仓匹配验证与 handoff（#13）；P1/P2 待 P0 闭环后再定。
 
-> **最新（2026-10-30）：Tier0 代码/UIUX 评审 P0 修复批＝客户决策端点身份鉴权（只改本地、未提交未推送；P1/P2 待 P0 闭环后再定）。**
+> **最新（2026-10-30）：Tier0 代码/UIUX 评审 P0 修复批＝客户决策端点身份鉴权（2026-11-04 复核：已随 PR #196 合 main，merge `e6038a3`；`backend/alembic/versions/0066_client_access_tokens.py` 与 `backend/app/core/client_auth/` 均在 `origin/main`；原文"只改本地、未提交未推送"为过期表述，P1/P2 当时待定）。**
 > - **缺口**：content 客户决策写口（approve/reject/revise/edit_body）原仅靠 query `tenant_id`＋body 自报 `actor`，无客户侧凭证、actor 从不校验（service 基本不读取）。
 > - **方案**：仿 staff_auth 新建 `app/core/client_auth/`（新表 `client_access_tokens`、明文前缀 `loom_client_`、库内只存 SHA-256、Bearer 验签），令牌绑 tenant_id；`require_client_actor` 依赖返回 `Actor(client_name,[whitelist_owner])`，四端点加 `Depends` 并以认证 actor 覆盖 body.actor；治理 router `/api/admin/client-keys`（签发/列表/吊销，platform_admin|operations）；迁移 `0066_client_access_tokens`（down_revision 0065）。
 > - **验证**：全量 **1529 passed＋11 skipped／0 failed**；新测试 `test_client_auth_api.py` 15 例（无令牌/错令牌/跨前缀/他租户 401、正确令牌 200、身份钉死防自报提权）；ruff 全仓净、mypy 新模块 0 错误（router/main 余 8 个为基线错误，HEAD 本就存在，已用 stash 对照确认）；临时 pgvector/pg16 容器全链 upgrade/downgrade/up 实测，`dba_schema_check` 77 表 845 列 **NO DRIFT**（30 模块 env.py 全注册）。
