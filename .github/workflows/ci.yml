@@ -72,6 +72,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      # 评审 P3-4（2026-11-02）：lint 接入门禁。存量 6 条告警与 5 条
+      # next/no-html-link 错误已按规则修掉（未关规则、未留 suppressions 基线），
+      # 现以 --max-warnings 0 硬门，新增任何错误或告警都会红。
+      - run: npm run lint
       - name: Eight frontend contract checkers
         run: |
           node scripts/check-tokens.mjs

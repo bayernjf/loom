@@ -1385,7 +1385,6 @@ for (const token of ["TODO_STATUS_FILTERS", "unknown todo status:"]) {
 }
 
 // Q124/Q125：管理端内容运营台（发布回填 + 作废回池；读双角色、写 operations）。
-const contentOpsDir = join(adminDir, "content");
 const contentOpsPage = readAdmin(join("content", "page.tsx"));
 const contentOpsActions = readAdmin(join("content", "actions.ts"));
 const publishIsland = readAdmin(join("content", "publish-info-island.tsx"));
@@ -1557,7 +1556,6 @@ if (needsAttentionAt === -1 || publishInfoAt === -1 || needsAttentionAt > publis
   problems.push("GET needs-attention must be registered before the publish-info parameter route");
 
 // Q129/Q130：管理端效果回流运营台（孤儿认领/批量/解绑 + 成品时序查询）。
-const effectsDir = join(adminDir, "effects");
 const effectsPage = readAdmin(join("effects", "page.tsx"));
 const effectsActions = readAdmin(join("effects", "actions.ts"));
 const orphanIsland = readAdmin(join("effects", "orphan-table-island.tsx"));
@@ -1675,7 +1673,6 @@ for (const token of ["date_from", "date_to", "DashboardWindowOpts"]) {
 }
 
 // Q167：入站 Agent Key 治理页（消费 Q88 三端点；platform_admin 写闸）。
-const akDir = join(adminDir, "agent-keys");
 const akPage = readAdmin(join("agent-keys", "page.tsx"));
 const akActions = readAdmin(join("agent-keys", "actions.ts"));
 const akIssue = readAdmin(join("agent-keys", "issue-island.tsx"));

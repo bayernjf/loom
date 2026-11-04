@@ -50,7 +50,7 @@ export async function getAssembleFormDataAction(): Promise<FormDataResult> {
       getAdminContentGoals(),
     ]);
     return { ok: true, slots, goals };
-  } catch (err) {
+  } catch {
     return { ok: false, status: "unknown" };
   }
 }
