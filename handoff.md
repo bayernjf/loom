@@ -1,5 +1,7 @@
 # Handoff — Loom
 
+> **2026-11-06 补登：dev → main 已于 2026-11-05 经 PR #207 合并（后端/前端/迁移/infra/fullchain 等检查全部 SUCCESS 后才合并）；实测 origin/main 与 origin/dev 内容完全一致（git diff 为空）。**
+
 > **复核（2026-11-05）：跨境增量 J2（T-M9-02 多语言内容生成）已完成——`ContentRequest` 加 `locale: str | None`（缺省 None 向后兼容），schema/producer/router 全链路接通，producer 按 locale 注入语种指令；测试覆盖 `test_content_base.py` 等。关联 J1（T-M9-01 commerce-os 骨架已落、卡 VLM 与官方 API 凭据）。**
 
 > **最新（2026-10-31）：Tier0 M3-W3-5 知识库消费试点批＝loom 接入 model-hub knowledge query（PRD F3 FR3-5「API-first 消费」，D-8 定案 loom 为首个试点）。**
