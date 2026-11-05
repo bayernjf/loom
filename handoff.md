@@ -1,5 +1,7 @@
 # Handoff — Loom
 
+> **复核（2026-11-05）：跨境增量 J2（T-M9-02 多语言内容生成）已完成——`ContentRequest` 加 `locale: str | None`（缺省 None 向后兼容），schema/producer/router 全链路接通，producer 按 locale 注入语种指令；测试覆盖 `test_content_base.py` 等。关联 J1（T-M9-01 commerce-os 骨架已落、卡 VLM 与官方 API 凭据）。**
+
 > **最新（2026-10-31）：Tier0 M3-W3-5 知识库消费试点批＝loom 接入 model-hub knowledge query（PRD F3 FR3-5「API-first 消费」，D-8 定案 loom 为首个试点）。**
 > - **方案**：新增 `backend/app/core/knowledge.py` 薄客户端（httpx async，Bearer project token 调 hub `POST /api/v1/knowledge/query`，契约见 model-hub `docs/knowledge-api.md`）。配置面 fail-closed：`LOOM_KNOWLEDGE_URL`／`LOOM_KNOWLEDGE_TOKEN` 任一缺失 ⇒ 功能整体停用，不报错、不发请求、不注入。运行面 fail-soft：超时／HTTP 4xx-5xx／非法响应／无命中一律返回 None 绝不抛错；刻意不重试（注入是原料增强项，非 drivers 那种生成可用性路径，重试只拖慢生成）。env 直读 `os.environ` 走可 source 的 `backend/.env.shell` 载体（Q239：**不得**写进 `backend/.env`／`.env.example`）；`LOOM_KNOWLEDGE_TIMEOUT_SECONDS` 可选旋钮，默认 15s（与 ModelHubClient 默认对齐，字符串默认不进魔法数字棘轮）。
 > - **挂点**：`generation.invoke_article_gen` 生成前用 FCW 原料拼检索词（goal＋platform＋原子内容前 200 字）查知识库，命中渲染为「业务文档参考」段（`[n]《标题》内容`，单条内容 300 字封顶）追加进 `$materials` 既有模板变量——零 prompt 版本变更（seeds v0.1 不动）。选生成前注入而非复检（ARTICLE-QC/SEMANTIC）＝PRD 场景「内容生产时懂业务文档」的直接对应；停用/无命中/失败时 materials 与旧形态**逐字节一致**。VIDEO-GEN 不接（试点只锁一处，video_ref 载体不消费文本上下文）。
