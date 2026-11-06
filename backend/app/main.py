@@ -70,7 +70,7 @@ async def _assert_staff_credentials(session) -> None:
     """P1-2：staff 门开着却没有可用令牌时启动即失败。
 
     否则所有内部面只会 401，运维分不清是配置错、迁移没跑还是压根没 bootstrap。
-    首个令牌的引导路径要求临时关闸（见 infra/docker-compose.yml 与 docs/17），
+    首令牌可直接用 ``scripts/bootstrap_staff_key.py`` 签发（无需先关闸），
     所以这里只能拒绝启动并给出那条明确指令，不能静默放行。
     """
     from app.core.staff_auth.models import StaffApiKey
@@ -79,11 +79,13 @@ async def _assert_staff_credentials(session) -> None:
         select(func.count()).select_from(StaffApiKey).where(StaffApiKey.status == "active")
     )
     if not active:
-        raise RuntimeError(
-            "LOOM_STAFF_AUTH_ENABLED=true but no active staff access token exists. "
-            "Bootstrap once with LOOM_STAFF_AUTH_ENABLED=false, issue the first key via "
-            "POST /api/admin/staff-keys, then restart with the gate on (docs/17)."
-        )
+        message = "Staff authentication is on (LOOM_STAFF_AUTH_ENABLED=true), but staff_api_keys has no active token, so every internal endpoint would answer 401."
+        message += "\nNext steps:"
+        message += "\n  1. Issue the first token without touching the gate: cd backend && python scripts/bootstrap_staff_key.py --staff-id <your-id> --staff-name <your-name>"
+        message += "\n     (the plaintext is printed once; store it somewhere safe)"
+        message += "\n  2. Paste it into /admin/login, then restart the backend."
+        message += "\nIf the table is missing, run `alembic upgrade head` first. See docs/17 部署与运维 §1 第 3 步."
+        raise RuntimeError(message)
 
 
 @asynccontextmanager
@@ -104,10 +106,12 @@ async def lifespan(app: FastAPI):
         except RuntimeError:
             raise
         except Exception as exc:
-            raise RuntimeError(
-                "LOOM_STAFF_AUTH_ENABLED=true but staff credentials could not be verified "
-                f"({exc.__class__.__name__}); ensure migrations ran and the database is reachable."
-            ) from exc
+            message = f"Staff authentication is on (LOOM_STAFF_AUTH_ENABLED=true), but staff credentials could not be checked ({exc.__class__.__name__}: {exc})."
+            message += "\nNext steps:"
+            message += "\n  1. Confirm the database is reachable and migrations ran (`alembic upgrade head`)."
+            message += "\n  2. Then issue the first token: cd backend && python scripts/bootstrap_staff_key.py --staff-id <your-id> --staff-name <your-name>."
+            message += "\n  3. Paste it into /admin/login and restart the backend. See docs/17 部署与运维 §1 第 3 步."
+            raise RuntimeError(message) from exc
     # W6-1：启动时同步一次 hub 投影（失败不阻断；client 0600 缓存兜底）。
     try:
         from app.core.model_registry import hub as model_hub
