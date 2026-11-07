@@ -114,11 +114,13 @@ npm run dev
 
 ```bash
 cd infra
-# 第 0 步·先写 infra/.env —— 三个不给就起不来（仓内刻意不留弱默认，Q203）：
-#   POSTGRES_PASSWORD=…      缺 ⇒ postgres 容器启动即失败
-#   MINIO_ROOT_PASSWORD=…    缺 ⇒ minio 容器启动即失败
-#   LOOM_MASTER_KEY=…        缺 ⇒ backend entrypoint 打印 FATAL 并 exit 1
-# 另两个不设不会崩、但会静默出错：LOOM_GATEWAY_DOMAIN=<域名> 与 LOOM_PUBLIC_BASE_URL=https://<域名>
+# 第 0 步·从模板建 infra/.env（全量变量、默认值与生成方式见 infra/.env.example）
+cp .env.example .env
+#   [必填] POSTGRES_PASSWORD / MINIO_ROOT_PASSWORD / LOOM_MASTER_KEY —— 缺任一个起不来（Q203）
+#   POSTGRES_PASSWORD      缺 ⇒ postgres 容器启动即失败
+#   MINIO_ROOT_PASSWORD    缺 ⇒ minio 容器启动即失败
+#   LOOM_MASTER_KEY        缺 ⇒ backend entrypoint 打印 FATAL 并 exit 1
+# 另两个不设不会崩、但会静默出错：LOOM_GATEWAY_DOMAIN 与 LOOM_PUBLIC_BASE_URL
 # —— 二者必须同域，异域时网关演练预检 exit 2（Q287）
 
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.gateway.yml up -d
@@ -126,7 +128,7 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.gateway.y
 
 - **迁移自动跑**：backend entrypoint 先 `alembic upgrade head` 再起 uvicorn，失败即退出。起来后宿主只有网关的 80/443，`backend`／`frontend` 都不发布宿主端口。
 - **验网关**（不可跳）：`curl -sI https://<域名>/` 期望 200 · `https://<域名>/docs` 期望 404（网关拦） · `http://<域名>/api/atoms` 期望 308。证书必须是 Let's Encrypt 真签——本机只以 `localhost`＋内部 CA 验过路由／拦截／跳转，**真 ACME 至今未证**。
-- **引导内部身份**（鸡生蛋，顺序不可反，Q178）：① 门控保持关 → 用自报 `platform_admin` 调 `POST /api/admin/staff-keys` 签首个人员令牌（明文只返回一次）② 浏览器 `/admin/login` 粘贴该令牌（经 `/api/auth/me` 自检写 httpOnly cookie）③ `.env` 设 `LOOM_STAFF_AUTH_ENABLED=true` 并重启 backend。此后内部写口只认真令牌，`?actor_id=&roles=` 自报提权失效。
+- **引导内部身份**（Q178；2026-11-06 起免开关控）：门控在 compose 形态默认开，直接 `cd backend && python scripts/bootstrap_staff_key.py --staff-id <工号> --staff-name <姓名>` 签首令牌（明文只输出一次），再到 `/admin/login` 粘贴（经 `/api/auth/me` 自检写 httpOnly cookie）。库为空且门控开时 backend 启动 fail-fast 并点名该脚本，**不需要**临时置 `LOOM_STAFF_AUTH_ENABLED=false`。此后内部写口只认真令牌，`?actor_id=&roles=` 自报提权失效。
 - **备份是内置的**：`db-backup` 每日 `pg_dump`＋7 天保留，`db-basebackup`＋`wal-archiver` 把基础备份与 WAL 推 MinIO（具备时点恢复 PITR）。监控按需叠 `-f docker-compose.monitoring.yml --profile monitoring`（要另给 `LOOM_GRAFANA_ADMIN_PASSWORD`，无默认值、缺失即报错）。
 
 > 完整投产清单（第 0–4 步＋部署前打勾单＋这份清单解决不了的三条）＝**docs/17 §1.3**；本节只是摘要，冲突以 docs/17 为准。
@@ -194,7 +196,7 @@ loom/
 
 ### 3. 一条请求穿过什么（安全与治理骨架）
 
-1. **认证**：机器面 Q88 Agent Key（`loom_` 前缀，保护 effect-callback／A2A／MCP）；人员面 Q178 内部 PAT（`loom_staff_` 前缀，门控 `LOOM_STAFF_AUTH_ENABLED` 默认关）。两域分表分前缀、不可互换。
+1. **认证**：机器面 Q88 Agent Key（`loom_` 前缀，保护 effect-callback／A2A／MCP）；人员面 Q178 内部 PAT（`loom_staff_` 前缀，门控 `LOOM_STAFF_AUTH_ENABLED` 在 compose 形态默认开、代码默认 false）。两域分表分前缀、不可互换。
 2. **授权**：认证与授权分离，角色判定收在 `rbac`（`require_any_role`／`require_internal_actor`）。写口分两类——路由级凭证闸 `require_internal_actor(<角色>)`，其清单由 `tests/integration/test_write_gate_wiring.py` **反向枚举路由**求得并钉死（新受闸口漏登记即判红）；只读管理口走 query actor 角色闸。
 3. **审计**：所有写动作经 `append_audit` 落 append-only 台账，操作人取**已验真凭证 > 请求自报**（`detail._actor_via` 三值可分辨，Q196）。
 4. **业务闸**：候选只能进 `pending_review`，人工裁决才生效；`frozen` PWS 是下游唯一输入；`final_id` 只有 `E1.1 publishFCW` 一个出口；合规 `block_required` 一票否决。
