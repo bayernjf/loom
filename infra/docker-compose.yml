@@ -111,6 +111,9 @@ services:
       # 此前只写在 backend/.env.shell（直读 os.environ 的非容器路径），容器里从未转发。
       MODEL_HUB_URL: ${MODEL_HUB_URL:-}
       MODEL_HUB_TOKEN: ${MODEL_HUB_TOKEN:-}
+      # 知识增强（LOOM_KNOWLEDGE_URL / LOOM_KNOWLEDGE_TOKEN）有意不在此转发：
+      # 后端直读 os.environ，非容器形态经 backend/.env.shell 提供；容器形态两项缺失
+      # 即整体停用（fail-closed，不影响生成）。要在容器启用须先由 owner 决策后显式加转发。
     expose: ["8000"]
     depends_on:
       postgres: {condition: service_healthy}
