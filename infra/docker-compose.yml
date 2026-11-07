@@ -107,6 +107,13 @@ services:
       # 开启后仍须运营逐单 approve 才向供应商提交（花钱过人工 Gate），且日上限走配置中心
       # content.video_real_daily_seconds_cap；超时/失败一律不自动重投（只开运营待办）。
       LOOM_VIDEO_REAL_ENABLED: ${LOOM_VIDEO_REAL_ENABLED:-false}
+      # W7-3：model-hub 是唯一模型源；两项齐全才启用，缺则 hub 未配置（不回落 env）。
+      # 此前只写在 backend/.env.shell（直读 os.environ 的非容器路径），容器里从未转发。
+      MODEL_HUB_URL: ${MODEL_HUB_URL:-}
+      MODEL_HUB_TOKEN: ${MODEL_HUB_TOKEN:-}
+      # 知识增强（LOOM_KNOWLEDGE_URL / LOOM_KNOWLEDGE_TOKEN）有意不在此转发：
+      # 后端直读 os.environ，非容器形态经 backend/.env.shell 提供；容器形态两项缺失
+      # 即整体停用（fail-closed，不影响生成）。要在容器启用须先由 owner 决策后显式加转发。
     expose: ["8000"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -121,6 +128,10 @@ services:
       LOOM_ACTOR_ID: ${LOOM_ACTOR_ID:-ops-actor}
       LOOM_ADMIN_ACTOR_ID: ${LOOM_ADMIN_ACTOR_ID:-admin-actor}
       LOOM_ADMIN_ROLES: ${LOOM_ADMIN_ROLES:-platform_admin}
+      # P0/P1-1：客户内容口（loom_client_）与 /api/exports/*（Agent Key）的服务端凭据。
+      # handoff/README 已要求"部署须给前端配"，此前未转发 ⇒ 容器里客户内容页与导出面恒 401。
+      LOOM_CLIENT_TOKEN: ${LOOM_CLIENT_TOKEN:-}
+      LOOM_AGENT_KEY: ${LOOM_AGENT_KEY:-}
     ports: ["3000:3000"]
     depends_on:
       backend: {condition: service_healthy}
