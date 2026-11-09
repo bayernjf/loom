@@ -27,4 +27,11 @@ mkdir -p "$DST" || exit 1
 mkdir -p "$DST/base" || rc=1
 "$DOCKER" cp "$BASEBACKUP_CONTAINER:/basebackups/." "$DST/base/" || rc=1
 
+# A zero-byte snapshot means the dump was interrupted before it wrote anything,
+# but docker cp faithfully reproduces it. Left in place it looks like a backup
+# that exists and is only discovered at restore time, so park it out of the way;
+# the container copy stays untouched.
+mkdir -p "$DST/_invalid" || rc=1
+find "$DST" -maxdepth 1 -type f -size 0c -exec mv -f {} "$DST/_invalid/" \; 2>/dev/null || true
+
 exit $rc
