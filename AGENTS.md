@@ -2,6 +2,14 @@
 
 供 AI coding agents（Claude Code / Codex / Cursor / Copilot 等）在本仓库工作时自动读取。
 
+## 本地容器运行时（macOS）
+
+本机 macOS 开发只用 OrbStack，不再使用 Docker Desktop。`docker` / `docker compose`
+命令不变（`docker context` 为 `orbstack`）。拉公共镜像直连失败时，用
+`docker.m.daocloud.io` 等镜像站前缀兜底。完整约定与恢复步骤见
+`../bayjf/AGENTS.md` 的「本地容器运行时约定（macOS）」和
+`~/000mycodes-backups/README.md`。
+
 ## 项目概览
 
 Loom：私域内容生产白名单平台（SaaS 后台）。核心是一条 **13 段链（CHAIN_13）** 内容生产链——产品录入 → 冷启动建模 → 字段池规划 → 字段下原子 → PWC 条件包 → PWS 冻结 → 平台适配 → PCP → 策略/结构/表达三包 → 合规清洗 → `final_id` 组装 → 内容生成 → 反馈回流。AI 只产候选、人工 Gate 裁决、`final_id` 唯一出口（E1.1 publishFCW）、反馈回流闭环反哺知识。
