@@ -19,6 +19,14 @@ backup_once() {
   out="$BACKUP_DIR/loom-$ts.sql.gz"
   echo "[backup] dumping $PGDATABASE to $out"
   pg_dump --no-password --format=custom --compress=9 --file="$out.tmp"
+  # A dump cut short — host killed, daemon wedged, disk full — leaves an empty
+  # temp file, and mv would rename it into place just fine: the loop then
+  # printed "ok" over a backup nobody can restore. Refuse the empty one.
+  if [ ! -s "$out.tmp" ]; then
+    echo "[backup] empty dump, discarding $out.tmp" >&2
+    rm -f "$out.tmp"
+    return 1
+  fi
   mv "$out.tmp" "$out"
   echo "[backup] pruning dumps older than $RETENTION_DAYS days"
   find "$BACKUP_DIR" -name 'loom-*.sql.gz' -type f -mtime "+$RETENTION_DAYS" -delete
