@@ -1,5 +1,46 @@
 # Handoff — Loom
 
+> **2026-11-11 只读实测：前端 34 个页面全部永久卡在骨架屏，而三层健康信号全绿（未修，待定位）。**
+> 本轮只做只读探测（HTTP GET ＋ 浏览器渲染 ＋ 读日志 ＋ 只读 SQL），零写入、零重启。
+>
+> - **现象（浏览器实证，不是靠状态码推断）**：34 个静态路由全返回 **200**（52–67 KB），
+>   但浏览器里 `<main>` 只有 `data-testid="page-loading"` 骨架，`innerText` 长度 **0**；
+>   等 12 s 与数分钟后复查仍是骨架，`document.readyState==="complete"` ⇒ **不会靠水合自愈**。
+>   客户页（`/zh-CN/workbench`）与运营页（`/zh-CN/admin/tenants`）均如此。
+>   ⚠️ 只按状态码判会得出"34/34 通过"的错误结论——本轮先这么判过，靠浏览器＋日志推翻。
+> - **服务端真因线索**：`infra-frontend-1` 日志每次渲染抛
+>   `TypeError: controller[kState].transformAlgorithm is not a function`，
+>   自容器创建（2026-11-10T05:19:55Z）起累计 **2564 次**，节奏约 **30 s 一次**——
+>   与 `infra-watchdog-1` 的 `WATCHDOG_INTERVAL_SECONDS=30` 轮询 `http://frontend:3000/` 对齐，
+>   **即本缺陷已持续 31 小时、与本轮探测无关**。RSC 流没写完，只有 Suspense fallback 发到浏览器。
+> - **为什么没人发现（三层都看不见它）**：① 容器 healthcheck 是
+>   `statusCode < 500 ? exit 0 : exit 1`，每 10 s 一次、`FailingStreak=0`、状态 healthy——
+>   **按构造就检不出"200 但渲染不出来"**；② watchdog 只在连接失败时 ALERT，200/307 算通过；
+>   ③ `LOOM_ALERT_WEBHOOK=` **为空**，告警根本没有出口。
+> - **上游同症状 issue 的现成解法不适用**：vercel/next.js#94158 描述一致（Next 15.5.x ＋ React 19
+>   SSR 流式失败、浏览器停在 loading shell），但它给的 workaround 是"钉 node:22-alpine"，
+>   而本容器**已经是 Node v22.23.4**（next 15.5.29 / react 19.3.0）⇒ 不能按"升 Node"收口，
+>   需要自己定位。**本轮未改任何版本、未重启，结论止于"已复现且已排除该 workaround"。**
+> - **另一个独立缺陷：客户令牌租户对不上。** 日志另有
+>   `Error: {"detail":"valid client access token for this tenant required …"} status 401`
+>   来自 `(shell)/analytics/page`。前端 env `LOOM_TENANT_ID=beta-tenant`，但只读查库
+>   `tenants` 只有 **t1 / t2 / t-e2e-c174c8ee7f9f**，**没有 beta-tenant**。
+>   与 2026-10-31 那批的部署提示（"未配 `LOOM_CLIENT_TOKEN` ＝客户内容页 401"）同族，
+>   但这里令牌**已配**、错的是租户标识。
+> - **后端读侧面（68 个无路径参 GET，容器内直连 8000）**：**8×200 / 9×401 / 51×422，0 个 5xx**。
+>   51 个 422 是 FastAPI 先校验 `actor_id`/`tenant_id` query 再进鉴权依赖。
+>   **自报 actor_id 不能绕过鉴权**：补 `?actor_id=1`（含 `=admin`）后 12 个运营口仍全 401。
+>   后端 8000 **未发布到宿主**，前端也**不代理 `/api`**（宿主打 `/api/*` 全 404）——
+>   数据获取只在服务端经 `LOOM_API_BASE_URL=http://backend:8000`，浏览器不直连。
+> - **无凭证客户读口能拿到真数据（设计如此，但立论已过期）**：
+>   `GET /api/fcw?tenant_id=t-e2e-c174c8ee7f9f` 无令牌返回 **2 行 / 5393 B**，
+>   `/api/compliance/overview` 1 行、`/api/compliance/ccr-history` 2 行同样 200。
+>   三个 handler 的 docstring 明写"无鉴权闸、tenant_id 必填、强制租户过滤"（Q180 D3.5 / Q101 / Q162），
+>   **但 `final_whitelist/router.py:225` 的理由「客户口径同 GET /api/content（无鉴权闸…）」已经不成立**——
+>   `/api/content` 在 2026-10-31 那批已接 `require_client_actor`，本轮实测 401。
+>   同理 `/api/skill-runs`、`/api/skill-candidates`、`/api/compliance/wordlist`、`/metrics`（98 KB）
+>   容器网内无凭证 200。**是否补闸属安全口径决策，留给 owner；本轮只登记事实与过期立论。**
+
 > **2026-11-06 补登：dev → main 已于 2026-11-05 经 PR #207 合并（后端/前端/迁移/infra/fullchain 等检查全部 SUCCESS 后才合并）；实测 origin/main 与 origin/dev 内容完全一致（git diff 为空）。**
 
 > **复核（2026-11-05）：跨境增量 J2（T-M9-02 多语言内容生成）已完成——`ContentRequest` 加 `locale: str | None`（缺省 None 向后兼容），schema/producer/router 全链路接通，producer 按 locale 注入语种指令；测试覆盖 `test_content_base.py` 等。关联 J1（T-M9-01 commerce-os 骨架已落、卡 VLM 与官方 API 凭据）。**
