@@ -1,5 +1,11 @@
 # Handoff — Loom
 
+> **2026-11-13 已修复：前端骨架屏根因定位并消除（healthcheck/watchdog 断连 RSC 流）。**
+>
+> - **根因**：容器 `healthcheck`（每 10s）与 `watchdog`（每 30s）都用「拿到响应头/状态码即断开、不消费 body」的方式打 `http://frontend:3000/` 根路径。根路径是 React Server Components 流式页面，探针提前断连截断 RSC 流，触发 Node 内部 `TransformStream` 的 `controller[kState].transformAlgorithm is not a function`，破坏客户端水合，导致页面永久卡在 loading 骨架屏（三层健康信号只看状态码，检不出）。
+> - **修复**：新增静态健康端点 `frontend/app/api/health/route.ts`（返回 `{"status":"ok"}` 纯 JSON，不经过 React 渲染/streaming）；`infra/docker-compose.yml` 的 frontend `healthcheck` 与 watchdog `FRONTEND_URL` 均改打 `/api/health`。
+> - **验证**：重建镜像并重启 frontend+watchdog 后，`transformAlgorithm` 错误 0 次（观察 80s，覆盖 healthcheck 7 轮 + watchdog 2 轮）；`/api/health` 返回 200；页面 SSR 可见文本正常；两容器 healthy。
+
 > **2026-11-11 只读实测：前端 34 个页面全部永久卡在骨架屏，而三层健康信号全绿（未修，待定位）。**
 > 本轮只做只读探测（HTTP GET ＋ 浏览器渲染 ＋ 读日志 ＋ 只读 SQL），零写入、零重启。
 >
