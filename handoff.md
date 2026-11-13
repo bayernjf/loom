@@ -1,5 +1,11 @@
 # Handoff — Loom
 
+> **2026-11-13 补 2 个回归测试（两个 bug 修复的复现锁）。**
+>
+> - `tests/unit/test_compliance_center_service.py`：`latest_report` 的 country 过滤——None 编译为 `IS NULL`、非 None 编译为等值，绝不再生成 `IS <参数>`（postgres 语法错误）。2 用例，已提交 `cf666b7`。
+> - `tests/unit/test_final_whitelist_service.py`：`assemble_one` GuardsFailed 审计——`entity_id` 是单一 `pws_id`（≤36 字符）、`slot_id` 进 `detail`。1 用例，已提交 `6569db6`。
+> - 两文件合计 3 用例全绿（`pytest tests/unit/test_compliance_center_service.py tests/unit/test_final_whitelist_service.py`）；已验证旧代码会命中断言（回归有效）。
+
 > **2026-11-13 growth-agent 链路完整 HTTP 端到端跑通（补齐 final_id 前置，闭合上一条的缺口）。**
 >
 > - **最终闭环**：`POST /api/fcw/assemble` 发证前七 Guard 全绿（score 76.6）→ 用 consumable `final_id=537a2f28…` 调 `POST /api/content/generate`（staff 令牌 operations）→ **HTTP 201**，`status=review`，真实产出种草文（`SCENE_ARTICLE_GEN="ARTICLE-GEN"` → `gateway.invoke` → hub → ark-code-latest）。与 commerce 链路（`/api/v1/content/requests` → 201 + `evidence_refs=['llm:ark-code-latest']`）合计，两条链路内容生成已全在 HTTP 层真实跑通。
