@@ -11,7 +11,14 @@
 > - **现象**：`LOOM_TENANT_ID=beta-tenant` 指向不存在的租户 ⇒ `GET /api/tenants/beta-tenant` 404、`GET /api/intakes/overview?tenant_id=beta-tenant` 401，workbench 页「操作失败」。
 > - **修复**：`infra/.env` 与 `infra/docker-compose.yml` 的 `LOOM_TENANT_ID` 由 `beta-tenant` 改为 `t1`（对齐 `frontend/.env` 既有约定；`t1`＝「开发租户 t1」，DB 存在且 active）。
 > - **验证**：`GET /api/tenants/t1` 200、onboarding 进度恢复显示；`/api/intakes/overview?tenant_id=t1` **仍 401**——根因是 `LOOM_CLIENT_TOKEN` 未配（下一条订正原「令牌已配」误判）。
-> - **未闭环**：`LOOM_CLIENT_TOKEN` 仍空，客户内容口（intakes/overview 等）需 `loom_client_` 令牌。签发属内部运营红线（`issue_client_key` 需 platform_admin/operations），**留给 owner**。
+> - **补记（同日）**：`LOOM_CLIENT_TOKEN` 已补配，见下一条。
+
+> **2026-11-13 已闭环：签发本地 client token，workbench 数据口打通。**
+>
+> - **背景**：`LOOM_CLIENT_TOKEN` 此前为空，`GET /api/intakes/overview?tenant_id=t1` 401，workbench 指标卡「操作失败」。
+> - **签发**：以既有 `bootstrap-admin`（platform_admin）为运营身份，走 `client_auth.service.issue_client_key` 签发绑 `t1` 的令牌，`client_name=dev-client-t1`（本地自用，非代运营客户）。明文仅打印一次，配入 `infra/.env` 的 `LOOM_CLIENT_TOKEN`（gitignored，不入库）。
+> - **验证**：`GET /api/tenants/t1` 200、`GET /api/intakes/overview?tenant_id=t1` **200**（原 401）；headless Chrome 渲染 workbench 后 `data-testid="page-loading"`=0、错误态清零（仅剩 i18n 字典预置文案）。
+> - **注**：签发属内部运营红线（`issue_client_key` 需 platform_admin/operations），本次为 owner 授权的本地自用签发，token 只服务本机自用，不做任何对外/代运营用途。
 
 > **2026-11-11 只读实测：前端 34 个页面全部永久卡在骨架屏，而三层健康信号全绿（未修，待定位）。**
 > 本轮只做只读探测（HTTP GET ＋ 浏览器渲染 ＋ 读日志 ＋ 只读 SQL），零写入、零重启。
