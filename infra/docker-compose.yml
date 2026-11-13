@@ -126,7 +126,7 @@ services:
     build: {context: .., dockerfile: frontend/Dockerfile}
     environment:
       LOOM_API_BASE_URL: http://backend:8000
-      LOOM_TENANT_ID: ${LOOM_TENANT_ID:-beta-tenant}
+      LOOM_TENANT_ID: ${LOOM_TENANT_ID:-t1}
       LOOM_ACTOR_ID: ${LOOM_ACTOR_ID:-ops-actor}
       LOOM_ADMIN_ACTOR_ID: ${LOOM_ADMIN_ACTOR_ID:-admin-actor}
       LOOM_ADMIN_ROLES: ${LOOM_ADMIN_ROLES:-platform_admin}
