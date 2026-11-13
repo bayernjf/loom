@@ -1,5 +1,12 @@
 # Handoff — Loom
 
+> **2026-11-13 HTTP 端到端验证：Agent Key 签发 + 两条链路真实流转结果（补齐 W6-1 凭证层）。**
+>
+> - **凭证签发**：以 bootstrap-admin（platform_admin）为认证身份，经 service 层签发 `arkcode-verify`（platform_admin）、`arkcode-ops`（operations）两枚 staff 令牌 + `arkcode-content-key` 一枚 Agent Key。明文只落宿主机 `/tmp`（未入库、未入 git），库内仍只存 SHA-256 hash。
+> - **commerce 链路（完整跑通）**：`POST /api/v1/content/requests`（Agent Key Bearer）→ **HTTP 201**，`evidence_refs=['llm:ark-code-latest']`，状态 `pending_review`，真实产出电商详情文案（声阔降噪耳机，标题+正文）。即「内容生成 → 待审」闭环在 HTTP 层走通。
+> - **growth-agent 链路（认证通，生成卡 final_id）**：`POST /api/content/generate`（staff 令牌 operations 角色）认证通过——用不存在 final_id 探针返回 **404** 而非 401/403。但真实生成需 consumable 的 `final_id`：库内现存 2 条 final_id 的 `fcw_snapshots` 均 `revoked`（E2E 遗留），`ensure_fcw_consumable` 拦截 → 409。发新 final_id 需走 `POST /api/fcw/assemble` 七 Guard 全流程（product_space 当前 `active_pws_id` 为空、仍在 modeling），属 operator 线下发证边界，非本次跑通范畴。
+> - **结论**：两条链路的模型解析（`ARTICLE-GEN`/`CONTENT-BASE` 均命中 ark-code-latest）与「生成核心 + HTTP 认证」均已真实验证；仅 growth-agent 的 final_id 前置需 operator 另发。
+
 > **2026-11-13 首次真机联调 model-hub：ark-code-latest 驱动内容生成（W6-1，两条链路）。**
 >
 > - **背景**：`LLMContentProducer` 与 `gateway.invoke` 早已写了「hub 配置时按 text 模态解析模型」，但 hub 侧从无 loom 项目、loom 也从没配 `MODEL_HUB_URL/TOKEN`，W6-1 从未真机跑过。本轮把「growth-agent→loom→zeus」「commerce-os→loom」两条链路的共同心脏（loom 内容生成）第一次真正接上 ark-code-latest。
