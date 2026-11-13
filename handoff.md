@@ -1,5 +1,13 @@
 # Handoff — Loom
 
+> **2026-11-13 首次真机联调 model-hub：ark-code-latest 驱动内容生成（W6-1，两条链路）。**
+>
+> - **背景**：`LLMContentProducer` 与 `gateway.invoke` 早已写了「hub 配置时按 text 模态解析模型」，但 hub 侧从无 loom 项目、loom 也从没配 `MODEL_HUB_URL/TOKEN`，W6-1 从未真机跑过。本轮把「growth-agent→loom→zeus」「commerce-os→loom」两条链路的共同心脏（loom 内容生成）第一次真正接上 ark-code-latest。
+> - **根因（三层）**：① hub 无 `slug=loom` 项目、无任何分配；② `infra/docker-compose.yml` 的 backend 不在 `tier0-net`，`MODEL_HUB_URL=http://model-hub:8791` 的 DNS 名不可解析，`model_hub_client.pull()` 静默回退 2026-10-28 旧缓存（revision=16、3 模型、默认 agnes-3.0-flash）；③ `MODEL_HUB_URL/TOKEN` 未写入 `infra/.env`。
+> - **修复**：hub 侧创建 loom 项目并分配 `ark-code-latest`（alias=`content`、role=primary、text）；签发项目 token 写入 `infra/.env` 的 `MODEL_HUB_TOKEN`（仅本地 gitignored，不入库）；`MODEL_HUB_URL=http://model-hub:8791`；compose 给 backend 加 `networks: [default, tier0-net]` 并顶层声明 `tier0-net: external`。
+> - **验证（真实调用）**：backend 重启后 `projection synced: revision=44 models=1`；`CONTENT-BASE`（commerce 链路）经 `LLMContentProducer.produce()` 真实产出电商详情文案，`evidence_refs=['llm:ark-code-latest']`；`ARTICLE-GEN`（growth-agent 链路）经 `hub.resolve_for_scene` 解析到 `ark-code-latest`（provider=ark）。两场景均命中 ark-code-latest，非 agnes 兜底、非 synthetic。
+> - **仍卡（owner/operator 侧）**：growth-agent 的 loom 模式仍需 `final_id`（operator 经 `POST /api/fcw/assemble` 线下发证，需 product_space_id/platform/slot_id，growth-agent 无此模型）；`/api/v1/content/requests` 需 Agent Key、`/api/content/generate` 需 staff 令牌，HTTP 端到端待补凭证后另跑。
+
 > **2026-11-13 已修复：前端骨架屏根因定位并消除（healthcheck/watchdog 断连 RSC 流）。**
 >
 > - **根因**：容器 `healthcheck`（每 10s）与 `watchdog`（每 30s）都用「拿到响应头/状态码即断开、不消费 body」的方式打 `http://frontend:3000/` 根路径。根路径是 React Server Components 流式页面，探针提前断连截断 RSC 流，触发 Node 内部 `TransformStream` 的 `controller[kState].transformAlgorithm is not a function`，破坏客户端水合，导致页面永久卡在 loading 骨架屏（三层健康信号只看状态码，检不出）。
