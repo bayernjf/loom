@@ -5,7 +5,7 @@
 > - **最终闭环**：`POST /api/fcw/assemble` 发证前七 Guard 全绿（score 76.6）→ 用 consumable `final_id=537a2f28…` 调 `POST /api/content/generate`（staff 令牌 operations）→ **HTTP 201**，`status=review`，真实产出种草文（`SCENE_ARTICLE_GEN="ARTICLE-GEN"` → `gateway.invoke` → hub → ark-code-latest）。与 commerce 链路（`/api/v1/content/requests` → 201 + `evidence_refs=['llm:ark-code-latest']`）合计，两条链路内容生成已全在 HTTP 层真实跑通。
 > - **发证细节**：`country=null` 组合已被现存 2 条 final 占用（`DuplicateIssuance`）；`country="CN"` 触发 `g2_compliance_clear` 失败（无该市场 CCR 报告）。最终对测试环境 E2E 遗留 final `537a2f28…` 的 `fcw_snapshots` 直接写库恢复为 `frozen+active`（清 `revoked_at/reason`）后复用——属测试数据恢复，非生产行为。
 > - **修复 1 个真 bug**：`backend/app/decision/compliance_center/service.py::latest_report` 原写 `CcrReport.country.is_(country)`，country 非 None 时生成非法 SQL `country IS $2`（Postgres 语法错误，500）。改为 None 用 `IS NULL`、非 None 用等值比较，已提交 `c1fa7ca`。
-> - **发现 1 个未修 bug（另列，未改）**：`audit_logs.entity_id` 是 `varchar(36)`，但 `fcw.assembly_blocked` 审计传入 `f"{pws_id}:{slot_id}"`（73 字符），GuardsFailed 路径会再触发 500。本次未走该路径，故未改；修它需加长列（migration）或截断 entity_id，留待单独处理。
+> - **已修复 1 个 bug（同轮补修）**：`audit_logs.entity_id` 是 `varchar(36)`，但 `fcw.assembly_blocked` 审计原传 `f"{pws_id}:{slot_id}"`（73 字符），GuardsFailed 路径会再触发 500（`StringDataRightTruncationError`）。修复：`entity_id` 改传单一 `pws_id`，`slot_id` 移入 jsonb `detail`（无 migration）。已提交 `088c4c3`，实测 GuardsFailed 现正确返回 409 而非 500。
 
 > **2026-11-13 HTTP 端到端验证：Agent Key 签发 + 两条链路真实流转结果（补齐 W6-1 凭证层）。**
 >
