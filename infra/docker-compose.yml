@@ -116,6 +116,9 @@ services:
       # 后端直读 os.environ，非容器形态经 backend/.env.shell 提供；容器形态两项缺失
       # 即整体停用（fail-closed，不影响生成）。要在容器启用须先由 owner 决策后显式加转发。
     expose: ["8000"]
+    # W6-1: backend 须经 tier0-net 访问 model-hub（http://model-hub:8791）。
+    # 不加入则 MODEL_HUB_URL 的 DNS 名不可解析，投影同步静默回退旧缓存。
+    networks: [default, tier0-net]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -215,6 +218,11 @@ services:
 # overlay。原因：compose 的 `${VAR:?}` 插值在**解析期全局求值**、与 profile 是否激活
 # 无关，把 Grafana 管理员口令的必填护栏留在此处会连带打断不开监控的默认部署路径。
 # 告警投递不开独立组件，由 watchdog 轮询 Prometheus 转发（见 monitoring overlay）。
+networks:
+  # 项目共享网络（model-hub/zeus 等已在其中）；backend 靠它解析 model-hub。
+  tier0-net:
+    external: true
+
 volumes:
   pgdata:
   redisdata:
