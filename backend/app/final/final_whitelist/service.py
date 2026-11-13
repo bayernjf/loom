@@ -417,10 +417,13 @@ async def assemble_one(
             actor_roles=actor.roles,
             action="fcw.assembly_blocked",
             entity_type="fcw_assembly",
-            entity_id=f"{pws.pws_id}:{slot_id}",
+            # entity_id 是 varchar(36)，复合键 pws_id:slot_id 会超长（73 字符）
+            # 触发 StringDataRightTruncationError；slot 归属放入 detail（jsonb 不限长）。
+            entity_id=pws.pws_id,
             detail={
                 "task_id": task_id,
                 "platform": platform,
+                "slot_id": slot_id,
                 "goal": goal,
                 "country": country,
                 "pwc_id": pwc_item.ref_id,
