@@ -6,6 +6,13 @@
 > - **修复**：新增静态健康端点 `frontend/app/api/health/route.ts`（返回 `{"status":"ok"}` 纯 JSON，不经过 React 渲染/streaming）；`infra/docker-compose.yml` 的 frontend `healthcheck` 与 watchdog `FRONTEND_URL` 均改打 `/api/health`。
 > - **验证**：重建镜像并重启 frontend+watchdog 后，`transformAlgorithm` 错误 0 次（观察 80s，覆盖 healthcheck 7 轮 + watchdog 2 轮）；`/api/health` 返回 200；页面 SSR 可见文本正常；两容器 healthy。
 
+> **2026-11-13 已修复：workbench 租户标识对齐（`beta-tenant` → `t1`）。**
+>
+> - **现象**：`LOOM_TENANT_ID=beta-tenant` 指向不存在的租户 ⇒ `GET /api/tenants/beta-tenant` 404、`GET /api/intakes/overview?tenant_id=beta-tenant` 401，workbench 页「操作失败」。
+> - **修复**：`infra/.env` 与 `infra/docker-compose.yml` 的 `LOOM_TENANT_ID` 由 `beta-tenant` 改为 `t1`（对齐 `frontend/.env` 既有约定；`t1`＝「开发租户 t1」，DB 存在且 active）。
+> - **验证**：`GET /api/tenants/t1` 200、onboarding 进度恢复显示；`/api/intakes/overview?tenant_id=t1` **仍 401**——根因是 `LOOM_CLIENT_TOKEN` 未配（下一条订正原「令牌已配」误判）。
+> - **未闭环**：`LOOM_CLIENT_TOKEN` 仍空，客户内容口（intakes/overview 等）需 `loom_client_` 令牌。签发属内部运营红线（`issue_client_key` 需 platform_admin/operations），**留给 owner**。
+
 > **2026-11-11 只读实测：前端 34 个页面全部永久卡在骨架屏，而三层健康信号全绿（未修，待定位）。**
 > 本轮只做只读探测（HTTP GET ＋ 浏览器渲染 ＋ 读日志 ＋ 只读 SQL），零写入、零重启。
 >
@@ -31,8 +38,9 @@
 >   `Error: {"detail":"valid client access token for this tenant required …"} status 401`
 >   来自 `(shell)/analytics/page`。前端 env `LOOM_TENANT_ID=beta-tenant`，但只读查库
 >   `tenants` 只有 **t1 / t2 / t-e2e-c174c8ee7f9f**，**没有 beta-tenant**。
->   与 2026-10-31 那批的部署提示（"未配 `LOOM_CLIENT_TOKEN` ＝客户内容页 401"）同族，
->   但这里令牌**已配**、错的是租户标识。
+>   与 2026-10-31 那批的部署提示（"未配 `LOOM_CLIENT_TOKEN` ＝客户内容页 401"）同族；
+>   实测（2026-11-13）令牌**也未配**（`LOOM_CLIENT_TOKEN` 空）且租户标识也错（`beta-tenant` 不存在）——
+>   两者均已定位，租户标识已修为 `t1`，令牌签发留 owner（内部运营红线）。
 > - **后端读侧面（68 个无路径参 GET，容器内直连 8000）**：**8×200 / 9×401 / 51×422，0 个 5xx**。
 >   51 个 422 是 FastAPI 先校验 `actor_id`/`tenant_id` query 再进鉴权依赖。
 >   **自报 actor_id 不能绕过鉴权**：补 `?actor_id=1`（含 `=admin`）后 12 个运营口仍全 401。
