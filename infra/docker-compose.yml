@@ -112,9 +112,12 @@ services:
       # 此前只写在 backend/.env.shell（直读 os.environ 的非容器路径），容器里从未转发。
       MODEL_HUB_URL: ${MODEL_HUB_URL:-}
       MODEL_HUB_TOKEN: ${MODEL_HUB_TOKEN:-}
-      # 知识增强（LOOM_KNOWLEDGE_URL / LOOM_KNOWLEDGE_TOKEN）有意不在此转发：
-      # 后端直读 os.environ，非容器形态经 backend/.env.shell 提供；容器形态两项缺失
-      # 即整体停用（fail-closed，不影响生成）。要在容器启用须先由 owner 决策后显式加转发。
+      # 知识增强（2026-11-14 owner 决策常开）：复用同一个 loom 项目 token（其项目已含
+      # embed 与 knowledge 文档，同一 mh_ 凭据同时覆盖模型与知识库两条面）。knowledge.py
+      # 直读 os.environ 的 LOOM_KNOWLEDGE_*，这里把已转发的 MODEL_HUB_* 映射过去，避免在
+      # infra/.env 维护第二份密钥。任一项为空则客户端整体 fail-closed 停用，不影响生成。
+      LOOM_KNOWLEDGE_URL: ${MODEL_HUB_URL:-}
+      LOOM_KNOWLEDGE_TOKEN: ${MODEL_HUB_TOKEN:-}
     expose: ["8000"]
     # W6-1: backend 须经 tier0-net 访问 model-hub（http://model-hub:8791）。
     # 不加入则 MODEL_HUB_URL 的 DNS 名不可解析，投影同步静默回退旧缓存。
