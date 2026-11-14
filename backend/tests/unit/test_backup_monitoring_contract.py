@@ -79,7 +79,7 @@ def test_compose_runs_watchdog_for_backend_and_frontend() -> None:
     watchdog = _services()["watchdog"]
     env = watchdog["environment"]
     assert env["BACKEND_HEALTH_URL"] == "http://backend:8000/healthz"
-    assert env["FRONTEND_URL"] == "http://frontend:3000/"
+    assert env["FRONTEND_URL"] == "http://frontend:3000/api/health"
     assert env["LOOM_ALERT_WEBHOOK"] == "${LOOM_ALERT_WEBHOOK:-}"
     assert watchdog["command"] == ["python", "/monitor/watchdog.py"]
     assert watchdog["depends_on"]["backend"]["condition"] == "service_healthy"
