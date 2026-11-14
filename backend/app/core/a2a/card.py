@@ -25,7 +25,7 @@ SKILLS: list[dict] = [
     },
 ]
 
-FEALTY: dict = {
+HANDSHAKE: dict = {
     "version": "1",
     "swornTo": "zeus",
     "domain": "content-production",
@@ -62,5 +62,5 @@ def build_agent_card() -> dict:
         "skills": SKILLS,
         "authentication": {"schemes": ["bearer"]},
         "preferredTransport": "JSONRPC",
-        "x-zeus-fealty": FEALTY,
+        "x-zeus-handshake": HANDSHAKE,
     }

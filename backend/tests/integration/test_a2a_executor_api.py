@@ -1,7 +1,7 @@
 """Q150 集成测试：A2A 执行器端点（Zeus 联邦 plan 模式第一阶段）。
 
-口径（02 C1.94 / docs/design-a2a-vassal.md，四项裁决均按草案）：
-- Agent Card 三发现路径公开（无 Key），fealty + 三件 plan skills；
+口径（02 C1.94 / docs/design-a2a-executor.md，四项裁决均按草案）：
+- Agent Card 三发现路径公开（无 Key），handshake + 三件 plan skills；
 - POST /api/a2a/tasks 复用 Q88 Agent Key Bearer 验签（无/错/吊销 Key 401）；
 - plan 模式不触链、不花 token、不越 Gate，任务落 a2a.task 审计（tenant=_platform）；
 - JSON-RPC：tasks/send 同步、tasks/sendSubscribe SSE、tasks/get、tasks/cancel。
@@ -89,9 +89,9 @@ async def test_agent_card_public_three_paths(client, path):
         "compliance-check",
         "effect-backfill",
     ]
-    fealty = card["x-zeus-fealty"]
-    assert fealty["swornTo"] == "zeus"
-    assert fealty["dataPolicy"] == "read-task-scope"
+    handshake = card["x-zeus-handshake"]
+    assert handshake["swornTo"] == "zeus"
+    assert handshake["dataPolicy"] == "read-task-scope"
     assert card["authentication"]["schemes"] == ["bearer"]
 
 
