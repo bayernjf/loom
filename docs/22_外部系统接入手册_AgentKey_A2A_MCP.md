@@ -2,7 +2,7 @@
 
 > **定位**：给"要调用 Loom 的机器"看的单一入口。三份文档分工——
 > [docs/11 §2.7](11_API规范_OpenAPI.md) 登记 API Key **治理端点契约**（签发/列出/吊销的响应模型与角色闸）；
-> [docs/design-a2a-vassal.md](design-a2a-vassal.md) 是 A2A 的**设计草案与裁决**（为什么做、明确不做）；
+> [docs/design-a2a-executor.md](design-a2a-executor.md) 是 A2A 的**设计草案与裁决**（为什么做、明确不做）；
 > **本文件是可执行接入步骤**（拿 Key → 探能力 → 调工具 → 读回执）。三者冲突时以代码与本文件的 file:line 实测为准。
 >
 > **事实纪律**：下文每个字段、状态码、常量都标了代码位置（2026-09-28 读码核对）。§5 的样例是**当天真进程实测输出**（一次性 pg16＋真 redis＋真 uvicorn，非测试替身）；规范里没取到的口径明标【原文未取到，待补】，不冒充"已符合规范全文"。
@@ -65,7 +65,7 @@
 
 `/api/a2a/agent-card`、`/.well-known/agent-card.json`、`/.well-known/agent.json` 返回**同一张卡片**，带 `Cache-Control: public, max-age=300`（`app/core/a2a/router.py:52-53`）。卡片单一事实源＝`app/core/a2a/card.py:46`。
 
-关键字段（实测 §5）：`name=loom`、`version=0.1.0`、`capabilities={streaming:true, pushNotifications:false, stateTransitionHistory:true}`、`defaultInputModes/OutputModes=["application/json"]`、`preferredTransport="JSONRPC"`、`authentication={schemes:["bearer"]}`、`skills[]`（三件，见 2.3）、`x-zeus-fealty`（**上游归属声明**：`swornTo=zeus`、`dataPolicy=read-task-scope`、`sla.ackSeconds=10`；键名与取值是 Q150 定下的对外契约，**不改名**）。
+关键字段（实测 §5）：`name=loom`、`version=0.1.0`、`capabilities={streaming:true, pushNotifications:false, stateTransitionHistory:true}`、`defaultInputModes/OutputModes=["application/json"]`、`preferredTransport="JSONRPC"`、`authentication={schemes:["bearer"]}`、`skills[]`（三件，见 2.3）、`x-zeus-handshake`（**上游归属声明**：`swornTo=zeus`、`dataPolicy=read-task-scope`、`sla.ackSeconds=10`；键名与取值是 Q150 定下的对外契约，**不改名**）。
 
 **`url` 字段 ＝ `{public_base_url}/api/a2a/tasks`**（`card.py:50,57`）。**Q238 起** `public_base_url` 是 `Settings` 的真字段、绑 env **`LOOM_PUBLIC_BASE_URL`**（`app/core/config.py`，默认 `""`）：**未设 ⇒ 出厂卡片 `url` 仍是相对路径 `/api/a2a/tasks`（与 Q238 前逐字节相同）**；**设为实例对外的公网域名（含 scheme；首尾空白与尾斜杠自动归一）⇒ 输出可直连的绝对地址**。**该 env 的取值＝实例对外域名，取决于「网关与 TLS 归属」裁决**（AGENTS 待裁项①）——本面只提供机制、不代裁取值。**Q280 补正（2026-10-05，空库真栈首启实测）**：光设 `.env` 一度并不生效——`infra/docker-compose.yml` 的 backend 段**从不转发** `LOOM_PUBLIC_BASE_URL`，容器里 `settings.public_base_url` 永远是空串，故 compose 部署出来的卡片 `url` 恒为相对路径`/api/a2a/tasks`（外部 Agent 拿到没法用）。现已补上 `LOOM_PUBLIC_BASE_URL: ${LOOM_PUBLIC_BASE_URL:-}` 一行，并由 `backend/tests/unit/test_gateway_surface_contract.py` 钉住（旋钮不许再消失、也不许被写死成某个域名）；修后实测：设 `https://loom.bayjf.com` ⇒ 两份卡片（`agent-card.json`·`agent.json`）经网关都回绝对地址。运行手册见 docs/17 §1.2。按 Q135 起先例，此部署参数**不入 `backend/.env.example`**（该文件只保留本机非 compose 开发路径所需项，那里相对路径本就正确）。⚠️ 未设该 env 时，**接入方仍须自行以部署域名补全**（原「须点工」口径已销账，见 §6）。
 
@@ -261,7 +261,7 @@ curl -s -X POST $B/mcp -H "authorization: Bearer $KEY" -H 'content-type: applica
 
 | 项 | 状态 |
 |---|---|
-| A2A 任务持久化跨实例、真 LLM 与链路执行、Zeus↔Loom 真机联调 | ⬜ 第二阶段，随 V2，须点工（02 C1.94；docs/design-a2a-vassal.md「明确不做」条） |
+| A2A 任务持久化跨实例、真 LLM 与链路执行、Zeus↔Loom 真机联调 | ⬜ 第二阶段，随 V2，须点工（02 C1.94；docs/design-a2a-executor.md「明确不做」条） |
 | MCP 的 `prompts`／`resources`／sampling／客户端侧工具 | ⬜ 不做：Loom 只暴露 plan 工具，`server/discover` 里声明的能力集就是 `server.py:101` |
 | Agent 侧 OAuth／per-key 作用域／速率限制 | ⬜ 未实现（Q88 只有 active/revoked 两态），`_PREFIX_SHOWN` 仅用于展示 |
 | ~~卡片 `url` 为相对路径（须加 `Settings.public_base_url` 字段／env `LOOM_PUBLIC_BASE_URL`，属新旋钮、需点工）~~ | ✅ **已销账**：2026-09-29 由 **Q238**（02 C1.182）落成真 env `LOOM_PUBLIC_BASE_URL`——**默认空＝相对路径（行为不变）**，设为实例对外域名即输出绝对地址。**取值仍取决于「网关与 TLS 归属」裁决**（待裁项①） |

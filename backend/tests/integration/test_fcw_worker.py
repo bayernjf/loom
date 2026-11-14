@@ -453,5 +453,7 @@ async def test_worker_path_assembly_blocked_audit_present(
             )
         ).all()
     # worker 路径下 fcw.assembly_blocked 审计行随 task 最终 commit 完整落库。
+    # entity_id 受 varchar(36) 限制只能放 pws_id，slot_id 保留在 detail。
     assert len(blocked) == 1
-    assert blocked[0].entity_id == f"{task.pws_id}:{slot_id}"
+    assert blocked[0].entity_id == task.pws_id
+    assert blocked[0].detail["slot_id"] == slot_id

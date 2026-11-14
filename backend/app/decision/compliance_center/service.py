@@ -340,10 +340,17 @@ async def run_ccr(session, pws_id: str, body) -> dict:
 async def latest_report(
     session, pws_id: str, country: str | None
 ) -> CcrReport | None:
+    # country 为 None 时用 IS NULL；非 None 用等值比较。SQLAlchemy 的
+    # .is_(country) 在 country 非 None 时会生成非法的 `country IS $2`。
+    country_cond = (
+        CcrReport.country.is_(None)
+        if country is None
+        else CcrReport.country == country
+    )
     rows = (
         await session.scalars(
             select(CcrReport)
-            .where(CcrReport.pws_id == pws_id, CcrReport.country.is_(country))
+            .where(CcrReport.pws_id == pws_id, country_cond)
             .order_by(CcrReport.created_at.desc(), CcrReport.ccr_id.desc())
         )
     ).all()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.a2a import rpc
-from app.core.a2a.card import FEALTY, SKILLS, build_agent_card
+from app.core.a2a.card import HANDSHAKE, SKILLS, build_agent_card
 from app.core.a2a.skills import list_skill_ids, run_plan_skill
 from app.core.config import Settings, get_settings
 
@@ -25,20 +25,20 @@ def _clean_store():
 
 
 class TestCard:
-    def test_card_exposes_fealty_and_three_plan_skills(self):
+    def test_card_exposes_handshake_and_three_plan_skills(self):
         card = build_agent_card()
         assert card["name"] == "loom"
-        assert FEALTY["swornTo"] == "zeus"
-        assert FEALTY["domain"] == "content-production"
-        assert FEALTY["dataRealms"] == ["enterprise"]
-        assert FEALTY["dataPolicy"] == "read-task-scope"
-        assert FEALTY["escalationPolicy"] == "auto"
-        assert FEALTY["sla"]["ackSeconds"] == 10
+        assert HANDSHAKE["registeredTo"] == "zeus"
+        assert HANDSHAKE["domain"] == "content-production"
+        assert HANDSHAKE["dataDomains"] == ["enterprise"]
+        assert HANDSHAKE["dataPolicy"] == "read-task-scope"
+        assert HANDSHAKE["escalationPolicy"] == "auto"
+        assert HANDSHAKE["sla"]["ackSeconds"] == 10
         assert [skill["id"] for skill in SKILLS] == ["generate-content", "compliance-check", "effect-backfill"]
         assert card["capabilities"]["streaming"] is True
 
-    def test_plan_only_promise_is_in_fealty_notes(self):
-        assert "never" in FEALTY["notes"] and "human gate" in FEALTY["notes"]
+    def test_plan_only_promise_is_in_handshake_notes(self):
+        assert "never" in HANDSHAKE["notes"] and "human gate" in HANDSHAKE["notes"]
 
 
 class TestCardBaseUrl:

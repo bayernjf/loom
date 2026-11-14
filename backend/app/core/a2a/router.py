@@ -17,7 +17,7 @@ from app.core.api_keys.service import require_agent_key
 from app.core.audit import append_audit
 from app.core.db import get_session
 
-router = APIRouter(tags=["a2a-vassal"])
+router = APIRouter(tags=["a2a-executor"])
 
 PLATFORM_TENANT = "_platform"
 
