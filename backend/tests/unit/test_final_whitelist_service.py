@@ -9,7 +9,8 @@
 import pytest
 
 from app.core.actor import Actor
-from app.final.final_whitelist import fcw_rules, service as svc
+from app.final.final_whitelist import fcw_rules
+from app.final.final_whitelist import service as svc
 
 PWS_ID = "12345678-1234-1234-1234-123456789012"  # 36 字符
 SLOT_ID = "abcdefab-abcd-abcd-abcd-abcdefabcdef"  # 36 字符

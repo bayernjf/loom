@@ -5,7 +5,6 @@
 回归锁：None 走 ``IS NULL``，非 None 走等值比较，绝不再生成 ``IS <参数>``。
 """
 
-import pytest
 from sqlalchemy.dialects import postgresql
 
 from app.decision.compliance_center import service as svc
