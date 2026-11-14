@@ -25,11 +25,11 @@ SKILLS: list[dict] = [
     },
 ]
 
-FEALTY: dict = {
+HANDSHAKE: dict = {
     "version": "1",
-    "swornTo": "zeus",
+    "registeredTo": "zeus",
     "domain": "content-production",
-    "dataRealms": ["enterprise"],
+    "dataDomains": ["enterprise"],
     "dataPolicy": "read-task-scope",
     "reportBack": True,
     "escalationPolicy": "auto",
@@ -62,5 +62,5 @@ def build_agent_card() -> dict:
         "skills": SKILLS,
         "authentication": {"schemes": ["bearer"]},
         "preferredTransport": "JSONRPC",
-        "x-zeus-fealty": FEALTY,
+        "x-zeus-handshake": HANDSHAKE,
     }

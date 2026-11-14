@@ -373,7 +373,7 @@
 
 ## 第四十八次续写（2026-10-01，Q243 批滚出 Q238 条目原文）
 
-- **Q238 A2A Agent Card `url` 基址落成真 env `LOOM_PUBLIC_BASE_URL`（2026-09-29；**代码＋测试＋文档**，零迁移零新表；改 `backend/app/core/config.py` ＋ `backend/app/core/a2a/card.py` ＋ `tests/unit/test_a2a_vassal.py` ＋ `tests/integration/test_a2a_vassal_api.py`，同步 docs/11·22·17·15·08·16·README、本表、AGENTS、CHANGELOG；基线 1032→**1038 passed＋10 skipped**（总收集 1048；＋6＝单测 5＋集成 1）；02 C1.182）**：负责人点工「先把 A2A 卡片那个 env 做了」。
+- **Q238 A2A Agent Card `url` 基址落成真 env `LOOM_PUBLIC_BASE_URL`（2026-09-29；**代码＋测试＋文档**，零迁移零新表；改 `backend/app/core/config.py` ＋ `backend/app/core/a2a/card.py` ＋ `tests/unit/test_a2a_executor.py` ＋ `tests/integration/test_a2a_executor_api.py`，同步 docs/11·22·17·15·08·16·README、本表、AGENTS、CHANGELOG；基线 1032→**1038 passed＋10 skipped**（总收集 1048；＋6＝单测 5＋集成 1）；02 C1.182）**：负责人点工「先把 A2A 卡片那个 env 做了」。
   - **修的是 Q233 登记、Q237 复评仍列为「须点工」的那条**：`build_agent_card()` 读 `settings.public_base_url`，而该名**不是 `Settings` 字段**（`getattr(..., None)` 永远落空）⇒ 出厂卡片 `url` 恒为相对路径 `/api/a2a/tasks`。
   - **落法＝纯加法**：`Settings.public_base_url: str = ""` ＋ `card.py` 去掉 `getattr` 兜底改读真字段并 `.strip().rstrip("/")`。**默认空串 ⇒ 输出与改前逐字节相同**；设为实例对外域名即输出绝对地址。
   - **承重断言＝「env 名 → 字段」的绑定**（`test_the_env_var_binds_to_the_setting`）——Q233 的失效模式正是「运营设了一个不起作用的变量并以为设好了」；集成一条把两态断言放同用例，兼钉「卡片每请求现建」（快照时第二次断言必红）。
