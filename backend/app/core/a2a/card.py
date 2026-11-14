@@ -29,7 +29,7 @@ HANDSHAKE: dict = {
     "version": "1",
     "swornTo": "zeus",
     "domain": "content-production",
-    "dataRealms": ["enterprise"],
+    "dataDomains": ["enterprise"],
     "dataPolicy": "read-task-scope",
     "reportBack": True,
     "escalationPolicy": "auto",

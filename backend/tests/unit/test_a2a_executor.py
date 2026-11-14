@@ -30,7 +30,7 @@ class TestCard:
         assert card["name"] == "loom"
         assert HANDSHAKE["swornTo"] == "zeus"
         assert HANDSHAKE["domain"] == "content-production"
-        assert HANDSHAKE["dataRealms"] == ["enterprise"]
+        assert HANDSHAKE["dataDomains"] == ["enterprise"]
         assert HANDSHAKE["dataPolicy"] == "read-task-scope"
         assert HANDSHAKE["escalationPolicy"] == "auto"
         assert HANDSHAKE["sla"]["ackSeconds"] == 10

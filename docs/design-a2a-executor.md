@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | swornTo | zeus | 星型拓扑，任务只来自 Zeus |
 | domain | content-production | 能力域，Zeus 据此路由 |
-| dataRealms | enterprise | 私域内容生产平台，服务企业租户 |
+| dataDomains | enterprise | 私域内容生产平台，服务企业租户 |
 | dataPolicy | read-task-scope | 只读任务范围内数据 |
 | reportBack | true | 产物回传（summary/evidence/cost） |
 | escalationPolicy | auto | 与 loom 既有「AI 只产候选、人工 Gate 裁决」天然同构——不可逆动作升级人工在环操作者 |
