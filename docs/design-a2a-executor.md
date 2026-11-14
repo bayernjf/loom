@@ -7,7 +7,7 @@
 
 | 字段 | 提议值 | 理由 |
 | --- | --- | --- |
-| swornTo | zeus | 星型拓扑，任务只来自 Zeus |
+| registeredTo | zeus | 星型拓扑，任务只来自 Zeus |
 | domain | content-production | 能力域，Zeus 据此路由 |
 | dataDomains | enterprise | 私域内容生产平台，服务企业租户 |
 | dataPolicy | read-task-scope | 只读任务范围内数据 |

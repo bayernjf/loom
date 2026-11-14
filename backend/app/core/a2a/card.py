@@ -27,7 +27,7 @@ SKILLS: list[dict] = [
 
 HANDSHAKE: dict = {
     "version": "1",
-    "swornTo": "zeus",
+    "registeredTo": "zeus",
     "domain": "content-production",
     "dataDomains": ["enterprise"],
     "dataPolicy": "read-task-scope",

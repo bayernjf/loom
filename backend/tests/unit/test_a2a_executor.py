@@ -28,7 +28,7 @@ class TestCard:
     def test_card_exposes_handshake_and_three_plan_skills(self):
         card = build_agent_card()
         assert card["name"] == "loom"
-        assert HANDSHAKE["swornTo"] == "zeus"
+        assert HANDSHAKE["registeredTo"] == "zeus"
         assert HANDSHAKE["domain"] == "content-production"
         assert HANDSHAKE["dataDomains"] == ["enterprise"]
         assert HANDSHAKE["dataPolicy"] == "read-task-scope"
