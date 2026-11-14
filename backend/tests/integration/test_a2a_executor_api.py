@@ -90,7 +90,7 @@ async def test_agent_card_public_three_paths(client, path):
         "effect-backfill",
     ]
     handshake = card["x-zeus-handshake"]
-    assert handshake["swornTo"] == "zeus"
+    assert handshake["registeredTo"] == "zeus"
     assert handshake["dataPolicy"] == "read-task-scope"
     assert card["authentication"]["schemes"] == ["bearer"]
 
