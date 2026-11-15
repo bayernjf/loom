@@ -166,6 +166,7 @@ export function OrphanTableIsland({ rows }: { rows: EffectRecordView[] }) {
           type="button"
           className={styles.primaryButton}
           disabled={pending || checkedCount === 0}
+          title={!pending && checkedCount === 0 ? t("batchSubmitDisabled") : undefined}
           onClick={claimChecked}
         >
           {t("batchSubmit", { count: checkedCount })}

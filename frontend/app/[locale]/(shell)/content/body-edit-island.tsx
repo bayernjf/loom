@@ -62,6 +62,7 @@ export function BodyEditIsland({
           type="button"
           className={styles.primaryButton}
           disabled={pending || !body.trim()}
+          title={!pending && !body.trim() ? t("submitEditDisabled") : undefined}
           onClick={submit}
         >
           {t("submitEdit")}

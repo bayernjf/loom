@@ -468,6 +468,7 @@ export function BatchBackfillIsland({ contentId }: { contentId: string }) {
           type="button"
           className={styles.primaryButton}
           disabled={pending || blocked || jobActive}
+          title={!pending && (blocked || jobActive) ? t("backfillBatchSubmitDisabled") : undefined}
           onClick={submit}
         >
           {t("backfillBatchSubmit")}
