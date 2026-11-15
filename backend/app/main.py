@@ -28,6 +28,7 @@ from app.core.mcp.router import router as mcp_router
 from app.core.metrics import MetricsMiddleware
 from app.core.metrics.router import router as metrics_router
 from app.core.model_registry.router import router as model_registry_router
+from app.core.observability import OtelTraceMiddleware, init_tracing
 from app.core.pool_options.router import router as pool_options_router
 from app.core.problem_details import unhandled_exception_handler
 from app.core.rbac import NotAuthenticated, PermissionDenied
@@ -208,6 +209,9 @@ async def lifespan(app: FastAPI):
             _scheduler = None
 
 
+# OTel trace 导出（阶段 3，opt-in）：未设 OTEL_EXPORTER_OTLP_ENDPOINT 时 noop。
+init_tracing()
+
 app = FastAPI(
     title="Loom",
     version="0.1.0",
@@ -218,6 +222,8 @@ app = FastAPI(
 
 # Q181：进程内指标采集中间件（纯 ASGI，记录请求计数/延迟；/metrics 暴露）。
 app.add_middleware(MetricsMiddleware)
+# 阶段 3：OTel 请求 span 中间件（opt-in，未初始化 tracer 时 noop）。
+app.add_middleware(OtelTraceMiddleware)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Q178：内部角色闸的统一 HTTP 映射（局部 try/except 已映射者优先，这里兜底，
