@@ -93,6 +93,7 @@ export function LoginIsland({ initialMe }: { initialMe: StaffMe | null }) {
           type="button"
           className={styles.primaryButton}
           disabled={pending || token.trim().length === 0}
+          title={!pending && token.trim().length === 0 ? t("emptyToken") : undefined}
           onClick={login}
         >
           {t("submit")}

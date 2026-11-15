@@ -565,6 +565,7 @@ export function VideoStudioIsland({
                 type="button"
                 className={styles.planChip}
                 disabled={pending || !newPrompt.trim()}
+                title={!pending && !newPrompt.trim() ? t("taskAddDisabled") : undefined}
                 onClick={submitCreateTask}
               >
                 {t("taskAdd")}
@@ -656,6 +657,7 @@ export function VideoStudioIsland({
                     type="button"
                     className={styles.planChip}
                     disabled={pending || !newText.trim()}
+                    title={!pending && !newText.trim() ? t("catalogAddDisabled") : undefined}
                     onClick={submitNewSegment}
                   >
                     {t("catalogAdd")}

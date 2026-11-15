@@ -118,6 +118,7 @@ export function EntryRowActions({
               type="button"
               className={styles.primaryButton}
               disabled={pending || draftContent.trim().length === 0}
+              title={!pending && draftContent.trim().length === 0 ? t("saveDisabled") : undefined}
               onClick={save}
             >
               {t("save")}

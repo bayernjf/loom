@@ -205,6 +205,7 @@ export function AssembleIsland() {
             type="button"
             className={styles.secondaryButton}
             disabled={reuseLoading || !reuseId.trim()}
+            title={!reuseLoading && !reuseId.trim() ? t("reuseButtonDisabled") : undefined}
             onClick={runReuse}
           >
             {reuseLoading ? t("reuseLoading") : t("reuseButton")}
@@ -298,6 +299,7 @@ export function AssembleIsland() {
           type="button"
           className={styles.primary}
           disabled={previewing || issuing || buildBody() === null}
+          title={!previewing && !issuing && buildBody() === null ? t("previewDisabled") : undefined}
           onClick={runPreview}
         >
           {previewing ? t("previewing") : t("preview")}
