@@ -118,6 +118,12 @@ services:
       # infra/.env 维护第二份密钥。任一项为空则客户端整体 fail-closed 停用，不影响生成。
       LOOM_KNOWLEDGE_URL: ${MODEL_HUB_URL:-}
       LOOM_KNOWLEDGE_TOKEN: ${MODEL_HUB_TOKEN:-}
+      # OTel trace 导出（阶段 3，opt-in）：代码层 env 空=不初始化（noop）。本地默认
+      # 指向 tier0-net 的 otel-collector（backend 已连 tier0-net，见 networks）。
+      # 覆盖为空串即关闭。
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-loom-backend}
+      DEPLOY_ENV: ${DEPLOY_ENV:-local}
     expose: ["8000"]
     # W6-1: backend 须经 tier0-net 访问 model-hub（http://model-hub:8791）。
     # 不加入则 MODEL_HUB_URL 的 DNS 名不可解析，投影同步静默回退旧缓存。
