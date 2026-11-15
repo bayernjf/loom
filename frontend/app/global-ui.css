@@ -22,3 +22,11 @@
 :where(table) tbody tr:hover {
   background: var(--color-bg-hover);
 }
+
+/* Disabled button desaturation (#11): global fallback — strip color
+ * saturation so a disabled primary button no longer reads as clickable.
+ * Opacity/grey-background stays in each module; this only desaturates. */
+::where(button:disabled) {
+  filter: saturate(0);
+  cursor: not-allowed;
+}
