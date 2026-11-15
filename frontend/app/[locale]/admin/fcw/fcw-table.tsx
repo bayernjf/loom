@@ -90,6 +90,7 @@ export function FcwTable({ items }: { items: FcwListItem[] }) {
           className={styles.primaryButton}
           onClick={copySelected}
           disabled={selected.size === 0}
+          title={selected.size === 0 ? t("bulkCopyDisabled") : undefined}
         >
           {t("bulkCopy")}
         </button>

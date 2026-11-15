@@ -177,6 +177,7 @@ export function AtomRowActions({ candidate }: { candidate: AtomCandidateView }) 
             type="button"
             className={styles.primaryButton}
             disabled={busy || !reason.trim()}
+            title={!busy && !reason.trim() ? t("opConfirmDisabled") : undefined}
             onClick={() =>
               run(() => rejectAtomCandidateAction(candidate.candidate_id, reason))
             }
@@ -209,6 +210,7 @@ export function AtomRowActions({ candidate }: { candidate: AtomCandidateView }) 
             type="button"
             className={styles.primaryButton}
             disabled={busy || !reason.trim()}
+            title={!busy && !reason.trim() ? t("opConfirmDisabled") : undefined}
             onClick={() =>
               run(() => overrideAtomRiskAction(candidate.candidate_id, riskLevel, reason))
             }
@@ -330,6 +332,7 @@ function ClusterDialog({
             type="button"
             className={styles.primaryButton}
             disabled={busy || !keeper}
+            title={!busy && !keeper ? t("opResolveDisabled") : undefined}
             onClick={resolve}
           >
             {t("opResolve")}

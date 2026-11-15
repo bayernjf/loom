@@ -75,6 +75,7 @@ export function IssueKeyIsland() {
           type="button"
           className={styles.primaryButton}
           disabled={pending || name.trim().length === 0}
+          title={!pending && name.trim().length === 0 ? t("issueSubmitDisabled") : undefined}
           onClick={submit}
         >
           {t("issueSubmit")}

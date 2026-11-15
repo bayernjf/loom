@@ -113,6 +113,7 @@ export function FreezeIsland({
               className={styles.primaryButton}
               onClick={confirmRevoke}
               disabled={!reason.trim() || pending}
+              title={!pending && !reason.trim() ? t("revokeConfirmDisabled") : undefined}
               data-testid="fcw-revoke-confirm"
             >
               {pending ? t("revoking") : t("revokeConfirm")}

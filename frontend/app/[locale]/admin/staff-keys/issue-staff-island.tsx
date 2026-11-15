@@ -108,6 +108,7 @@ export function IssueStaffKeyIsland() {
           type="button"
           className={styles.primaryButton}
           disabled={!canSubmit}
+          title={!canSubmit ? t("issueSubmitDisabled") : undefined}
           onClick={submit}
         >
           {t("issueSubmit")}

@@ -131,6 +131,7 @@ export function CreateEntryIsland({ tenantId }: { tenantId: string }) {
           type="button"
           className={styles.primaryButton}
           disabled={pending || !ready}
+          title={!pending && !ready ? t("createSubmitDisabled") : undefined}
           onClick={submit}
         >
           {t("createSubmit")}
