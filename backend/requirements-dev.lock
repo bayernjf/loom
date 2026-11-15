@@ -64,6 +64,10 @@ cffi==2.1.1
     # via
     #   -c /tmp/constraints.txt
     #   cryptography
+charset-normalizer==3.5.2
+    # via
+    #   -c /tmp/c.txt
+    #   requests
 click==8.5.0
     # via
     #   -c /tmp/constraints.txt
@@ -84,6 +88,10 @@ fastapi==0.141.1
     # via
     #   -c /tmp/constraints.txt
     #   loom-backend (pyproject.toml)
+googleapis-common-protos==1.76.0
+    # via
+    #   -c /tmp/c.txt
+    #   opentelemetry-exporter-otlp-proto-http
 greenlet==3.5.5
     # via
     #   -c /tmp/constraints.txt
@@ -143,6 +151,45 @@ openpyxl==3.1.5
     # via
     #   -c /tmp/constraints.txt
     #   loom-backend (pyproject.toml)
+opentelemetry-api==1.45.2
+    # via
+    #   -c /tmp/c.txt
+    #   loom-backend (pyproject.toml)
+    #   opentelemetry-exporter-http-transport
+    #   opentelemetry-exporter-otlp-proto-http
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
+opentelemetry-exporter-http-transport==0.66b2
+    # via
+    #   -c /tmp/c.txt
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-common==0.66b2
+    # via
+    #   -c /tmp/c.txt
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-common==1.45.2
+    # via
+    #   -c /tmp/c.txt
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-http==1.45.2
+    # via
+    #   -c /tmp/c.txt
+    #   loom-backend (pyproject.toml)
+opentelemetry-proto==1.45.2
+    # via
+    #   -c /tmp/c.txt
+    #   opentelemetry-exporter-otlp-proto-common
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-sdk==1.45.2
+    # via
+    #   -c /tmp/c.txt
+    #   loom-backend (pyproject.toml)
+    #   opentelemetry-exporter-otlp-common
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-semantic-conventions==0.66b2
+    # via
+    #   -c /tmp/c.txt
+    #   opentelemetry-sdk
 packaging==26.3
     # via
     #   -c /tmp/constraints.txt
@@ -160,6 +207,11 @@ pluggy==1.6.0
     #   -c /tmp/constraints.txt
     #   pytest
     #   pytest-cov
+protobuf==7.36.2
+    # via
+    #   -c /tmp/c.txt
+    #   googleapis-common-protos
+    #   opentelemetry-proto
 pycparser==3.0
     # via
     #   -c /tmp/constraints.txt
@@ -214,6 +266,11 @@ redis==8.1.0
     # via
     #   -c /tmp/constraints.txt
     #   loom-backend (pyproject.toml)
+requests==2.34.2
+    # via
+    #   -c /tmp/c.txt
+    #   opentelemetry-exporter-http-transport
+    #   opentelemetry-exporter-otlp-proto-http
 ruff==0.16.7
     # via
     #   -c /tmp/constraints.txt
