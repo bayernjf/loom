@@ -48,7 +48,10 @@ class ContentConstraints:
 
 @dataclass(frozen=True)
 class ContentRequest:
-    """一次内容产出请求（设计 §4.5 ContentRequest）。"""
+    """一次内容产出请求（设计 §4.5 ContentRequest）。
+
+    locale：产出语言（BCP-47 风格，如 zh/en/zh-CN），None = 沿用模型默认语言。
+    """
 
     product_id: str
     channel: str
@@ -57,6 +60,7 @@ class ContentRequest:
     constraints: ContentConstraints = field(default_factory=ContentConstraints)
     # 幂等键：同键重复请求不重复产出（设计 §4.7 幂等口径）。
     idempotency_key: str | None = None
+    locale: str | None = None
     # 产出语言（T-M9-02，如 zh-CN/en-US）：None = 调用方默认语言，向后兼容。
     locale: str | None = None
 
