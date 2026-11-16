@@ -17,6 +17,13 @@ class ContentConstraintsModel(BaseModel):
     wordlist: list[str] = Field(default_factory=list)
     banned: list[str] = Field(default_factory=list)
     brand: list[str] = Field(default_factory=list)
+    locale: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=16,
+        pattern=r"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$",
+        description="BCP-47 风格输出语言（zh/en/zh-CN），缺省沿用模型默认语言",
+    )
 
 
 class CreateContentRequest(BaseModel):

@@ -48,7 +48,10 @@ class ContentConstraints:
 
 @dataclass(frozen=True)
 class ContentRequest:
-    """一次内容产出请求（设计 §4.5 ContentRequest）。"""
+    """一次内容产出请求（设计 §4.5 ContentRequest）。
+
+    locale：产出语言（BCP-47 风格，如 zh/en/zh-CN），None = 沿用模型默认语言。
+    """
 
     product_id: str
     channel: str
