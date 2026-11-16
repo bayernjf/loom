@@ -37,6 +37,7 @@ from app.core.actor import Actor
 from app.core.config import get_settings
 from app.core.rbac import PLATFORM_ADMIN
 from app.core.staff_auth import service
+from app.core.staff_auth.context import reset_current_staff, set_current_staff
 from app.core.staff_auth.models import StaffApiKey
 
 # 审计里区分「引导脚本」与 API 自报签发；created_by 同样记这个稳定标识。
@@ -81,13 +82,20 @@ async def bootstrap_staff_key(
                     "issue additional keys through POST /api/admin/staff-keys, or pass --force "
                     "if you really mean to add another bootstrap token."
                 )
-            row, plaintext = await service.issue_staff_key(
-                session,
-                staff_id=staff_id,
-                staff_name=staff_name,
-                roles=roles,
-                actor=Actor(id=BOOTSTRAP_ACTOR_ID, roles=[PLATFORM_ADMIN]),
-            )
+            # 门控开启时 rbac 只认请求上下文里的已认证身份，不看 actor 自报角色。
+            # 本脚本是 DB 级引导口（明文只在标准输出出现一次），在此显式以引导身份
+            # 注入上下文，等价于「已认证的 platform_admin」，否则门控一开就签不出。
+            set_current_staff(Actor(id=BOOTSTRAP_ACTOR_ID, roles=[PLATFORM_ADMIN]))
+            try:
+                row, plaintext = await service.issue_staff_key(
+                    session,
+                    staff_id=staff_id,
+                    staff_name=staff_name,
+                    roles=roles,
+                    actor=Actor(id=BOOTSTRAP_ACTOR_ID, roles=[PLATFORM_ADMIN]),
+                )
+            finally:
+                reset_current_staff()
             await session.commit()
             return row, plaintext
     finally:
