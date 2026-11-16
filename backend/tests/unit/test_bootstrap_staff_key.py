@@ -122,3 +122,33 @@ async def test_bootstrap_force_adds_a_second_key(dsn):
     )
     assert row.staff_id == "ops-03"
     assert len(await _rows(dsn)) == 2
+
+
+async def test_bootstrap_force_works_with_gate_enabled_globally(dsn, monkeypatch):
+    """门控真正开启（settings 生效）时，--force 仍要能签出令牌。
+
+    回归点：rbac 在门控开启后只认请求上下文里的已认证身份，不看 actor 自报角色，
+    旧脚本因此抛 NotAuthenticated。脚本是 DB 级引导口，必须自行注入引导身份。
+    """
+    import app.core.rbac as rbac_module
+
+    monkeypatch.setattr(rbac_module.settings, "staff_auth_enabled", True)
+    await _create_schema(dsn)
+    await bootstrap_staff_key(
+        dsn=dsn,
+        staff_id="ops-01",
+        staff_name="运营",
+        roles=["platform_admin"],
+        gate_enabled=True,
+    )
+    row, plaintext = await bootstrap_staff_key(
+        dsn=dsn,
+        staff_id="ops-04",
+        staff_name="运营4",
+        roles=["platform_admin"],
+        gate_enabled=True,
+        force=True,
+    )
+    assert row.staff_id == "ops-04"
+    assert plaintext.startswith("loom_staff_")
+    assert len(await _rows(dsn)) == 2
