@@ -1,5 +1,17 @@
 # Handoff — Loom
 
+## 待办登记（标准）
+
+> 本段是本产品唯一活跃待办入口；详细背景见下方原有章节。完成一项改 `[x]`，并在“最近变更 / Recently shipped”留证据。
+> 最近同步：2026-11-19
+
+- [ ] **C1 识别 / WF-01 自动触发链路** — 状态：blocked；证据：intake `4589af3a-700f-4d5e-827a-a81f8f5c16bd` 在 `ai_recognizing` 停留超过 50 分钟无产出；下一步：查 C1 识别与 WF-01 触发，确认是否有 worker 消费该状态。
+- [ ] **段 3/7/9/12 完整闭环** — 状态：open；段 12 视频支线还缺分段编目/转写/对象存储/成片复检规格。
+- [ ] **真实客户 dogfood** — 状态：blocked；当前无客户；下一步：找 1 个真实产品跑段 1→6→10 与发证，补真实订单/发布证据。
+- [ ] **成稿质量：E1 SSO + `doubao-seed-1-6`** — 状态：blocked by E1；下一步：SSO 重登后登记并切换模型。
+- [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
+- [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前只有内部 staff 令牌。
+
 > **2026-11-13 补 2 个回归测试（两个 bug 修复的复现锁）。**
 >
 > - `tests/unit/test_compliance_center_service.py`：`latest_report` 的 country 过滤——None 编译为 `IS NULL`、非 None 编译为等值，绝不再生成 `IS <参数>`（postgres 语法错误）。2 用例，已提交 `cf666b7`。
