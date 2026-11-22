@@ -27,6 +27,7 @@ from app.core.imports.worker import ImportWorker, build_import_workers
 from app.core.mcp.router import router as mcp_router
 from app.core.metrics import MetricsMiddleware
 from app.core.metrics.router import router as metrics_router
+from app.core.model_registry.c1_worker import C1RecognitionWorker
 from app.core.model_registry.router import router as model_registry_router
 from app.core.observability import OtelTraceMiddleware, init_tracing
 from app.core.pool_options.router import router as pool_options_router
@@ -60,6 +61,7 @@ logger = logging.getLogger("loom.startup")
 
 _scheduler: SweepScheduler | None = None
 _restock_worker: RestockWorker | None = None
+_c1_worker: C1RecognitionWorker | None = None
 _config_subscriber: ConfigBroadcastSubscriber | None = None
 # Q152：导出消费组可在单进程内起多个 consumer（默认 1，V1 行为）。
 _export_workers: list[ExportWorker] = []
@@ -91,7 +93,7 @@ async def _assert_staff_credentials(session) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _scheduler, _restock_worker, _config_subscriber, _export_workers, _import_workers, _fcw_workers
+    global _scheduler, _restock_worker, _c1_worker, _config_subscriber, _export_workers, _import_workers, _fcw_workers
     # M10c：启动引导配置缓存。失败不阻断启动——knob() 回落种子默认值，
     # 进程仍可健康启动，配置中心在下次发布或重启后恢复（单进程 V1）。
     try:
@@ -138,6 +140,13 @@ async def lifespan(app: FastAPI):
             settings.restock_batch_size,
         )
         await _restock_worker.start()
+    if settings.c1_worker_enabled:
+        _c1_worker = C1RecognitionWorker(
+            SessionLocal,
+            settings.c1_worker_interval_seconds,
+            settings.c1_worker_batch_size,
+        )
+        await _c1_worker.start()
     if settings.export_worker_enabled:
         # Q137：导出任务消费组 worker（只读幂等，可多副本水平并行，无需 leader 锁）。
         # Q152：单进程内按 LOOM_EXPORT_WORKER_CONCURRENCY 起多个 consumer 同组分片。
@@ -204,6 +213,9 @@ async def lifespan(app: FastAPI):
         if _restock_worker is not None:
             await _restock_worker.stop()
             _restock_worker = None
+        if _c1_worker is not None:
+            await _c1_worker.stop()
+            _c1_worker = None
         if _scheduler is not None:
             await _scheduler.stop()
             _scheduler = None
