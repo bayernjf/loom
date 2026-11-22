@@ -11,7 +11,8 @@ Q121 定稿（02 C1.65，负责人决策「纯 advisory」）：
 - 场景未配置 / 模型不可用 / 上游错误 / 输出非法时不阻断生成：
   semantic 段记 ``checked=false`` + ``error``，成品照常进 review。
 
-施工指令核对、国家规则核对两项仍占位【原文未给出，待补】。
+施工指令核对、国家规则核对两项由 ``app/content/compliance.py`` 落地（Q59 ③④
+v0.1 工程甲案，规格见 docs/29）。
 检测维度 code（unsubstantiated_claim / absolute_guarantee /
 off_material_exaggeration / misleading_ambiguity）为 v0.1 工程口径，待业务方校准。
 """

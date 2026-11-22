@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.content import generation
+from app.content import compliance, generation
 from app.content import languages as l10n
 from app.content import quality as qc
 from app.content import semantic as sem
@@ -177,7 +177,11 @@ async def run_content_review(session: AsyncSession, content: ContentProduct) -> 
       结果落 ``review_hits["semantic"]``，**纯 advisory**（不阻断 approve、
       不改 block_required）；检测不可用记 checked=false + error，不阻断生成。
 
-    施工指令核对 / 国家规则核对两项原文未给实现口径，仍占位【待补】。
+    - 第 3 项施工指令核对（docs/29 v0.1 工程甲案）：降级映射已执行 /
+      结构指令已落实 / 无证外承诺，落 ``review_hits["construction"]``；
+    - 第 4 项国家规则核对：外链 / 留资 / CTA 与目标国家规则集比对，落
+      ``review_hits["country_rules"]``；③④ 均纯 advisory（不阻断 approve、
+      不改 block_required），规则集为 v0.1 工程口径待业务/法审校准。
     """
     ps = await session.get(ProductSpace, content.product_space_id)
     industry = ps.industry_tag if ps is not None else None
@@ -193,6 +197,21 @@ async def run_content_review(session: AsyncSession, content: ContentProduct) -> 
         "block_required": result["block_required"],
     }
     review_hits["semantic"] = await sem.run_semantic_check(session, content)
+    fcw = (
+        await session.get(FinalContentWhitelist, content.final_id)
+        if content.final_id
+        else None
+    )
+    if fcw is None:
+        review_hits["construction"] = {"checked": False, "error": "fcw_missing"}
+        review_hits["country_rules"] = {"checked": False, "error": "fcw_missing"}
+    else:
+        review_hits["construction"] = await compliance.run_construction_check(
+            session, content, fcw, review_hits
+        )
+        review_hits["country_rules"] = await compliance.run_country_rule_check(
+            session, content, fcw
+        )
     return review_hits
 
 
