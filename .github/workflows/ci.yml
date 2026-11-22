@@ -299,6 +299,8 @@ jobs:
           # Q279 甲案：网关 overlay 也必须在**零注入 secret** 的默认路径上可解析
           # （它只带 ${LOOM_GATEWAY_DOMAIN:-…}，没有口令类插值）。
           docker compose -f docker-compose.yml -f docker-compose.gateway.yml config -q
+          # 本地 dogfood overlay（backend 回环端口），只验可解析、不参与部署。
+          docker compose -f docker-compose.yml -f docker-compose.dogfood.yml config -q
           docker compose -f docker-compose.yml -f docker-compose.staging.yml \
             -f docker-compose.ha.yml config -q
           # b) opt-in overlay 叠进来后仍得是一个合法 project：护栏只约束 -f 进来的人，

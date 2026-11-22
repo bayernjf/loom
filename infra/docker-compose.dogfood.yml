@@ -1,0 +1,8 @@
+# 本地 dogfood 专用 overlay（仅单机自用，不参与任何部署）：
+#   docker compose -f docker-compose.yml -f docker-compose.dogfood.yml up -d backend
+# 作用：把 backend 的 8000 以回环地址映射到宿主 8001，供 dogfood 脚本与
+# Atlas 本地流程直连；基础 compose 保持 backend 不对外发布（部署契约不变）。
+services:
+  backend:
+    ports:
+      - "127.0.0.1:8001:8000"
