@@ -91,6 +91,11 @@ services:
       # 默认关。显式可覆盖插值（不像 worker 开关只由 ha overlay 打开）；除 staff 门控外
       # 默认值原样保留，V1 行为一字不变。
       LOOM_SCHEDULER_ENABLED: ${LOOM_SCHEDULER_ENABLED:-true}
+      # C1 自动识别 worker：默认关；本地自用可在 .env 显式开
+      # LOOM_C1_WORKER_ENABLED=true，产出仍走 skill7 人工 Gate。
+      LOOM_C1_WORKER_ENABLED: ${LOOM_C1_WORKER_ENABLED:-false}
+      LOOM_C1_WORKER_INTERVAL_SECONDS: ${LOOM_C1_WORKER_INTERVAL_SECONDS:-60}
+      LOOM_C1_WORKER_BATCH_SIZE: ${LOOM_C1_WORKER_BATCH_SIZE:-10}
       # 评审 P1-2（2026-11-02）：staff 身份门控在生产 compose 默认开。此前默认关，
       # 154 个内部写口只认 body/query 自报角色，绕过网关直连 backend 即失守。
       # 首次部署仍是鸡生蛋：无凭据时后端启动 fail-fast 并给出「先关闸签首令牌再开」的
