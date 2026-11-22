@@ -106,6 +106,8 @@ npm run dev
 
 > `backend/.env.example` 的 DSN 默认就指向 `localhost:5432` 的 `loom/loom`，与上面这条 compose 链对齐。`LOOM_MASTER_KEY` 是出站供应商 Key 的加密主密钥——容器形态下空值会让 entrypoint 直接 `exit 1`（本机跑 uvicorn 不强制，但要调真模型就得给）。
 
+- C1 自动识别 worker（Q376，默认关闭）：消费停留在 `ai_recognizing` 的 intake，产出仍落 `pending_review` 走人工 Gate；已有 c1 候选（含人工驳回）不重跑。容器形态在 `infra/.env` 设 `LOOM_C1_WORKER_ENABLED=true`；不经容器时可单跑 `cd backend && .venv/bin/python scripts/c1_worker.py --once`（或 `--watch --interval 60`）。**容器 worker 与 sidecar 二选一，不要同时开**；真模型会自动花 token，未配 key 时 `CAT-RECOG` 走 synthetic 路由。
+
 - `.env` 载体纪律（Q239）：`backend/.env` **只能放 `Settings` 字段**——pydantic-settings 是 `extra="forbid"`，放一个它不认识的名字（如 `LOOM_LLM_BASE_URL_AGNES`）会让进程直接起不来。直读 `os.environ` 的变量走可 source 的 `backend/.env.shell`（`set -a; source backend/.env.shell; set +a`）；本仓没有 `load_dotenv`。
 - 出站供应商 Key **不进任何 env 或文件**：它经 Fernet 加密存 `ai_model_keys`，主密钥是 `LOOM_MASTER_KEY`（Q82／Q148）。
 - model-hub 知识库消费（M3-W3-5 试点）：ARTICLE-GEN 生成前经 `backend/app/core/knowledge.py` 检索 hub 知识库，命中作为「业务文档参考」段（带出处）追加进生成原料。env 直读 `os.environ`、走 `.env.shell` 载体：`LOOM_KNOWLEDGE_URL`（hub 基址，如 `http://localhost:8791`）与 `LOOM_KNOWLEDGE_TOKEN`（hub project token `mh_…`）**任一缺失即功能整体停用**（fail-closed，不报错不影响生成）；`LOOM_KNOWLEDGE_TIMEOUT_SECONDS` 可选超时旋钮（默认 15s）。运行期超时／HTTP 错误／无命中一律 fail-soft 跳过注入；检索与重排的限流/计费在 hub 侧（30 ingest/h、120 query/h，见 model-hub `docs/knowledge-api.md`）。**容器形态（compose）有意不转发这两项，故知识增强恒停用**（`backend/docker-entrypoint.sh` 不 source `.env.shell`，`.env.shell` 只对非容器运行生效）；要在容器启用需先由 owner 决策后显式加转发。

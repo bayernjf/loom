@@ -5,12 +5,21 @@
 > 本段是本产品唯一活跃待办入口；详细背景见下方原有章节。完成一项改 `[x]`，并在“最近变更 / Recently shipped”留证据。
 > 最近同步：2026-11-19
 
-- [ ] **C1 识别 / WF-01 自动触发链路** — 状态：blocked；证据：intake `4589af3a-700f-4d5e-827a-a81f8f5c16bd` 在 `ai_recognizing` 停留超过 50 分钟无产出；下一步：查 C1 识别与 WF-01 触发，确认是否有 worker 消费该状态。
+- [x] **C1 识别 / WF-01 自动触发链路** — 状态：本地已闭环（2026-11-22）；证据：新增 `C1RecognitionWorker`＋本机 CLI，真实库 intake `3e53e5ff-23fe-47ba-b628-c60a27fc77cb` 自动产出候选后停在 `pending_review`，二次扫描正确跳过；剩余：容器镜像重建受 GitHub TLS 阻塞，暂以本机 sidecar 运行（见下方 2026-11-22 记录）。
 - [ ] **段 3/7/9/12 完整闭环** — 状态：open；段 12 视频支线还缺分段编目/转写/对象存储/成片复检规格。
 - [ ] **真实客户 dogfood** — 状态：blocked；当前无客户；下一步：找 1 个真实产品跑段 1→6→10 与发证，补真实订单/发布证据。
 - [ ] **成稿质量：E1 SSO + `doubao-seed-1-6`** — 状态：blocked by E1；下一步：SSO 重登后登记并切换模型。
 - [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
 - [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前只有内部 staff 令牌。
+
+> **2026-11-22 C1/WF-01 自动触发已在本地闭环（Q376）。**
+>
+> - **根因**：`ai_recognizing` 不是模型或数据问题，而是没有进程自动消费该状态；`POST /api/intakes/{id}/c1-recognition/llm-invoke` 只是 operations 手动触发端点，前端无按钮。
+> - **实现**：新增 `backend/app/core/model_registry/c1_worker.py`（`run_c1_once`＋`C1RecognitionWorker`，复用既有 `extraction.invoke_c1_recognition`）与 `backend/scripts/c1_worker.py`（`--once`／`--watch`）；`app.main` 按 `LOOM_C1_WORKER_ENABLED` 启动，默认关闭，compose 与两份 `.env.example` 已登记三个旋钮。
+> - **Gate 边界**：worker 只触发识别，候选仍落 `pending_review`，不确认、不写 `C1Record`；任一状态的 c1 候选（含人工驳回后的 `archived`）存在即跳过，避免重复花钱；单条失败只记日志，下一轮可重试。
+> - **证据**：`tests/integration/test_c1_worker.py` 2 passed（自动产出＋驳回后不重跑）；后端全量 `1630 passed＋11 skipped`、ruff 全仓净。真实库 intake `3e53e5ff-23fe-47ba-b628-c60a27fc77cb` 由 worker 产出候选 `139af90e-e67f-11f1-81d3-65a140f07c71`（`pending_review`），二次扫描 `{'checked': 1, 'processed': 0, 'skipped': 1}`；原卡住的 `4589af3a-700f-4d5e-827a-a81f8f5c16bd` 已手工验证推进到 `pending_confirm`。
+> - **当前运行形态**：`infra-backend-1` 镜像重建在 `pip install model-hub-client @ git+https://github.com/...` 处被 GitHub TLS 握手失败挡住，容器内仍是旧代码；工人暂以本机 sidecar（`cd backend && .venv/bin/python scripts/c1_worker.py --watch --interval 60 --limit 10`）消费同一 Postgres。网络恢复后重建镜像即可切回容器形态；**容器 worker 与 sidecar 不要同时开**。
+> - **本地开关**：`infra/.env` 与 `backend/.env` 已写 `LOOM_C1_WORKER_ENABLED=true`（gitignored）；未配置真模型 key 时走 `CAT-RECOG` 的 synthetic 路由，不产生外部费用。
 
 > **2026-11-13 补 2 个回归测试（两个 bug 修复的复现锁）。**
 >
