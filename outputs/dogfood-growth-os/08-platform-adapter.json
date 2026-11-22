@@ -1,0 +1,19 @@
+{
+  "slot_id": "0e9f967c-1444-410b-bed2-628cb0c27f9e",
+  "platform": "x_platform",
+  "code": "xs-8cb36aa4b7",
+  "name": "短视频位",
+  "slot_type": "short_video",
+  "chars_max": null,
+  "dur_min": null,
+  "dur_max": null,
+  "traffic": 70.0,
+  "safe": 80.0,
+  "conv": 60.0,
+  "load": 50.0,
+  "score_source": "manual_eval",
+  "risk": null,
+  "gate": "approved",
+  "source_url": null,
+  "status": "active"
+}

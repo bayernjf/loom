@@ -1,0 +1,47 @@
+[
+  {
+    "atom_id": "23ded794-25bc-4286-92a3-43132d2088c3",
+    "candidate_id": "adbbdee9-fcf1-4d84-a205-17edc5f78be5",
+    "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+    "pool_id": "c109d222-9bc5-4dd5-8266-ef7483990573",
+    "dimension_id": "e4da1979-8366-45cc-9bc6-4d8236ec5ef1",
+    "fid": "f_name",
+    "content": "离线确定性回放",
+    "fact_type": null,
+    "aliases": [],
+    "risk_level": "low",
+    "risk_source": "ai",
+    "status": "approved",
+    "reference_count": 1
+  },
+  {
+    "atom_id": "e87f3b71-512d-4aa1-ba15-0509a794cc11",
+    "candidate_id": "b26c8515-1122-43f3-9a5e-07329f1abe2d",
+    "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+    "pool_id": "c109d222-9bc5-4dd5-8266-ef7483990573",
+    "dimension_id": "98f739c9-44b1-4290-99ca-570a3ded8be1",
+    "fid": "f_promoted_eb136890",
+    "content": "人工复核洞察",
+    "fact_type": null,
+    "aliases": [],
+    "risk_level": "low",
+    "risk_source": "ai",
+    "status": "approved",
+    "reference_count": 1
+  },
+  {
+    "atom_id": "cb48459b-8482-4919-82c5-9e4f96ed7c10",
+    "candidate_id": "d13f25e2-2d8a-4b7f-b549-bbf99efa68d2",
+    "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+    "pool_id": "c109d222-9bc5-4dd5-8266-ef7483990573",
+    "dimension_id": "021218b5-838b-470f-8891-31c0c4caea48",
+    "fid": "f_promoted_ddf8c5b8",
+    "content": "版本化研究报告",
+    "fact_type": null,
+    "aliases": [],
+    "risk_level": "low",
+    "risk_source": "ai",
+    "status": "approved",
+    "reference_count": 1
+  }
+]

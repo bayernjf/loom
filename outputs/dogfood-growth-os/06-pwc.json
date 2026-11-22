@@ -1,0 +1,38 @@
+[
+  {
+    "pwc_id": "1d1ead3b-a0bf-4eb1-b48e-2398bcc8d7eb",
+    "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+    "source": "ai",
+    "goals": [
+      "ENGAGEMENT"
+    ],
+    "weight": null,
+    "compliance": {
+      "ban": [],
+      "downgrade": []
+    },
+    "score": 0.8200000000000001,
+    "score_detail": {
+      "logic": 0.8,
+      "fit": 0.6,
+      "reasonableness": 0.7,
+      "diversity": 1.0,
+      "category_multiplier": 1.0,
+      "w_logic": 0.5,
+      "w_fit": 0.5
+    },
+    "score_incomplete": false,
+    "dup_of": null,
+    "is_backup": false,
+    "gate_status": "pending",
+    "status": "pending_gate",
+    "reject_reason": null,
+    "usage_count": 0,
+    "high_reuse": false,
+    "is_hot": false,
+    "combo_atom_ids": [
+      "23ded794-25bc-4286-92a3-43132d2088c3",
+      "e87f3b71-512d-4aa1-ba15-0509a794cc11"
+    ]
+  }
+]

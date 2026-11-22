@@ -1,0 +1,140 @@
+{
+  "final_id": "0f392a3a-e6a1-11f1-ab6a-fa6984d93c8f",
+  "task_id": null,
+  "tenant_id": "t1",
+  "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+  "pws_id": "cd3790cb-1be5-4116-9cd5-42848387f288",
+  "pwc_id": "1d1ead3b-a0bf-4eb1-b48e-2398bcc8d7eb",
+  "pcp_id": "474da74d-2d34-4c55-9648-ed5f915baeb6",
+  "csp_package_id": "47073774-69e0-441d-b43f-2fe907af9c2d",
+  "cstp_package_id": "726b9417-c8d5-4b59-9900-e976dcf7523b",
+  "cep_package_id": "0c75d274-d841-438a-ae4c-8a67e43582ae",
+  "ccr_report_id": "0f35a54a-e6a1-11f1-ab6a-fa6984d93c8f",
+  "platform": "x_platform",
+  "slot_id": "0e9f967c-1444-410b-bed2-628cb0c27f9e",
+  "goal": "ENGAGEMENT",
+  "country": null,
+  "score": 76.60000000000001,
+  "score_detail": {
+    "formula": "pwc*0.4 + fit*0.3 + conf_avg*0.3",
+    "weights": {
+      "pwc": 0.4,
+      "fit": 0.3,
+      "conf": 0.3
+    },
+    "raw": {
+      "pwc_score": 0.8200000000000001,
+      "slot_fit_score": 66.0,
+      "package_confs": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "scaled": {
+      "pwc_x100": 82.0,
+      "conf_avg_x100": 80.00000000000001
+    },
+    "score": 76.60000000000001
+  },
+  "score_incomplete": false,
+  "guards_passed": true,
+  "guards": {
+    "guards": [
+      {
+        "code": "g1_pws_frozen",
+        "passed": true,
+        "detail": {
+          "pws_status": "frozen",
+          "required": "frozen"
+        }
+      },
+      {
+        "code": "g2_compliance_clear",
+        "passed": true,
+        "detail": {
+          "latest_report_id": "0f35a54a-e6a1-11f1-ab6a-fa6984d93c8f",
+          "report_status": "clean",
+          "block_required": false,
+          "cleaning_passed": true
+        }
+      },
+      {
+        "code": "g3_packages_active",
+        "passed": true,
+        "detail": {
+          "pcp": {
+            "id": "474da74d-2d34-4c55-9648-ed5f915baeb6",
+            "status": "active"
+          },
+          "csp": {
+            "id": "47073774-69e0-441d-b43f-2fe907af9c2d",
+            "status": "active",
+            "gate": "approved"
+          },
+          "cstp": {
+            "id": "726b9417-c8d5-4b59-9900-e976dcf7523b",
+            "status": "active",
+            "gate": "approved"
+          },
+          "cep": {
+            "id": "0c75d274-d841-438a-ae4c-8a67e43582ae",
+            "status": "active",
+            "gate": "approved"
+          }
+        }
+      },
+      {
+        "code": "g4_product_space_consistent",
+        "passed": true,
+        "detail": {
+          "product_space_ids": {
+            "pws": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+            "pcp": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+            "csp": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+            "cstp": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+            "cep": "532cdf15-0f34-41df-8c28-fe01d692b4ef"
+          },
+          "request": "532cdf15-0f34-41df-8c28-fe01d692b4ef"
+        }
+      },
+      {
+        "code": "g5_tenant_consistent",
+        "passed": true,
+        "detail": {
+          "tenant_ids": {
+            "pws": "t1",
+            "pcp": "t1",
+            "csp": "t1",
+            "cstp": "t1",
+            "cep": "t1"
+          }
+        }
+      },
+      {
+        "code": "g6_law_review",
+        "passed": true,
+        "detail": {
+          "law_review_required": false,
+          "law_review_status": null,
+          "law_review_passed": false
+        }
+      },
+      {
+        "code": "g7_pws_active_version",
+        "passed": true,
+        "detail": {
+          "pws_is_active": true,
+          "pws_status": "frozen"
+        }
+      }
+    ]
+  },
+  "publish_status": "published",
+  "issued_by": "dogfood-ops",
+  "created_at": "2026-11-22T18:18:04.460167Z",
+  "published_at": "2026-11-22T18:18:04.471704Z",
+  "snapshot_status": null,
+  "snapshot_revoked_at": null,
+  "revoke_reason": null
+}

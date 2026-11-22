@@ -1,0 +1,20 @@
+{
+  "package_id": "47073774-69e0-441d-b43f-2fe907af9c2d",
+  "kind": "csp",
+  "tenant_id": "t1",
+  "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+  "platform": "x_platform",
+  "goal": "ENGAGEMENT",
+  "payload": {
+    "goal": "种草",
+    "stage": "认知",
+    "angle": "成分",
+    "intensity": "中",
+    "cta": "软",
+    "emotion": "安心"
+  },
+  "conf": 0.8,
+  "gate": "approved",
+  "status": "active",
+  "usage_count": 0
+}

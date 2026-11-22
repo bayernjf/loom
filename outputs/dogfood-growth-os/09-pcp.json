@@ -1,0 +1,27 @@
+{
+  "pcp_id": "474da74d-2d34-4c55-9648-ed5f915baeb6",
+  "tenant_id": "t1",
+  "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+  "platform": "x_platform",
+  "template_code": "short_video",
+  "weights": {
+    "goal": 0.08,
+    "hook": 0.12,
+    "mid1": 0.02,
+    "mid2": 0.02,
+    "mid3": 0.01,
+    "tone": 0.06,
+    "stage": 0.04,
+    "style": 0.04,
+    "title": 0.1,
+    "action": 0.08,
+    "ending": 0.01,
+    "rhythm": 0.1,
+    "struct": 0.06,
+    "emotion": 0.08,
+    "opening": 0.08,
+    "intensity": 0.06,
+    "perspective": 0.04
+  },
+  "status": "active"
+}

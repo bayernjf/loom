@@ -1,0 +1,21 @@
+{
+  "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+  "tenant_id": "t1",
+  "intake_id": "13d17c77-7975-4291-aa63-7086516b6427",
+  "lifecycle": "modeling",
+  "profile_snapshot": {
+    "f_seo": "growth-os market research agent",
+    "f_name": "growth-os",
+    "f_brand": "jiangfeng",
+    "f_intro": "Operations personal agent for growth: 市场研究、需求发现、潜客挖掘、CRM 与外联",
+    "f_channel": "web",
+    "f_audience": "独立开发者与单人运营",
+    "f_language": "zh-CN",
+    "f_main_image": "https://example.com/img/growth-os.png",
+    "f_content_usage": "EDUCATION",
+    "f_target_market": "CN",
+    "f_selling_points": "信号引擎采集去重打分聚类；人工复核 insights；版本化加水印研究报告；离线确定性回放；线上 fail-closed",
+    "f_packaging_image": "https://example.com/img/growth-pack.png"
+  },
+  "target_languages": null
+}
