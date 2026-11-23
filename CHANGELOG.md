@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **L-09（2026-11-23）条级归因**：docs/25 Q377 的 9 🟡 / 4 ⬜ 共 13 条逐条定 `做/后置/不做`＝**0/12/1**，新增 `docs/31_L09-条级归因_2026-11-23.md`，docs/25 新增 §8.4、§8.2 清掉 Q35/#12、Q44、Q59③④、Q68 四条已闭环项；docs/27 P0 表 L-01/L-02/L-03 全部翻 ✅、L-09 翻 ✅、§4.2/§4.3 清除 dogfood/Q59/容器 worker 三条过期读数。纯文档批，零代码零迁移零测试变化；条级计数仍 ✅83／🟡9／⬜4，后置不等于完成。
+
 - **Q377（2026-11-23）L-04 / Q44 内容目的配比软提示**：新增共享 UTC 日期窗 `core/time_window.py`；`condition/service.py` 提供 `goal_mix_health()` 五态（no_data/unconfigured/below/within/above，1e-9 边界容差）与 `goal_mix_summary()`（近 30 天 `published` FCW 按 `goal` 聚合，`tenant_id` 必填、`product_space_id`/日期窗可选，归档历史码进 `unmapped_count`）；新增只读 `GET /api/admin/content-goal-mix`（读闸 `require_content_goals_view`）。迁移 `0067_content_goal_ratio_seed`（纯数据零 schema）按 PRD line 1090 播五目的单边界，upgrade 只碰双 NULL 行、downgrade 三列指纹保护运营配置；种子常量单点 `product/condition/seeds.py`。前端 `GoalMixPanel` 双落任务页 `/admin/fcw/assemble` 与段13 `/admin/effects`，above/below 黄条软提示、不阻断发证。测试 +20，后端全量 **1661 passed＋11 skipped／收集 1672**，ruff 净；真 PG16 0001→0067 `dba_schema_check` **77 表／845 列 NO DRIFT**、down/up 对称且运营改过的配比保留；前端 typecheck＋check-admin＋build 三绿；真实浏览器两屏验收 `outputs/l04-q44/`。02 C1.320；规格 docs/30。
 
 - **Q376（2026-11-22）C1/WF-01 自动触发 worker**：新增 `C1RecognitionWorker` 消费 `ai_recognizing` intake，复用既有 C1 识别、候选仍落 `pending_review`；任一状态 c1 候选（含人工驳回 archived）存在即跳过，避免重复花钱。`LOOM_C1_WORKER_ENABLED` 默认关，本地显式开；新增 `scripts/c1_worker.py --once/--watch` sidecar。测试 +2（自动产出／驳回后不重跑），后端全量 **1630 passed＋11 skipped**、ruff 净；真实库 intake `3e53e5ff-23fe-47ba-b628-c60a27fc77cb` 产出候选 `pending_review`，二次扫描 skipped。容器镜像重建受 GitHub TLS 阻塞，当前以本机 sidecar 运行；02 C1.318。
