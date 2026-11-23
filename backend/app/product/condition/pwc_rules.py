@@ -131,6 +131,9 @@ CONTENT_GOALS = (
     GOAL_RETENTION,
 )
 
+# Q44 的配比播种值在 `app/product/condition/seeds.py`（数值载体，Q9 哨兵排除）；
+# 运行时软提示只读数据库当前值，代码里不保留业务阈值。
+
 # gate_status（line 1780 原列三值）。
 GATE_PENDING = "pending"
 GATE_BLOCKED = "blocked"
