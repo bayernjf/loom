@@ -6,12 +6,14 @@ Q71 自动补货调度随 M10；M5 接收结构化组合与 AI 分项分做确�
 """
 
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.audit import append_audit
 from app.core.compliance_wordlist import service as wl_service
+from app.core.time_window import window_bounds
+from app.final.final_whitelist.models import PUBLISH_PUBLISHED, FinalContentWhitelist
 from app.product.atom.atom_rules import ATOM_APPROVED
 from app.product.atom.models import ProductAtomInstance
 from app.product.condition import pwc_rules
@@ -135,6 +137,128 @@ async def archive_goal(session, code: str, actor) -> None:
         entity_type="content_goal",
         entity_id=code,
     )
+
+
+# ---------- Q44 内容目的配比健康度（只读软提示） ----------
+
+GOAL_HEALTH_NO_DATA = "no_data"
+GOAL_HEALTH_UNCONFIGURED = "unconfigured"
+GOAL_HEALTH_BELOW = "below"
+GOAL_HEALTH_WITHIN = "within"
+GOAL_HEALTH_ABOVE = "above"
+
+
+def goal_mix_health(
+    *,
+    count: int,
+    total: int,
+    ratio_min: float | None,
+    ratio_max: float | None,
+) -> str:
+    """Q44 健康判定：缺数据/缺配比都不猜，只对已配置的单边界判越界。"""
+    if total <= 0:
+        return GOAL_HEALTH_NO_DATA
+    if ratio_min is None and ratio_max is None:
+        return GOAL_HEALTH_UNCONFIGURED
+    actual = count / total
+    # 浮点误差容差：恰好落在边界视为健康（软提示不制造假超标）。
+    if ratio_max is not None and actual > ratio_max + 1e-9:
+        return GOAL_HEALTH_ABOVE
+    if ratio_min is not None and actual < ratio_min - 1e-9:
+        return GOAL_HEALTH_BELOW
+    return GOAL_HEALTH_WITHIN
+
+
+async def goal_mix_summary(
+    session,
+    *,
+    tenant_id: str,
+    product_space_id: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict:
+    """Q44：近 30 天已签发 FCW 按目的分布 vs Q25 配比上下限。
+
+    口径（实现补，docs/25 Q44 的页面归属落地时定）：
+    - 计数源＝``final_content_whitelists`` 中 ``publish_status='published'`` 的发证行；
+      计入的是“近 30 天发起了哪些目的的内容”，不是效果回流条数。
+    - 默认窗为近 30 天（含今天），半开区间 [from 00:00, to+1d 00:00) UTC；
+      ``tenant_id`` 必填，``product_space_id`` 可选收窄到单产品空间。
+    - 分母＝窗内全部发证行（含已归档目的的历史码，作为 ``unmapped_count`` 单列）；
+      目的行只返回当前 active 字典项，避免拿归档项做“新增生产”的提示。
+    - 只读，不写审计、不阻断发证；健康状态仅 above/below 会产生前端黄条。
+    """
+    start, end = window_bounds(date_from, date_to)
+
+    stmt = (
+        select(FinalContentWhitelist.goal, func.count().label("count"))
+        .where(
+            FinalContentWhitelist.tenant_id == tenant_id,
+            FinalContentWhitelist.publish_status == PUBLISH_PUBLISHED,
+            FinalContentWhitelist.created_at >= start,
+            FinalContentWhitelist.created_at < end,
+        )
+        .group_by(FinalContentWhitelist.goal)
+    )
+    if product_space_id:
+        stmt = stmt.where(
+            FinalContentWhitelist.product_space_id == product_space_id
+        )
+    counts = {
+        row.goal: int(row.count)
+        for row in (await session.execute(stmt)).all()
+    }
+
+    goals = await list_goals(session)
+    total = sum(counts.values())
+    rows: list[dict] = []
+    for goal in goals:
+        count = counts.get(goal.code, 0)
+        health = goal_mix_health(
+            count=count,
+            total=total,
+            ratio_min=goal.ratio_min,
+            ratio_max=goal.ratio_max,
+        )
+        row = {
+            "code": goal.code,
+            "count": count,
+            "actual_ratio": round(count / total, 6) if total else 0.0,
+            "ratio_min": goal.ratio_min,
+            "ratio_max": goal.ratio_max,
+            "health": health,
+        }
+        rows.append(row)
+
+    alerts = [
+        {
+            "code": row["code"],
+            "health": row["health"],
+            "actual_ratio": row["actual_ratio"],
+            "bound": row["ratio_max"]
+            if row["health"] == GOAL_HEALTH_ABOVE
+            else row["ratio_min"],
+        }
+        for row in rows
+        if row["health"] in (GOAL_HEALTH_ABOVE, GOAL_HEALTH_BELOW)
+    ]
+    mapped_total = sum(
+        counts.get(goal.code, 0) for goal in goals
+    )
+    return {
+        "window": {
+            "date_from": start.date().isoformat(),
+            "date_to": (end - timedelta(days=1)).date().isoformat(),
+            "days": (end - start).days,
+        },
+        "tenant_id": tenant_id,
+        "product_space_id": product_space_id,
+        "total": total,
+        "unmapped_count": max(total - mapped_total, 0),
+        "goals": rows,
+        "alerts": alerts,
+    }
+
 
 
 # ---------- Q27 库容配置 ----------

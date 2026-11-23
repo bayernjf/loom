@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +15,7 @@ from app.core.rbac import (
     require_any_role,
 )
 from app.core.staff_auth.deps import require_internal_actor
+from app.core.time_window import TimeWindowInvalid
 from app.product.condition import service
 from app.product.condition.models import (
     ConditionPackage,
@@ -102,6 +105,28 @@ async def list_goals(
 ) -> list[dict]:
     rows = await service.list_goals(session, include_archived=include_archived)
     return [_goal_view(g) for g in rows]
+
+
+@router.get("/admin/content-goal-mix")
+async def content_goal_mix(
+    tenant_id: str = Query(..., min_length=1),
+    product_space_id: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+    _: Actor = Depends(require_content_goals_view),
+) -> dict:
+    """Q44：近 30 天目的分布 vs 配比目标（只读软提示，不阻断发证）。"""
+    try:
+        return await service.goal_mix_summary(
+            session,
+            tenant_id=tenant_id,
+            product_space_id=product_space_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except TimeWindowInvalid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.put("/admin/content-goals")
