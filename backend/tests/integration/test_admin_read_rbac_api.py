@@ -43,6 +43,8 @@ GATED_READS = [
     # ---- Q118：Q117 审计发现 Q109 穷举遗漏的 4 个 ----
     # Q307 放行 platform_admin；Q350（清单二 #12 甲）再放行 operations，与段7/8 一条读闸
     ("/api/admin/content-goals", ["dictionary_admin", "platform_admin", "operations"]),   # 05 Q25 字典／Q307/Q350 读面
+    # Q44 配比健康度：同 content-goals 读闸；tenant_id 是业务必填，非角色口径。
+    ("/api/admin/content-goal-mix", ["dictionary_admin", "platform_admin", "operations"]),
     ("/api/admin/cp-law-domains", ["internal_compliance"]),    # 05 Q49 敏感领域清单
     # ---- Q346（负责人「按你推荐的搞」裁甲，02 C1.289）：段7/8 管理端读口统一到一条闸 ----
     # 五张原只认 operations 的读口改挂 `require_ops_admin_view`（管理端 `/admin/platform-adaptation`
@@ -104,14 +106,21 @@ async def client(session_factory):
 async def test_admin_read_requires_actor_query(client, path, _roles):
     # 缺 actor_id → 422；给 actor 但 roles 为空 → 403。
     assert (await client.get(path)).status_code == 422
-    denied = await client.get(path, params=[("actor_id", "cust-1"), ("roles", "customer")])
+    denied_params = [("actor_id", "cust-1"), ("roles", "customer")]
+    if path == "/api/admin/content-goal-mix":
+        denied_params.append(("tenant_id", "tenant-rbac"))
+    denied = await client.get(path, params=denied_params)
     assert denied.status_code == 403, (path, denied.status_code, denied.text)
 
 
 @pytest.mark.parametrize("path,allowed_roles", GATED_READS)
 async def test_admin_read_allows_matrix_roles(client, path, allowed_roles):
     for role in allowed_roles:
-        resp = await client.get(path, params=[("actor_id", f"{role}-1"), ("roles", role)])
+        params = [("actor_id", f"{role}-1"), ("roles", role)]
+        if path == "/api/admin/content-goal-mix":
+            # Q44 的聚合必须绑定租户；缺 tenant_id 的 422 由专门用例钉住。
+            params.append(("tenant_id", "tenant-rbac"))
+        resp = await client.get(path, params=params)
         assert resp.status_code == 200, (path, role, resp.status_code, resp.text)
 
 

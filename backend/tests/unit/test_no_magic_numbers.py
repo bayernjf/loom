@@ -49,7 +49,9 @@ ALLOWLIST: dict[str, set[float]] = {
     "app/core/model_registry/hub.py": {0.0, 2.0, 300.0},
     "app/product/atom/atom_rules.py": {0.0, 1.0},
     "app/product/condition/pwc_rules.py": {0.0},
-    "app/product/condition/service.py": {0.0},
+    # 0.0＝比例零基线（窗口内无该目的即 0）；1e-9＝Q44 健康态边界容差，
+    # 让恰好 40%／15% 判 within 而非因浮点误差假超标，不是业务阈值。
+    "app/product/condition/service.py": {0.0, 1e-09},
     "app/product/modeling/c1.py": {1.0},
     "app/product/modeling/c7.py": {1.0},
     "app/product/whitelist_center/pws_rules.py": {1.0},
