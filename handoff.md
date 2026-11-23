@@ -9,11 +9,16 @@
 - [x] **立项差距台账（docs/27）P0** — 状态：P0 三项已闭环（2026-11-23）；L-01 13 段 dogfood（docs/28）、L-02 Q59③④ 工程甲案 v0.1（docs/29）、L-03 worker 固化（launchd＋容器）；迭代纪律：现有功能全保留（private beta、客户菜单、`loom_client_`/`loom_staff_` 模式），只追加不删；P1/P2 明细仍 open，见 `docs/27_立项差距与待办_2026-11-23.md`。
 - [x] **L-04 / Q44 内容目的配比软提示** — 状态：本地已闭环（2026-11-23，Q377／02 C1.320）；证据：`GET /api/admin/content-goal-mix`＋`GoalMixPanel` 双落任务页/段13＋迁移 0067 五目的单边界种子；后端全量 1661 passed＋11 skipped、真 PG16 77 表/845 列 NO DRIFT、前端 typecheck＋check-admin＋build 三绿、真实浏览器两屏截图 `outputs/l04-q44/`。
 - [x] **L-09 条级归因** — 状态：done（2026-11-23）；13 条剩余项逐条定 `做/后置/不做`＝0/12/1，`docs/25` §8.4 已同步，明细 `docs/31_L09-条级归因_2026-11-23.md`；条级计数仍 ✅83／🟡9／⬜4，后置不等于完成。
-- [ ] **段 3/7/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器 + 存量灵感模板重发；段 7 剩 `fit_score` 真自学习 + Q38；段 9 Q44 配比软提示已随 Q377 落地，余无本段硬缺口；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
+- [ ] **段 3/7/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器；`DIM-MERGE` 模板已由 Q378 重发本机库 v0.2；段 7 剩 `fit_score` 真自学习 + Q38；段 9 Q44 配比软提示已随 Q377 落地，余无本段硬缺口；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
 - [x] **真实自有产品 dogfood（本地自用口径）** — 状态：done（2026-11-23）；对象 growth-os，13 段全链真实入料跑通（intake `13d17c77-…` → final_id `0f392a3a-…` → content `cd099720-…`），证据 `loom/outputs/dogfood-growth-os/`；成稿为 synthetic 占位（model-hub 真模型上游失败待修），机制闭环不等同文案质量验收。
 - [ ] **成稿质量：E1 SSO + `doubao-seed-1-6`** — 状态：blocked by E1；下一步：SSO 重登后登记并切换模型。
 - [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
 - [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前无客户登录页，客户内容口用 `loom_client_` Bearer，运营写口用 `loom_staff_` 个人令牌；本地自用可后置。
+
+> **2026-11-23 DIM-MERGE 存量模板本机库重发（02 C1.321，Q378）。**
+> - 发布前：`v0.1` 1083 字符、7 变量、缺 `$inspiration_entries`；发布后：`v0.2` 1297 字符、8 变量，`current_version=v0.2`。
+> - 路径：临时 `platform_admin` 令牌 → `POST /api/admin/skill-prompts/DIM-MERGE/versions` → 发布后吊销；审计 `_actor_via=staff_token`。
+> - 边界：只覆盖本机库；其它独立存量库需运营按同路径复核；`DIM-SOURCE` 七路连接器仍未接。证据 `outputs/l07-dim-merge-reissue/`（记录、diff、发布响应）。
 
 > **2026-11-23 L-04 / Q44 内容目的配比软提示本地闭环（02 C1.320，Q377）。**
 > - 后端：共享 UTC 日期窗 `core/time_window.py`；`goal_mix_summary()` 取近 30 天 `published` FCW 按 goal 聚合，`goal_mix_health()` 五态（no_data/unconfigured/below/within/above，1e-9 边界容差）；`GET /api/admin/content-goal-mix` 只读，读闸 `require_content_goals_view`（dictionary_admin/platform_admin/operations）。
