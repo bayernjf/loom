@@ -1,8 +1,16 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import { ApiError, CURRENT_ADMIN_ACTOR_ID, getEffectOrphans } from "@/lib/api";
+import {
+  ApiError,
+  CURRENT_ADMIN_ACTOR_ID,
+  CURRENT_TENANT_ID,
+  getContentGoalMix,
+  getEffectOrphans,
+  type ContentGoalMix,
+} from "@/lib/api";
 import styles from "../admin.module.css";
+import { GoalMixPanel } from "../_components/GoalMixPanel";
 import { OrphanTableIsland } from "./orphan-table-island";
 import { SeriesQueryIsland } from "./series-island";
 
@@ -19,10 +27,21 @@ export default async function AdminEffectsPage() {
   const tError = await getTranslations("error");
 
   let orphanSection: ReactNode;
+  let goalMix: ContentGoalMix | null = null;
+  let goalMixStatus: "ok" | "unconfigured" | "failed" = "unconfigured";
 
   if (!CURRENT_ADMIN_ACTOR_ID) {
     orphanSection = <p className={styles.notice}>{tAdmin("unconfigured")}</p>;
   } else {
+    // Q44：段13 回流报表的“目的配比健康度”栏单独兜错，不拖垮孤儿队列。
+    if (CURRENT_TENANT_ID) {
+      try {
+        goalMix = await getContentGoalMix();
+        goalMixStatus = "ok";
+      } catch {
+        goalMixStatus = "failed";
+      }
+    }
     let errorStatus = 0;
     let orphans = null;
     try {
@@ -46,6 +65,10 @@ export default async function AdminEffectsPage() {
         <h1 className={styles.title}>{t("title")}</h1>
         <p className={styles.intro}>{t("intro")}</p>
       </header>
+
+      <section className={styles.section}>
+        <GoalMixPanel mix={goalMix} status={goalMixStatus} />
+      </section>
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>{t("orphanTitle")}</h2>

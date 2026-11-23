@@ -36,8 +36,8 @@ def _created_at() -> Mapped[datetime]:
 class ContentGoal(Base):
     """Q25 contentGoals 目的字典：录入页与 PWC 打标读同一张平台级共享表。
 
-    名称用 line 1090 五类标准枚举码；颜色/配比上下限原文未给出具体值，
-    种子留 NULL 待运营维护【原文未给出，待补】。
+    名称用 line 1090 五类标准枚举码；颜色原文未给出具体值，留 NULL 待运营维护。
+    配比上下限取 PRD line 1090 的五项单边界（0067 播种），运营仍可经字典写口热更。
     """
 
     __tablename__ = "content_goals"

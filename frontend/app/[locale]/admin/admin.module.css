@@ -560,3 +560,55 @@
   font-size: var(--font-size-sm);
   cursor: pointer;
 }
+
+/* Q44：内容目的配比健康度（任务页常驻 + 段13 回流报表共用）。 */
+.goalMixPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-2);
+}
+
+.goalMixHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.goalMixAlert {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-state-warning-text);
+  background: var(--color-warning-bg);
+  border-inline-start: 3px solid var(--color-state-warning);
+  border-radius: var(--radius-1);
+  font-size: var(--font-size-sm);
+}
+
+.goalMixBadge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.goalMixBad {
+  color: var(--color-state-warning-text);
+  background: var(--color-warning-bg);
+}
+
+.goalMixGood {
+  color: var(--color-state-success-text);
+  background: var(--color-success-bg);
+}
+
+.goalMixMuted {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-card);
+}

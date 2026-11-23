@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
 import styles from "../../admin.module.css";
+import { GoalMixPanel } from "../../_components/GoalMixPanel";
 import {
   assembleManualAction,
   getAssembleFormDataAction,
@@ -19,6 +20,8 @@ import {
   type AiSelectResult,
   type AssembleManualBody,
   type ConflictCheckRow,
+  type ContentGoalMix,
+  type GoalMixStatus,
   type Wf07Scene,
 } from "./actions";
 
@@ -36,6 +39,9 @@ export function AssembleIsland() {
 
   const [slots, setSlots] = useState<AdminPublishSlot[]>([]);
   const [goals, setGoals] = useState<AdminContentGoal[]>([]);
+  const [goalMix, setGoalMix] = useState<ContentGoalMix | null>(null);
+  const [goalMixStatus, setGoalMixStatus] =
+    useState<GoalMixStatus>("unconfigured");
   const [formFailed, setFormFailed] = useState(false);
   const [formMissingRole, setFormMissingRole] = useState(false);
 
@@ -70,6 +76,8 @@ export function AssembleIsland() {
       if (r.ok) {
         setSlots(r.slots);
         setGoals(r.goals);
+        setGoalMix(r.goalMix);
+        setGoalMixStatus(r.goalMixStatus);
       } else if (r.status === "missing_role") {
         setFormMissingRole(true);
       } else {
@@ -189,6 +197,8 @@ export function AssembleIsland() {
   return (
     <section className={styles.section} data-testid="fcw-assemble-form">
       <p className={styles.windowLine}>{t("intro")}</p>
+
+      <GoalMixPanel mix={goalMix} status={goalMixStatus} />
 
       <div className={styles.grid}>
         <label className={styles.fieldLabel}>

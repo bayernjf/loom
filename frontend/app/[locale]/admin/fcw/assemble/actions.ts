@@ -9,10 +9,12 @@
 import {
   ApiError,
   CURRENT_ADMIN_ACTOR_ID,
+  CURRENT_TENANT_ID,
   assembleManual,
   getAdminContentGoals,
   getAdminFcwMaterial,
   getAdminPublishSlots,
+  getContentGoalMix,
   previewAssemble,
   suggestAiSelect,
   type AdminContentGoal,
@@ -21,6 +23,7 @@ import {
   type AiSelectSuggestView,
   type AssembleManualBody,
   type AssemblePreview,
+  type ContentGoalMix,
   type FcwCardView,
   type Wf07Scene,
 } from "@/lib/api";
@@ -33,13 +36,22 @@ export type {
   AssemblePreview,
   FcwCardView,
   ConflictCheckRow,
+  ContentGoalMix,
   Wf07Scene,
 };
 
 const KNOWN_STATUSES = new Set([401, 403, 404, 409, 422]);
 
+export type GoalMixStatus = "ok" | "unconfigured" | "failed";
+
 export type FormDataResult =
-  | { ok: true; slots: AdminPublishSlot[]; goals: AdminContentGoal[] }
+  | {
+      ok: true;
+      slots: AdminPublishSlot[];
+      goals: AdminContentGoal[];
+      goalMix: ContentGoalMix | null;
+      goalMixStatus: GoalMixStatus;
+    }
   | { ok: false; status: "unconfigured" | "missing_role" | "unknown" };
 
 export async function getAssembleFormDataAction(): Promise<FormDataResult> {
@@ -49,7 +61,18 @@ export async function getAssembleFormDataAction(): Promise<FormDataResult> {
       getAdminPublishSlots(),
       getAdminContentGoals(),
     ]);
-    return { ok: true, slots, goals };
+    // Q44 常驻面板单独兜错：配比口挂了不拖垮整张组装表单。
+    let goalMix: ContentGoalMix | null = null;
+    let goalMixStatus: GoalMixStatus = "unconfigured";
+    if (CURRENT_TENANT_ID) {
+      try {
+        goalMix = await getContentGoalMix();
+        goalMixStatus = "ok";
+      } catch {
+        goalMixStatus = "failed";
+      }
+    }
+    return { ok: true, slots, goals, goalMix, goalMixStatus };
   } catch {
     return { ok: false, status: "unknown" };
   }

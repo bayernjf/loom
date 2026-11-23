@@ -7,11 +7,19 @@
 
 - [x] **C1 识别 / WF-01 自动触发链路** — 状态：本地已闭环（2026-11-22，容器重建 2026-11-23）；证据：`C1RecognitionWorker`＋`scripts/c1_worker.py`，真实库 intake 自动产出候选后停在 `pending_review`、二次扫描跳过；`model-hub-client@v0.2.0` 可达后 backend 镜像重建成功，容器 `LOOM_C1_WORKER_ENABLED=false`、launchd sidecar 唯一常驻（L-03 闭环）。
 - [x] **立项差距台账（docs/27）P0** — 状态：P0 三项已闭环（2026-11-23）；L-01 13 段 dogfood（docs/28）、L-02 Q59③④ 工程甲案 v0.1（docs/29）、L-03 worker 固化（launchd＋容器）；迭代纪律：现有功能全保留（private beta、客户菜单、`loom_client_`/`loom_staff_` 模式），只追加不删；P1/P2 明细仍 open，见 `docs/27_立项差距与待办_2026-11-23.md`。
-- [ ] **段 3/7/9/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器 + 存量灵感模板重发；段 7 剩 `fit_score` 真自学习 + Q38；段 9 剩 Q44 配比软提示；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
+- [x] **L-04 / Q44 内容目的配比软提示** — 状态：本地已闭环（2026-11-23，Q377／02 C1.320）；证据：`GET /api/admin/content-goal-mix`＋`GoalMixPanel` 双落任务页/段13＋迁移 0067 五目的单边界种子；后端全量 1661 passed＋11 skipped、真 PG16 77 表/845 列 NO DRIFT、前端 typecheck＋check-admin＋build 三绿、真实浏览器两屏截图 `outputs/l04-q44/`。
+- [ ] **段 3/7/9/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器 + 存量灵感模板重发；段 7 剩 `fit_score` 真自学习 + Q38；段 9 Q44 配比软提示已随 Q377 落地，余无本段硬缺口；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
 - [x] **真实自有产品 dogfood（本地自用口径）** — 状态：done（2026-11-23）；对象 growth-os，13 段全链真实入料跑通（intake `13d17c77-…` → final_id `0f392a3a-…` → content `cd099720-…`），证据 `loom/outputs/dogfood-growth-os/`；成稿为 synthetic 占位（model-hub 真模型上游失败待修），机制闭环不等同文案质量验收。
 - [ ] **成稿质量：E1 SSO + `doubao-seed-1-6`** — 状态：blocked by E1；下一步：SSO 重登后登记并切换模型。
 - [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
 - [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前无客户登录页，客户内容口用 `loom_client_` Bearer，运营写口用 `loom_staff_` 个人令牌；本地自用可后置。
+
+> **2026-11-23 L-04 / Q44 内容目的配比软提示本地闭环（02 C1.320，Q377）。**
+> - 后端：共享 UTC 日期窗 `core/time_window.py`；`goal_mix_summary()` 取近 30 天 `published` FCW 按 goal 聚合，`goal_mix_health()` 五态（no_data/unconfigured/below/within/above，1e-9 边界容差）；`GET /api/admin/content-goal-mix` 只读，读闸 `require_content_goals_view`（dictionary_admin/platform_admin/operations）。
+> - 种子：迁移 `0067_content_goal_ratio_seed`（纯数据零 schema）按 PRD line 1090 播五目的单边界（ENGAGEMENT≤0.40／CONVERSION≤0.30／EDUCATION≥0.15／TRUST≥0.15／RETENTION≥0.10）；upgrade 只碰双 NULL 行，downgrade 三列指纹保护运营配置。
+> - 前端：`GoalMixPanel` 双落 `/admin/fcw/assemble` 常驻面板与 `/admin/effects` 段13 健康度栏；above/below 黄条明确“软提示，不阻断发证”，不写审计、不改 Gate。
+> - 验证：Q44 专项 90 passed；含驾驶舱/Q9 哨兵专项 102 passed；后端全量 1661 passed＋11 skipped（收集 1672）；真 PG16 0001→0067 NO DRIFT（77 表/845 列/迁移 67），EDUCATION.ratio_min=0.2 定制 down/up 均保留；前端 typecheck＋check-admin＋build 三绿；真实页面截图 `outputs/l04-q44/01-assemble.png`、`02-effects.png`。
+> - 边界：页面归属为本轮实现口径双落、非 owner 新拍板；计数是“发起侧已签发 FCW”不是效果回流条数；归档目的只进 `unmapped_count`；不 push。
 
 > **2026-11-23 Loom P0 三项（L-01/L-02/L-03）本地闭环（02 C1.319）。**
 > - L-01：growth-os 13 段全链跑通（C1 由 launchd worker 自动识别），证据 `outputs/dogfood-growth-os/` 15 份；启动包 docs/28 已回填结果。
