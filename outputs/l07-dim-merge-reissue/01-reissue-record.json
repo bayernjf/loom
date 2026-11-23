@@ -1,0 +1,54 @@
+{
+  "task": "L-07 / Q358 存量 DIM-MERGE 模板重发",
+  "q": "Q378",
+  "c1": "C1.321",
+  "date_utc": "2026-11-23T14:54:06Z",
+  "environment": {
+    "backend_container": "infra-backend-1",
+    "db_container": "infra-postgres-1",
+    "db": "loom",
+    "api_base": "http://127.0.0.1:8001"
+  },
+  "before": {
+    "skill_id": "DIM-MERGE",
+    "current_version": "v0.1",
+    "template_length": 1083,
+    "has_inspiration_entries": false,
+    "variables_count": 7
+  },
+  "after": {
+    "skill_id": "DIM-MERGE",
+    "current_version": "v0.2",
+    "version_id": "5d517e82-e74d-11f1-a285-8a510f57d3dd",
+    "template_length": 1297,
+    "has_inspiration_entries": true,
+    "variables_count": 8,
+    "change_note": "Q358 存量库重发：补 inspiration_entries 变量（L-07 运营复核）",
+    "publish_http_status": 201
+  },
+  "audit": {
+    "action": "skill_prompt.publish",
+    "entity_id": "DIM-MERGE",
+    "version": "v0.2",
+    "actor_via": "staff_token"
+  },
+  "temporary_key": {
+    "staff_id": "loom-reissue-temp",
+    "key_id": "45de4da2-e74d-11f1-81fe-8a510f57d3dd",
+    "status": "revoked",
+    "revoked_at": "2026-11-23T14:51:45.935031Z"
+  },
+  "checks": {
+    "database_pointer": "v0.2",
+    "template_variable_like": true,
+    "variables_json_has_key": true,
+    "python_template_substitute": "ok",
+    "field_plan_injection": "backend/app/core/model_registry/field_plan.py:122"
+  },
+  "boundary": {
+    "direct_db_edit": false,
+    "full_backend_suite_rerun": false,
+    "scope": "本机库已重发；其它独立存量库若另有实例需运营按同路径复核",
+    "not_done": "DIM-SOURCE 七路真实外部连接器仍未接"
+  }
+}

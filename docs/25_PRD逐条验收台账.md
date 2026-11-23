@@ -64,7 +64,7 @@
 
 | # | PRD 口径 | 状态 | 证据 | 缺口 |
 |---|---|---|---|---|
-| Q8 | 来源路由表运营可配、默认 6 路、每路带"依据来源" | ✅ | `fieldpool/models.py:36-45`；迁移 `0003_m3_stage3:91-108` 播种 6 路；`planning.py:70,129-130`（source_ref 空判 `VIOL_MISSING_EVIDENCE`）；`model_registry/field_plan.py:84-86` 动态读启用路由；`0053:62-74` 另加第 7 路 case_evidence（超配） | 灵感库本体＝产品基准段3 的 MVP 模块（product-inspiration：通用＋产品专属两层）：**✅ 2026-10-14 Q358 已建**（见 docs/24 §5.2）＝`inspiration_entries` 表＋`/api/admin/inspiration-entries` CRUD＋`field_plan.py` 接线灌入 DIM-MERGE 提示词；迁移 `0060_inspiration_entries` 零种子。前端界面 **2026-10-14 Q359 已落**＝`/admin/inspiration-entries` 运营配置台（列表/过滤/新建/行内编辑/启停/删除；读侧 Q307 契约＋写侧三岛 Server Action，侧栏第 18 项；docs/02 C1.301）。余一项＝存量 production `skill_prompts` 的 DIM-MERGE 模板需运营重发一版把 `$inspiration_entries` 真正写进（fresh-install 已正确） |
+| Q8 | 来源路由表运营可配、默认 6 路、每路带"依据来源" | ✅ | `fieldpool/models.py:36-45`；迁移 `0003_m3_stage3:91-108` 播种 6 路；`planning.py:70,129-130`（source_ref 空判 `VIOL_MISSING_EVIDENCE`）；`model_registry/field_plan.py:84-86` 动态读启用路由；`0053:62-74` 另加第 7 路 case_evidence（超配） | 灵感库本体＝产品基准段3 的 MVP 模块（product-inspiration：通用＋产品专属两层）：**✅ 2026-10-14 Q358 已建**（见 docs/24 §5.2）＝`inspiration_entries` 表＋`/api/admin/inspiration-entries` CRUD＋`field_plan.py` 接线灌入 DIM-MERGE 提示词；迁移 `0060_inspiration_entries` 零种子。前端界面 **2026-10-14 Q359 已落**＝`/admin/inspiration-entries` 运营配置台（列表/过滤/新建/行内编辑/启停/删除；读侧 Q307 契约＋写侧三岛 Server Action，侧栏第 18 项；docs/02 C1.301）。**模板已重发（Q378／02 C1.321）**：本机库存量 DIM-MERGE v0.1 缺 `$inspiration_entries`，已经管理端发布 v0.2（1297 字符、8 变量），发布后核验与临时令牌吊销见 C1.321；其它独立存量库若另有实例按同路径复核 |
 | Q9 | 0.85 细看线配置化 + 全局魔法数字一律配置化 | ✅ | 0.85 落：`seeds.py:17` `fieldpool.needs_detail_conf`→`planning.py:23-25,101`；docs/02 §C2 表已登记该键 |  **"禁止硬编码"无强制手段：~~无 lint／哨兵测试扫残留魔法数字，`docs/23` 全文无配置化审计条目，仅靠人工登记 seeds~~ **✅ 2026-10-14 Q357 已补**＝`tests/unit/test_no_magic_numbers.py`：AST 扫 `app/**/*.py` 浮点常量（注释/字符串天然不计入）＋**棘轮 `ALLOWLIST`**（逐文件登记存量、实扫须完全相等：新增未登记浮点与登记项消失都判红）＋`PENDING_BUSINESS_CALIBRATION`（待业务给真值的数值须持续显式登记，当前只有 `fit_learning` 的 `_REF_PLAYS/_REF_CONV`＝清单二第 16 项②）；存量实测 21 文件 35 值逐个附「为什么可以留在代码里」；**整数本批刻意不纳入**（理由写进文件头）；种植验证（插 `PLANTED = 0.73`）判红后按原样还原。〔**Q363 两读法注记（02 C1.305）→ Q366 裁决已下（02 C1.308）**：负责人 2026-10-16 裁读法一——§8.1 处置口径「加 lint/哨兵测试，或明确靠人工登记」已被 Q357 哨兵测试满足 ⇒ 翻正 ✅；读法二（严格读法下存量 35 值仍硬编码于代码、ALLOWLIST 登记制 ≠ 配置化）不采纳——处置口径原文为「或」选其一，哨兵测试＋棘轮登记制＋`PENDING_BUSINESS_CALIBRATION` 待校准显式登记即满足。〕 |
 | Q10 | 相似度≥0.9 标疑似重复，人工终裁 | ✅ | `planning.py:28-30,74-75,102`；`seeds.py:18` `=0.9`；`models.py:102-103`（dup/related_fid）；终裁走 `pool.gate=pending_gate`（`service.py:168`）；`test_fieldpool_planning.py:108` | — |
 | Q11 | risk_control：敏感行业强制 ≥1 个 | ✅ | 强制逻辑：`planning.py:118,142-143`（sensitive 且无 risk_control → violation）、`fieldpool/service.py:157`、`test_fieldpool_planning.py:38`；〔**Q350 补派生链路（02 C1.293）**：`product_intake/service.py:34` `_derive_industry_flags()` 在 `start_modeling` 从最新 C1Record＋Q7 `sensitive` 旗标派生写入，迁移 0057 补种子〕 | ~~旗标无派生链路恒 False~~ 已销（§9-① 注记同） |
@@ -231,14 +231,12 @@
 
 ### 8.2 需外部规格输入（工程侧不可自推）
 
+> 已闭环项从本表移出：Q35/#12（Q368）、Q44（Q377）、Q59③④（Q376）、Q68（Q357）。现存项与 L-09 归因见 §8.4 与 `docs/31_L09-条级归因_2026-11-23.md`。
+
 | 条 | 等什么 |
 |---|---|
-| Q35/#12 | PLATFORM-ADAPTER 真模型供应商 + AI 新增发布位档案流程 |
-| Q38 | AI 降级动作组合的生成路径 + schema（docs/12:150【待补】） |
-| Q41 | AI 重算生成器；`pcp.recalc_*` 与"事件→权重"映射规则（业务方） |
-| Q44 | 配比健康度栏目的口径与页面归属（产品口径） |
-| Q59 ③④ | 复检"施工指令核对/国家规则核对"——**已落 v0.1 工程甲案（docs/29，2026-11-23）**；权威规则文本仍待业务方/法审校准 |
-| ~~Q68 存量~~ | **✅ 2026-10-14 Q357 已补扫描器**＝`backend/scripts/check_field_fid_registry.py`（只读、不代处置；黑户落库/悬空引用＝阻断 exit 1，非 active 字段引用与 `c7_runs` 历史留痕只报不改、`pending_gate` 候选计数＝提示，缺表或无 `alembic_version` 行＝exit 2）｜**余下的是裁决不是工程**：真扫出存量后"补 fid 还是建候选"由人定，转正权限归 Q13 字典管理员 |
+| Q38 | AI 降级动作组合的生成路径 + schema（`docs/12:150`【待补】）；字典/CRUD 已落，AI 侧消费方未出现 |
+| Q41 | AI 重算生成器；`pcp.recalc_*` 与“事件→权重”映射规则（业务方） |
 | #11 | R-X01~X05 跨层规则【原文未给出，待补】 |
 | #13 | slotRuleByType 约 40 列默认值【原文未给出】 |
 | Q61 | 爆款绝对门槛与自动判定是否提前点工 |
@@ -248,6 +246,26 @@
 ### 8.3 与原文明示"本期不做"一致，非缺口
 
 Q37 自动采集｜Q43 第 18 池｜#17 之外 Agent 注册表本体｜Q70 分配算法与 10% 抽检｜#18c 资金 HumanGate（随计费 V2）｜Q56 段13 相关性校准｜Q57 段13 相关性校准｜段12 video 转写/成片复检（待供应商/待业务方）。
+
+### 8.4 L-09 条级归因（2026-11-23）
+
+> 结论：**做 0／后置 12／不做 1**；条级计数仍为 ✅83／🟡9／⬜4。后置不等于完成，不做只约束新增、不回收现有能力。逐条理由与重新激活条件见 `docs/31_L09-条级归因_2026-11-23.md`。
+
+| 条 | 决定 | 一句话 |
+|---|---|---|
+| Q38 | 后置 | 等 AI 动作组合 schema；字典/CRUD 已可用 |
+| Q41 | 后置 | 等业务方事件→权重映射与 AI 重算器 |
+| Q61 | 后置 | 绝对门槛值与自动转正规则未拍板；手工标注可用 |
+| Q66 | 后置 | 财务窗口随计费 V2；AI 零角色已由 staff auth 守住 |
+| Q72 | 后置 | WF-11/12 随 Q63–Q65 的 KUP 对象起做 |
+| #11 | 后置 | R-X01~X05 原文未给 |
+| #13 | 后置 | 13 类约 40 列默认值原文未给 |
+| #17 | 后置 | 无 Agent 注册/执行面，emergency_stop 无对象 |
+| #18b | 后置 | 单人直写＋审计够用；多编辑者再上 ChangeProposal |
+| Q63 | 后置 | V2/P3；缺真实效果样本与预期对账口径 |
+| Q64 | 后置 | 依赖 Q63 对象；PM 命名随角色迁移清理 |
+| Q65 | 后置 | 依赖 Q63/Q64 与 ≥50 真实样本 |
+| 18c | 不做 | 本地自用无计费/资金动作；不新增 billing |
 
 ## 9. 本批新坐实的 8 处（条级事实，段级文档未写入）
 

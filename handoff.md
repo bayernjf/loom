@@ -8,11 +8,17 @@
 - [x] **C1 识别 / WF-01 自动触发链路** — 状态：本地已闭环（2026-11-22，容器重建 2026-11-23）；证据：`C1RecognitionWorker`＋`scripts/c1_worker.py`，真实库 intake 自动产出候选后停在 `pending_review`、二次扫描跳过；`model-hub-client@v0.2.0` 可达后 backend 镜像重建成功，容器 `LOOM_C1_WORKER_ENABLED=false`、launchd sidecar 唯一常驻（L-03 闭环）。
 - [x] **立项差距台账（docs/27）P0** — 状态：P0 三项已闭环（2026-11-23）；L-01 13 段 dogfood（docs/28）、L-02 Q59③④ 工程甲案 v0.1（docs/29）、L-03 worker 固化（launchd＋容器）；迭代纪律：现有功能全保留（private beta、客户菜单、`loom_client_`/`loom_staff_` 模式），只追加不删；P1/P2 明细仍 open，见 `docs/27_立项差距与待办_2026-11-23.md`。
 - [x] **L-04 / Q44 内容目的配比软提示** — 状态：本地已闭环（2026-11-23，Q377／02 C1.320）；证据：`GET /api/admin/content-goal-mix`＋`GoalMixPanel` 双落任务页/段13＋迁移 0067 五目的单边界种子；后端全量 1661 passed＋11 skipped、真 PG16 77 表/845 列 NO DRIFT、前端 typecheck＋check-admin＋build 三绿、真实浏览器两屏截图 `outputs/l04-q44/`。
-- [ ] **段 3/7/9/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器 + 存量灵感模板重发；段 7 剩 `fit_score` 真自学习 + Q38；段 9 Q44 配比软提示已随 Q377 落地，余无本段硬缺口；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
+- [x] **L-09 条级归因** — 状态：done（2026-11-23）；13 条剩余项逐条定 `做/后置/不做`＝0/12/1，`docs/25` §8.4 已同步，明细 `docs/31_L09-条级归因_2026-11-23.md`；条级计数仍 ✅83／🟡9／⬜4，后置不等于完成。
+- [ ] **段 3/7/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器；`DIM-MERGE` 模板已由 Q378 重发本机库 v0.2；段 7 剩 `fit_score` 真自学习 + Q38；段 9 Q44 配比软提示已随 Q377 落地，余无本段硬缺口；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
 - [x] **真实自有产品 dogfood（本地自用口径）** — 状态：done（2026-11-23）；对象 growth-os，13 段全链真实入料跑通（intake `13d17c77-…` → final_id `0f392a3a-…` → content `cd099720-…`），证据 `loom/outputs/dogfood-growth-os/`；成稿为 synthetic 占位（model-hub 真模型上游失败待修），机制闭环不等同文案质量验收。
 - [ ] **成稿质量：E1 SSO + `doubao-seed-1-6`** — 状态：blocked by E1；下一步：SSO 重登后登记并切换模型。
 - [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
 - [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前无客户登录页，客户内容口用 `loom_client_` Bearer，运营写口用 `loom_staff_` 个人令牌；本地自用可后置。
+
+> **2026-11-23 DIM-MERGE 存量模板本机库重发（02 C1.321，Q378）。**
+> - 发布前：`v0.1` 1083 字符、7 变量、缺 `$inspiration_entries`；发布后：`v0.2` 1297 字符、8 变量，`current_version=v0.2`。
+> - 路径：临时 `platform_admin` 令牌 → `POST /api/admin/skill-prompts/DIM-MERGE/versions` → 发布后吊销；审计 `_actor_via=staff_token`。
+> - 边界：只覆盖本机库；其它独立存量库需运营按同路径复核；`DIM-SOURCE` 七路连接器仍未接。证据 `outputs/l07-dim-merge-reissue/`（记录、diff、发布响应）。
 
 > **2026-11-23 L-04 / Q44 内容目的配比软提示本地闭环（02 C1.320，Q377）。**
 > - 后端：共享 UTC 日期窗 `core/time_window.py`；`goal_mix_summary()` 取近 30 天 `published` FCW 按 goal 聚合，`goal_mix_health()` 五态（no_data/unconfigured/below/within/above，1e-9 边界容差）；`GET /api/admin/content-goal-mix` 只读，读闸 `require_content_goals_view`（dictionary_admin/platform_admin/operations）。
@@ -262,10 +268,11 @@ Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 →
 | [docs/21_运营SOP_全链操作手册.md](docs/21_运营SOP_全链操作手册.md) | 运营全链操作 SOP：逐段端点/页面、角色、Gate、冻结发证、4xx 含义、日常节奏 | ✅ 权威（Q170） |
 | [docs/22_外部系统接入手册_AgentKey_A2A_MCP.md](docs/22_外部系统接入手册_AgentKey_A2A_MCP.md) | 机器接入手册：Q88 Agent Key 签发/验签、Q150 A2A（三发现端点＋JSON-RPC 四方法＋三 plan skill）、Q232 MCP（`POST /mcp`，规范 2026-07-28，门控默认关）；§5 样例＝2026-09-28 真进程实测 | 🟡 已落地（Q232）；两处【原文未取到，待补】**2026-09-28 已结**：工具 id 字符约束＝**符合**；`server/discover` 官方结构已取到但与本仓有 4 处出入（含 **MUST** 缺 `ttlMs`+`cacheScope`）＝**待裁决**，见 §3.6／§6 |
 | [docs/23_项目级代码审计报告与功能点梳理.md](docs/23_项目级代码审计报告与功能点梳理.md) | 项目级代码审计＋产品功能点全景：§1–§10 是 2026-09-30／Q240 时点快照（Q241 已逐条回代码复核并订正），**§0.1＋§11 是 2026-10-04／Q276 的全量重扫；§0.2 ＝ 2026-10-05／Q283 活状态复扫（475 条 `file:line` 引用扫内容、1 个错锚已更正）**；§11.11/§11.12 ＝ Q279 网关落地／Q280 首启缺陷追记（223 操作＝写 128／读 95、68 表 734 列、四族鉴权机制清点、写口接线守卫漏钉 8 口已补并证伪、三条写口契约未规定角色＝🟡 待补），附录 C 登记可复现命令 | 🟡 报告类文档，无漂移门：**每有新增可达面须人工重扫**（Q276 已把这一条登记为 P2 建议） |
-| [docs/24_功能点比对_ContentOS产品基准.md](docs/24_功能点比对_ContentOS产品基准.md) | 产品基准 vs 实现现状逐功能点覆盖度比对（Q322，对照 ContentOS 13 段主链＋全景图 33 项；13 段 **9 段闭环＋4 段部分**〔段3 DIM-SOURCE 来源规格／段7 真模型接入＋fit_score 自学习／段9 WF-07 四 Skill／段12 video-studio〕，横切五条 ✅，未做项全属 V2 厚度／V3 辅助系统／周边，不阻塞 docs/20 已判定的核心可用） | 报告类，随实现推进复扫；与 docs/25 条级口径互补 |
-| [docs/25_PRD逐条验收台账.md](docs/25_PRD逐条验收台账.md) | PRD 逐条验收台账（Q347 立、Q350 同步）：docs/01 13 段规格＋Q1–Q72 决策拆 **96 条**可逐条打勾条目（决策 75＋结构性硬闸/红线 21；**✅61／🟡30／⬜5**〔Q350：#16 国家规则裁随 V2、Q11/Q30 升 ✅〕；V1 主链 41 条＝✅30／🟡11／⬜0），每条给落地状态＋可溯源证据（`文件:行号`／迁移号／配置键）＋缺口；§8.1 销账行保留删除线 | 核心（条级验收口径，与 docs/24 段级、docs/20 三层判定互补不替代） |
+| [docs/24_功能点比对_ContentOS产品基准.md](docs/24_功能点比对_ContentOS产品基准.md) | 产品基准 vs 实现现状逐功能点覆盖度比对（Q322，对照 ContentOS 13 段主链＋全景图 33 项；13 段 **10 段闭环＋3 段部分**〔段3 DIM-SOURCE 来源规格／段7 真模型接入＋fit_score 自学习／段12 video-studio〕，横切五条 ✅，未做项全属 V2 厚度／V3 辅助系统／周边，不阻塞 docs/20 已判定的核心可用） | 报告类，随实现推进复扫；与 docs/25 条级口径互补 |
+| [docs/25_PRD逐条验收台账.md](docs/25_PRD逐条验收台账.md) | PRD 逐条验收台账（Q347 立、Q350 同步）：docs/01 13 段规格＋Q1–Q72 决策拆 **96 条**可逐条打勾条目（决策 75＋结构性硬闸/红线 21；**✅83／🟡9／⬜4**〔Q377；Q59/Q44 已翻正〕；V1 主链 41 条＝✅41／🟡0／⬜0），每条给落地状态＋可溯源证据（`文件:行号`／迁移号／配置键）＋缺口；§8.1 销账行保留删除线；§8.4 为 L-09 归因 | 核心（条级验收口径，与 docs/24 段级、docs/20 三层判定互补不替代） |
 | [docs/26_新用户E2E验证清单.md](docs/26_新用户E2E验证清单.md) | **浏览器 E2E 功能验证手册**（2026-10-17，Q368 形态）：新用户视角逐项验证核心功能，每条给入口 URL＋操作路径＋预期 UI 判据＋依据；附录＝管理端侧栏 20 路由 | ✅ 权威（E2E 操作手册；权威状态仍指 25/24/23/21） |
-| [docs/27_立项差距与待办_2026-11-23.md](docs/27_立项差距与待办_2026-11-23.md) | 立项 vs 当前差距与待办（2026-11-23，本地自用口径）：13 段 **9 闭环 / 4 部分**、96 条 **81 ✅ / 10 🟡 / 5 ⬜**、V1 主链 41/41、P0 L-01–L-03；含段 3/7/9/12 残项与真实自有产品 dogfood | 专题审计，不替代 docs/24/25 |
+| [docs/27_立项差距与待办_2026-11-23.md](docs/27_立项差距与待办_2026-11-23.md) | 立项 vs 当前差距与待办（2026-11-23，本地自用口径）：13 段 **10 闭环 / 3 部分**、96 条 **83 ✅ / 9 🟡 / 4 ⬜**、V1 主链 41/41、P0 L-01–L-03 ✅、P1 L-04/L-09 ✅；含段 3/7/12 残项与真实自有产品 dogfood | 专题审计，不替代 docs/24/25 |
+| [docs/31_L09-条级归因_2026-11-23.md](docs/31_L09-条级归因_2026-11-23.md) | L-09 条级归因：9 🟡 / 4 ⬜ 共 13 条逐条定 `做/后置/不做`＝0/12/1，含理由、重新激活条件与 P0/P1/P2 对齐 | ✅ 完成（2026-11-23） |
 | [docs/design-*.md](docs/README_文档地图与治理.md)（**18 份**：a2a-executor／identity-layer-v2／d3.5-whitelist-assembly-remaining／fcw-freeze-management／p2-package-reuse-reconfig／deployment-gateway-tls／v2-pcp-weekly-recalc／v2-fit-score-selflearning／v2-platform-adapter-business／v2-internal-roles-rbac／q324-candidate-review／video-studio-segment-cleaning／segment12-video-spec-input／external-inputs-action-card／q242-whitelist-owner-signability／v2-billing-subscription／v3-rollback-center／segment12-video-candidates） | 实现/裁决候选设计档。逐份的一句话描述与裁决状态**以 [docs/README 文档地图](docs/README_文档地图与治理.md) 行 41–58 为准（本表不重复维护，防两处漂移）**；已核实本会话内的三份：p2 §6 ＝ 待裁项⑦ 评审材料（Q284，未执行）、gateway-tls ＝ Q279 裁甲并落地、identity-layer-v2 ＝ Q196 落地 | ✅/🟡 按份不同 |
 | [docs/handoff-archive-2026-10-31.md](docs/handoff-archive-2026-10-31.md) | handoff 归档（2026-10-31 例行瘦身：Q371 批整组按「最近 5 条」上限滚出＋待办 #4 收口子项与 #5 历次基线读数链滚出，原文逐字） | 归档 |
 | [docs/handoff-archive-2026-09-23.md](docs/handoff-archive-2026-09-23.md) | handoff 进度归档（2026-09-23：Q158 异机备份恢复/Q159–161 批量回填收口+MVP 评审/Q162–165 一口气四片滚出条目原文） | 归档 |
