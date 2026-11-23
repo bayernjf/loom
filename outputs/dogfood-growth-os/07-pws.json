@@ -1,0 +1,150 @@
+{
+  "pws": {
+    "pws_id": "cd3790cb-1be5-4116-9cd5-42848387f288",
+    "tenant_id": "t1",
+    "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+    "version": "v1.0",
+    "status": "frozen",
+    "is_active": true,
+    "pool_id": "c109d222-9bc5-4dd5-8266-ef7483990573",
+    "fingerprint": "8f30fc8ed6c9dfa5d998b2290b227b0eff2399525856b5e70fe0ac7df4b56936",
+    "readiness": {
+      "checks": {
+        "approved_field_pool": true,
+        "enough_approved_atoms": true,
+        "active_pwc": true,
+        "no_unresolved_blocked_conflict": true,
+        "no_pending_gate_fields": true
+      },
+      "all_green": true,
+      "counts": {
+        "approved_atoms": 3,
+        "active_pwcs": 1,
+        "unresolved_blocked_conflicts": 0,
+        "pending_gate_fields": 0
+      },
+      "pool_id": "c109d222-9bc5-4dd5-8266-ef7483990573"
+    },
+    "refreeze_tier": null,
+    "reason_code": null,
+    "superseded_by": null,
+    "created_by": "dogfood-ops",
+    "created_at": "2026-11-22T18:18:04.420780+00:00",
+    "revoked_by": null,
+    "revoked_at": null,
+    "revoke_reason": null,
+    "snapshot": {
+      "pool_id": "c109d222-9bc5-4dd5-8266-ef7483990573",
+      "atoms": [
+        {
+          "atom_id": "23ded794-25bc-4286-92a3-43132d2088c3",
+          "dimension_id": "e4da1979-8366-45cc-9bc6-4d8236ec5ef1",
+          "fid": "f_name",
+          "content": "离线确定性回放",
+          "fact_type": null,
+          "status": "approved"
+        },
+        {
+          "atom_id": "e87f3b71-512d-4aa1-ba15-0509a794cc11",
+          "dimension_id": "98f739c9-44b1-4290-99ca-570a3ded8be1",
+          "fid": "f_promoted_eb136890",
+          "content": "人工复核洞察",
+          "fact_type": null,
+          "status": "approved"
+        },
+        {
+          "atom_id": "cb48459b-8482-4919-82c5-9e4f96ed7c10",
+          "dimension_id": "021218b5-838b-470f-8891-31c0c4caea48",
+          "fid": "f_promoted_ddf8c5b8",
+          "content": "版本化研究报告",
+          "fact_type": null,
+          "status": "approved"
+        }
+      ],
+      "pwcs": [
+        {
+          "pwc_id": "1d1ead3b-a0bf-4eb1-b48e-2398bcc8d7eb",
+          "goals": [
+            "ENGAGEMENT"
+          ],
+          "score": 0.8200000000000001,
+          "combo": [
+            {
+              "atom_id": "23ded794-25bc-4286-92a3-43132d2088c3",
+              "dimension_id": "e4da1979-8366-45cc-9bc6-4d8236ec5ef1",
+              "fid": "f_name"
+            },
+            {
+              "atom_id": "e87f3b71-512d-4aa1-ba15-0509a794cc11",
+              "dimension_id": "98f739c9-44b1-4290-99ca-570a3ded8be1",
+              "fid": "f_promoted_eb136890"
+            }
+          ]
+        }
+      ]
+    },
+    "items": [
+      {
+        "item_id": "bcf55ab8-ebde-47b5-8a40-5469c69051c5",
+        "kind": "atom",
+        "ref_id": "23ded794-25bc-4286-92a3-43132d2088c3",
+        "dimension_id": "e4da1979-8366-45cc-9bc6-4d8236ec5ef1",
+        "seq": 1,
+        "payload": {
+          "fid": "f_name",
+          "content": "离线确定性回放",
+          "fact_type": null
+        }
+      },
+      {
+        "item_id": "453db1a5-e5c2-4375-b716-b3b3fe6a1bd1",
+        "kind": "atom",
+        "ref_id": "e87f3b71-512d-4aa1-ba15-0509a794cc11",
+        "dimension_id": "98f739c9-44b1-4290-99ca-570a3ded8be1",
+        "seq": 2,
+        "payload": {
+          "fid": "f_promoted_eb136890",
+          "content": "人工复核洞察",
+          "fact_type": null
+        }
+      },
+      {
+        "item_id": "385f54af-4022-4e76-9639-0e1a406fe04d",
+        "kind": "atom",
+        "ref_id": "cb48459b-8482-4919-82c5-9e4f96ed7c10",
+        "dimension_id": "021218b5-838b-470f-8891-31c0c4caea48",
+        "seq": 3,
+        "payload": {
+          "fid": "f_promoted_ddf8c5b8",
+          "content": "版本化研究报告",
+          "fact_type": null
+        }
+      },
+      {
+        "item_id": "559a587b-9bf7-4f73-b32c-c562de07de65",
+        "kind": "pwc",
+        "ref_id": "1d1ead3b-a0bf-4eb1-b48e-2398bcc8d7eb",
+        "dimension_id": null,
+        "seq": 4,
+        "payload": {
+          "combo": [
+            {
+              "atom_id": "23ded794-25bc-4286-92a3-43132d2088c3",
+              "dimension_id": "e4da1979-8366-45cc-9bc6-4d8236ec5ef1"
+            },
+            {
+              "atom_id": "e87f3b71-512d-4aa1-ba15-0509a794cc11",
+              "dimension_id": "98f739c9-44b1-4290-99ca-570a3ded8be1"
+            }
+          ],
+          "goals": [
+            "ENGAGEMENT"
+          ],
+          "score": 0.8200000000000001
+        }
+      }
+    ]
+  },
+  "dup_hints": [],
+  "dispositions": null
+}

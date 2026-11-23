@@ -1,6 +1,6 @@
-# Loom · 私域内容生产白名单平台
+# Loom · 受控 private beta 内容工作台（私域内容生产白名单链）
 
-**AI 驱动的 13 段链内容生产 SaaS 后台**：把"产品信息 → 可发布内容"这件事拆成一条可编排、可审计、可质量拦截的生产链——从产品录入、冷启动建模、字段池与原子管理，到条件包（PWC/PWS）冻结、平台适配、策略/结构/表达三包、合规清洗、`final_id` 组装，最后只读消费给内容生成，再经反馈回流反哺知识进化。
+**AI 驱动的 13 段链内容生产工作台（受控 private beta / 单租户，公网自助 SaaS 为 Q144 NO-GO）**：把"产品信息 → 可发布内容"这件事拆成一条可编排、可审计、可质量拦截的生产链——从产品录入、冷启动建模、字段池与原子管理，到条件包（PWC/PWS）冻结、平台适配、策略/结构/表达三包、合规清洗、`final_id` 组装，最后只读消费给内容生成，再经反馈回流反哺知识进化。
 
 > **本文件只讲三件事：产品是什么／怎么把它起来／代码怎么摆。** 进度与逐批历史不在这里——当前状态与基线看 [handoff.md](handoff.md) 顶部权威行，逐条决策台账看 [docs/02](docs/02_决策记录_ADR_Q1-Q72.md)，按 PRD 逐条验收看 [docs/25](docs/25_PRD逐条验收台账.md)，段级功能比对看 [docs/24](docs/24_功能点比对_ContentOS产品基准.md)。README 原先承载的逐批状态段已于 2026-10-13（Q356）整段逐字移入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md) 的「三十三、」节，一字未改。
 
@@ -105,6 +105,8 @@ npm run dev
 ```
 
 > `backend/.env.example` 的 DSN 默认就指向 `localhost:5432` 的 `loom/loom`，与上面这条 compose 链对齐。`LOOM_MASTER_KEY` 是出站供应商 Key 的加密主密钥——容器形态下空值会让 entrypoint 直接 `exit 1`（本机跑 uvicorn 不强制，但要调真模型就得给）。
+
+- C1 自动识别 worker（Q376，默认关闭）：消费停留在 `ai_recognizing` 的 intake，产出仍落 `pending_review` 走人工 Gate；已有 c1 候选（含人工驳回）不重跑。容器形态在 `infra/.env` 设 `LOOM_C1_WORKER_ENABLED=true`；不经容器时可单跑 `cd backend && .venv/bin/python scripts/c1_worker.py --once`（或 `--watch --interval 60`）。**容器 worker 与 sidecar 二选一，不要同时开**；真模型会自动花 token，未配 key 时 `CAT-RECOG` 走 synthetic 路由。
 
 - `.env` 载体纪律（Q239）：`backend/.env` **只能放 `Settings` 字段**——pydantic-settings 是 `extra="forbid"`，放一个它不认识的名字（如 `LOOM_LLM_BASE_URL_AGNES`）会让进程直接起不来。直读 `os.environ` 的变量走可 source 的 `backend/.env.shell`（`set -a; source backend/.env.shell; set +a`）；本仓没有 `load_dotenv`。
 - 出站供应商 Key **不进任何 env 或文件**：它经 Fernet 加密存 `ai_model_keys`，主密钥是 `LOOM_MASTER_KEY`（Q82／Q148）。

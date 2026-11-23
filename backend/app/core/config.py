@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     restock_interval_seconds: float = 60.0
     restock_batch_size: int = 20
 
+    # C1 自动识别 worker：消费停留在 ai_recognizing 的 intake，产出仍走人工 Gate。
+    # 默认关闭（真模型会自动花 token）；本地自用显式开 LOOM_C1_WORKER_ENABLED=true。
+    c1_worker_enabled: bool = False
+    c1_worker_interval_seconds: float = 60.0
+    c1_worker_batch_size: int = 10
+
     # Q138 restock requested 信号 Redis Streams 生产接线：默认关。开启后跌破
     # critical 的补货请求在提交后 best-effort XADD 到 restock 流（DB 行仍是事实
     # 源、DB 轮询兜底）；消费组水平并行消费留 V2（花钱单实例裁决见 Q87/Q89）。

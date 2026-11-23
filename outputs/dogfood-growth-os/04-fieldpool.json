@@ -1,0 +1,60 @@
+{
+  "pool_id": "c109d222-9bc5-4dd5-8266-ef7483990573",
+  "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+  "gate": "approved",
+  "compliant": true,
+  "violations": [],
+  "target_atom_min": 15,
+  "target_atom_max": 30,
+  "reject_reason": null,
+  "dimensions": [
+    {
+      "dimension_id": "e4da1979-8366-45cc-9bc6-4d8236ec5ef1",
+      "role": "product_attribute",
+      "source_route": "user_input",
+      "source_ref": "growth-ref-1",
+      "field_name": "维度1",
+      "definition": null,
+      "fid": "f_name",
+      "candidate_id": null,
+      "confidence": 0.9,
+      "needs_detail": false,
+      "dup": false,
+      "related_fid": null,
+      "status": "selected",
+      "sort_order": 0
+    },
+    {
+      "dimension_id": "98f739c9-44b1-4290-99ca-570a3ded8be1",
+      "role": "product_attribute",
+      "source_route": "user_input",
+      "source_ref": "growth-ref-2",
+      "field_name": "维度2",
+      "definition": null,
+      "fid": null,
+      "candidate_id": "eb136890-52ee-4b92-897f-da1f325e5358",
+      "confidence": 0.9,
+      "needs_detail": false,
+      "dup": false,
+      "related_fid": null,
+      "status": "selected",
+      "sort_order": 1
+    },
+    {
+      "dimension_id": "021218b5-838b-470f-8891-31c0c4caea48",
+      "role": "product_attribute",
+      "source_route": "user_input",
+      "source_ref": "growth-ref-3",
+      "field_name": "维度3",
+      "definition": null,
+      "fid": null,
+      "candidate_id": "ddf8c5b8-0ac6-4d6d-a061-d2096780064a",
+      "confidence": 0.9,
+      "needs_detail": false,
+      "dup": false,
+      "related_fid": null,
+      "status": "selected",
+      "sort_order": 2
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "content_id": "cd099720-e6a1-11f1-9230-9ed4b69628fb",
+  "status": "ready_for_publish",
+  "review_hits": {
+    "bans": [],
+    "downgrades": [],
+    "block_required": false,
+    "semantic": {
+      "checked": true,
+      "findings": []
+    },
+    "construction": {
+      "checked": true,
+      "rules_version": "v0.1-engineering",
+      "hits": [
+        {
+          "code": "structure_not_applied",
+          "expected": "钩子-论点-收尾",
+          "paragraphs": 2
+        }
+      ],
+      "structure": {
+        "expected": "钩子-论点-收尾",
+        "paragraphs": 2,
+        "satisfied": false
+      },
+      "claims": [],
+      "unchecked": [
+        "tone",
+        "perspective",
+        "explicit",
+        "soften"
+      ]
+    },
+    "country_rules": {
+      "checked": true,
+      "rules_version": "v0.1-engineering",
+      "country": null,
+      "rule_set": "generic",
+      "hits": [],
+      "urls": [],
+      "lead_words": [],
+      "cta_words": []
+    }
+  }
+}

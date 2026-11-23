@@ -1,0 +1,15 @@
+{
+  "package_id": "726b9417-c8d5-4b59-9900-e976dcf7523b",
+  "kind": "cstp",
+  "tenant_id": "t1",
+  "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+  "platform": "x_platform",
+  "goal": "ENGAGEMENT",
+  "payload": {
+    "struct": "钩子-论点-收尾"
+  },
+  "conf": 0.8,
+  "gate": "approved",
+  "status": "active",
+  "usage_count": 0
+}

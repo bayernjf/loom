@@ -156,9 +156,20 @@ async def test_generation_runs_semantic_check(client, session_factory):
     assert r.status_code == 201, r.text
     data = r.json()
     assert data["status"] == CONTENT_REVIEW
-    # 词库复检段 + 语义复检段共存；synthetic 正常正文无发现。
-    assert set(data["review_hits"]) == {"bans", "downgrades", "block_required", "semantic"}
+    # 词库复检段 + 语义复检段 + Q59③④ 共存；synthetic 正常正文无发现。
+    assert set(data["review_hits"]) == {
+        "bans",
+        "downgrades",
+        "block_required",
+        "semantic",
+        "construction",
+        "country_rules",
+    }
     assert data["review_hits"]["semantic"] == {"checked": True, "findings": []}
+    # Q59③④ 在既有 FCW 上下文上正常执行（v0.1 工程口径，纯 advisory）。
+    assert data["review_hits"]["construction"]["checked"] is True
+    assert data["review_hits"]["construction"]["rules_version"] == "v0.1-engineering"
+    assert data["review_hits"]["country_rules"]["checked"] is True
 
     async with session_factory() as session:
         runs = {r.skill_id for r in (await session.scalars(select(SkillRun))).all()}

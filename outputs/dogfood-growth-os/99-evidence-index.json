@@ -1,0 +1,135 @@
+{
+  "run": "905136d2c383",
+  "intake_id": "13d17c77-7975-4291-aa63-7086516b6427",
+  "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+  "final_id": "0f392a3a-e6a1-11f1-ab6a-fa6984d93c8f",
+  "content_id": "cd099720-e6a1-11f1-9230-9ed4b69628fb",
+  "steps": [
+    {
+      "step": "resume intake",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "c1 candidates produced",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "intake reached stored",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "product space ready",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "field pool reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "list g2 candidates",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "current field pool",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "atoms reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "pwc reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "slot reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "pcp reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "package csp reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "package cstp reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "package cep reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "pws reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "ccr reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "final_id reused (checkpoint)",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "content generate",
+      "ok": true,
+      "http": 201,
+      "detail": null
+    },
+    {
+      "step": "customer approve",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    },
+    {
+      "step": "agent key",
+      "ok": true,
+      "http": 201,
+      "detail": null
+    },
+    {
+      "step": "effect callback",
+      "ok": true,
+      "http": 200,
+      "detail": null
+    }
+  ]
+}

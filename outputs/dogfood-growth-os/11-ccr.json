@@ -1,0 +1,17 @@
+{
+  "report": {
+    "ccr_id": "0f35a54a-e6a1-11f1-ab6a-fa6984d93c8f",
+    "pws_id": "cd3790cb-1be5-4116-9cd5-42848387f288",
+    "product_space_id": "532cdf15-0f34-41df-8c28-fe01d692b4ef",
+    "country": null,
+    "status": "clean",
+    "block_required": false,
+    "hits": {
+      "bans": [],
+      "downgrades": []
+    },
+    "decided_by": null,
+    "created_at": "2026-11-22T18:18:04.447345+00:00"
+  },
+  "law_review": null
+}
