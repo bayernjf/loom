@@ -50,6 +50,32 @@ const requiredKeys = [
   ...[
     "title",
     "intro",
+    "windowLine",
+    "summary",
+    "unmapped",
+    "noData",
+    "tenantUnconfigured",
+    "loadFailed",
+    "alertAbove",
+    "alertBelow",
+    "targetUnset",
+    "targetMax",
+    "targetMin",
+    "targetRange",
+    "colGoal",
+    "colCount",
+    "colActual",
+    "colTarget",
+    "colHealth",
+    "healthAbove",
+    "healthBelow",
+    "healthWithin",
+    "healthUnconfigured",
+    "healthNoData",
+  ].map((k) => `admin.goalMix.${k}`),
+  ...[
+    "title",
+    "intro",
     "totals",
     "totalRuns",
     "inputTokens",
@@ -1569,7 +1595,7 @@ for (const forbidden of ["method:", "POST", "PATCH", "DELETE"]) {
   if (effectsPage.includes(forbidden))
     problems.push(`admin/effects/page.tsx is read-only; must not contain ${forbidden}`);
 }
-for (const token of ["getEffectOrphans", "OrphanTableIsland", "SeriesQueryIsland"]) {
+for (const token of ["getEffectOrphans", "OrphanTableIsland", "SeriesQueryIsland", "getContentGoalMix", "GoalMixPanel"]) {
   if (!effectsPage.includes(token))
     problems.push(`admin/effects/page.tsx must use ${token}`);
 }
@@ -1997,6 +2023,7 @@ for (const token of [
   "assembleManual",
   "getAdminPublishSlots",
   "getAdminContentGoals",
+  "getContentGoalMix",
   "mapConflictChecks",
 ]) {
   if (!assembleActions.includes(token))
@@ -2019,6 +2046,7 @@ for (const token of [
   "assembleManualAction",
   "guards_passed",
   "conflicts",
+  "GoalMixPanel",
   "data-testid",
 ]) {
   if (!assembleIsland.includes(token))

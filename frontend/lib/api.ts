@@ -5,6 +5,14 @@
 import { redirect } from "next/navigation";
 
 import { getStaffToken } from "./staff-auth";
+import type { ContentGoalMix } from "./content-goal-mix";
+
+export type {
+  ContentGoalMix,
+  ContentGoalMixAlert,
+  ContentGoalMixRow,
+  GoalMixHealth,
+} from "./content-goal-mix";
 
 // 工程临时键：产品名在 profile 中的 fid 基线未回填（g2_fields cat='common' 为空表，
 // docs/04:58 仅有中文名枚举，溯 line 682-698），基线落地后须对齐替换，挂账 Q98。
@@ -2100,6 +2108,23 @@ export async function getAdminContentGoals(): Promise<AdminContentGoal[]> {
   const params = new URLSearchParams({ actor_id: CURRENT_ADMIN_ACTOR_ID });
   for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
   return request<AdminContentGoal[]>(`/api/admin/content-goals?${params}`);
+}
+
+// Q44：任务页常驻面板 + 段13 回流报表健康度栏共用；只读、不阻断。
+export async function getContentGoalMix(opts?: {
+  product_space_id?: string;
+  date_from?: string;
+  date_to?: string;
+}): Promise<ContentGoalMix> {
+  const params = new URLSearchParams({
+    actor_id: CURRENT_ADMIN_ACTOR_ID,
+    tenant_id: CURRENT_TENANT_ID,
+  });
+  for (const role of ADMIN_ROLE_LIST) params.append("roles", role);
+  if (opts?.product_space_id) params.set("product_space_id", opts.product_space_id);
+  if (opts?.date_from) params.set("date_from", opts.date_from);
+  if (opts?.date_to) params.set("date_to", opts.date_to);
+  return request<ContentGoalMix>(`/api/admin/content-goal-mix?${params}`);
 }
 
 // ---- Q345 段7/8 平台适配台（/admin/platform-adaptation）消费的九张只读口 ----
