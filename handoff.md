@@ -15,6 +15,10 @@
 - [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
 - [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前无客户登录页，客户内容口用 `loom_client_` Bearer，运营写口用 `loom_staff_` 个人令牌；本地自用可后置。
 
+> **2026-11-23 README 对外自我描述收口（02 C1.322，Q379）。**
+> - 口径：受控 private beta / 单租户内容工作台，不是公网多租户自助 SaaS（Q144 NO-GO）；README 主体已于 `31afc28` 改好，本批收紧首段括号并翻正 docs/27 §7.1。
+> - 不改功能、客户菜单、`loom_client_`/`loom_staff_` 模式；纯文档，无测试影响。
+
 > **2026-11-23 DIM-MERGE 存量模板本机库重发（02 C1.321，Q378）。**
 > - 发布前：`v0.1` 1083 字符、7 变量、缺 `$inspiration_entries`；发布后：`v0.2` 1297 字符、8 变量，`current_version=v0.2`。
 > - 路径：临时 `platform_admin` 令牌 → `POST /api/admin/skill-prompts/DIM-MERGE/versions` → 发布后吊销；审计 `_actor_via=staff_token`。
@@ -239,7 +243,7 @@
 > ~~Q327 banner 原文~~（含其子项）已按「最近 5 条」上限于 2026-10-10 逐字滚入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)。
 > ~~Q326 banner 原文~~（含其子项）已按「最近 5 条」上限于 2026-10-10 逐字滚入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)。
 ## 项目一句话
-Loom = 私域内容生产白名单平台（SaaS 后台）：把"产品信息 → 可发布内容"拆成 **13 段链（CHAIN_13）** 可编排生产链，AI 只产候选、人工 Gate 裁决、`final_id` 唯一出口、反馈回流反哺知识。三端：用户前端 / 管理后端（13 模块）/ 系统后台 API。
+Loom = 受控 private beta / 单租户内容工作台（私域内容生产白名单链，Q144 公网自助 SaaS NO-GO）：把"产品信息 → 可发布内容"拆成 **13 段链（CHAIN_13）** 可编排生产链，AI 只产候选、人工 Gate 裁决、`final_id` 唯一出口、反馈回流反哺知识。三端：用户前端 / 管理后端（13 模块）/ 系统后台 API。
 ## 项目文档（完整清单，单一事实源）
 > 完整清单与一句话描述**只以本节为准**；[docs/README](docs/README_文档地图与治理.md) 只做场景导航，不重复清单。
 | 文档 | 一句话描述 | 状态 |

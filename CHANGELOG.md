@@ -3,6 +3,8 @@
 All notable changes are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/).
 
 ## [Unreleased]
+- **Q379（2026-11-23）对外自我描述收口**：负责人确认 README 采用「受控 private beta / 单租户内容工作台」，不再以「私域内容生产白名单平台 / AI 驱动的 13 段链内容生产 SaaS 后台」对外；README 主体已于 `31afc28` 改好，本批收紧首段括号为「不是公网多租户自助 SaaS；Q144 NO-GO」，并把 `docs/27 §7.1` 的过期待拍板项翻 ✅。纯文档，不改功能/客户菜单/`loom_client_`/`loom_staff_` 模式。02 C1.322。
+
 - **Q378（2026-11-23）存量 DIM-MERGE 模板重发**：本机库 `skill_prompts.current_version` 从 `v0.1`（模板 1083 字符、7 变量、缺 `$inspiration_entries`）经管理端 `POST /api/admin/skill-prompts/DIM-MERGE/versions` 发布 `v0.2`（1297 字符、8 变量含该键），发布后 `current_version=v0.2`、模板/变量核验通过、`skill_prompt.publish` 审计 `_actor_via=staff_token`；临时 `platform_admin` 令牌已吊销。未直改库、未重跑全量；`field_plan.py` 变量注入口径不变。证据 `outputs/l07-dim-merge-reissue/01-reissue-record.json`、`02-prompt-diff.txt`、`03-publish-response.json`。02 C1.321；docs/24 段3、docs/25 Q8、docs/27 L-07、handoff 同步。
 
 - **L-09（2026-11-23）条级归因**：docs/25 Q377 的 9 🟡 / 4 ⬜ 共 13 条逐条定 `做/后置/不做`＝**0/12/1**，新增 `docs/31_L09-条级归因_2026-11-23.md`，docs/25 新增 §8.4、§8.2 清掉 Q35/#12、Q44、Q59③④、Q68 四条已闭环项；docs/27 P0 表 L-01/L-02/L-03 全部翻 ✅、L-09 翻 ✅、§4.2/§4.3 清除 dogfood/Q59/容器 worker 三条过期读数。纯文档批，零代码零迁移零测试变化；条级计数仍 ✅83／🟡9／⬜4，后置不等于完成。
