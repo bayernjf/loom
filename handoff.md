@@ -3,17 +3,25 @@
 ## 待办登记（标准）
 
 > 本段是本产品唯一活跃待办入口；详细背景见下方原有章节。完成一项改 `[x]`，并在“最近变更 / Recently shipped”留证据。
-> 最近同步：2026-11-23
+> 最近同步：2026-11-25
 
 - [x] **C1 识别 / WF-01 自动触发链路** — 状态：本地已闭环（2026-11-22，容器重建 2026-11-23）；证据：`C1RecognitionWorker`＋`scripts/c1_worker.py`，真实库 intake 自动产出候选后停在 `pending_review`、二次扫描跳过；`model-hub-client@v0.2.0` 可达后 backend 镜像重建成功，容器 `LOOM_C1_WORKER_ENABLED=false`、launchd sidecar 唯一常驻（L-03 闭环）。
 - [x] **立项差距台账（docs/27）P0** — 状态：P0 三项已闭环（2026-11-23）；L-01 13 段 dogfood（docs/28）、L-02 Q59③④ 工程甲案 v0.1（docs/29）、L-03 worker 固化（launchd＋容器）；迭代纪律：现有功能全保留（private beta、客户菜单、`loom_client_`/`loom_staff_` 模式），只追加不删；P1/P2 明细仍 open，见 `docs/27_立项差距与待办_2026-11-23.md`。
 - [x] **L-04 / Q44 内容目的配比软提示** — 状态：本地已闭环（2026-11-23，Q377／02 C1.320）；证据：`GET /api/admin/content-goal-mix`＋`GoalMixPanel` 双落任务页/段13＋迁移 0067 五目的单边界种子；后端全量 1661 passed＋11 skipped、真 PG16 77 表/845 列 NO DRIFT、前端 typecheck＋check-admin＋build 三绿、真实浏览器两屏截图 `outputs/l04-q44/`。
 - [x] **L-09 条级归因** — 状态：done（2026-11-23）；13 条剩余项逐条定 `做/后置/不做`＝0/12/1，`docs/25` §8.4 已同步，明细 `docs/31_L09-条级归因_2026-11-23.md`；条级计数仍 ✅83／🟡9／⬜4，后置不等于完成。
 - [ ] **段 3/7/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器；`DIM-MERGE` 模板已由 Q378 重发本机库 v0.2；段 7 剩 `fit_score` 真自学习 + Q38；段 9 Q44 配比软提示已随 Q377 落地，余无本段硬缺口；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
-- [x] **真实自有产品 dogfood（本地自用口径）** — 状态：done（2026-11-23）；对象 growth-os，13 段全链真实入料跑通（intake `13d17c77-…` → final_id `0f392a3a-…` → content `cd099720-…`），证据 `loom/outputs/dogfood-growth-os/`；成稿为 synthetic 占位（model-hub 真模型上游失败待修），机制闭环不等同文案质量验收。
-- [ ] **成稿质量：E1 SSO + `doubao-seed-1-6`** — 状态：blocked by E1；下一步：SSO 重登后登记并切换模型。
+- [x] **真实自有产品 dogfood（本地自用口径）** — 状态：done（2026-11-23）；对象 growth-os，13 段全链真实入料跑通（intake `13d17c77-…` → final_id `0f392a3a-…` → content `cd099720-…`），证据 `loom/outputs/dogfood-growth-os/`；成稿为 synthetic 占位（2026-11-25 已在另一条 review 内容上跑通真实模型；本 dogfood 成稿本身未重生成），机制闭环不等同文案质量验收。
+- [x] **真实模型路径 / E1 阻塞定位** — 状态：已打通（2026-11-25）；当前 Loom project token 解析 `content -> doubao-seed-evolving`，backend 容器 projection rev 82；真实 `ARTICLE-GEN` / `ARTICLE-SEMANTIC-CHECK` / `ARTICLE-QC` 三条 run 全 succeeded，模型 assignment `asn_ea33a7e7bfe8574af9107c434cdff1bc`；证据 `outputs/real-model-2026-11-25/`。
+- [ ] **`doubao-seed-1-6` 切换** — 状态：blocked by Ark account access；preset 已登记 `mdl_dddd6c4ae5de157b646aa4141b3d122b`，但 shallow test 返回 `InvalidEndpointOrModel.NotFound`（模型或 endpoint 不存在/无权限），已 disabled；需 Ark 控制台 SSO/开通后再测，不影响当前 seed-evolving 真模型路径。
 - [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
 - [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前无客户登录页，客户内容口用 `loom_client_` Bearer，运营写口用 `loom_staff_` 个人令牌；本地自用可后置。
+
+> **2026-11-25 Loom 真实模型路径打通。**
+> - 根因：`backend/.env.shell` 仍是旧 Loom token，projection 缓存为 3 个 Agnes 3.0；`infra/.env` 的 `MODEL_HUB_URL/TOKEN` 为空，容器 API 静默回退 synthetic。
+> - 修复：改用 Loom 项目当前 token（hint `60bf`，明文只在 gitignored env）；`MODEL_HUB_URL=http://model-hub:8791`；recreate backend，重启 launchd C1 sidecar；`hub.sync` revision 82，projection 1 条 `content -> doubao-seed-evolving`。
+> - 验证：对 tenant `t-e2e-c174c8ee7f9f` 的 review 内容 `fefb41e6-…` 走客户 `revise` → 运营 `regenerate`；`ARTICLE-GEN` 1401/1492 tokens、semantic 688/213、QC 488/717，三条 succeeded；成稿 191 字符，quality 0.90，review_hits 无命中；证据 `outputs/real-model-2026-11-25/result.json`。
+> - `doubao-seed-1-6`：Ark preset 存在，已导入 `mdl_dddd6c4ae5de157b646aa4141b3d122b`，但 shallow test 返回 `InvalidEndpointOrModel.NotFound`（账号无该 endpoint/model 权限），已保持 disabled；需 Ark 控制台 SSO/开通，不是 token/投影问题。
+> - 边界：这是链路验收，不是文案质量验收；最新 dogfood 内容 `cd099720-…` 仍是 synthetic，未被改写。
 
 > **2026-11-23 README 对外自我描述收口（02 C1.322，Q379）。**
 > - 口径：受控 private beta / 单租户内容工作台，不是公网多租户自助 SaaS（Q144 NO-GO）；README 主体已于 `31afc28` 改好，本批收紧首段括号并翻正 docs/27 §7.1。
@@ -35,7 +43,7 @@
 > - L-01：growth-os 13 段全链跑通（C1 由 launchd worker 自动识别），证据 `outputs/dogfood-growth-os/` 15 份；启动包 docs/28 已回填结果。
 > - L-02：Q59③④ 工程甲案 v0.1 落码（`content/compliance.py`，`review_hits.construction/country_rules`，纯 advisory），单测 11 例＋全量 1641 passed；真实成稿复检证据 `outputs/dogfood-growth-os/15-review-q59-34.json`；规格 docs/29。
 > - L-03：launchd sidecar＋容器镜像重建双形态，单 worker 二选一（容器开关 false）；`infra/docker-compose.dogfood.yml` 提供本机回环端口，基础 compose 发布契约不变。
-> - 已知限制：真模型路径未通（model-hub 上游 3 次失败，synthetic 回退）；③④ 规则集为 v0.1 工程口径待校准。
+> - 已知限制：本段 dogfood 成稿仍为 synthetic；2026-11-25 已在另一条 review 内容上验证真实 seed-evolving 路径；③④ 规则集为 v0.1 工程口径待校准。
 
 > **2026-11-22 C1/WF-01 自动触发已在本地闭环（Q376）。**
 >
