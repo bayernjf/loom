@@ -1,0 +1,183 @@
+{
+  "revise": {
+    "http_status": 200,
+    "response": {
+      "content_id": "fefb41e6-df6e-11f1-a89a-16173182c4db",
+      "tenant_id": "t-e2e-c174c8ee7f9f",
+      "product_space_id": "bd1e64ac-9e27-4da6-b471-30aa3bf21c12",
+      "final_id": "537a2f28-c0e5-11f1-8218-9bc72af50592",
+      "goal": "ENGAGEMENT",
+      "platform": "x_platform",
+      "slot_id": "32df9f0c-abab-4523-8a3e-46b7799739e2",
+      "country": null,
+      "kind": "article",
+      "language": "zh-CN",
+      "body": "「温和又清爽的洁面 水润肤感太赞了」\n你是不是也在找一款用着舒服的日常洁面呀？\n这款温和洁面很适合日常使用，它是清爽质地，上脸没有厚重黏腻的负担，洗完之后带着自然的水润肤感，用着让人很安心。\n要是你近期有挑选洁面的打算，不妨多留意这类温和款哦。",
+      "review_hits": {
+        "bans": [],
+        "semantic": {
+          "checked": true,
+          "findings": []
+        },
+        "downgrades": [],
+        "block_required": false
+      },
+      "status": "revising",
+      "reject_reason": null,
+      "regenerate_count": 0,
+      "created_at": "2026-11-13T14:32:04.233132Z",
+      "discard_reason": null,
+      "published_url": null,
+      "platform_post_id": null,
+      "published_at": null,
+      "quality_score": 0.9,
+      "quality_issues": [],
+      "quality_threshold": 0.85,
+      "quality_advisory": false
+    }
+  },
+  "regenerate": {
+    "http_status": 200,
+    "response": {
+      "content_id": "fefb41e6-df6e-11f1-a89a-16173182c4db",
+      "tenant_id": "t-e2e-c174c8ee7f9f",
+      "product_space_id": "bd1e64ac-9e27-4da6-b471-30aa3bf21c12",
+      "final_id": "537a2f28-c0e5-11f1-8218-9bc72af50592",
+      "goal": "ENGAGEMENT",
+      "platform": "x_platform",
+      "slot_id": "32df9f0c-abab-4523-8a3e-46b7799739e2",
+      "country": null,
+      "kind": "article",
+      "language": "zh-CN",
+      "body": "《洗感超舒服的日常洁面，用着好安心》\n你是不是挑洁面的时候总纠结，怕清洁力太强刺激肌肤，又怕洗不干净肤感黏腻难受？\n这款是温和洁面类型，日常用适配度很高，不会给肌肤增添多余负担，用着特别安心。它是清爽质地，上脸顺滑好推开，冲洗的时候也很省事，不会有残留的闷肤感。洗完之后是水润肤感，脸蛋润润的不会拔干紧绷，摸起来软乎乎的很舒服。\n要是你最近在找适合日常用的洁面，这款可以多留意下哦。",
+      "review_hits": {
+        "bans": [],
+        "downgrades": [],
+        "block_required": false,
+        "semantic": {
+          "checked": true,
+          "findings": []
+        },
+        "construction": {
+          "checked": true,
+          "rules_version": "v0.1-engineering",
+          "hits": [],
+          "structure": {
+            "expected": "钩子-论点-收尾",
+            "paragraphs": 4,
+            "satisfied": true
+          },
+          "claims": [],
+          "unchecked": [
+            "tone",
+            "perspective",
+            "explicit",
+            "soften"
+          ]
+        },
+        "country_rules": {
+          "checked": true,
+          "rules_version": "v0.1-engineering",
+          "country": null,
+          "rule_set": "generic",
+          "hits": [],
+          "urls": [],
+          "lead_words": [],
+          "cta_words": []
+        }
+      },
+      "status": "review",
+      "reject_reason": null,
+      "regenerate_count": 1,
+      "created_at": "2026-11-13T14:32:04.233132Z",
+      "discard_reason": null,
+      "published_url": null,
+      "platform_post_id": null,
+      "published_at": null,
+      "quality_score": 0.9,
+      "quality_issues": [],
+      "quality_threshold": 0.85,
+      "quality_advisory": false
+    }
+  },
+  "skill_runs": [
+    {
+      "run_id": "d00c7b02-e8ce-11f1-8381-6e4c69543ebe",
+      "skill_id": "ARTICLE-GEN",
+      "status": "succeeded",
+      "model_id": "asn_ea33a7e7bfe8574af9107c434cdff1bc",
+      "input_tokens": 1401,
+      "output_tokens": 1492,
+      "input_cost": "0.001261",
+      "output_cost": "0.006714",
+      "currency_code": null,
+      "created_at": "2026-11-25T12:50:05.286758+00:00"
+    },
+    {
+      "run_id": "d6e50ac0-e8ce-11f1-8381-6e4c69543ebe",
+      "skill_id": "ARTICLE-SEMANTIC-CHECK",
+      "status": "succeeded",
+      "model_id": "asn_ea33a7e7bfe8574af9107c434cdff1bc",
+      "input_tokens": 688,
+      "output_tokens": 213,
+      "input_cost": "0.000619",
+      "output_cost": "0.000959",
+      "currency_code": null,
+      "created_at": "2026-11-25T12:50:05.286758+00:00"
+    },
+    {
+      "run_id": "e4b550ce-e8ce-11f1-8381-6e4c69543ebe",
+      "skill_id": "ARTICLE-QC",
+      "status": "succeeded",
+      "model_id": "asn_ea33a7e7bfe8574af9107c434cdff1bc",
+      "input_tokens": 488,
+      "output_tokens": 717,
+      "input_cost": "0.000439",
+      "output_cost": "0.003227",
+      "currency_code": null,
+      "created_at": "2026-11-25T12:50:05.286758+00:00"
+    }
+  ],
+  "content_id": "fefb41e6-df6e-11f1-a89a-16173182c4db",
+  "body": "《洗感超舒服的日常洁面，用着好安心》\n你是不是挑洁面的时候总纠结，怕清洁力太强刺激肌肤，又怕洗不干净肤感黏腻难受？\n这款是温和洁面类型，日常用适配度很高，不会给肌肤增添多余负担，用着特别安心。它是清爽质地，上脸顺滑好推开，冲洗的时候也很省事，不会有残留的闷肤感。洗完之后是水润肤感，脸蛋润润的不会拔干紧绷，摸起来软乎乎的很舒服。\n要是你最近在找适合日常用的洁面，这款可以多留意下哦。",
+  "quality_score": 0.9,
+  "review_hits": {
+    "bans": [],
+    "downgrades": [],
+    "block_required": false,
+    "semantic": {
+      "checked": true,
+      "findings": []
+    },
+    "construction": {
+      "checked": true,
+      "rules_version": "v0.1-engineering",
+      "hits": [],
+      "structure": {
+        "expected": "钩子-论点-收尾",
+        "paragraphs": 4,
+        "satisfied": true
+      },
+      "claims": [],
+      "unchecked": [
+        "tone",
+        "perspective",
+        "explicit",
+        "soften"
+      ]
+    },
+    "country_rules": {
+      "checked": true,
+      "rules_version": "v0.1-engineering",
+      "country": null,
+      "rule_set": "generic",
+      "hits": [],
+      "urls": [],
+      "lead_words": [],
+      "cta_words": []
+    }
+  },
+  "status": "review",
+  "regenerate_count": 1,
+  "generated_at": "2026-11-25T12:51:12.365277+00:00"
+}

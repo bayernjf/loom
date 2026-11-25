@@ -1,0 +1,1 @@
+{"ok":false,"latency_ms":194,"scope":"model","error":{"code":"model_not_found","detail":"{\"error\":{\"code\":\"InvalidEndpointOrModel.NotFound\",\"message\":\"The model or endpoint doubao-seed-1-6-250615 does not exist or you do not have access to it. Request id: 021795611301855b71a54db2718758900f1b5b7cc45ea655d9436\",\"param\":\"\",\"type\":\"Not Found\"}}"}}
