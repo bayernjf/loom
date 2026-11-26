@@ -7,13 +7,16 @@ Q8/Q9/Q10/Q11/Q12/Q15/line 14081 不绕）。create_all 不跑迁移种子，平
 由本文件 helper 自行插入；业务数据全部合成（16 §4）。
 """
 
+import json
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.compliance_wordlist.models import ComplianceWordlistEntry
 from app.core.db import Base, get_session
 from app.core.model_registry import drivers, synthetic
 from app.core.model_registry.drivers import GenerationResult
@@ -24,16 +27,17 @@ from app.core.model_registry.models import (
     SkillPromptVersion,
 )
 from app.core.model_registry.seeds import (
-    DIM_MERGE_PROMPT_ID,
-    DIM_MERGE_PROMPT_TEMPLATE,
-    DIM_MERGE_PROMPT_VARIABLES,
-    DIM_MERGE_PROMPT_VERSION,
+    DIM_MERGE_PROMPT_COMPLIANCE_ID,
+    DIM_MERGE_PROMPT_COMPLIANCE_TEMPLATE,
+    DIM_MERGE_PROMPT_COMPLIANCE_VARIABLES,
+    DIM_MERGE_PROMPT_COMPLIANCE_VERSION,
     SCENE_DIM_MERGE,
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.main import app
 from app.product.fieldpool.models import FieldPool, FPSourceRoute
+from app.product.modeling.models import G1Category, G1CategoryTemplate
 from app.product.product_intake.models import (
     G2Field,
     ProductIntakeApplication,
@@ -72,18 +76,24 @@ async def client(session_factory):
                 provider="synthetic", status="active",
             ),
             AISceneRoute(scene=SCENE_DIM_MERGE, model_id=SYNTHETIC_MODEL_ID),
-            SkillPrompt(skill_id=SCENE_DIM_MERGE, current_version=DIM_MERGE_PROMPT_VERSION),
+            SkillPrompt(
+                skill_id=SCENE_DIM_MERGE,
+                current_version=DIM_MERGE_PROMPT_COMPLIANCE_VERSION,
+            ),
             SkillPromptVersion(
-                version_id=DIM_MERGE_PROMPT_ID, skill_id=SCENE_DIM_MERGE,
-                version=DIM_MERGE_PROMPT_VERSION, template=DIM_MERGE_PROMPT_TEMPLATE,
-                variables={"vars": DIM_MERGE_PROMPT_VARIABLES},
+                version_id=DIM_MERGE_PROMPT_COMPLIANCE_ID,
+                skill_id=SCENE_DIM_MERGE,
+                version=DIM_MERGE_PROMPT_COMPLIANCE_VERSION,
+                template=DIM_MERGE_PROMPT_COMPLIANCE_TEMPLATE,
+                variables={"vars": DIM_MERGE_PROMPT_COMPLIANCE_VARIABLES},
             ),
             G2Field(fid="f_a", cat="common", field_name="字段A"),
             G2Field(fid="f_b", cat="selling", field_name="字段B"),
             FPSourceRoute(route="user_input", name="用户输入", sort_order=1),
             FPSourceRoute(route="g2_frequent", name="G2高频", sort_order=2),
             FPSourceRoute(route="compliance_risk", name="合规风险面", sort_order=3),
-            FPSourceRoute(route="disabled_route", name="停用路", enabled=False, sort_order=4),
+            FPSourceRoute(route="category_template", name="G1类目模板", sort_order=4),
+            FPSourceRoute(route="disabled_route", name="停用路", enabled=False, sort_order=5),
         ])
         await session.commit()
     transport = ASGITransport(app=app)
@@ -91,7 +101,7 @@ async def client(session_factory):
         yield ac
 
 
-async def _make_ps(session_factory, *, sensitive=False) -> str:
+async def _make_ps(session_factory, *, sensitive=False, category_node_id=None) -> str:
     async with session_factory() as session:
         intake = ProductIntakeApplication(
             tenant_id="t1", status="stored", profile={"f_a": "x"}
@@ -104,10 +114,27 @@ async def _make_ps(session_factory, *, sensitive=False) -> str:
             sensitive_industry=sensitive,
             industry_tag="medical" if sensitive else "general",
             profile_snapshot={"f_a": "合成面霜", "f_b": "保湿"},
+            category_node_id=category_node_id,
         )
         session.add(ps)
         await session.commit()
         return ps.product_space_id
+
+
+async def _make_category_template(session_factory, field_list, *, status="approved") -> str:
+    async with session_factory() as session:
+        category = G1Category(name="合成叶子类目", status="active")
+        session.add(category)
+        await session.flush()
+        session.add(
+            G1CategoryTemplate(
+                category_id=category.category_id,
+                field_list=field_list,
+                status=status,
+            )
+        )
+        await session.commit()
+        return category.category_id
 
 
 def _plan_body(**kw):
@@ -366,6 +393,219 @@ def _valid_out(**kw):
     }
     out.update(kw)
     return out
+
+
+async def test_llm_plan_injects_category_template_source(
+    client, session_factory, monkeypatch
+):
+    async with session_factory() as session:
+        session.add(G2Field(fid="f_cat", cat="common", field_name="类目字段"))
+        await session.commit()
+    category_id = await _make_category_template(
+        session_factory, ["f_cat", "f_ghost"]
+    )
+    ps_id = await _make_ps(session_factory, category_node_id=category_id)
+
+    captured: dict = {}
+
+    async def _capture(self, *, scene, user_message, variables, **kwargs):
+        captured.update(variables)
+        out = _valid_out(
+            dimensions=[
+                _dim(
+                    1,
+                    field_name="类目字段",
+                    source_route="category_template",
+                    source_ref="category_template:f_cat",
+                    fid="f_cat",
+                ),
+                _dim(2, field_name="维度2b"),
+                _dim(3, field_name="维度3b"),
+            ]
+        )
+        return GenerationResult(
+            text=json.dumps(out, ensure_ascii=False), input_tokens=2, output_tokens=3
+        )
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _capture)
+    r = await client.post(
+        f"/api/product-spaces/{ps_id}/field-pools/llm-plan", json=_plan_body()
+    )
+    assert r.status_code == 201, r.text
+
+    assert captured["_category_template"] == [{
+        "category_id": category_id,
+        "category_name": "合成叶子类目",
+        "fid": "f_cat",
+        "field_name": "类目字段",
+        "source_ref": "category_template:f_cat",
+    }]
+    assert "f_cat" in captured["category_template_entries"]
+    assert "f_ghost" not in captured["category_template_entries"]
+
+    body = r.json()
+    async with session_factory() as session:
+        run = await session.get(SkillRun, body["run_id"])
+        assert run.input_payload["category_template_field_count"] == 1
+        cand = await session.get(SkillCandidate, body["candidates"][0]["candidate_id"])
+        cat_dim = next(
+            d for d in cand.payload["dimensions"]
+            if d["source_route"] == "category_template"
+        )
+        assert cat_dim["source_ref"] == "category_template:f_cat"
+        assert cat_dim["fid"] == "f_cat"
+
+
+async def test_llm_plan_skips_unapproved_category_template(
+    client, session_factory, monkeypatch
+):
+    async with session_factory() as session:
+        session.add(G2Field(fid="f_cat", cat="common", field_name="类目字段"))
+        await session.commit()
+    category_id = await _make_category_template(
+        session_factory, ["f_cat"], status="draft"
+    )
+    ps_id = await _make_ps(session_factory, category_node_id=category_id)
+
+    captured: dict = {}
+
+    async def _capture(self, *, scene, user_message, variables, **kwargs):
+        captured.update(variables)
+        return GenerationResult(
+            text=json.dumps(_valid_out(), ensure_ascii=False),
+            input_tokens=2,
+            output_tokens=3,
+        )
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _capture)
+    r = await client.post(
+        f"/api/product-spaces/{ps_id}/field-pools/llm-plan", json=_plan_body()
+    )
+    assert r.status_code == 201, r.text
+    assert captured["_category_template"] == []
+    assert captured["category_template_entries"] == "（无）"
+
+
+async def _make_wordlist_entry(
+    session_factory,
+    *,
+    word: str,
+    level: str = "critical",
+    action: str = "ban",
+    industry: str | None = None,
+    country: str | None = None,
+    status: str = "active",
+    effective_from: datetime | None = None,
+    effective_until: datetime | None = None,
+) -> str:
+    async with session_factory() as session:
+        entry = ComplianceWordlistEntry(
+            word=word,
+            level=level,
+            action=action,
+            industry=industry,
+            country=country,
+            status=status,
+            effective_from=effective_from,
+            effective_until=effective_until,
+        )
+        session.add(entry)
+        await session.commit()
+        return entry.entry_id
+
+
+async def test_llm_plan_injects_compliance_risk_source(
+    client, session_factory, monkeypatch
+):
+    generic_id = await _make_wordlist_entry(session_factory, word="根治")
+    medical_id = await _make_wordlist_entry(
+        session_factory, word="治疗", level="high", industry="medical"
+    )
+    await _make_wordlist_entry(
+        session_factory, word="金融承诺", level="high", industry="finance"
+    )
+    await _make_wordlist_entry(
+        session_factory,
+        word="过期词",
+        effective_until=datetime.now(UTC) - timedelta(days=1),
+    )
+    await _make_wordlist_entry(
+        session_factory,
+        word="未来词",
+        effective_from=datetime.now(UTC) + timedelta(days=1),
+    )
+    await _make_wordlist_entry(session_factory, word="美国限定", country="US")
+    ps_id = await _make_ps(session_factory, sensitive=True)
+
+    captured: dict = {}
+
+    async def _capture(self, *, scene, user_message, variables, **kwargs):
+        captured.update(variables)
+        out = _valid_out(
+            dimensions=[
+                _dim(1, fid="f_a", source_ref="g2:f_a"),
+                _dim(2, field_name="维度2b"),
+                _dim(3, field_name="维度3b"),
+                _dim(
+                    4,
+                    field_name="合规风险",
+                    role="risk_control",
+                    source_route="compliance_risk",
+                    source_ref=f"compliance_risk:{generic_id}",
+                ),
+            ]
+        )
+        return GenerationResult(
+            text=json.dumps(out, ensure_ascii=False), input_tokens=2, output_tokens=3
+        )
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _capture)
+    r = await client.post(
+        f"/api/product-spaces/{ps_id}/field-pools/llm-plan", json=_plan_body()
+    )
+    assert r.status_code == 201, r.text
+
+    assert captured["_compliance_risk"] == [
+        {
+            "entry_id": generic_id,
+            "word": "根治",
+            "level": "critical",
+            "action": "ban",
+            "downgrade_target": None,
+            "industry": None,
+            "country": None,
+            "layer": "base",
+            "source_ref": f"compliance_risk:{generic_id}",
+        },
+        {
+            "entry_id": medical_id,
+            "word": "治疗",
+            "level": "high",
+            "action": "ban",
+            "downgrade_target": None,
+            "industry": "medical",
+            "country": None,
+            "layer": "base",
+            "source_ref": f"compliance_risk:{medical_id}",
+        },
+    ]
+    text = captured["compliance_risk_entries"]
+    assert "根治" in text and "治疗" in text
+    assert "过期词" not in text
+    assert "未来词" not in text
+    assert "金融承诺" not in text
+    assert "美国限定" not in text
+
+    body = r.json()
+    async with session_factory() as session:
+        run = await session.get(SkillRun, body["run_id"])
+        assert run.input_payload["compliance_risk_entry_count"] == 2
+        cand = await session.get(SkillCandidate, body["candidates"][0]["candidate_id"])
+        risk_dim = next(
+            d for d in cand.payload["dimensions"]
+            if d["source_route"] == "compliance_risk"
+        )
+        assert risk_dim["source_ref"] == f"compliance_risk:{generic_id}"
 
 
 async def test_llm_plan_rejects_target_echo_drift(client, session_factory, monkeypatch):
