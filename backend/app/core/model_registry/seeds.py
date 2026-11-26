@@ -148,6 +148,69 @@ DIM_MERGE_PROMPT_VARIABLES = [
     "target_atom_range",
 ]
 
+# L-07 第一路 connector：DIM-MERGE v0.3 追加 G1 已审核类目模板变量。v0.1 保留
+# 历史种子内容不动；存量库由 0068 迁移发布 v0.3 并切换 current_version。
+DIM_MERGE_PROMPT_CATEGORY_VERSION = "v0.3"
+DIM_MERGE_PROMPT_CATEGORY_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:DIM-MERGE:v0.3")
+)
+DIM_MERGE_PROMPT_CATEGORY_TEMPLATE = """你是 Loom 私域内容生产平台段3 的 DIM-MERGE Skill：综合 FIELDPOOL-PLAN 规划框架与 DIM-SOURCE 来源结果，为一个产品空间产出合并后的完整字段池方案。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
+
+【产品资料（profile_snapshot 唯一资料副本，Q74）】
+$product_profile
+
+【敏感行业】$sensitive_industry（敏感行业方案必含 risk_control 维度，Q11；行业标签：$industry_tag）
+
+【启用中的来源路由】（source_route 只能取自下表，未知/停用路由一律拒绝，DIM-SOURCE failure_policy）
+$enabled_routes
+
+【G2 active 字段】（fid 只能复用下表内字段；提新字段时不要给 fid，改给 definition）
+$active_g2_fields
+
+【灵感库条目】（source_route 取 common_inspiration / product_inspiration 时，只能引用下列真实条目：
+通用层对该租户所有产品共享，产品专属层仅本产品可用；source_ref 写 inspiration:<entry_id>；
+列表为空时不得编造，改走 user_input 或 category_template 等其它来源）
+$inspiration_entries
+
+【G1 类目模板】（source_route 取 category_template 时，只能引用下列已审核模板字段；
+source_ref 写 category_template:<fid>；列表为空时不得编造，改走 user_input 或其它来源）
+$category_template_entries
+
+【硬性边界】维度数 $dim_range（PT-FP-PLAN/Q12）；目标原子数 $target_atom_range（Q15），target_atom_min/target_atom_max 必须原样回传。
+每条维度必须含非空 field_name、role（product_attribute 或 risk_control，且 ≥1 条 product_attribute）、source_route、confidence（0..1 置信度，<0.85 仅转人工细看 Q9）、source_ref（依据红线 line 14081：只许引用上表资料中的真实来源，如 g2:<fid>、product_profile:<资料键>、industry_tag:<标签>、category_template:<fid>；禁止编造）。
+similarity/related_fid 可省略（疑似重复 ≥0.9 仅标记，Q10，人工终裁）。
+
+只输出：
+{"target_atom_min": 0, "target_atom_max": 0, "dimensions": [{"field_name": "...", "role": "product_attribute", "source_route": "...", "confidence": 0.0, "source_ref": "...", "fid": "...", "similarity": 0.0, "related_fid": "...", "definition": "..."}]}
+"""
+
+DIM_MERGE_PROMPT_CATEGORY_VARIABLES = [
+    *DIM_MERGE_PROMPT_VARIABLES,
+    "category_template_entries",
+]
+
+# L-07 第二路：DIM-MERGE v0.4 追加合规风险词条变量；v0.3 保留不动，存量库由
+# 0069 迁移发布 v0.4 并切换 current_version。
+DIM_MERGE_PROMPT_COMPLIANCE_VERSION = "v0.4"
+DIM_MERGE_PROMPT_COMPLIANCE_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:DIM-MERGE:v0.4")
+)
+_DIM_MERGE_COMPLIANCE_SECTION = """【合规风险词条】（source_route 取 compliance_risk 时，只能引用下列当前生效词条；
+source_ref 写 compliance_risk:<entry_id>；列表为空时不得编造，改走 user_input 或其它来源）
+$compliance_risk_entries
+
+"""
+DIM_MERGE_PROMPT_COMPLIANCE_TEMPLATE = DIM_MERGE_PROMPT_CATEGORY_TEMPLATE.replace(
+    "【硬性边界】", _DIM_MERGE_COMPLIANCE_SECTION + "【硬性边界】"
+).replace(
+    "category_template:<fid>；禁止编造",
+    "category_template:<fid>、compliance_risk:<entry_id>；禁止编造",
+)
+DIM_MERGE_PROMPT_COMPLIANCE_VARIABLES = [
+    *DIM_MERGE_PROMPT_CATEGORY_VARIABLES,
+    "compliance_risk_entries",
+]
+
 CONFLICT_PRECHECK_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段4 WF-03 的 CONFLICT-PRECHECK Skill：为一个产品空间的字段池原子批量补池（ATOM-EXPAND 生产契约）。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
 
 【产品资料（唯一资料副本，Q74）】

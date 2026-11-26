@@ -32,6 +32,14 @@ from app.product.fieldpool.service import (
     GateNotAllowed,
     ProductSpaceNotFound,
 )
+from app.product.fieldpool.source_connectors import (
+    CATEGORY_TEMPLATE_ROUTE,
+    COMPLIANCE_RISK_ROUTE,
+    format_category_template_context,
+    format_compliance_risk_context,
+    load_category_template_entries,
+    load_compliance_risk_entries,
+)
 from app.product.inspiration import service as inspiration_service
 from app.product.product_intake.models import G2Field, ProductSpace
 
@@ -104,6 +112,24 @@ async def invoke_field_plan(
     )
     insp_text = inspiration_service.format_inspiration_context(insp_entries)
 
+    # L-07 第一路 connector：仅当 category_template 路由启用时读取 G1 已审核模板；
+    # 未绑定类目/模板未审核/字段失效均 fail-closed 为空，不编造来源。
+    category_entries = (
+        await load_category_template_entries(session, ps)
+        if CATEGORY_TEMPLATE_ROUTE in enabled_routes
+        else []
+    )
+    category_text = format_category_template_context(category_entries)
+
+    # L-07 第二路：仅当 compliance_risk 路由启用时读取当前生效、适用行业/全球
+    # 的合规词条；过期/未生效/国家定向词条不注入，避免无依据风险维度。
+    compliance_entries = (
+        await load_compliance_risk_entries(session, ps)
+        if COMPLIANCE_RISK_ROUTE in enabled_routes
+        else []
+    )
+    compliance_text = format_compliance_risk_context(compliance_entries)
+
     profile = dict(ps.profile_snapshot or {})
     profile_lines = [f"- {key}: {value}" for key, value in profile.items()]
 
@@ -120,9 +146,37 @@ async def invoke_field_plan(
         "target_atom_range": f"{target_min}-{target_max}",
         # Q358：灵感库依据内容（模板渲染用）；空时由 format_inspiration_context 给「（无）」。
         "inspiration_entries": insp_text,
+        # L-07：G1 类目模板依据内容（模板渲染用）；空时给「（无）」。
+        "category_template_entries": category_text,
+        # L-07：合规风险词条依据内容（模板渲染用）；空时给「（无）」。
+        "compliance_risk_entries": compliance_text,
         "_inspiration": [
             {"entry_id": e.entry_id, "layer": e.layer, "content": e.content}
             for e in insp_entries
+        ],
+        "_category_template": [
+            {
+                "category_id": e.category_id,
+                "category_name": e.category_name,
+                "fid": e.fid,
+                "field_name": e.field_name,
+                "source_ref": e.source_ref,
+            }
+            for e in category_entries
+        ],
+        "_compliance_risk": [
+            {
+                "entry_id": e.entry_id,
+                "word": e.word,
+                "level": e.level,
+                "action": e.action,
+                "downgrade_target": e.downgrade_target,
+                "industry": e.industry,
+                "country": e.country,
+                "layer": e.layer,
+                "source_ref": e.source_ref,
+            }
+            for e in compliance_entries
         ],
         # 合成替身驱动用（机读），不进模板占位：
         "_profile": {str(k): str(v) for k, v in profile.items()},
@@ -235,6 +289,8 @@ async def invoke_field_plan(
             "sensitive_industry": ps.sensitive_industry,
             "enabled_route_count": len(routes),
             "active_g2_field_count": len(active_fids),
+            "category_template_field_count": len(category_entries),
+            "compliance_risk_entry_count": len(compliance_entries),
             "dimension_count": len(dimensions),
         },
         output=payload,
