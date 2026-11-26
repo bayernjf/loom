@@ -3,18 +3,44 @@
 ## 待办登记（标准）
 
 > 本段是本产品唯一活跃待办入口；详细背景见下方原有章节。完成一项改 `[x]`，并在“最近变更 / Recently shipped”留证据。
-> 最近同步：2026-11-25
+> 最近同步：2026-11-26
+
+<!-- tier0:todos v1 -->
+| id | title | status | priority | owner | next | evidence | updated |
+|---|---|---|---|---|---|---|---|
+| L-06 | 段 7 `fit_score` 真自学习 + Q38 六码强校验 | blocked | p1 | self | 需事件→权重映射、审核角色码、Q38 字典口径 | `loom/docs/27_立项差距与待办_2026-11-23.md` | 2026-11-25 |
+| L-07 | 段 3 `DIM-SOURCE` 七路外部连接器 + `DIM-MERGE` 重发 | open | p1 | self | `category_template` + `compliance_risk` 两路已通；其余五路各接一条真实/可复现数据 | `loom/docs/27_立项差距与待办_2026-11-23.md`；`loom/outputs/l07-category-template-spike/`；`loom/outputs/l07-compliance-risk-spike/` | 2026-11-26 |
+| L-13 | 段 12 视频转写 / 成片复检 | planned | p2 | self | 视视频是否为主产出决定优先级；Q59③④ 规则集待业务/法审校准 | `loom/docs/27_立项差距与待办_2026-11-23.md` | 2026-11-25 |
+| LM-01 | `doubao-seed-1-6` 切换 | blocked | p1 | external | Ark 控制台 SSO/开通后再测 | `loom/handoff.md` | 2026-11-25 |
+| LM-02 | 客户侧真实认证 / 租户绑定（V2 第一项） | open | p2 | self | 客户登录页与租户绑定；本地自用可后置 | `loom/README.md` | 2026-11-25 |
+<!-- /tier0:todos -->
+
+> 段 3/7/12 已拆为 L-06/L-07/L-13；L-05/L-08 见 bayjf 按序清单（仅文档登记）。
+
+### 已完成（历史）
 
 - [x] **C1 识别 / WF-01 自动触发链路** — 状态：本地已闭环（2026-11-22，容器重建 2026-11-23）；证据：`C1RecognitionWorker`＋`scripts/c1_worker.py`，真实库 intake 自动产出候选后停在 `pending_review`、二次扫描跳过；`model-hub-client@v0.2.0` 可达后 backend 镜像重建成功，容器 `LOOM_C1_WORKER_ENABLED=false`、launchd sidecar 唯一常驻（L-03 闭环）。
 - [x] **立项差距台账（docs/27）P0** — 状态：P0 三项已闭环（2026-11-23）；L-01 13 段 dogfood（docs/28）、L-02 Q59③④ 工程甲案 v0.1（docs/29）、L-03 worker 固化（launchd＋容器）；迭代纪律：现有功能全保留（private beta、客户菜单、`loom_client_`/`loom_staff_` 模式），只追加不删；P1/P2 明细仍 open，见 `docs/27_立项差距与待办_2026-11-23.md`。
 - [x] **L-04 / Q44 内容目的配比软提示** — 状态：本地已闭环（2026-11-23，Q377／02 C1.320）；证据：`GET /api/admin/content-goal-mix`＋`GoalMixPanel` 双落任务页/段13＋迁移 0067 五目的单边界种子；后端全量 1661 passed＋11 skipped、真 PG16 77 表/845 列 NO DRIFT、前端 typecheck＋check-admin＋build 三绿、真实浏览器两屏截图 `outputs/l04-q44/`。
 - [x] **L-09 条级归因** — 状态：done（2026-11-23）；13 条剩余项逐条定 `做/后置/不做`＝0/12/1，`docs/25` §8.4 已同步，明细 `docs/31_L09-条级归因_2026-11-23.md`；条级计数仍 ✅83／🟡9／⬜4，后置不等于完成。
-- [ ] **段 3/7/12 段级闭环** — 状态：open（详见 docs/27）；段 3 剩 `DIM-SOURCE` 七路外部连接器；`DIM-MERGE` 模板已由 Q378 重发本机库 v0.2；段 7 剩 `fit_score` 真自学习 + Q38；段 9 Q44 配比软提示已随 Q377 落地，余无本段硬缺口；段 12 剩视频转写/成片复检（Q59③④ 已随 Q376 落 v0.1，规则集待业务/法审校准）。分段编目/对象存储/成片回填已随 Q336/Q354/Q368 落地。
 - [x] **真实自有产品 dogfood（本地自用口径）** — 状态：done（2026-11-23）；对象 growth-os，13 段全链真实入料跑通（intake `13d17c77-…` → final_id `0f392a3a-…` → content `cd099720-…`），证据 `loom/outputs/dogfood-growth-os/`；成稿为 synthetic 占位（2026-11-25 已在另一条 review 内容上跑通真实模型；本 dogfood 成稿本身未重生成），机制闭环不等同文案质量验收。
 - [x] **真实模型路径 / E1 阻塞定位** — 状态：已打通（2026-11-25）；当前 Loom project token 解析 `content -> doubao-seed-evolving`，backend 容器 projection rev 82；真实 `ARTICLE-GEN` / `ARTICLE-SEMANTIC-CHECK` / `ARTICLE-QC` 三条 run 全 succeeded，模型 assignment `asn_ea33a7e7bfe8574af9107c434cdff1bc`；证据 `outputs/real-model-2026-11-25/`。
-- [ ] **`doubao-seed-1-6` 切换** — 状态：blocked by Ark account access；preset 已登记 `mdl_dddd6c4ae5de157b646aa4141b3d122b`，但 shallow test 返回 `InvalidEndpointOrModel.NotFound`（模型或 endpoint 不存在/无权限），已 disabled；需 Ark 控制台 SSO/开通后再测，不影响当前 seed-evolving 真模型路径。
-- [ ] **fit_score 真自学习业务规则** — 状态：blocked；需事件→权重映射、审核角色码、Q38 字典口径。
-- [ ] **客户侧真实认证 / 租户绑定（V2 第一项）** — 状态：open；当前无客户登录页，客户内容口用 `loom_client_` Bearer，运营写口用 `loom_staff_` 个人令牌；本地自用可后置。
+
+> **2026-11-26 L-07 单路 DIM-SOURCE connector（category_template）本地打通。**
+> - 数据链：`ProductSpace.category_node_id` → `G1CategoryTemplate(status=approved)` → `G2Field(status=active)` → `category_template_entries` / `_category_template` 变量 → DIM-MERGE prompt v0.3 → 候选维度 `source_ref=category_template:<fid>`。
+> - 代码：新增 `backend/app/product/fieldpool/source_connectors.py`；`field_plan.py` 仅在 `category_template` 路由启用时注入，缺绑定/模板未审核/字段失效均 fail-closed 为空。
+> - 模板：新增 DIM-MERGE v0.3 常量；迁移 `0068_dim_merge_category_template_prompt` 已在本机库执行，`current_version=v0.3`（1477 字符、9 变量），v0.1/v0.2 历史行保留。
+> - 运行：`loom-backend:latest` 已重建并重启 `infra-backend-1`，容器 healthy、`healthz` OK、新 connector 可导入。
+> - 验证：`test_fieldpool_llm_plan_api.py` 13 passed（approved 注入＋draft 跳过）；相关单测/接口 63 passed；后端全量 1668 passed / 11 skipped；ruff 通过；v0.3 prompt 渲染实测无未替换占位。证据 `outputs/l07-category-template-spike/`。
+> - 边界：当时只接七路中的 `category_template`；其余六路仍需外部来源，不把 L-07 标为闭环。本机库当前 0 条 approved 模板、0 个绑定类目的 PS，本轮用 in-memory 集成测试证明链路，不向本机库写合成业务数据。未 commit / 未 push。
+
+> **2026-11-26 L-07 第二路 DIM-SOURCE connector（compliance_risk）本地打通。**
+> - 数据链：`ComplianceWordlistEntry(status=active)` → 当前生效窗口 → `country is NULL` + `industry is NULL|ps.industry_tag` → `compliance_risk_entries` / `_compliance_risk` 变量 → DIM-MERGE prompt v0.4 → 候选维度 `source_ref=compliance_risk:<entry_id>`。
+> - 代码：`source_connectors.py` 新增 `load_compliance_risk_entries`/`format_compliance_risk_context`，最多 20 条；`field_plan.py` 仅在 `compliance_risk` 路由启用时注入，过期/未生效/国家定向/行业不匹配均 fail-closed 跳过。
+> - 模板：新增 DIM-MERGE v0.4 常量；迁移 `0069_dim_merge_compliance_risk_prompt` 已在本机库执行，`current_version=v0.4`（1657 字符、10 变量），v0.1/v0.2/v0.3 历史行保留。
+> - 运行：`loom-backend:latest` 已重建并重启 `infra-backend-1`，容器 healthy、`healthz` OK、新 connector 可导入；真实库 2 个 ProductSpace 各读到 6 条生效词条，v0.4 渲染 2255 字符且无未替换占位。
+> - 验证：定向 24 passed（含合规词条注入/过滤 + 迁移契约）；后端全量 1674 passed / 11 skipped；ruff/mypy 通过。证据 `outputs/l07-compliance-risk-spike/`。
+> - 边界：累计只接七路中的两路；其余五路（`user_input`/`g2_frequent`/`common_inspiration`/`product_inspiration`/`case_evidence`）仍需真实样本或外部来源，不把 L-07 标为闭环。未 commit / 未 push。
 
 > **2026-11-25 Loom 真实模型路径打通。**
 > - 根因：`backend/.env.shell` 仍是旧 Loom token，projection 缓存为 3 个 Agnes 3.0；`infra/.env` 的 `MODEL_HUB_URL/TOKEN` 为空，容器 API 静默回退 synthetic。
@@ -250,6 +276,8 @@
 > ~~Q328 banner 原文~~（含其子项）已按「最近 5 条」上限于 2026-10-10 逐字滚入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)。
 > ~~Q327 banner 原文~~（含其子项）已按「最近 5 条」上限于 2026-10-10 逐字滚入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)。
 > ~~Q326 banner 原文~~（含其子项）已按「最近 5 条」上限于 2026-10-10 逐字滚入 [docs/handoff-archive-2026-10-08.md](docs/handoff-archive-2026-10-08.md)。
+
+
 ## 项目一句话
 Loom = 受控 private beta / 单租户内容工作台（私域内容生产白名单链，Q144 公网自助 SaaS NO-GO）：把"产品信息 → 可发布内容"拆成 **13 段链（CHAIN_13）** 可编排生产链，AI 只产候选、人工 Gate 裁决、`final_id` 唯一出口、反馈回流反哺知识。三端：用户前端 / 管理后端（13 模块）/ 系统后台 API。
 ## 项目文档（完整清单，单一事实源）
