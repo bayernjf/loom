@@ -9,7 +9,7 @@
 | id | title | status | priority | owner | next | evidence | updated |
 |---|---|---|---|---|---|---|---|
 | L-06 | 段 7 `fit_score` 真自学习 + Q38 六码强校验 | blocked | p1 | self | 需事件→权重映射、审核角色码、Q38 字典口径 | `loom/docs/27_立项差距与待办_2026-11-23.md` | 2026-11-25 |
-| L-07 | 段 3 `DIM-SOURCE` 七路外部连接器 + `DIM-MERGE` 重发 | open | p1 | self | 六路已接：`category_template` + `compliance_risk` 两路显式 connector；`common_inspiration` / `product_inspiration` 已由 Q358 `get_context_for_planning` 接；`user_input` / `g2_frequent` 天然已有（Source input / active_g2_fields）。仅剩 `case_evidence`（无数据模型，需设计裁决） | `loom/docs/27_立项差距与待办_2026-11-23.md`；`loom/outputs/l07-*`；`backend/app/product/inspiration/service.py` | 2026-11-27 |
+| L-07 | 段 3 `DIM-SOURCE` 七路外部连接器 + `DIM-MERGE` 重发 | done | p1 | self | 七路全接：`category_template`/`compliance_risk`/`case_evidence` 三路显式 connector；`common_inspiration`/`product_inspiration` 由 Q358 接；`user_input`/`g2_frequent` 天然已有。case_evidence 迁移 0070 建表 + DIM-MERGE v0.5 | `backend/alembic/versions/0070_*.py`；`backend/app/product/case_evidence/`；`backend/app/product/fieldpool/source_connectors.py`；`outputs/l07-*` | 2026-11-27 |
 | L-13 | 段 12 视频转写 / 成片复检 | planned | p2 | self | 视视频是否为主产出决定优先级；Q59③④ 规则集待业务/法审校准 | `loom/docs/27_立项差距与待办_2026-11-23.md` | 2026-11-25 |
 | LM-01 | `doubao-seed-1-6` 切换 | blocked | p1 | external | Ark 控制台 SSO/开通后再测 | `loom/handoff.md` | 2026-11-25 |
 | LM-02 | 客户侧真实认证 / 租户绑定（V2 第一项） | open | p2 | self | 客户登录页与租户绑定；本地自用可后置 | `loom/README.md` | 2026-11-25 |
@@ -41,6 +41,13 @@
 > - 运行：`loom-backend:latest` 已重建并重启 `infra-backend-1`，容器 healthy、`healthz` OK、新 connector 可导入；真实库 2 个 ProductSpace 各读到 6 条生效词条，v0.4 渲染 2255 字符且无未替换占位。
 > - 验证：定向 24 passed（含合规词条注入/过滤 + 迁移契约）；后端全量 1674 passed / 11 skipped；ruff/mypy 通过。证据 `outputs/l07-compliance-risk-spike/`。
 > - 边界：累计只接七路中的两路；其余五路（`user_input`/`g2_frequent`/`common_inspiration`/`product_inspiration`/`case_evidence`）仍需真实样本或外部来源，不把 L-07 标为闭环。未 commit / 未 push。
+
+> **2026-11-27 L-07 第三路 DIM-SOURCE connector（case_evidence）本地打通，七路全接。**
+> - 数据链：`CaseEvidence(enabled)` → 租户通用层（`product_space_id IS NULL`）+ 本产品专属层 → `case_evidence_entries` / `_case_evidence` 变量 → DIM-MERGE prompt v0.5 → 候选维度 `source_ref=case_evidence:<case_id>`。
+> - 代码：新建 `backend/app/product/case_evidence/models.py`（`case_evidence` 表：case_id/tenant_id/product_space_id/title/content/source_url/enabled，零种子，禁止臆造）；`source_connectors.py` 新增 `load_case_evidence_entries`/`format_case_evidence_context`（通用层在前、最多 20 条、未启用 fail-closed）；`field_plan.py` 仅在 `case_evidence` 路由启用时注入，并加 `case_evidence_entry_count` 入 run input；`alembic/env.py` 登记新模型模块。
+> - 模板：新增 DIM-MERGE v0.5 常量（在 v0.4 基础上追加 `case_evidence_entries` 段与 `case_evidence:<case_id>` 依据说明）；迁移 `0070_case_evidence_dim_merge_v05` 建表 + 发布 v0.5 并切 `current_version`。
+> - 验证：迁移契约 5 例、fieldpool 集成 16 passed（含 case_evidence 注入 + 停用跳过）；后端全量 **1681 passed / 11 skipped**（89.13s）；ruff 全净；`test_dba_schema_check` 25 passed（模型注册完整性含 case_evidence）。SQLite 往返因迁移 0010 用 PG 专属 `now()` 不可行，PG16 往返由 CI Migration gate 覆盖（本地未起 PG 容器）。
+> - 边界：case_evidence 数据零种子，管理端 CRUD 后置（当前用 in-memory 集成测试证明链路，不向本机库写合成业务数据）；七路自此全接，L-07 标 done。
 
 > **2026-11-25 Loom 真实模型路径打通。**
 > - 根因：`backend/.env.shell` 仍是旧 Loom token，projection 缓存为 3 个 Agnes 3.0；`infra/.env` 的 `MODEL_HUB_URL/TOKEN` 为空，容器 API 静默回退 synthetic。
