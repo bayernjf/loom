@@ -27,15 +27,16 @@ from app.core.model_registry.models import (
     SkillPromptVersion,
 )
 from app.core.model_registry.seeds import (
-    DIM_MERGE_PROMPT_COMPLIANCE_ID,
-    DIM_MERGE_PROMPT_COMPLIANCE_TEMPLATE,
-    DIM_MERGE_PROMPT_COMPLIANCE_VARIABLES,
-    DIM_MERGE_PROMPT_COMPLIANCE_VERSION,
+    DIM_MERGE_PROMPT_CASE_EVIDENCE_ID,
+    DIM_MERGE_PROMPT_CASE_EVIDENCE_TEMPLATE,
+    DIM_MERGE_PROMPT_CASE_EVIDENCE_VARIABLES,
+    DIM_MERGE_PROMPT_CASE_EVIDENCE_VERSION,
     SCENE_DIM_MERGE,
     SYNTHETIC_MODEL_ID,
 )
 from app.core.skill7.models import SkillCandidate, SkillRun
 from app.main import app
+from app.product.case_evidence.models import CaseEvidence
 from app.product.fieldpool.models import FieldPool, FPSourceRoute
 from app.product.modeling.models import G1Category, G1CategoryTemplate
 from app.product.product_intake.models import (
@@ -78,14 +79,14 @@ async def client(session_factory):
             AISceneRoute(scene=SCENE_DIM_MERGE, model_id=SYNTHETIC_MODEL_ID),
             SkillPrompt(
                 skill_id=SCENE_DIM_MERGE,
-                current_version=DIM_MERGE_PROMPT_COMPLIANCE_VERSION,
+                current_version=DIM_MERGE_PROMPT_CASE_EVIDENCE_VERSION,
             ),
             SkillPromptVersion(
-                version_id=DIM_MERGE_PROMPT_COMPLIANCE_ID,
+                version_id=DIM_MERGE_PROMPT_CASE_EVIDENCE_ID,
                 skill_id=SCENE_DIM_MERGE,
-                version=DIM_MERGE_PROMPT_COMPLIANCE_VERSION,
-                template=DIM_MERGE_PROMPT_COMPLIANCE_TEMPLATE,
-                variables={"vars": DIM_MERGE_PROMPT_COMPLIANCE_VARIABLES},
+                version=DIM_MERGE_PROMPT_CASE_EVIDENCE_VERSION,
+                template=DIM_MERGE_PROMPT_CASE_EVIDENCE_TEMPLATE,
+                variables={"vars": DIM_MERGE_PROMPT_CASE_EVIDENCE_VARIABLES},
             ),
             G2Field(fid="f_a", cat="common", field_name="字段A"),
             G2Field(fid="f_b", cat="selling", field_name="字段B"),
@@ -93,6 +94,7 @@ async def client(session_factory):
             FPSourceRoute(route="g2_frequent", name="G2高频", sort_order=2),
             FPSourceRoute(route="compliance_risk", name="合规风险面", sort_order=3),
             FPSourceRoute(route="category_template", name="G1类目模板", sort_order=4),
+            FPSourceRoute(route="case_evidence", name="案例证据", sort_order=7),
             FPSourceRoute(route="disabled_route", name="停用路", enabled=False, sort_order=5),
         ])
         await session.commit()
@@ -699,3 +701,127 @@ async def test_llm_plan_below_min_lands_noncompliant_pool_gate_blocks_approval(
         json={"decision": "approve", "actor": REVIEWER},
     )
     assert gate.status_code == 409  # 非合规方案不允许过 WF-02 Gate
+
+
+async def _make_case_evidence(
+    session_factory,
+    *,
+    tenant_id: str = "t1",
+    title: str,
+    content: str,
+    source_url: str | None = None,
+    product_space_id: str | None = None,
+    enabled: bool = True,
+) -> str:
+    async with session_factory() as session:
+        case = CaseEvidence(
+            tenant_id=tenant_id,
+            product_space_id=product_space_id,
+            title=title,
+            content=content,
+            source_url=source_url,
+            enabled=enabled,
+        )
+        session.add(case)
+        await session.commit()
+        return case.case_id
+
+
+async def test_llm_plan_injects_case_evidence_source(
+    client, session_factory, monkeypatch
+):
+    generic_id = await _make_case_evidence(
+        session_factory, title="同类爆款案例", content="标题带痛点+功效+限时"
+    )
+    ps_id = await _make_ps(session_factory)
+    product_id = await _make_case_evidence(
+        session_factory,
+        title="本产品专属案例",
+        content="开箱式开场、三段式卖点",
+        source_url="https://example.com/case-1",
+        product_space_id=ps_id,
+    )
+    await _make_case_evidence(
+        session_factory, title="停用案例", content="不应出现", enabled=False
+    )
+
+    captured: dict = {}
+
+    async def _capture(self, *, scene, user_message, variables, **kwargs):
+        captured.update(variables)
+        out = _valid_out(
+            dimensions=[
+                _dim(1, fid="f_a", source_ref="g2:f_a"),
+                _dim(2, field_name="维度2b"),
+                _dim(3, field_name="维度3b"),
+                _dim(
+                    4,
+                    field_name="案例借鉴",
+                    source_route="case_evidence",
+                    source_ref=f"case_evidence:{generic_id}",
+                ),
+            ]
+        )
+        return GenerationResult(
+            text=json.dumps(out, ensure_ascii=False), input_tokens=2, output_tokens=3
+        )
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _capture)
+    r = await client.post(
+        f"/api/product-spaces/{ps_id}/field-pools/llm-plan", json=_plan_body()
+    )
+    assert r.status_code == 201, r.text
+
+    assert captured["_case_evidence"] == [
+        {
+            "case_id": generic_id,
+            "title": "同类爆款案例",
+            "content": "标题带痛点+功效+限时",
+            "source_url": None,
+            "product_space_id": None,
+            "source_ref": f"case_evidence:{generic_id}",
+        },
+        {
+            "case_id": product_id,
+            "title": "本产品专属案例",
+            "content": "开箱式开场、三段式卖点",
+            "source_url": "https://example.com/case-1",
+            "product_space_id": ps_id,
+            "source_ref": f"case_evidence:{product_id}",
+        },
+    ]
+    assert "同类爆款案例" in captured["case_evidence_entries"]
+    assert "本产品专属案例" in captured["case_evidence_entries"]
+    assert "停用案例" not in captured["case_evidence_entries"]
+
+    body = r.json()
+    async with session_factory() as session:
+        run = await session.get(SkillRun, body["run_id"])
+        assert run.input_payload["case_evidence_entry_count"] == 2
+
+
+async def test_llm_plan_skips_disabled_case_evidence(
+    client, session_factory, monkeypatch
+):
+    await _make_case_evidence(
+        session_factory, title="停用案例", content="不应出现", enabled=False
+    )
+    ps_id = await _make_ps(session_factory)
+
+    captured: dict = {}
+
+    async def _capture(self, *, scene, user_message, variables, **kwargs):
+        captured.update(variables)
+        return GenerationResult(
+            text=json.dumps(_valid_out(), ensure_ascii=False),
+            input_tokens=2,
+            output_tokens=3,
+        )
+
+    monkeypatch.setattr(drivers.SyntheticDriver, "generate", _capture)
+    r = await client.post(
+        f"/api/product-spaces/{ps_id}/field-pools/llm-plan", json=_plan_body()
+    )
+    assert r.status_code == 201, r.text
+    assert captured["_case_evidence"] == []
+    assert captured["case_evidence_entries"] == "（无）"
