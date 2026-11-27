@@ -211,6 +211,31 @@ DIM_MERGE_PROMPT_COMPLIANCE_VARIABLES = [
     "compliance_risk_entries",
 ]
 
+# L-07 第三路：DIM-MERGE v0.5 追加案例证据变量。v0.3/v0.4 保留不动，
+# 存量库由 0070 迁移发布 v0.5 并切换 current_version。
+DIM_MERGE_PROMPT_CASE_EVIDENCE_VERSION = "v0.5"
+DIM_MERGE_PROMPT_CASE_EVIDENCE_ID = str(
+    uuid.uuid5(uuid.NAMESPACE_URL, "loom:skill-prompt:DIM-MERGE:v0.5")
+)
+_DIM_MERGE_CASE_EVIDENCE_SECTION = """【案例证据】（source_route 取 case_evidence 时，只能引用下列同类好内容/案例；
+source_ref 写 case_evidence:<case_id>；列表为空时不得编造，改走 user_input 或其它来源）
+$case_evidence_entries
+
+"""
+DIM_MERGE_PROMPT_CASE_EVIDENCE_TEMPLATE = (
+    DIM_MERGE_PROMPT_COMPLIANCE_TEMPLATE.replace(
+        "【硬性边界】",
+        _DIM_MERGE_CASE_EVIDENCE_SECTION + "【硬性边界】",
+    ).replace(
+        "category_template:<fid>、compliance_risk:<entry_id>；禁止编造",
+        "category_template:<fid>、compliance_risk:<entry_id>、case_evidence:<case_id>；禁止编造",
+    )
+)
+DIM_MERGE_PROMPT_CASE_EVIDENCE_VARIABLES = [
+    *DIM_MERGE_PROMPT_COMPLIANCE_VARIABLES,
+    "case_evidence_entries",
+]
+
 CONFLICT_PRECHECK_PROMPT_TEMPLATE = """你是 Loom 私域内容生产平台段4 WF-03 的 CONFLICT-PRECHECK Skill：为一个产品空间的字段池原子批量补池（ATOM-EXPAND 生产契约）。只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码围栏。
 
 【产品资料（唯一资料副本，Q74）】

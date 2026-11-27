@@ -33,10 +33,13 @@ from app.product.fieldpool.service import (
     ProductSpaceNotFound,
 )
 from app.product.fieldpool.source_connectors import (
+    CASE_EVIDENCE_ROUTE,
     CATEGORY_TEMPLATE_ROUTE,
     COMPLIANCE_RISK_ROUTE,
+    format_case_evidence_context,
     format_category_template_context,
     format_compliance_risk_context,
+    load_case_evidence_entries,
     load_category_template_entries,
     load_compliance_risk_entries,
 )
@@ -130,6 +133,15 @@ async def invoke_field_plan(
     )
     compliance_text = format_compliance_risk_context(compliance_entries)
 
+    # L-07 第三路：仅当 case_evidence 路由启用时读取该租户通用层 + 本产品
+    # 专属层的同类好内容/案例；无案例/未启用 fail-closed 为空，不编造来源。
+    case_entries = (
+        await load_case_evidence_entries(session, ps)
+        if CASE_EVIDENCE_ROUTE in enabled_routes
+        else []
+    )
+    case_text = format_case_evidence_context(case_entries)
+
     profile = dict(ps.profile_snapshot or {})
     profile_lines = [f"- {key}: {value}" for key, value in profile.items()]
 
@@ -150,6 +162,8 @@ async def invoke_field_plan(
         "category_template_entries": category_text,
         # L-07：合规风险词条依据内容（模板渲染用）；空时给「（无）」。
         "compliance_risk_entries": compliance_text,
+        # L-07：案例证据依据内容（模板渲染用）；空时给「（无）」。
+        "case_evidence_entries": case_text,
         "_inspiration": [
             {"entry_id": e.entry_id, "layer": e.layer, "content": e.content}
             for e in insp_entries
@@ -177,6 +191,17 @@ async def invoke_field_plan(
                 "source_ref": e.source_ref,
             }
             for e in compliance_entries
+        ],
+        "_case_evidence": [
+            {
+                "case_id": e.case_id,
+                "title": e.title,
+                "content": e.content,
+                "source_url": e.source_url,
+                "product_space_id": e.product_space_id,
+                "source_ref": e.source_ref,
+            }
+            for e in case_entries
         ],
         # 合成替身驱动用（机读），不进模板占位：
         "_profile": {str(k): str(v) for k, v in profile.items()},
@@ -291,6 +316,7 @@ async def invoke_field_plan(
             "active_g2_field_count": len(active_fids),
             "category_template_field_count": len(category_entries),
             "compliance_risk_entry_count": len(compliance_entries),
+            "case_evidence_entry_count": len(case_entries),
             "dimension_count": len(dimensions),
         },
         output=payload,
