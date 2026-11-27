@@ -15,17 +15,21 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.compliance_wordlist.models import ComplianceWordlistEntry
+from app.product.case_evidence.models import CaseEvidence
 from app.product.modeling.models import G1Category, G1CategoryTemplate
 from app.product.product_intake.models import G2Field, ProductSpace
 
 CATEGORY_TEMPLATE_ROUTE = "category_template"
 COMPLIANCE_RISK_ROUTE = "compliance_risk"
+CASE_EVIDENCE_ROUTE = "case_evidence"
 TEMPLATE_STATUS_APPROVED = "approved"
 G2_STATUS_ACTIVE = "active"
 WORDLIST_STATUS_ACTIVE = "active"
 MAX_COMPLIANCE_RISK_ENTRIES = 20
+MAX_CASE_EVIDENCE_ENTRIES = 20
 CATEGORY_SOURCE_REF_PREFIX = f"{CATEGORY_TEMPLATE_ROUTE}:"
 COMPLIANCE_SOURCE_REF_PREFIX = f"{COMPLIANCE_RISK_ROUTE}:"
+CASE_EVIDENCE_SOURCE_REF_PREFIX = f"{CASE_EVIDENCE_ROUTE}:"
 
 
 @dataclass(frozen=True)
@@ -195,6 +199,75 @@ def format_compliance_risk_context(entries: list[ComplianceRiskEntry]) -> str:
             parts.append(f"industry={entry.industry}")
         if entry.country:
             parts.append(f"country={entry.country}")
+        parts.append(f"source_ref={entry.source_ref}")
+        lines.append("- " + " | ".join(parts))
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class CaseEvidenceEntry:
+    """一条案例证据来源；``source_ref`` 用 case_id，避免案例内容重复。"""
+
+    case_id: str
+    title: str
+    content: str
+    source_url: str | None
+    product_space_id: str | None
+
+    @property
+    def source_ref(self) -> str:
+        return f"{CASE_EVIDENCE_SOURCE_REF_PREFIX}{self.case_id}"
+
+
+async def load_case_evidence_entries(
+    session: AsyncSession, product_space: ProductSpace
+) -> list[CaseEvidenceEntry]:
+    """读取该租户 enabled 的通用层 + 本产品专属层案例；最多 20 条。
+
+    fail-closed：缺 tenant 绑定/无案例/未启用均返回空，不编造来源。
+    """
+    stmt = (
+        select(CaseEvidence)
+        .where(
+            CaseEvidence.tenant_id == product_space.tenant_id,
+            CaseEvidence.enabled.is_(True),
+        )
+        .where(
+            or_(
+                CaseEvidence.product_space_id.is_(None),
+                CaseEvidence.product_space_id == product_space.product_space_id,
+            )
+        )
+        .order_by(
+            CaseEvidence.product_space_id.is_(None).desc(),
+            CaseEvidence.created_at,
+            CaseEvidence.case_id,
+        )
+        .limit(MAX_CASE_EVIDENCE_ENTRIES)
+    )
+    rows = (await session.scalars(stmt)).all()
+    return [
+        CaseEvidenceEntry(
+            case_id=row.case_id,
+            title=row.title,
+            content=row.content,
+            source_url=row.source_url,
+            product_space_id=row.product_space_id,
+        )
+        for row in rows
+    ]
+
+
+def format_case_evidence_context(entries: list[CaseEvidenceEntry]) -> str:
+    """把案例证据渲染成 DIM-MERGE 提示词文本块；空列表给「（无）」。"""
+    if not entries:
+        return "（无）"
+    lines = ["同类好内容/案例（仅列当前启用、本租户通用或本产品专属的案例）："]
+    for entry in entries:
+        scope = "通用" if entry.product_space_id is None else "产品专属"
+        parts = [f"[{scope}] {entry.title}", entry.content]
+        if entry.source_url:
+            parts.append(f"url={entry.source_url}")
         parts.append(f"source_ref={entry.source_ref}")
         lines.append("- " + " | ".join(parts))
     return "\n".join(lines)

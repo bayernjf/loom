@@ -43,6 +43,7 @@ from app.decision.layer_strategy import models as _package_models  # noqa: F401
 from app.final.final_whitelist import models as _fcw_models  # noqa: F401
 from app.platform.platform_adaptation import models as _platform_models  # noqa: F401
 from app.product.atom import models as _atom_models  # noqa: F401
+from app.product.case_evidence import models as _case_evidence_models  # noqa: F401  (L-07 第 7 路)
 from app.product.condition import models as _condition_models  # noqa: F401
 from app.product.fieldpool import models as _fieldpool_models  # noqa: F401
 from app.product.inspiration import models as _inspiration_models  # noqa: F401  (Q358 灵感库本体)
